@@ -5,28 +5,78 @@
 	// Or use a Dockerfile or Docker Compose file. More info: https://containers.dev/guide/dockerfile
 	"image": "mcr.microsoft.com/devcontainers/base:bookworm",
 	"features": {
-		"ghcr.io/devcontainers/features/docker-in-docker:2": {},
-		"ghcr.io/devcontainers/features/git-lfs:1": {},
-		"ghcr.io/devcontainers/features/github-cli:1": {},
-		"ghcr.io/devcontainers/features/python:1": {},
-		"ghcr.io/eitsupi/devcontainer-features/jq-likes:2": {},
+		"ghcr.io/devcontainers/features/docker-in-docker:2": {
+			"moby": true,
+			"installDockerBuildx": true,
+			"installDockerComposeSwitch": true,
+			"version": "20.10",
+			"dockerDashComposeVersion": "v2"
+		},
+		"ghcr.io/devcontainers/features/git-lfs:1": {
+			"autoPull": true,
+			"version": "latest"
+		},
+		"ghcr.io/devcontainers/features/github-cli:1": {
+			"installDirectlyFromGitHubRelease": true,
+			"version": "latest"
+		},
+		"ghcr.io/devcontainers/features/python:1": {
+			"installTools": true,
+			"version": "3.12"
+		},
+		"ghcr.io/eitsupi/devcontainer-features/jq-likes:2": {
+			"jqVersion": "1",
+			"yqVersion": "4",
+			"gojqVersion": "latest",
+			"xqVersion": "latest",
+			"jaqVersion": "1"
+		},
 		"ghcr.io/dhoeric/features/hadolint:1": {},
 		"ghcr.io/stuartleeks/dev-container-features/shell-history:0": {},
-		"ghcr.io/lentzi90/features/yamlfmt:0": {},
-		"ghcr.io/va-h/devcontainers-features/difftastic:1": {},
-		"ghcr.io/va-h/devcontainers-features/uv:1": {},
+		"ghcr.io/lentzi90/features/yamlfmt:0": {
+			"version": "v0.14.0"
+		},
+		"ghcr.io/va-h/devcontainers-features/difftastic:1": {
+			"version": "latest"
+		},
+		"ghcr.io/va-h/devcontainers-features/uv:1": {
+			"shellautocompletion": true,
+			"version": "latest"
+		},
 		"ghcr.io/larsnieuwenhuizen/features/neovim:0": {},
-		"ghcr.io/devcontainers-extra/features/actions-runner:1": {},
-		"ghcr.io/devcontainers-extra/features/age:1": {},
-		"ghcr.io/devcontainers-extra/features/apt-packages:1": {},
+		"ghcr.io/devcontainers-extra/features/actions-runner:1": {
+			"version": "latest",
+			"dotnetVersion": "latest"
+		},
+		"ghcr.io/devcontainers-extra/features/age:1": {
+			"version": "latest"
+		},
+		"ghcr.io/devcontainers-extra/features/apt-packages:1": {
+			"clean_ppas": true,
+			"preserve_apt_list": true,
+			"packages": "curl,ca-certificates",
+			"ppas": "ppa:deadsnakes/ppa"
+		},
 		"ghcr.io/devcontainers-extra/features/curl-apt-get:1": {},
-		"ghcr.io/devcontainers-extra/features/git-lfs:1": {},
-		"ghcr.io/devcontainers-extra/features/pre-commit:2": {},
-		"ghcr.io/devcontainers-extra/features/sops:1": {},
-		"ghcr.io/devcontainers-extra/features/starship:1": {},
+		"ghcr.io/devcontainers-extra/features/git-lfs:1": {
+			"version": "latest"
+		},
+		"ghcr.io/devcontainers-extra/features/pre-commit:2": {
+			"version": "latest"
+		},
+		"ghcr.io/devcontainers-extra/features/sops:1": {
+			"version": "latest"
+		},
+		"ghcr.io/devcontainers-extra/features/starship:1": {
+			"version": "latest"
+		},
 		"ghcr.io/devcontainers-extra/features/wget-apt-get:1": {},
-		"ghcr.io/devcontainers-extra/features/yamllint:2": {},
-		"ghcr.io/devcontainers-extra/features/ruff:1": {}
+		"ghcr.io/devcontainers-extra/features/yamllint:2": {
+			"version": "latest"
+		},
+		"ghcr.io/devcontainers-extra/features/ruff:1": {
+			"version": "latest"
+		}
 	},
 
 	"containerEnv": {
