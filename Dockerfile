@@ -18,18 +18,25 @@ RUN pip install --upgrade pip uv \
     && uv sync --no-dev \
     && uv pip install pyinstaller \
     && source /middleware_api/.venv/bin/activate \
-    && PYTHONPATH=/middleware_api/app pyinstaller --onefile app/main.py --name middleware_api
+    && PYTHONPATH=/middleware_api/app \
+       pyinstaller --onefile app/main.py --name middleware_api
 
 
 # # ---- Runtime Stage ----
 FROM alpine:latest
 
+# Create non-root user and group
+RUN addgroup -S middleware && adduser -S middleware -G middleware
+
 WORKDIR /middleware_api
 
-COPY --from=builder /middleware_api/dist/middleware_api /middleware_api/middleware_api
+COPY --from=builder /middleware_api/dist/middleware_api .
 
-RUN apk add --no-cache libffi openssl
+# fix permissions
+RUN chown -R middleware:middleware /middleware_api
+
+USER middleware
 
 EXPOSE 8000
 
-CMD ["/middleware_api/middleware_api"]
+ENTRYPOINT ["/middleware_api/middleware_api"]
