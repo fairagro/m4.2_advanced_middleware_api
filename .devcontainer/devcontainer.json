@@ -9,7 +9,7 @@
 			"moby": true,
 			"installDockerBuildx": true,
 			"installDockerComposeSwitch": true,
-			"version": "20.10",
+			"version": "28.3.3",
 			"dockerDashComposeVersion": "v2"
 		},
 		"ghcr.io/devcontainers/features/git-lfs:1": {
