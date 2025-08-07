@@ -160,25 +160,23 @@ source = { virtual = "." }
 dependencies = [
     { name = "arctrl" },
     { name = "fastapi" },
+    { name = "uvicorn" },
 ]
 
 [package.dev-dependencies]
 dev = [
     { name = "pytest" },
-    { name = "uvicorn" },
 ]
 
 [package.metadata]
 requires-dist = [
     { name = "arctrl", specifier = ">=2.5.1" },
     { name = "fastapi", specifier = ">=0.116.1" },
+    { name = "uvicorn", specifier = ">=0.35.0" },
 ]
 
 [package.metadata.requires-dev]
-dev = [
-    { name = "pytest", specifier = ">=8.4.1" },
-    { name = "uvicorn", specifier = ">=0.35.0" },
-]
+dev = [{ name = "pytest", specifier = ">=8.4.1" }]
 
 [[package]]
 name = "openpyxl"
