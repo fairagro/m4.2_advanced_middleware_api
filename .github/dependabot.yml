@@ -5,21 +5,13 @@
 # https://containers.dev/guide/dependabot
 
 version: 2
+
 updates:
   - package-ecosystem: "devcontainers"
     directory: "/"
     schedule:
       interval: weekly
-  - package-ecosystem: "pip"
+  - package-ecosystem: "uv"
     directory: "/"                     # oder Unterverzeichnis, falls Projekt nicht im Root liegt
     schedule:
       interval: "weekly"              # oder "daily", "monthly"
-    ignore:
-      - dependency-name: "uv"         # optional: wenn du uv selbst nicht automatisch aktualisieren willst
-    allow:
-      - dependency-type: "direct"
-    labels:
-      - "dependencies"
-    commit-message:
-      prefix: "deps"
-    rebase-strategy: "auto"
