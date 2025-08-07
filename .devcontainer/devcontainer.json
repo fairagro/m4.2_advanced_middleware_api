@@ -43,7 +43,6 @@
 			"shellautocompletion": true,
 			"version": "latest"
 		},
-		"ghcr.io/larsnieuwenhuizen/features/neovim:0": {},
 		"ghcr.io/devcontainers-extra/features/actions-runner:1": {
 			"version": "latest",
 			"dotnetVersion": "latest"
@@ -76,7 +75,8 @@
 		},
 		"ghcr.io/devcontainers-extra/features/ruff:1": {
 			"version": "latest"
-		}
+		},
+		"ghcr.io/jungaretti/features/vim:1": {}
 	},
 
 	"containerEnv": {
@@ -87,7 +87,29 @@
 	// "forwardPorts": [],
 
 	// Configure tool-specific properties.
-	// "customizations": {},
+	"customizations": {
+		"vscode": {
+			// Add the IDs of extensions you want installed when the container is created.
+			"extensions": [
+				"signageos.signageos-vscode-sops",
+				"davidanson.vscode-markdownlint",
+				"samuelcolvin.jinjahtml",
+				"tamasfe.even-better-toml",
+				"ms-python.python",
+				"ms-python.vscode-pylance",
+				"ms-python.debugpy",
+				"ms-python.autopep8",
+				"ms-python.vscode-python-envs",
+				"esbenp.prettier-vscode",
+				"streetsidesoftware.code-spell-checker",
+				"mhutchie.git-graph",
+				"donjayamanne.githistory",
+				"codezombiech.gitignore",
+				"github.copilot",
+				"github.copilot-chat"
+			]
+		}
+	},
 
 	// Uncomment to connect as root instead. More info: https://aka.ms/dev-containers-non-root.
 	"remoteUser": "vscode"

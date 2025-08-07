@@ -3,7 +3,14 @@ name = "m4-2-advanced-middleware-api"
 version = "0.1.0"
 description = "Add your description here"
 readme = "README.md"
-requires-python = ">=3.11"
+requires-python = ">=3.12"
 dependencies = [
     "arctrl>=2.5.1",
+    "fastapi>=0.116.1"
 ]
+
+[dependency-groups]
+dev = [
+    "pytest>=8.4.1",
+]
+
