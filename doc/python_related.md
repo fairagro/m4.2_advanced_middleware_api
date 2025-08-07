@@ -15,7 +15,7 @@ The dependencies of these "primary" dependencies are then installed
 automatically.
 
 "Primary" dependencies are managed in the file `pyproject.toml`, whereas
-depedencies of dependencies are managed in the file `uv.lock`.
+dependencies of dependencies are managed in the file `uv.lock`.
 
 ### First steps after cloning the project
 
@@ -26,20 +26,29 @@ uv venv
 . .venv/bin/activate
 ```
 
-Install all dependencies (from `uv.lock`):
+Install all standard dependencies (from `uv.lock`):
 
 ```bash
 uv sync
 ```
 
+Install also development dependencies:
+
+```bash
+uv sync --dev
+```
+
 ### Modify dependencies
 
-Add/Delete a primary dependecy:
+Add/Delete a primary dependency:
 
 ```bash
 uv add <package name>
 uv delete <package name>
 ```
+
+By passing `--dev` you do not modify the standard dependencies, but
+development dependencies.
 
 Update the `uv.lock` file:
 
@@ -60,3 +69,14 @@ not be part of the project dependencies:
 ```bash
 uv pip install <package name>
 ```
+
+## Testing with the `uvicorn` API server
+
+To run the API on your local dev machine, issue:
+
+```bash
+uvicorn app.main:app
+```
+
+The API will listen on `http://127.0.0.1:8000`, you can access swagger docs
+under `http://127.0.0.1:8000/docs`.
