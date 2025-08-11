@@ -1,0 +1,819 @@
+{
+  "@context": [
+    "https://w3id.org/ro/crate/1.1/context",
+    {
+      "Sample": "https://bioschemas.org/Sample",
+      "additionalProperty": "http://schema.org/additionalProperty",
+      "intendedUse": "https://bioschemas.org/intendedUse",
+      "computationalTool": "https://bioschemas.org/computationalTool",
+      "labEquipment": "https://bioschemas.org/labEquipment",
+      "reagent": "https://bioschemas.org/reagent",
+      "LabProtocol": "https://bioschemas.org/LabProtocol",
+      "executesLabProtocol": "https://bioschemas.org/executesLabProtocol",
+      "parameterValue": "https://bioschemas.org/parameterValue",
+      "LabProcess": "https://bioschemas.org/LabProcess",
+      "measurementMethod": "http://schema.org/measurementMethod"
+    }
+  ],
+  "@graph": [
+    {
+      "@id": "https://bioregistry.io/EFO:EFO_0009736",
+      "@type": "DefinedTerm",
+      "name": "principal investigator",
+      "termCode": "https://bioregistry.io/EFO:EFO_0009736"
+    },
+    {
+      "@id": "#Person_Jasmine_Beetroot",
+      "@type": "Person",
+      "givenName": "Jasmine",
+      "familyName": "Beetroot",
+      "jobTitle": { "@id": "https://bioregistry.io/EFO:EFO_0009736" }
+    },
+    {
+      "@id": "https://bioregistry.io/NCIT:C25936",
+      "@type": "DefinedTerm",
+      "name": "Investigator",
+      "termCode": "https://bioregistry.io/NCIT:C25936"
+    },
+    {
+      "@id": "#Person_Viola_Canina",
+      "@type": "Person",
+      "givenName": "Viola",
+      "familyName": "Canina",
+      "jobTitle": { "@id": "https://bioregistry.io/NCIT:C25936" }
+    },
+    {
+      "@id": "https://bioregistry.io/NCIT:C100128",
+      "@type": "DefinedTerm",
+      "name": "Partner",
+      "termCode": "https://bioregistry.io/NCIT:C100128"
+    },
+    {
+      "@id": "#Person_Oliver_Sage",
+      "@type": "Person",
+      "givenName": "Oliver",
+      "familyName": "Sage",
+      "jobTitle": { "@id": "https://bioregistry.io/NCIT:C100128" }
+    },
+    { "@id": "#Person_a", "@type": "Person", "givenName": "a" },
+    {
+      "@id": "#CharacteristicValue_organism_Arabidopsis_thaliana",
+      "@type": "PropertyValue",
+      "additionalType": "CharacteristicValue",
+      "columnIndex": "0",
+      "name": "organism",
+      "value": "Arabidopsis thaliana",
+      "propertyID": "https://bioregistry.io/OBI:0100026",
+      "valueReference": "http://purl.obolibrary.org/obo/NCBITAXON_3702"
+    },
+    {
+      "@id": "#CharacteristicValue_growth_time_4",
+      "@type": "PropertyValue",
+      "additionalType": "CharacteristicValue",
+      "columnIndex": "1",
+      "name": "growth time",
+      "value": "4",
+      "propertyID": "http://purl.org/nfdi4plants/ontology/dpbo/DPBO_0000100",
+      "unitCode": "https://bioregistry.io/UO:0000033",
+      "unitText": "day"
+    },
+    {
+      "@id": "#CharacteristicValue_Light_intensity",
+      "@type": "PropertyValue",
+      "additionalType": "CharacteristicValue",
+      "columnIndex": "2",
+      "name": "Light intensity",
+      "propertyID": "http://purl.obolibrary.org/obo/MIAPPE_0101",
+      "unitCode": "https://bioregistry.io/UO:0000156",
+      "unitText": "einstein per square meter per second"
+    },
+    {
+      "@id": "#Source_Cold1",
+      "@type": "Sample",
+      "additionalType": "Source",
+      "name": "Cold1",
+      "additionalProperty": [
+        { "@id": "#CharacteristicValue_organism_Arabidopsis_thaliana" },
+        { "@id": "#CharacteristicValue_growth_time_4" },
+        { "@id": "#CharacteristicValue_Light_intensity" }
+      ]
+    },
+    {
+      "@id": "#FactorValue_temperature_day_6",
+      "@type": "PropertyValue",
+      "additionalType": "FactorValue",
+      "columnIndex": "3",
+      "name": "temperature day",
+      "value": "6",
+      "propertyID": "http://purl.org/nfdi4plants/ontology/dpbo/DPBO_0000007",
+      "unitCode": "https://bioregistry.io/NCIT:C42559",
+      "unitText": "Degree Celsius"
+    },
+    {
+      "@id": "#Sample_Cold1_leaf",
+      "@type": "Sample",
+      "additionalType": "Sample",
+      "name": "Cold1_leaf",
+      "additionalProperty": { "@id": "#FactorValue_temperature_day_6" }
+    },
+    {
+      "@id": "https://bioregistry.io/NCIT:C41139",
+      "@type": "DefinedTerm",
+      "name": "Meter",
+      "termCode": "https://bioregistry.io/NCIT:C41139"
+    },
+    {
+      "@id": "#Protocol_./studies/AthalianaColdStress/protocols/growth_protocol.md_NewTable0",
+      "@type": "LabProtocol",
+      "name": "./studies/AthalianaColdStress/protocols/growth_protocol.md",
+      "intendedUse": [
+        { "@id": "https://bioregistry.io/NCIT:C71177" },
+        { "@id": "https://bioregistry.io/NCIT:C41139" }
+      ]
+    },
+    {
+      "@id": "#ParameterValue_Test_Test",
+      "@type": "PropertyValue",
+      "additionalType": "ParameterValue",
+      "columnIndex": ["5", "4"],
+      "name": "Test",
+      "value": "Test",
+      "propertyID": "https://bioregistry.io/NCIT:C47891",
+      "valueReference": "https://bioregistry.io/NCIT:C47891"
+    },
+    {
+      "@id": "#ParameterValue_Growth_Test",
+      "@type": "PropertyValue",
+      "additionalType": "ParameterValue",
+      "columnIndex": ["7", "6", "8"],
+      "name": "Growth",
+      "value": "Test",
+      "propertyID": "https://bioregistry.io/NCIT:C64379",
+      "valueReference": "https://bioregistry.io/NCIT:C47891"
+    },
+    {
+      "@id": "#ParameterValue_Growth",
+      "@type": "PropertyValue",
+      "additionalType": "ParameterValue",
+      "columnIndex": ["10", "9"],
+      "name": "Growth",
+      "propertyID": "https://bioregistry.io/NCIT:C64379",
+      "unitCode": "https://bioregistry.io/NCIT:C71177",
+      "unitText": "Kilometer"
+    },
+    {
+      "@id": "#Process_NewTable0_0",
+      "@type": "LabProcess",
+      "name": "NewTable0_0",
+      "agent": { "@id": "#Person_a" },
+      "object": { "@id": "#Source_Cold1" },
+      "result": { "@id": "#Sample_Cold1_leaf" },
+      "executesLabProtocol": {
+        "@id": "#Protocol_./studies/AthalianaColdStress/protocols/growth_protocol.md_NewTable0"
+      },
+      "parameterValue": [
+        { "@id": "#ParameterValue_Test_Test" },
+        { "@id": "#ParameterValue_Test_Test" },
+        { "@id": "#ParameterValue_Growth_Test" },
+        { "@id": "#ParameterValue_Growth_Test" },
+        { "@id": "#ParameterValue_Growth_Test" },
+        { "@id": "#ParameterValue_Growth" },
+        { "@id": "#ParameterValue_Growth" }
+      ]
+    },
+    { "@id": "#Person_b", "@type": "Person", "givenName": "b" },
+    {
+      "@id": "#Source_Cold2",
+      "@type": "Sample",
+      "additionalType": "Source",
+      "name": "Cold2",
+      "additionalProperty": [
+        { "@id": "#CharacteristicValue_organism_Arabidopsis_thaliana" },
+        { "@id": "#CharacteristicValue_growth_time_4" },
+        { "@id": "#CharacteristicValue_Light_intensity" }
+      ]
+    },
+    {
+      "@id": "#Sample_Cold2_leaf",
+      "@type": "Sample",
+      "additionalType": "Sample",
+      "name": "Cold2_leaf",
+      "additionalProperty": { "@id": "#FactorValue_temperature_day_6" }
+    },
+    {
+      "@id": "https://bioregistry.io/NCIT:C71177",
+      "@type": "DefinedTerm",
+      "name": "Kilometer",
+      "termCode": "https://bioregistry.io/NCIT:C71177"
+    },
+    {
+      "@id": "#Process_NewTable0_1",
+      "@type": "LabProcess",
+      "name": "NewTable0_1",
+      "agent": { "@id": "#Person_b" },
+      "object": { "@id": "#Source_Cold2" },
+      "result": { "@id": "#Sample_Cold2_leaf" },
+      "executesLabProtocol": {
+        "@id": "#Protocol_./studies/AthalianaColdStress/protocols/growth_protocol.md_NewTable0"
+      },
+      "parameterValue": [
+        { "@id": "#ParameterValue_Test_Test" },
+        { "@id": "#ParameterValue_Test_Test" },
+        { "@id": "#ParameterValue_Growth_Test" },
+        { "@id": "#ParameterValue_Growth_Test" },
+        { "@id": "#ParameterValue_Growth_Test" },
+        { "@id": "#ParameterValue_Growth" },
+        { "@id": "#ParameterValue_Growth" }
+      ]
+    },
+    { "@id": "#Person_", "@type": "Person", "givenName": "" },
+    {
+      "@id": "#Source_Cold3",
+      "@type": "Sample",
+      "additionalType": "Source",
+      "name": "Cold3",
+      "additionalProperty": [
+        { "@id": "#CharacteristicValue_organism_Arabidopsis_thaliana" },
+        { "@id": "#CharacteristicValue_growth_time_4" },
+        { "@id": "#CharacteristicValue_Light_intensity" }
+      ]
+    },
+    {
+      "@id": "#Sample_Cold3_leaf",
+      "@type": "Sample",
+      "additionalType": "Sample",
+      "name": "Cold3_leaf",
+      "additionalProperty": { "@id": "#FactorValue_temperature_day_6" }
+    },
+    {
+      "@id": "#ParameterValue_Growth_5",
+      "@type": "PropertyValue",
+      "additionalType": "ParameterValue",
+      "columnIndex": "10",
+      "name": "Growth",
+      "value": "5",
+      "propertyID": "https://bioregistry.io/NCIT:C64379",
+      "unitCode": "https://bioregistry.io/NCIT:C71177",
+      "unitText": "Kilometer"
+    },
+    {
+      "@id": "#Process_NewTable0_2",
+      "@type": "LabProcess",
+      "name": "NewTable0_2",
+      "agent": { "@id": "#Person_" },
+      "object": { "@id": "#Source_Cold3" },
+      "result": { "@id": "#Sample_Cold3_leaf" },
+      "executesLabProtocol": {
+        "@id": "#Protocol_./studies/AthalianaColdStress/protocols/growth_protocol.md_NewTable0"
+      },
+      "parameterValue": [
+        { "@id": "#ParameterValue_Test_Test" },
+        { "@id": "#ParameterValue_Test_Test" },
+        { "@id": "#ParameterValue_Growth_Test" },
+        { "@id": "#ParameterValue_Growth_Test" },
+        { "@id": "#ParameterValue_Growth_Test" },
+        { "@id": "#ParameterValue_Growth" },
+        { "@id": "#ParameterValue_Growth_5" }
+      ]
+    },
+    {
+      "@id": "#Source_RT1",
+      "@type": "Sample",
+      "additionalType": "Source",
+      "name": "RT1",
+      "additionalProperty": [
+        { "@id": "#CharacteristicValue_organism_Arabidopsis_thaliana" },
+        { "@id": "#CharacteristicValue_growth_time_4" },
+        { "@id": "#CharacteristicValue_Light_intensity" }
+      ]
+    },
+    {
+      "@id": "#FactorValue_temperature_day_25",
+      "@type": "PropertyValue",
+      "additionalType": "FactorValue",
+      "columnIndex": "3",
+      "name": "temperature day",
+      "value": "25",
+      "propertyID": "http://purl.org/nfdi4plants/ontology/dpbo/DPBO_0000007",
+      "unitCode": "https://bioregistry.io/NCIT:C42559",
+      "unitText": "Degree Celsius"
+    },
+    {
+      "@id": "#Sample_RT1_leaf",
+      "@type": "Sample",
+      "additionalType": "Sample",
+      "name": "RT1_leaf",
+      "additionalProperty": { "@id": "#FactorValue_temperature_day_25" }
+    },
+    {
+      "@id": "#Process_NewTable0_3",
+      "@type": "LabProcess",
+      "name": "NewTable0_3",
+      "agent": { "@id": "#Person_" },
+      "object": { "@id": "#Source_RT1" },
+      "result": { "@id": "#Sample_RT1_leaf" },
+      "executesLabProtocol": {
+        "@id": "#Protocol_./studies/AthalianaColdStress/protocols/growth_protocol.md_NewTable0"
+      },
+      "parameterValue": [
+        { "@id": "#ParameterValue_Test_Test" },
+        { "@id": "#ParameterValue_Test_Test" },
+        { "@id": "#ParameterValue_Growth_Test" },
+        { "@id": "#ParameterValue_Growth_Test" },
+        { "@id": "#ParameterValue_Growth_Test" },
+        { "@id": "#ParameterValue_Growth" },
+        { "@id": "#ParameterValue_Growth" }
+      ]
+    },
+    {
+      "@id": "#Source_RT2",
+      "@type": "Sample",
+      "additionalType": "Source",
+      "name": "RT2",
+      "additionalProperty": [
+        { "@id": "#CharacteristicValue_organism_Arabidopsis_thaliana" },
+        { "@id": "#CharacteristicValue_growth_time_4" },
+        { "@id": "#CharacteristicValue_Light_intensity" }
+      ]
+    },
+    {
+      "@id": "#Sample_RT2_leaf",
+      "@type": "Sample",
+      "additionalType": "Sample",
+      "name": "RT2_leaf",
+      "additionalProperty": { "@id": "#FactorValue_temperature_day_25" }
+    },
+    {
+      "@id": "#Process_NewTable0_4",
+      "@type": "LabProcess",
+      "name": "NewTable0_4",
+      "agent": { "@id": "#Person_" },
+      "object": { "@id": "#Source_RT2" },
+      "result": { "@id": "#Sample_RT2_leaf" },
+      "executesLabProtocol": {
+        "@id": "#Protocol_./studies/AthalianaColdStress/protocols/growth_protocol.md_NewTable0"
+      },
+      "parameterValue": [
+        { "@id": "#ParameterValue_Test_Test" },
+        { "@id": "#ParameterValue_Test_Test" },
+        { "@id": "#ParameterValue_Growth_Test" },
+        { "@id": "#ParameterValue_Growth_Test" },
+        { "@id": "#ParameterValue_Growth_Test" },
+        { "@id": "#ParameterValue_Growth" },
+        { "@id": "#ParameterValue_Growth" }
+      ]
+    },
+    {
+      "@id": "#Source_RT3",
+      "@type": "Sample",
+      "additionalType": "Source",
+      "name": "RT3",
+      "additionalProperty": [
+        { "@id": "#CharacteristicValue_organism_Arabidopsis_thaliana" },
+        { "@id": "#CharacteristicValue_growth_time_4" },
+        { "@id": "#CharacteristicValue_Light_intensity" }
+      ]
+    },
+    {
+      "@id": "#Sample_RT3_leaf",
+      "@type": "Sample",
+      "additionalType": "Sample",
+      "name": "RT3_leaf",
+      "additionalProperty": { "@id": "#FactorValue_temperature_day_25" }
+    },
+    {
+      "@id": "#Process_NewTable0_5",
+      "@type": "LabProcess",
+      "name": "NewTable0_5",
+      "agent": { "@id": "#Person_" },
+      "object": { "@id": "#Source_RT3" },
+      "result": { "@id": "#Sample_RT3_leaf" },
+      "executesLabProtocol": {
+        "@id": "#Protocol_./studies/AthalianaColdStress/protocols/growth_protocol.md_NewTable0"
+      },
+      "parameterValue": [
+        { "@id": "#ParameterValue_Test_Test" },
+        { "@id": "#ParameterValue_Test_Test" },
+        { "@id": "#ParameterValue_Growth_Test" },
+        { "@id": "#ParameterValue_Growth_Test" },
+        { "@id": "#ParameterValue_Growth_Test" },
+        { "@id": "#ParameterValue_Growth" },
+        { "@id": "#ParameterValue_Growth" }
+      ]
+    },
+    {
+      "@id": "studies/AthalianaColdStress/",
+      "@type": "Dataset",
+      "additionalType": "Study",
+      "identifier": "AthalianaColdStress",
+      "creator": [
+        { "@id": "#Person_Jasmine_Beetroot" },
+        { "@id": "#Person_Viola_Canina" },
+        { "@id": "#Person_Oliver_Sage" }
+      ],
+      "dateModified": "2025-08-11T15:44:37.467",
+      "description": "Cold acclimation analysis of Arabidopsis leaf tissue",
+      "hasPart": [],
+      "about": [
+        { "@id": "#Process_NewTable0_0" },
+        { "@id": "#Process_NewTable0_1" },
+        { "@id": "#Process_NewTable0_2" },
+        { "@id": "#Process_NewTable0_3" },
+        { "@id": "#Process_NewTable0_4" },
+        { "@id": "#Process_NewTable0_5" }
+      ]
+    },
+    {
+      "@id": "assays/Proteomics_MS/",
+      "@type": "Dataset",
+      "additionalType": "Assay",
+      "identifier": "Proteomics_MS"
+    },
+    {
+      "@id": "assays/SugarMeasurement/dataset/./assays/SugarMeasurement/dataset/sugar_result.csv",
+      "@type": "File",
+      "name": "assays/SugarMeasurement/dataset/./assays/SugarMeasurement/dataset/sugar_result.csv"
+    },
+    {
+      "@id": "#Sample_Cold1_sugar-ext",
+      "@type": "Sample",
+      "additionalType": "Sample",
+      "name": "Cold1_sugar-ext"
+    },
+    { "@id": "#Protocol_SugarExtraction", "@type": "LabProtocol" },
+    {
+      "@id": "#ParameterValue_Vortex_Mixer_3",
+      "@type": "PropertyValue",
+      "additionalType": "ParameterValue",
+      "columnIndex": "0",
+      "name": "Vortex Mixer",
+      "value": "3",
+      "propertyID": "https://bioregistry.io/NCIT:C29544",
+      "unitCode": "https://bioregistry.io/UO:0000010",
+      "unitText": "second"
+    },
+    {
+      "@id": "#ParameterValue_Temperature_95",
+      "@type": "PropertyValue",
+      "additionalType": "ParameterValue",
+      "columnIndex": "1",
+      "name": "Temperature",
+      "value": "95",
+      "propertyID": "https://bioregistry.io/NCIT:C25206",
+      "unitCode": "https://bioregistry.io/UO:0000027",
+      "unitText": "degree celsius"
+    },
+    {
+      "@id": "#Process_SugarExtraction_0",
+      "@type": "LabProcess",
+      "name": "SugarExtraction_0",
+      "object": { "@id": "#Sample_Cold1_leaf" },
+      "result": { "@id": "#Sample_Cold1_sugar-ext" },
+      "executesLabProtocol": { "@id": "#Protocol_SugarExtraction" },
+      "parameterValue": [
+        { "@id": "#ParameterValue_Vortex_Mixer_3" },
+        { "@id": "#ParameterValue_Temperature_95" }
+      ]
+    },
+    {
+      "@id": "#Sample_Cold2_sugar-ext",
+      "@type": "Sample",
+      "additionalType": "Sample",
+      "name": "Cold2_sugar-ext"
+    },
+    {
+      "@id": "#Process_SugarExtraction_1",
+      "@type": "LabProcess",
+      "name": "SugarExtraction_1",
+      "object": { "@id": "#Sample_Cold2_leaf" },
+      "result": { "@id": "#Sample_Cold2_sugar-ext" },
+      "executesLabProtocol": { "@id": "#Protocol_SugarExtraction" },
+      "parameterValue": [
+        { "@id": "#ParameterValue_Vortex_Mixer_3" },
+        { "@id": "#ParameterValue_Temperature_95" }
+      ]
+    },
+    {
+      "@id": "#Sample_Cold3_sugar-ext",
+      "@type": "Sample",
+      "additionalType": "Sample",
+      "name": "Cold3_sugar-ext"
+    },
+    {
+      "@id": "#Process_SugarExtraction_2",
+      "@type": "LabProcess",
+      "name": "SugarExtraction_2",
+      "object": { "@id": "#Sample_Cold3_leaf" },
+      "result": { "@id": "#Sample_Cold3_sugar-ext" },
+      "executesLabProtocol": { "@id": "#Protocol_SugarExtraction" },
+      "parameterValue": [
+        { "@id": "#ParameterValue_Vortex_Mixer_3" },
+        { "@id": "#ParameterValue_Temperature_95" }
+      ]
+    },
+    {
+      "@id": "#Sample_RT1_sugar-ext",
+      "@type": "Sample",
+      "additionalType": "Sample",
+      "name": "RT1_sugar-ext"
+    },
+    {
+      "@id": "#Process_SugarExtraction_3",
+      "@type": "LabProcess",
+      "name": "SugarExtraction_3",
+      "object": { "@id": "#Sample_RT1_leaf" },
+      "result": { "@id": "#Sample_RT1_sugar-ext" },
+      "executesLabProtocol": { "@id": "#Protocol_SugarExtraction" },
+      "parameterValue": [
+        { "@id": "#ParameterValue_Vortex_Mixer_3" },
+        { "@id": "#ParameterValue_Temperature_95" }
+      ]
+    },
+    {
+      "@id": "#Sample_RT2_sugar-ext",
+      "@type": "Sample",
+      "additionalType": "Sample",
+      "name": "RT2_sugar-ext"
+    },
+    {
+      "@id": "#Process_SugarExtraction_4",
+      "@type": "LabProcess",
+      "name": "SugarExtraction_4",
+      "object": { "@id": "#Sample_RT2_leaf" },
+      "result": { "@id": "#Sample_RT2_sugar-ext" },
+      "executesLabProtocol": { "@id": "#Protocol_SugarExtraction" },
+      "parameterValue": [
+        { "@id": "#ParameterValue_Vortex_Mixer_3" },
+        { "@id": "#ParameterValue_Temperature_95" }
+      ]
+    },
+    {
+      "@id": "#Sample_RT3_sugar-ext",
+      "@type": "Sample",
+      "additionalType": "Sample",
+      "name": "RT3_sugar-ext"
+    },
+    {
+      "@id": "#Process_SugarExtraction_5",
+      "@type": "LabProcess",
+      "name": "SugarExtraction_5",
+      "object": { "@id": "#Sample_RT3_leaf" },
+      "result": { "@id": "#Sample_RT3_sugar-ext" },
+      "executesLabProtocol": { "@id": "#Protocol_SugarExtraction" },
+      "parameterValue": [
+        { "@id": "#ParameterValue_Vortex_Mixer_3" },
+        { "@id": "#ParameterValue_Temperature_95" }
+      ]
+    },
+    { "@id": "#OA_", "@type": "DefinedTerm", "name": "" },
+    {
+      "@id": "#Protocol__SugarMeasurement",
+      "@type": "LabProtocol",
+      "name": "",
+      "description": "",
+      "intendedUse": { "@id": "#OA_" },
+      "version": ""
+    },
+    {
+      "@id": "#ParameterValue_technical_replicate_1",
+      "@type": "PropertyValue",
+      "additionalType": "ParameterValue",
+      "columnIndex": "0",
+      "name": "technical replicate",
+      "value": "1",
+      "propertyID": "https://bioregistry.io/EFO:0002090"
+    },
+    {
+      "@id": "#ParameterValue_sample_volume_10",
+      "@type": "PropertyValue",
+      "additionalType": "ParameterValue",
+      "columnIndex": "1",
+      "name": "sample volume",
+      "value": "10",
+      "propertyID": "http://purl.org/nfdi4plants/ontology/dpbo/DPBO_0010013",
+      "unitCode": "https://bioregistry.io/UO:0000101",
+      "unitText": "microliter"
+    },
+    {
+      "@id": "#ParameterValue_buffer_volume_150",
+      "@type": "PropertyValue",
+      "additionalType": "ParameterValue",
+      "columnIndex": "2",
+      "name": "buffer volume",
+      "value": "150",
+      "propertyID": "http://purl.org/nfdi4plants/ontology/dpbo/DPBO_0000117",
+      "unitCode": "https://bioregistry.io/UO:0000101",
+      "unitText": "microliter"
+    },
+    {
+      "@id": "#ParameterValue_measurement_device",
+      "@type": "PropertyValue",
+      "additionalType": "ParameterValue",
+      "columnIndex": "3",
+      "name": "measurement device",
+      "propertyID": "https://bioregistry.io/OBI:0000832"
+    },
+    {
+      "@id": "#ParameterValue_cycle_count_5",
+      "@type": "PropertyValue",
+      "additionalType": "ParameterValue",
+      "columnIndex": "4",
+      "name": "cycle count",
+      "value": "5",
+      "propertyID": "http://purl.obolibrary.org/obo/AFR_0002311"
+    },
+    {
+      "@id": "#Process_SugarMeasurement_0",
+      "@type": "LabProcess",
+      "name": "SugarMeasurement_0",
+      "agent": { "@id": "#Person_" },
+      "object": { "@id": "#Sample_Cold1_sugar-ext" },
+      "result": {
+        "@id": "assays/SugarMeasurement/dataset/./assays/SugarMeasurement/dataset/sugar_result.csv"
+      },
+      "executesLabProtocol": { "@id": "#Protocol__SugarMeasurement" },
+      "parameterValue": [
+        { "@id": "#ParameterValue_technical_replicate_1" },
+        { "@id": "#ParameterValue_sample_volume_10" },
+        { "@id": "#ParameterValue_buffer_volume_150" },
+        { "@id": "#ParameterValue_measurement_device" },
+        { "@id": "#ParameterValue_cycle_count_5" }
+      ]
+    },
+    {
+      "@id": "#ParameterValue_technical_replicate_2",
+      "@type": "PropertyValue",
+      "additionalType": "ParameterValue",
+      "columnIndex": "0",
+      "name": "technical replicate",
+      "value": "2",
+      "propertyID": "https://bioregistry.io/EFO:0002090"
+    },
+    {
+      "@id": "#Process_SugarMeasurement_1",
+      "@type": "LabProcess",
+      "name": "SugarMeasurement_1",
+      "agent": { "@id": "#Person_" },
+      "object": { "@id": "#Sample_Cold2_sugar-ext" },
+      "result": {
+        "@id": "assays/SugarMeasurement/dataset/./assays/SugarMeasurement/dataset/sugar_result.csv"
+      },
+      "executesLabProtocol": { "@id": "#Protocol__SugarMeasurement" },
+      "parameterValue": [
+        { "@id": "#ParameterValue_technical_replicate_2" },
+        { "@id": "#ParameterValue_sample_volume_10" },
+        { "@id": "#ParameterValue_buffer_volume_150" },
+        { "@id": "#ParameterValue_measurement_device" },
+        { "@id": "#ParameterValue_cycle_count_5" }
+      ]
+    },
+    {
+      "@id": "#ParameterValue_technical_replicate_3",
+      "@type": "PropertyValue",
+      "additionalType": "ParameterValue",
+      "columnIndex": "0",
+      "name": "technical replicate",
+      "value": "3",
+      "propertyID": "https://bioregistry.io/EFO:0002090"
+    },
+    {
+      "@id": "#Process_SugarMeasurement_2",
+      "@type": "LabProcess",
+      "name": "SugarMeasurement_2",
+      "agent": { "@id": "#Person_" },
+      "object": { "@id": "#Sample_Cold3_sugar-ext" },
+      "result": {
+        "@id": "assays/SugarMeasurement/dataset/./assays/SugarMeasurement/dataset/sugar_result.csv"
+      },
+      "executesLabProtocol": { "@id": "#Protocol__SugarMeasurement" },
+      "parameterValue": [
+        { "@id": "#ParameterValue_technical_replicate_3" },
+        { "@id": "#ParameterValue_sample_volume_10" },
+        { "@id": "#ParameterValue_buffer_volume_150" },
+        { "@id": "#ParameterValue_measurement_device" },
+        { "@id": "#ParameterValue_cycle_count_5" }
+      ]
+    },
+    {
+      "@id": "#Process_SugarMeasurement_3",
+      "@type": "LabProcess",
+      "name": "SugarMeasurement_3",
+      "agent": { "@id": "#Person_" },
+      "object": { "@id": "#Sample_RT1_sugar-ext" },
+      "result": {
+        "@id": "assays/SugarMeasurement/dataset/./assays/SugarMeasurement/dataset/sugar_result.csv"
+      },
+      "executesLabProtocol": { "@id": "#Protocol__SugarMeasurement" },
+      "parameterValue": [
+        { "@id": "#ParameterValue_technical_replicate_1" },
+        { "@id": "#ParameterValue_sample_volume_10" },
+        { "@id": "#ParameterValue_buffer_volume_150" },
+        { "@id": "#ParameterValue_measurement_device" },
+        { "@id": "#ParameterValue_cycle_count_5" }
+      ]
+    },
+    {
+      "@id": "#Process_SugarMeasurement_4",
+      "@type": "LabProcess",
+      "name": "SugarMeasurement_4",
+      "agent": { "@id": "#Person_" },
+      "object": { "@id": "#Sample_RT2_sugar-ext" },
+      "result": {
+        "@id": "assays/SugarMeasurement/dataset/./assays/SugarMeasurement/dataset/sugar_result.csv"
+      },
+      "executesLabProtocol": { "@id": "#Protocol__SugarMeasurement" },
+      "parameterValue": [
+        { "@id": "#ParameterValue_technical_replicate_2" },
+        { "@id": "#ParameterValue_sample_volume_10" },
+        { "@id": "#ParameterValue_buffer_volume_150" },
+        { "@id": "#ParameterValue_measurement_device" },
+        { "@id": "#ParameterValue_cycle_count_5" }
+      ]
+    },
+    {
+      "@id": "#Process_SugarMeasurement_5",
+      "@type": "LabProcess",
+      "name": "SugarMeasurement_5",
+      "agent": { "@id": "#Person_" },
+      "object": { "@id": "#Sample_RT3_sugar-ext" },
+      "result": {
+        "@id": "assays/SugarMeasurement/dataset/./assays/SugarMeasurement/dataset/sugar_result.csv"
+      },
+      "executesLabProtocol": { "@id": "#Protocol__SugarMeasurement" },
+      "parameterValue": [
+        { "@id": "#ParameterValue_technical_replicate_3" },
+        { "@id": "#ParameterValue_sample_volume_10" },
+        { "@id": "#ParameterValue_buffer_volume_150" },
+        { "@id": "#ParameterValue_measurement_device" },
+        { "@id": "#ParameterValue_cycle_count_5" }
+      ]
+    },
+    {
+      "@id": "http://purl.org/nfdi4plants/ontology/dpbo/DPBO_0000116",
+      "@type": "DefinedTerm",
+      "name": "Infinite M200 plate reader (Tecan)",
+      "termCode": "http://purl.org/nfdi4plants/ontology/dpbo/DPBO_0000116"
+    },
+    {
+      "@id": "assays/SugarMeasurement/",
+      "@type": "Dataset",
+      "additionalType": "Assay",
+      "identifier": "SugarMeasurement",
+      "hasPart": {
+        "@id": "assays/SugarMeasurement/dataset/./assays/SugarMeasurement/dataset/sugar_result.csv"
+      },
+      "about": [
+        { "@id": "#Process_SugarExtraction_0" },
+        { "@id": "#Process_SugarExtraction_1" },
+        { "@id": "#Process_SugarExtraction_2" },
+        { "@id": "#Process_SugarExtraction_3" },
+        { "@id": "#Process_SugarExtraction_4" },
+        { "@id": "#Process_SugarExtraction_5" },
+        { "@id": "#Process_SugarMeasurement_0" },
+        { "@id": "#Process_SugarMeasurement_1" },
+        { "@id": "#Process_SugarMeasurement_2" },
+        { "@id": "#Process_SugarMeasurement_3" },
+        { "@id": "#Process_SugarMeasurement_4" },
+        { "@id": "#Process_SugarMeasurement_5" }
+      ],
+      "measurementMethod": {
+        "@id": "http://purl.org/nfdi4plants/ontology/dpbo/DPBO_0000116"
+      },
+      "measurementTechnique": {
+        "@id": "http://purl.org/nfdi4plants/ontology/dpbo/DPBO_0000116"
+      }
+    },
+    { "@id": "#OA_draft", "@type": "DefinedTerm", "name": "draft" },
+    { "@id": "#LDComment_a_a", "@type": "Comment", "name": "a", "text": "a" },
+    {
+      "@id": "#test",
+      "@type": "ScholarlyArticle",
+      "headline": "test",
+      "identifier": [],
+      "creativeWorkStatus": { "@id": "#OA_draft" },
+      "comment": { "@id": "#LDComment_a_a" }
+    },
+    {
+      "@id": "./",
+      "@type": "Dataset",
+      "additionalType": "Investigation",
+      "identifier": "AthalianaColdStressSugar",
+      "datePublished": "2025-08-11T15:44:37.510",
+      "description": "This experiment investigates the response of Arabidopsis thaliana to cold stress by subjecting plants to low-temperature conditions and monitoring physiological, molecular, and growth-related changes. Cold-treated plants are compared with control groups grown under optimal conditions to assess stress-related markers such as changes in protein abundance, sugar content, and growth rates. The goal is to identify key molecules and physiological responses involved in cold tolerance, contributing to the understanding of plant stress adaptation mechanisms.",
+      "hasPart": [
+        { "@id": "studies/AthalianaColdStress/" },
+        { "@id": "assays/Proteomics_MS/" },
+        { "@id": "assays/SugarMeasurement/" }
+      ],
+      "name": "Arabidopsis thaliana cold acclimation",
+      "citation": { "@id": "#test" },
+      "license": "ALL RIGHTS RESERVED BY THE AUTHORS"
+    },
+    {
+      "@id": "ro-crate-metadata.json",
+      "@type": "CreativeWork",
+      "conformsTo": { "@id": "https://w3id.org/ro/crate/1.1" },
+      "about": { "@id": "./" }
+    }
+  ]
+}

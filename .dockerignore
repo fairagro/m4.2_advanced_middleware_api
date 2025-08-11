@@ -43,3 +43,9 @@ coverage.xml
 
 # Others
 *.swp
+
+.devcontainer/
+ro_crates/
+tools/
+scratch/
+tests/
