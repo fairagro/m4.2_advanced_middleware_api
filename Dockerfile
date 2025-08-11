@@ -25,15 +25,13 @@ RUN pip install --upgrade pip uv \
 # # ---- Runtime Stage ----
 FROM alpine:latest
 
-# Create non-root user and group
-RUN addgroup -S middleware && adduser -S middleware -G middleware
-
 WORKDIR /middleware_api
 
 COPY --from=builder /middleware_api/dist/middleware_api .
 
-# fix permissions
-RUN chown -R middleware:middleware /middleware_api
+# Create non-root user and group and fix permissions
+RUN addgroup -S middleware && adduser -S middleware -G middleware \
+    && chown -R middleware:middleware /middleware_api
 
 USER middleware
 
