@@ -1,12 +1,19 @@
+import time
 from arctrl.arc import ARC
 
 def arc_to_rocrate_json(arc_path: str, rocrate_output_path: str):
     # Lade ARC aus Datei
+    start = time.perf_counter()
     arc = ARC.load(arc_path)
+    end = time.perf_counter()
+    print(f"Loading ARC took {end - start:.2f} seconds")
     
     # Exportiere als RO-Crate JSON-Objekt
+    start = time.perf_counter()
     rocrate = arc.ToROCrateJsonString()
-    
+    end = time.perf_counter()
+    print(f"Converting ARC to RO-Crate JSON took {end - start:.2f} seconds")
+
     # Schreibe die JSON-Repräsentation in eine Datei
     with open(rocrate_output_path, "w", encoding="utf-8") as f:
         f.write(rocrate)
