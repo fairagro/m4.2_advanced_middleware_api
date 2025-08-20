@@ -9,12 +9,18 @@ from cryptography.hazmat.primitives import serialization
 import datetime
 
 from app.middleware_api import app
+from app.middleware_service import MiddlewareService
 from app.arc_store_gitlab_api import ARCStoreGitlabAPI
 
 
 @pytest.fixture
 def client() -> TestClient:
     return TestClient(app)
+
+@pytest.fixture
+def service() -> MiddlewareService:
+    store = MagicMock()
+    return MiddlewareService(store)
 
 @pytest.fixture(scope="session")
 def cert() -> str:

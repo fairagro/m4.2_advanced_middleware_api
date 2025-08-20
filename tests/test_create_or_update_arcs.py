@@ -1,4 +1,16 @@
-from fastapi.testclient import TestClient
+import json
+from typing import Any
+import pytest
+
+from app.middleware_service import (
+    ARCResponse,
+    CreateOrUpdateResponse,
+    InvalidAcceptTypeError,
+    InvalidContentTypeError,
+    InvalidJsonSemanticError,
+    InvalidJsonSyntaxError,
+    MiddlewareService
+)
 
 
 def is_valid_sha256(s: str) -> bool:
@@ -11,89 +23,128 @@ def is_valid_sha256(s: str) -> bool:
         return False
 
 
-def test_success(client: TestClient, cert: str):
-    # Valid ARC RO-Crate structure
-    rocrate = [{
-        "@context": "https://w3id.org/ro/crate/1.1/context",
-        "@graph": [
-            {
-                "@id": "./",
-                "@type": "Dataset",
-                "additionalType": "Investigation",
-                "identifier": "ARC-001"
-            },
-            {
-                "@id": "ro-crate-metadata.json",
-                "@type": "CreativeWork",
-                "conformsTo": {"@id": "https://w3id.org/ro/crate/1.1"},
-                "about": {"@id": "./"}
-            }
-        ]
-    }]
-    response = client.post(
-        "/v1/arcs",
-        headers={
-            "content-type": "application/ro-crate+json",
-            "accept": "application/json",
-            "X-Client-Cert": cert,
-        },
-        json=rocrate
-    )
-    assert response.status_code == 201
-    data = response.json()
-    assert isinstance(data, list)
-    assert "id" in data[0]
-    assert is_valid_sha256(data[0]["id"])
-    assert data[0]["status"] == "created"
-    assert "updated_at" in data[0]
-    assert response.headers["Location"] == f"/v1/arcs/{data[0]['id']}"
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "rocrate",
+    [
+        [],  # Empty list
+        [{  # One item
+            "@context": "https://w3id.org/ro/crate/1.1/context",
+            "@graph": [
+                {
+                    "@id": "./",
+                    "@type": "Dataset",
+                    "additionalType": "Investigation",
+                    "identifier": "ARC-001"
+                },
+                {
+                    "@id": "ro-crate-metadata.json",
+                    "@type": "CreativeWork",
+                    "conformsTo": {"@id": "https://w3id.org/ro/crate/1.1"},
+                    "about": {"@id": "./"}
+                }
+            ]
+        }],
+        [{  # Multiple items
+            "@context": "https://w3id.org/ro/crate/1.1/context",
+            "@graph": [
+                {
+                    "@id": "./",
+                    "@type": "Dataset",
+                    "additionalType": "Investigation",
+                    "identifier": "ARC-004"
+                },
+                {
+                    "@id": "ro-crate-metadata.json",
+                    "@type": "CreativeWork",
+                    "conformsTo": {"@id": "https://w3id.org/ro/crate/1.1"},
+                    "about": {"@id": "./"}
+                }
+            ]
+        }, {
+            "@context": "https://w3id.org/ro/crate/1.1/context",
+            "@graph": [
+                {
+                    "@id": "./",
+                    "@type": "Dataset",
+                    "additionalType": "Investigation",
+                    "identifier": "ARC-005"
+                },
+                {
+                    "@id": "ro-crate-metadata.json",
+                    "@type": "CreativeWork",
+                    "conformsTo": {"@id": "https://w3id.org/ro/crate/1.1"},
+                    "about": {"@id": "./"}
+                }
+            ]
+        }]
+    ]
+)
+async def test_success(service: MiddlewareService, cert: str, rocrate: list[dict[str, Any]]):
+    result = await service.create_or_update_arcs(
+        data=json.dumps(rocrate),
+        client_cert=cert,
+        content_type="application/ro-crate+json",
+        accept_type="application/json")
+
+    assert isinstance(result, CreateOrUpdateResponse)
+    assert result.client_id == "TestClient"
+    assert isinstance(result.arcs, list)
+    assert all(isinstance(a, ARCResponse) for a in result.arcs)
+    assert len(result.arcs) == len(rocrate)
+    assert all(is_valid_sha256(a.id) for a in result.arcs)
+    assert all(a.status == "created" for a in result.arcs)
 
 
-def test_missing_identifier(client: TestClient, cert: str):
-    rocrate = [{
-        "@context": "https://w3id.org/ro/crate/1.1/context",
-        "@graph": [
-            {
-                "@id": "./",
-                "@type": "Dataset",
-                "additionalType": "Investigation",
-                # Missing Identifier
-            },
-            {
-                "@id": "ro-crate-metadata.json",
-                "@type": "CreativeWork",
-                "conformsTo": {"@id": "https://w3id.org/ro/crate/1.1"},
-                "about": {"@id": "./"}
-            }
-        ]
-    }]
-    response = client.post(
-        "/v1/arcs",
-        headers={
-            "content-type": "application/ro-crate+json",
-            "accept": "application/json",
-            "X-Client-Cert": cert,
-        },
-        json=rocrate
-    )
-    assert response.status_code == 422
-
-
-def test_invalid_json(client: TestClient, cert: str):
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "rocrate",
+    [
+        "not a valid json",  # Invalid JSON syntax
+        {   # Not a list
+            "@context": "https://w3id.org/ro/crate/1.1/context",
+            "@graph": [
+                {
+                    "@id": "./",
+                    "@type": "Dataset",
+                    "additionalType": "Investigation",
+                    "identifier": "ARC-006"
+                },
+                {
+                    "@id": "ro-crate-metadata.json",
+                    "@type": "CreativeWork",
+                    "conformsTo": {"@id": "https://w3id.org/ro/crate/1.1"},
+                    "about": {"@id": "./"}
+                }
+            ]
+        }
+    ]
+)
+async def test_invalid_json(service: MiddlewareService, cert: str, rocrate: str | dict[str, Any]):
     # Send invalid JSON (not a list)
-    response = client.post(
-        "/v1/arcs",
-        headers={
-            "content-type": "application/ro-crate+json",
-            "accept": "application/json",
-            "X-Client-Cert": cert,
-        },
-        data="not a json"  # type: ignore
-    )
-    assert response.status_code == 400
+    with pytest.raises(InvalidJsonSyntaxError):
+        await service.create_or_update_arcs(
+            data=json.dumps(rocrate) if isinstance(rocrate, dict) else rocrate,
+            client_cert=cert,
+            content_type="application/ro-crate+json",
+            accept_type="application/json")
 
 
-def test_unsupported_content_type(client: TestClient, cert: str):
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "content_type, accept_type, expected_exception",
+    [
+        ("application/json", "application/json", InvalidContentTypeError),
+        ("application/ro-crate+json", "application/text", InvalidAcceptTypeError),
+        ("application/ro-crate+json", "application/xml", InvalidAcceptTypeError),
+    ]
+)
+async def test_invalid_header(
+        service: MiddlewareService,
+        cert: str,
+        content_type: str,
+        accept_type: str,
+        expected_exception: type):
     rocrate = [{
         "@context": "https://w3id.org/ro/crate/1.1/context",
         "@graph": [
@@ -111,74 +162,28 @@ def test_unsupported_content_type(client: TestClient, cert: str):
             }
         ]
     }]
-    response = client.post(
-        "/v1/arcs",
-        headers={
-            "content-type": "application/json",
-            "accept": "application/json",
-            "X-Client-Cert": cert,
-        },
-        json=rocrate
-    )
-    assert response.status_code == 415
-    assert "Unsupported Media Type" in response.json()["detail"]
+    with pytest.raises(expected_exception):
+        await service.create_or_update_arcs(
+            data=json.dumps(rocrate),
+            client_cert=cert,
+            content_type=content_type,
+            accept_type=accept_type)
 
 
-def test_unsupported_accept(client: TestClient, cert: str):
-    rocrate = [{
-        "@context": "https://w3id.org/ro/crate/1.1/context",
-        "@graph": [
-            {
-                "@id": "./",
-                "@type": "Dataset",
-                "additionalType": "Investigation",
-                "identifier": "ARC-003"
-            },
-            {
-                "@id": "ro-crate-metadata.json",
-                "@type": "CreativeWork",
-                "conformsTo": {"@id": "https://w3id.org/ro/crate/1.1"},
-                "about": {"@id": "./"}
-            }
-        ]
-    }]
-    response = client.post(
-        "/v1/arcs",
-        headers={
-            "content-type": "application/ro-crate+json",
-            "accept": "application/xml",
-            "X-Client-Cert": cert,
-        },
-        json=rocrate
-    )
-    assert response.status_code == 406
-
-
-def test_empty_list(client: TestClient, cert: str):
-    response = client.post(
-        "/v1/arcs",
-        headers={
-            "content-type": "application/ro-crate+json",
-            "accept": "application/json",
-            "X-Client-Cert": cert,
-        },
-        json=[]
-    )
-    assert response.status_code == 200
-    assert response.json() == []
-    assert response.headers["Location"] == ""
-
-
-def test_multiple_arcs(client: TestClient, cert: str):
-    rocrate = [
-        {
-            "@context": "https://w3id.org/ro/crate/1.1/context",
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "rocrate",
+    [
+        [{  # No @graph
+            "@context": "https://w3id.org/ro/crate/1.1/context"
+        }],
+        [{  # No @context
             "@graph": [
                 {
                     "@id": "./",
                     "@type": "Dataset",
                     "additionalType": "Investigation",
-                    "identifier": "ARC-004"
+                    "identifier": "ARC-006"
                 },
                 {
                     "@id": "ro-crate-metadata.json",
@@ -187,15 +192,25 @@ def test_multiple_arcs(client: TestClient, cert: str):
                     "about": {"@id": "./"}
                 }
             ]
-        },
-        {
+        }],
+        [{  # No Dataset
+            "@context": "https://w3id.org/ro/crate/1.1/context",
+            "@graph": [
+                {
+                    "@id": "ro-crate-metadata.json",
+                    "@type": "CreativeWork",
+                    "about": {"@id": "./"}
+                }
+            ]
+        }],
+        [{
             "@context": "https://w3id.org/ro/crate/1.1/context",
             "@graph": [
                 {
                     "@id": "./",
                     "@type": "Dataset",
                     "additionalType": "Investigation",
-                    "identifier": "ARC-005"
+                    # Missing Identifier
                 },
                 {
                     "@id": "ro-crate-metadata.json",
@@ -204,127 +219,13 @@ def test_multiple_arcs(client: TestClient, cert: str):
                     "about": {"@id": "./"}
                 }
             ]
-        }
+        }]
     ]
-    response = client.post(
-        "/v1/arcs",
-        headers={
-            "content-type": "application/ro-crate+json",
-            "accept": "application/json",
-            "X-Client-Cert": cert,
-        },
-        json=rocrate
-    )
-    assert response.status_code == 201
-    data = response.json()
-    assert isinstance(data, list)
-    assert len(data) == 2
-    assert is_valid_sha256(data[0]["id"])
-    assert is_valid_sha256(data[1]["id"])
-    assert response.headers["Location"] == f"/v1/arcs/{data[0]['id']}"
-
-
-def test_graph_missing(client: TestClient, cert: str):
-    # Missing @graph key
-    rocrate = [{
-        "@context": "https://w3id.org/ro/crate/1.1/context"
-        # No @graph
-    }]
-    response = client.post(
-        "/v1/arcs",
-        headers={
-            "content-type": "application/ro-crate+json",
-            "accept": "application/json",
-            "X-Client-Cert": cert,
-        },
-        json=rocrate
-    )
-    assert response.status_code == 422
-
-
-def test_context_missing(client: TestClient, cert: str):
-    # Missing @context key
-    rocrate = [{
-        "@graph": [
-            {
-                "@id": "./",
-                "@type": "Dataset",
-                "additionalType": "Investigation",
-                "identifier": "ARC-006"
-            },
-            {
-                "@id": "ro-crate-metadata.json",
-                "@type": "CreativeWork",
-                "conformsTo": {"@id": "https://w3id.org/ro/crate/1.1"},
-                "about": {"@id": "./"}
-            }
-        ]
-    }]
-    response = client.post(
-        "/v1/arcs",
-        headers={
-            "content-type": "application/ro-crate+json",
-            "accept": "application/json",
-            "X-Client-Cert": cert,
-        },
-        json=rocrate
-    )
-    # Should fail if @context is required by ARC.from_rocrate_json_string
-    assert response.status_code == 422
-
-
-def test_dataset_missing(client: TestClient, cert: str):
-    # @graph exists but no Dataset entry
-    rocrate = [{
-        "@context": "https://w3id.org/ro/crate/1.1/context",
-        "@graph": [
-            {
-                "@id": "ro-crate-metadata.json",
-                "@type": "CreativeWork",
-                "about": {"@id": "./"}
-            }
-            # No Dataset
-        ]
-    }]
-    response = client.post(
-        "/v1/arcs",
-        headers={
-            "content-type": "application/ro-crate+json",
-            "accept": "application/json",
-            "X-Client-Cert": cert,
-        },
-        json=rocrate
-    )
-    assert response.status_code == 422
-
-
-def test_non_list_payload(client: TestClient, cert: str):
-    # Send a dict instead of a list
-    rocrate = {
-        "@context": "https://w3id.org/ro/crate/1.1/context",
-        "@graph": [
-            {
-                "@id": "./",
-                "@type": "Dataset",
-                "additionalType": "Investigation",
-                "identifier": "ARC-006"
-            },
-            {
-                "@id": "ro-crate-metadata.json",
-                "@type": "CreativeWork",
-                "conformsTo": {"@id": "https://w3id.org/ro/crate/1.1"},
-                "about": {"@id": "./"}
-            }
-        ]
-    }
-    response = client.post(
-        "/v1/arcs",
-        headers={
-            "content-type": "application/ro-crate+json",
-            "accept": "application/json",
-            "X-Client-Cert": cert,
-        },
-        json=rocrate
-    )
-    # Should fail because the API expects a list
-    assert response.status_code == 400
+)
+async def test_element_missing(service: MiddlewareService, cert: str, rocrate: list[dict[str, Any]]):
+    with pytest.raises(InvalidJsonSemanticError):
+        await service.create_or_update_arcs(
+            data=json.dumps(rocrate),
+            client_cert=cert,
+            content_type="application/ro-crate+json",
+            accept_type="application/json")
