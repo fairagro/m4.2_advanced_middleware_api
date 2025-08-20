@@ -9,7 +9,7 @@ from cryptography.hazmat.primitives import serialization
 import datetime
 
 from app.middleware_api import app
-from app.arc_persistence_gitlab_api import ARCPersistenceGitlabAPI
+from app.arc_store_gitlab_api import ARCStoreGitlabAPI
 
 
 @pytest.fixture
@@ -53,6 +53,6 @@ def cert() -> str:
 @pytest.fixture
 def api():
     """Erzeugt ein ARCPersistenceGitlabAPI mit gemocktem Gitlab."""
-    api = ARCPersistenceGitlabAPI("http://gitlab", "token", 1)
+    api = ARCStoreGitlabAPI("http://gitlab", "token", 1)
     api.gl = MagicMock()
     return api

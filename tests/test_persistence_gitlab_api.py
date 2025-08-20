@@ -94,7 +94,7 @@ def test_get_success(api, monkeypatch):
     api.gl.projects.list.return_value = [project]
 
     dummy_arc = MagicMock()
-    monkeypatch.setattr("app.arc_persistence_gitlab_api.ARC.try_load_async", lambda path: dummy_arc)
+    monkeypatch.setattr("app.arc_store_gitlab_api.ARC.try_load_async", lambda path: dummy_arc)
 
     arc = api.get("arc1")
     assert arc == dummy_arc

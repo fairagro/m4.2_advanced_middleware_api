@@ -4,7 +4,7 @@ from arctrl.arc import ARC
 
 # ----------- Interface -----------
 
-class ARCPersistence(ABC):
+class ARCStore(ABC):
     @abstractmethod
     def create_or_update(self, arc_id: str, arc: ARC) -> None:
         """Erstellt oder aktualisiert ein ARC"""

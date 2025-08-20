@@ -6,11 +6,11 @@ import gitlab
 from gitlab.exceptions import GitlabGetError, GitlabAuthenticationError, GitlabConnectionError
 import logging
 from arctrl.arc import ARC
-from .arc_persistence import ARCPersistence
+from .arc_store import ARCStore
 
 logger = logging.getLogger(__name__)
 
-class ARCPersistenceGitlabAPI(ARCPersistence):
+class ARCStoreGitlabAPI(ARCStore):
 
     def __init__(self, gitlab_url: str, private_token: str, group_id: int, branch: str = "main"):
         logger.info("Initializing ARCPersistenceGitlabAPI")
