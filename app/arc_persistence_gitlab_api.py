@@ -88,20 +88,20 @@ class ARCPersistenceGitlabAPI(ARCPersistence):
                             action = "create"
                             logger.debug(f"File '{relative_path}' does not exist. Action: create")
 
+                        content_bytes = file_path.read_bytes()
                         try:
-                            content = file_path.read_text(encoding="utf-8")
+                            content_text = content_bytes.decode("utf-8")
                             actions.append({
                                 "action": action,
                                 "file_path": relative_path,
-                                "content": content,
+                                "content": content_text,
                             })
                             logger.debug(f"Added text file '{relative_path}' to actions.")
                         except UnicodeDecodeError:
-                            content = file_path.read_bytes()
                             actions.append({
                                 "action": action,
                                 "file_path": relative_path,
-                                "content": base64.b64encode(content).decode("utf-8"),
+                                "content": base64.b64encode(content_bytes).decode("utf-8"),
                                 "encoding": "base64",
                             })
                             logger.debug(f"Added binary file '{relative_path}' to actions.")
@@ -148,25 +148,32 @@ class ARCPersistenceGitlabAPI(ARCPersistence):
 
                 tree = project.repository_tree(ref=self.branch, all=True, recursive=True)
                 for entry in tree:
-                    if entry["type"] == "blob":
+                    if entry["type"] != "blob":
+                        continue
+                    if entry["path"] == ".arc_hash":
+                        logger.debug("Skipping .arc_hash file (used only for change detection).")
+                        continue
+
+                    try:
+                        f = project.files.get(file_path=entry["path"], ref=self.branch)
+                    except GitlabGetError as e:
+                        logger.error(f"File '{entry['path']}' not found in project '{arc_id}': {e}")
+                        continue
+                    file_path = arc_path / entry["path"]
+                    file_path.parent.mkdir(parents=True, exist_ok=True)
+                    file_content = base64.b64decode(f.content)
+                    if getattr(f, "encoding", None) == "base64":
+                        file_path.write_bytes(file_content)
+                        logger.debug(f"Wrote binary file '{entry['path']}'")
+                    else:
                         try:
-                            f = project.files.get(file_path=entry["path"], ref=self.branch)
-                        except GitlabGetError as e:
-                            logger.error(f"File '{entry['path']}' not found in project '{arc_id}': {e}")
-                            continue
-                        file_path = arc_path / entry["path"]
-                        file_path.parent.mkdir(parents=True, exist_ok=True)
-                        file_content = base64.b64decode(f.content)
-                        if getattr(f, "encoding", None) == "base64":
+                            text_content = file_content.decode("utf-8")
+                            file_path.write_text(text_content, encoding="utf-8")
+                            logger.debug(f"Wrote text file '{entry['path']}'")
+                        except UnicodeDecodeError:
+                            # Fallback – sollte eigentlich nie passieren, wenn encoding korrekt gesetzt ist
                             file_path.write_bytes(file_content)
-                            logger.debug(f"Wrote binary file '{entry['path']}'")
-                        else:
-                            try:
-                                file_path.write_text(file_content.decode("utf-8"), encoding="utf-8")
-                                logger.debug(f"Wrote text file '{entry['path']}'")
-                            except Exception as e:
-                                logger.error(f"Error decoding file '{entry['path']}' as UTF-8: {e}")
-                                continue
+                            logger.warning(f"Failed to decode '{entry['path']}' as UTF-8, wrote as binary.")
 
                 try:
                     logger.info(f"Loading ARC from '{arc_path}'")
