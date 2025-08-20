@@ -1,11 +1,11 @@
-from .prepare_tests import client, test_cert
+from fastapi.testclient import TestClient
 
 
-def test_authenticated():
+def test_authenticated(client: TestClient, cert: str):
     response = client.get(
         "/v1/whoami",
         headers={
-            "X-Client-Cert": test_cert,
+            "X-Client-Cert": cert,
             "Accept": "application/json"
         }
     )
@@ -14,7 +14,7 @@ def test_authenticated():
     assert data["client_id"] == "TestClient"
 
 
-def test_no_cert_header():
+def test_no_cert_header(client: TestClient):
     response = client.get(
         "/v1/whoami",
         headers={
@@ -24,7 +24,7 @@ def test_no_cert_header():
     assert response.status_code == 401
 
 
-def test_whoami_invalid_cert():
+def test_whoami_invalid_cert(client: TestClient):
     response = client.get(
         "/v1/whoami",
         headers={
@@ -35,11 +35,11 @@ def test_whoami_invalid_cert():
     assert response.status_code == 400
 
 
-def test_invalid_accept_header():
+def test_invalid_accept_header(client: TestClient, cert: str):
     response = client.get(
         "/v1/whoami",
         headers={
-            "X-Client-Cert": test_cert,
+            "X-Client-Cert": cert,
             "Accept": "application/xml"
         }
     )

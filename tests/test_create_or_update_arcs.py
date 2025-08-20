@@ -1,4 +1,4 @@
-from .prepare_tests import client, test_cert
+from fastapi.testclient import TestClient
 
 
 def is_valid_sha256(s: str) -> bool:
@@ -11,7 +11,7 @@ def is_valid_sha256(s: str) -> bool:
         return False
 
 
-def test_success():
+def test_success(client: TestClient, cert: str):
     # Valid ARC RO-Crate structure
     rocrate = [{
         "@context": "https://w3id.org/ro/crate/1.1/context",
@@ -35,7 +35,7 @@ def test_success():
         headers={
             "content-type": "application/ro-crate+json",
             "accept": "application/json",
-            "X-Client-Cert": test_cert,
+            "X-Client-Cert": cert,
         },
         json=rocrate
     )
@@ -49,7 +49,7 @@ def test_success():
     assert response.headers["Location"] == f"/v1/arcs/{data[0]['id']}"
 
 
-def test_missing_identifier():
+def test_missing_identifier(client: TestClient, cert: str):
     rocrate = [{
         "@context": "https://w3id.org/ro/crate/1.1/context",
         "@graph": [
@@ -72,28 +72,28 @@ def test_missing_identifier():
         headers={
             "content-type": "application/ro-crate+json",
             "accept": "application/json",
-            "X-Client-Cert": test_cert,
+            "X-Client-Cert": cert,
         },
         json=rocrate
     )
     assert response.status_code == 422
 
 
-def test_invalid_json():
+def test_invalid_json(client: TestClient, cert: str):
     # Send invalid JSON (not a list)
     response = client.post(
         "/v1/arcs",
         headers={
             "content-type": "application/ro-crate+json",
             "accept": "application/json",
-            "X-Client-Cert": test_cert,
+            "X-Client-Cert": cert,
         },
         data="not a json"  # type: ignore
     )
     assert response.status_code == 400
 
 
-def test_unsupported_content_type():
+def test_unsupported_content_type(client: TestClient, cert: str):
     rocrate = [{
         "@context": "https://w3id.org/ro/crate/1.1/context",
         "@graph": [
@@ -116,7 +116,7 @@ def test_unsupported_content_type():
         headers={
             "content-type": "application/json",
             "accept": "application/json",
-            "X-Client-Cert": test_cert,
+            "X-Client-Cert": cert,
         },
         json=rocrate
     )
@@ -124,7 +124,7 @@ def test_unsupported_content_type():
     assert "Unsupported Media Type" in response.json()["detail"]
 
 
-def test_unsupported_accept():
+def test_unsupported_accept(client: TestClient, cert: str):
     rocrate = [{
         "@context": "https://w3id.org/ro/crate/1.1/context",
         "@graph": [
@@ -147,20 +147,20 @@ def test_unsupported_accept():
         headers={
             "content-type": "application/ro-crate+json",
             "accept": "application/xml",
-            "X-Client-Cert": test_cert,
+            "X-Client-Cert": cert,
         },
         json=rocrate
     )
     assert response.status_code == 406
 
 
-def test_empty_list():
+def test_empty_list(client: TestClient, cert: str):
     response = client.post(
         "/v1/arcs",
         headers={
             "content-type": "application/ro-crate+json",
             "accept": "application/json",
-            "X-Client-Cert": test_cert,
+            "X-Client-Cert": cert,
         },
         json=[]
     )
@@ -169,7 +169,7 @@ def test_empty_list():
     assert response.headers["Location"] == ""
 
 
-def test_multiple_arcs():
+def test_multiple_arcs(client: TestClient, cert: str):
     rocrate = [
         {
             "@context": "https://w3id.org/ro/crate/1.1/context",
@@ -211,7 +211,7 @@ def test_multiple_arcs():
         headers={
             "content-type": "application/ro-crate+json",
             "accept": "application/json",
-            "X-Client-Cert": test_cert,
+            "X-Client-Cert": cert,
         },
         json=rocrate
     )
@@ -224,7 +224,7 @@ def test_multiple_arcs():
     assert response.headers["Location"] == f"/v1/arcs/{data[0]['id']}"
 
 
-def test_graph_missing():
+def test_graph_missing(client: TestClient, cert: str):
     # Missing @graph key
     rocrate = [{
         "@context": "https://w3id.org/ro/crate/1.1/context"
@@ -235,14 +235,14 @@ def test_graph_missing():
         headers={
             "content-type": "application/ro-crate+json",
             "accept": "application/json",
-            "X-Client-Cert": test_cert,
+            "X-Client-Cert": cert,
         },
         json=rocrate
     )
     assert response.status_code == 422
 
 
-def test_context_missing():
+def test_context_missing(client: TestClient, cert: str):
     # Missing @context key
     rocrate = [{
         "@graph": [
@@ -265,7 +265,7 @@ def test_context_missing():
         headers={
             "content-type": "application/ro-crate+json",
             "accept": "application/json",
-            "X-Client-Cert": test_cert,
+            "X-Client-Cert": cert,
         },
         json=rocrate
     )
@@ -273,7 +273,7 @@ def test_context_missing():
     assert response.status_code == 422
 
 
-def test_dataset_missing():
+def test_dataset_missing(client: TestClient, cert: str):
     # @graph exists but no Dataset entry
     rocrate = [{
         "@context": "https://w3id.org/ro/crate/1.1/context",
@@ -291,14 +291,14 @@ def test_dataset_missing():
         headers={
             "content-type": "application/ro-crate+json",
             "accept": "application/json",
-            "X-Client-Cert": test_cert,
+            "X-Client-Cert": cert,
         },
         json=rocrate
     )
     assert response.status_code == 422
 
 
-def test_non_list_payload():
+def test_non_list_payload(client: TestClient, cert: str):
     # Send a dict instead of a list
     rocrate = {
         "@context": "https://w3id.org/ro/crate/1.1/context",
@@ -322,7 +322,7 @@ def test_non_list_payload():
         headers={
             "content-type": "application/ro-crate+json",
             "accept": "application/json",
-            "X-Client-Cert": test_cert,
+            "X-Client-Cert": cert,
         },
         json=rocrate
     )

@@ -6,7 +6,6 @@ import gitlab
 from gitlab.exceptions import GitlabGetError, GitlabAuthenticationError, GitlabConnectionError, GitlabCreateError
 import logging
 from arctrl.arc import ARC
-
 from .arc_persistence import ARCPersistence
 
 logger = logging.getLogger(__name__)
@@ -19,195 +18,174 @@ class ARCPersistenceGitlabAPI(ARCPersistence):
         self.group_id = group_id
         self.branch = branch
 
+    # -------------------------- Project Handling --------------------------
     def _get_or_create_project(self, arc_id: str):
-        logger.info(f"Searching for GitLab project with path '{arc_id}'")
         projects = self.gl.projects.list(search=arc_id)
         for project in projects:
-            logger.debug(f"Found project candidate: {project.path}")
             if project.path == arc_id:
-                logger.info(f"Project '{arc_id}' found.")
                 return project
-
-        logger.info(f"Project '{arc_id}' not found. Creating new project.")
         group = self.gl.groups.get(self.group_id)
-        project = self.gl.projects.create({
+        return self.gl.projects.create({
             "name": arc_id,
             "path": arc_id,
             "namespace_id": group.id,
             "initialize_with_readme": False,
         })
-        logger.info(f"Project '{arc_id}' created with id {project.id}.")
-        return project
-    
+
+    def _find_project(self, arc_id: str):
+        projects = self.gl.projects.list(search=arc_id)
+        return next((p for p in projects if p.path == arc_id), None)
+
+    # -------------------------- Hashing --------------------------
     def _compute_arc_hash(self, arc_dir: Path) -> str:
-        logger.info(f"Computing hash for ARC directory: {arc_dir}")
         sha = hashlib.sha256()
         for file_path in sorted(arc_dir.rglob("*")):
             if file_path.is_file():
-                logger.debug(f"Hashing file: {file_path}")
                 with open(file_path, "rb") as f:
                     while chunk := f.read(8192):
                         sha.update(chunk)
-        hash_value = sha.hexdigest()
-        logger.info(f"Computed ARC hash: {hash_value}")
-        return hash_value
+        return sha.hexdigest()
 
+    def _load_old_hash(self, project) -> str | None:
+        try:
+            old_hash_file = project.files.get(file_path=".arc_hash", ref=self.branch)
+            return base64.b64decode(old_hash_file.content).decode("utf-8").strip()
+        except GitlabGetError:
+            return None
+
+    # -------------------------- File Actions --------------------------
+    def _prepare_file_actions(self, project, arc_path: Path, old_hash: str) -> list:
+        actions = []
+        for file_path in arc_path.rglob("*"):
+            if not file_path.is_file():
+                continue
+            relative_path = str(file_path.relative_to(arc_path))
+            action_type = "update" if self._file_exists(project, relative_path) else "create"
+            actions.append(self._build_file_action(file_path, relative_path, action_type))
+        # ARC hash action separat hinzufügen
+        actions.append(self._build_hash_action(old_hash, arc_path))
+        return actions
+
+    def _file_exists(self, project, file_path: str) -> bool:
+        try:
+            project.files.get(file_path=file_path, ref=self.branch)
+            return True
+        except GitlabGetError:
+            return False
+
+    def _build_file_action(self, file_path: Path, relative_path: str, action_type: str) -> dict:
+        """Erstellt ein Action-Dict für eine Datei (Text oder Binär)."""
+        content_bytes = file_path.read_bytes()
+        if self._is_text_file(content_bytes):
+            return {
+                "action": action_type,
+                "file_path": relative_path,
+                "content": content_bytes.decode("utf-8"),
+            }
+        else:
+            return {
+                "action": action_type,
+                "file_path": relative_path,
+                "content": base64.b64encode(content_bytes).decode("utf-8"),
+                "encoding": "base64",
+            }
+
+    def _is_text_file(self, content_bytes: bytes) -> bool:
+        """Gibt True zurück, wenn Datei UTF-8-dekodierbar ist."""
+        try:
+            content_bytes.decode("utf-8")
+            return True
+        except UnicodeDecodeError:
+            return False
+
+    def _build_hash_action(self, old_hash: str, arc_path: Path) -> dict:
+        """Erstellt die Commit-Action für die .arc_hash Datei."""
+        return {
+            "action": "create" if not old_hash else "update",
+            "file_path": ".arc_hash",
+            "content": self._compute_arc_hash(arc_path)
+        }
+
+    # -------------------------- Commit --------------------------
+    def _commit_actions(self, project, actions, arc_id: str):
+        commit_data = {
+            "branch": self.branch,
+            "commit_message": f"Add/update ARC {arc_id}",
+            "actions": actions,
+        }
+        project.commits.create(commit_data)
+
+    # -------------------------- Create/Update --------------------------
     def create_or_update(self, arc_id: str, arc) -> None:
-        logger.info(f"Starting create_or_update for ARC '{arc_id}'")
         try:
             project = self._get_or_create_project(arc_id)
             with tempfile.TemporaryDirectory() as tmp_root:
                 arc_path = Path(tmp_root) / arc_id
                 arc_path.mkdir(parents=True, exist_ok=True)
-                logger.info(f"Writing ARC to temp path: {arc_path}")
                 arc.Write(str(arc_path))
-                new_hash = self._compute_arc_hash(arc_path)
 
-                try:
-                    old_hash_file = project.files.get(file_path=".arc_hash", ref=self.branch)
-                    old_hash = base64.b64decode(old_hash_file.content).decode("utf-8").strip()
-                    logger.info(f"Loaded old ARC hash: {old_hash}")
-                except GitlabGetError:
-                    old_hash = None
-                    logger.info("No previous ARC hash found.")
+                new_hash = self._compute_arc_hash(arc_path)
+                old_hash = self._load_old_hash(project)
 
                 if new_hash == old_hash:
-                    logger.info(f"No changes detected for ARC '{arc_id}'. Skipping update.")
                     return
 
-                actions = []
-                for file_path in arc_path.rglob("*"):
-                    if file_path.is_file():
-                        relative_path = str(file_path.relative_to(arc_path))
-                        logger.debug(f"Preparing file for commit: {relative_path}")
-                        try:
-                            project.files.get(file_path=relative_path, ref=self.branch)
-                            action = "update"
-                            logger.debug(f"File '{relative_path}' exists. Action: update")
-                        except GitlabGetError:
-                            action = "create"
-                            logger.debug(f"File '{relative_path}' does not exist. Action: create")
-
-                        content_bytes = file_path.read_bytes()
-                        try:
-                            content_text = content_bytes.decode("utf-8")
-                            actions.append({
-                                "action": action,
-                                "file_path": relative_path,
-                                "content": content_text,
-                            })
-                            logger.debug(f"Added text file '{relative_path}' to actions.")
-                        except UnicodeDecodeError:
-                            actions.append({
-                                "action": action,
-                                "file_path": relative_path,
-                                "content": base64.b64encode(content_bytes).decode("utf-8"),
-                                "encoding": "base64",
-                            })
-                            logger.debug(f"Added binary file '{relative_path}' to actions.")
-
-                actions.append({
-                    "action": "create" if not old_hash else "update",
-                    "file_path": ".arc_hash",
-                    "content": new_hash
-                })
-                logger.info(f"Prepared {len(actions)} actions for commit.")
-
-                commit_data = {
-                    "branch": self.branch,
-                    "commit_message": f"Add/update ARC {arc_id}",
-                    "actions": actions,
-                }
-                logger.info(f"Committing changes to project '{arc_id}'")
-                try:
-                    project.commits.create(commit_data)
-                    logger.info(f"Commit successful for ARC '{arc_id}'")
-                except GitlabCreateError as e:
-                    logger.error(f"Failed to commit changes to ARC '{arc_id}': {e}")
-                    raise
-        except (GitlabAuthenticationError, GitlabConnectionError) as e:
-            logger.error(f"GitLab connection/authentication error: {e}")
+                actions = self._prepare_file_actions(project, arc_path, old_hash)
+                self._commit_actions(project, actions, arc_id)
+        except (GitlabAuthenticationError, GitlabConnectionError):
             raise
-        except Exception as e:
-            logger.exception(f"Unexpected error in create_or_update({arc_id}): {e}")
+        except Exception:
+            logger.exception(f"Unexpected error in create_or_update({arc_id})")
             raise
 
+    # -------------------------- Get --------------------------
     def get(self, arc_id: str):
-        logger.info(f"Starting get for ARC '{arc_id}'")
         try:
-            projects = self.gl.projects.list(search=arc_id)
-            project = next((p for p in projects if p.path == arc_id), None)
+            project = self._find_project(arc_id)
             if not project:
-                logger.warning(f"ARC project '{arc_id}' not found in GitLab.")
                 return None
-
             with tempfile.TemporaryDirectory() as tmp_root:
                 arc_path = Path(tmp_root) / arc_id
                 arc_path.mkdir(parents=True, exist_ok=True)
-                logger.info(f"Downloading files from project '{arc_id}' to '{arc_path}'")
-
-                tree = project.repository_tree(ref=self.branch, all=True, recursive=True)
-                for entry in tree:
-                    if entry["type"] != "blob":
-                        continue
-                    if entry["path"] == ".arc_hash":
-                        logger.debug("Skipping .arc_hash file (used only for change detection).")
-                        continue
-
-                    try:
-                        f = project.files.get(file_path=entry["path"], ref=self.branch)
-                    except GitlabGetError as e:
-                        logger.error(f"File '{entry['path']}' not found in project '{arc_id}': {e}")
-                        continue
-                    file_path = arc_path / entry["path"]
-                    file_path.parent.mkdir(parents=True, exist_ok=True)
-                    file_content = base64.b64decode(f.content)
-                    if getattr(f, "encoding", None) == "base64":
-                        file_path.write_bytes(file_content)
-                        logger.debug(f"Wrote binary file '{entry['path']}'")
-                    else:
-                        try:
-                            text_content = file_content.decode("utf-8")
-                            file_path.write_text(text_content, encoding="utf-8")
-                            logger.debug(f"Wrote text file '{entry['path']}'")
-                        except UnicodeDecodeError:
-                            # Fallback – sollte eigentlich nie passieren, wenn encoding korrekt gesetzt ist
-                            file_path.write_bytes(file_content)
-                            logger.warning(f"Failed to decode '{entry['path']}' as UTF-8, wrote as binary.")
-
-                try:
-                    logger.info(f"Loading ARC from '{arc_path}'")
-                    arc = ARC.try_load_async(str(arc_path))
-                except Exception as e:
-                    logger.error(f"Failed to load ARC from '{arc_path}': {e}")
-                    return None
-                logger.info(f"Successfully loaded ARC '{arc_id}'")
-                return arc
-        except (GitlabAuthenticationError, GitlabConnectionError) as e:
-            logger.error(f"GitLab connection/authentication error: {e}")
+                self._download_project_files(project, arc_path)
+                return ARC.try_load_async(str(arc_path))
+        except (GitlabAuthenticationError, GitlabConnectionError):
             return None
-        except Exception as e:
-            logger.exception(f"Unexpected error in get({arc_id}): {e}")
+        except Exception:
+            logger.exception(f"Unexpected error in get({arc_id})")
             return None
 
+    def _download_project_files(self, project, arc_path: Path):
+        tree = project.repository_tree(ref=self.branch, all=True, recursive=True)
+        for entry in tree:
+            if entry["type"] != "blob" or entry["path"] == ".arc_hash":
+                continue
+            f = project.files.get(file_path=entry["path"], ref=self.branch)
+            file_path = arc_path / entry["path"]
+            file_path.parent.mkdir(parents=True, exist_ok=True)
+            self._write_project_file(f, file_path)
+
+    def _write_project_file(self, f, file_path: Path):
+        content_bytes = base64.b64decode(f.content)
+        if getattr(f, "encoding", None) == "base64":
+            file_path.write_bytes(content_bytes)
+        else:
+            try:
+                text_content = content_bytes.decode("utf-8")
+                file_path.write_text(text_content, encoding="utf-8")
+            except UnicodeDecodeError:
+                file_path.write_bytes(content_bytes)
+
+    # -------------------------- Delete --------------------------
     def delete(self, arc_id: str) -> None:
-        logger.info(f"Starting delete for ARC '{arc_id}'")
         try:
-            projects = self.gl.projects.list(search=arc_id)
-            project = next((p for p in projects if p.path == arc_id), None)
+            project = self._find_project(arc_id)
             if project:
-                try:
-                    logger.info(f"Deleting project '{arc_id}'")
-                    project.delete()
-                    logger.info(f"Project '{arc_id}' deleted successfully.")
-                except Exception as e:
-                    logger.error(f"Failed to delete project '{arc_id}': {e}")
-                    raise
+                project.delete()
             else:
                 logger.warning(f"Project '{arc_id}' not found for deletion.")
-        except (GitlabAuthenticationError, GitlabConnectionError) as e:
-            logger.error(f"GitLab connection/authentication error: {e}")
+        except (GitlabAuthenticationError, GitlabConnectionError):
             raise
-        except Exception as e:
-            logger.exception(f"Unexpected error in delete({arc_id}): {e}")
+        except Exception:
+            logger.exception(f"Unexpected error in delete({arc_id})")
             raise
