@@ -3,7 +3,7 @@ import hashlib
 from pathlib import Path
 import tempfile
 import gitlab
-from gitlab.exceptions import GitlabGetError, GitlabAuthenticationError, GitlabConnectionError, GitlabCreateError
+from gitlab.exceptions import GitlabGetError, GitlabAuthenticationError, GitlabConnectionError
 import logging
 from arctrl.arc import ARC
 from .arc_persistence import ARCPersistence
@@ -54,7 +54,7 @@ class ARCPersistenceGitlabAPI(ARCPersistence):
             return None
 
     # -------------------------- File Actions --------------------------
-    def _prepare_file_actions(self, project, arc_path: Path, old_hash: str) -> list:
+    def _prepare_file_actions(self, project, arc_path: Path, old_hash: str | None) -> list:
         actions = []
         for file_path in arc_path.rglob("*"):
             if not file_path.is_file():
@@ -98,7 +98,7 @@ class ARCPersistenceGitlabAPI(ARCPersistence):
         except UnicodeDecodeError:
             return False
 
-    def _build_hash_action(self, old_hash: str, arc_path: Path) -> dict:
+    def _build_hash_action(self, old_hash: str | None, arc_path: Path) -> dict:
         """Erstellt die Commit-Action für die .arc_hash Datei."""
         return {
             "action": "create" if not old_hash else "update",
