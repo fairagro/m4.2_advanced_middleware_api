@@ -75,7 +75,7 @@ class MiddlewareLogic:
                 f"Error processing RO-Crate JSON: {str(e)}") from e
 
         identifier = getattr(arc, "Identifier", None)
-        if not identifier:
+        if not identifier or identifier == "":
             raise InvalidJsonSemanticError(
                 "RO-Crate JSON must contain an 'Identifier' in the ISA object."
             )
@@ -103,20 +103,28 @@ class MiddlewareLogic:
     # -------------------------- Whoami --------------------------
 
     async def whoami(self, client_id: str) -> MiddlewareLogicResponse:
-        return MiddlewareLogicResponse(
-            client_id=client_id,
-            message="Client authenticated successfully"
-        )
+        try:
+            return MiddlewareLogicResponse(
+                client_id=client_id,
+                message="Client authenticated successfully"
+            )
+        except Exception as e:
+            raise MiddlewareLogicError(
+                f"unexpected error encountered: {str(e)}") from e
 
     # -------------------------- Create or Update ARCs --------------------------
     async def create_or_update_arcs(
             self, data: str, client_id: str) -> CreateOrUpdateResponse:
-        result = await self._process_arcs(data, client_id)
-        return CreateOrUpdateResponse(
-            client_id=client_id,
-            message="ARCs processed successfully",
-            arcs=result,
-        )
+        try:
+            result = await self._process_arcs(data, client_id)
+            return CreateOrUpdateResponse(
+                client_id=client_id,
+                message="ARCs processed successfully",
+                arcs=result,
+            )
+        except Exception as e:
+            raise MiddlewareLogicError(
+                f"unexpected error encountered: {str(e)}") from e
 
     # # -------------------------
     # # READ ARCs
