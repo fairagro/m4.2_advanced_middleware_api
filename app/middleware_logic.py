@@ -16,7 +16,7 @@ class ARCStatus(str, Enum):
     requested = "requested"
 
 
-class MiddlewareResponse(BaseModel):
+class MiddlewareLogicResponse(BaseModel):
     client_id: str
     message: str
 
@@ -27,26 +27,26 @@ class ARCResponse(BaseModel):
     timestamp: str
 
 
-class CreateOrUpdateResponse(MiddlewareResponse):
+class CreateOrUpdateResponse(MiddlewareLogicResponse):
     arcs: List[ARCResponse]
 
 
-class MiddlewareServiceError(Exception):
+class MiddlewareLogicError(Exception):
     """Basisklasse für Fehler in MiddlewareService"""
     pass
 
 
-class InvalidJsonSyntaxError(MiddlewareServiceError):
+class InvalidJsonSyntaxError(MiddlewareLogicError):
     """Wird geworfen, wenn es Probleme beim Parsen des ARC JSON gibt"""
     pass
 
 
-class InvalidJsonSemanticError(MiddlewareServiceError):
+class InvalidJsonSemanticError(MiddlewareLogicError):
     """Wird geworfen, wenn es Probleme beim Parsen des ARC JSON gibt"""
     pass
 
 
-class MiddlewareService:
+class MiddlewareLogic:
 
     def __init__(self, store: ARCStore):
         self._store = store
@@ -102,8 +102,8 @@ class MiddlewareService:
 
     # -------------------------- Whoami --------------------------
 
-    async def whoami(self, client_id: str) -> MiddlewareResponse:
-        return MiddlewareResponse(
+    async def whoami(self, client_id: str) -> MiddlewareLogicResponse:
+        return MiddlewareLogicResponse(
             client_id=client_id,
             message="Client authenticated successfully"
         )

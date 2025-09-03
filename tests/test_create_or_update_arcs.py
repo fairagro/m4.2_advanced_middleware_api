@@ -2,12 +2,12 @@ import json
 from typing import Any
 import pytest
 
-from app.middleware_service import (
+from app.middleware_logic import (
     ARCResponse,
     CreateOrUpdateResponse,
     InvalidJsonSemanticError,
     InvalidJsonSyntaxError,
-    MiddlewareService
+    MiddlewareLogic
 )
 
 
@@ -78,7 +78,7 @@ def is_valid_sha256(s: str) -> bool:
         }]
     ]
 )
-async def test_success(service: MiddlewareService, rocrate: list[dict[str, Any]]):
+async def test_success(service: MiddlewareLogic, rocrate: list[dict[str, Any]]):
     result = await service.create_or_update_arcs(
         data=json.dumps(rocrate),
         client_id="TestClient")
@@ -116,7 +116,7 @@ async def test_success(service: MiddlewareService, rocrate: list[dict[str, Any]]
         }
     ]
 )
-async def test_invalid_json(service: MiddlewareService, rocrate: str | dict[str, Any]):
+async def test_invalid_json(service: MiddlewareLogic, rocrate: str | dict[str, Any]):
     # Send invalid JSON (not a list)
     with pytest.raises(InvalidJsonSyntaxError):
         await service.create_or_update_arcs(
@@ -176,7 +176,7 @@ async def test_invalid_json(service: MiddlewareService, rocrate: str | dict[str,
         }]
     ]
 )
-async def test_element_missing(service: MiddlewareService, cert: str, rocrate: list[dict[str, Any]]):
+async def test_element_missing(service: MiddlewareLogic, cert: str, rocrate: list[dict[str, Any]]):
     with pytest.raises(InvalidJsonSemanticError):
         await service.create_or_update_arcs(
             data=json.dumps(rocrate),

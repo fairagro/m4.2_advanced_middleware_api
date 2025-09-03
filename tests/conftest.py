@@ -9,7 +9,7 @@ from cryptography.hazmat.primitives import serialization
 import datetime
 
 from app.middleware_api import MiddlewareAPI
-from app.middleware_service import ARCResponse, ARCStatus, CreateOrUpdateResponse, MiddlewareResponse, MiddlewareService
+from app.middleware_logic import ARCResponse, ARCStatus, CreateOrUpdateResponse, MiddlewareLogicResponse, MiddlewareLogic
 from app.arc_store_gitlab_api import ARCStoreGitlabAPI
 
 
@@ -25,9 +25,9 @@ def client(middleware_api):
     middleware_api.app.dependency_overrides.clear()
 
 @pytest.fixture
-def service() -> MiddlewareService:
+def service() -> MiddlewareLogic:
     store = MagicMock()
-    return MiddlewareService(store)
+    return MiddlewareLogic(store)
 
 @pytest.fixture
 def mock_service(monkeypatch):
@@ -35,7 +35,7 @@ def mock_service(monkeypatch):
 
     class DummyService:
         async def whoami(self, request, client_cert, accept_type):
-            return MiddlewareResponse(client_id="TestClient", message="ok")
+            return MiddlewareLogicResponse(client_id="TestClient", message="ok")
 
         async def create_or_update_arcs(self, data, client_cert, content_type, accept_type):
             return CreateOrUpdateResponse(

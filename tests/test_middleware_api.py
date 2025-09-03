@@ -6,7 +6,7 @@ import pytest
 from app.middleware_api import MiddlewareAPI
 
 # Nur die Exception-Typen importieren, damit wir das HTTP-Mapping testen können
-from app.middleware_service import (
+from app.middleware_logic import (
     InvalidJsonSemanticError,
     InvalidJsonSyntaxError,
 )
