@@ -6,7 +6,7 @@ from typing import List, Dict
 from pydantic import BaseModel
 from cryptography import x509
 from cryptography.hazmat.backends import default_backend
-from arctrl.arc import ARC
+from arctrl import ARC
 
 from .arc_store import ARCStore
 
@@ -125,7 +125,7 @@ class MiddlewareService:
             raise InvalidJsonSemanticError(
                 f"Error processing RO-Crate JSON: {str(e)}")
 
-        identifier = getattr(arc.ISA, "Identifier", None)
+        identifier = getattr(arc, "Identifier", None)
         if not identifier:
             raise InvalidJsonSemanticError(
                 "RO-Crate JSON must contain an 'Identifier' in the ISA object."

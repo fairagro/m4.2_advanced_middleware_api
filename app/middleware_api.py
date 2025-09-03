@@ -4,7 +4,15 @@ from fastapi.responses import JSONResponse
 from fastapi.params import Depends
 
 from app.arc_store_gitlab_api import ARCStoreGitlabAPI
-from app.middleware_service import ClientCertMissingError, ClientCertParsingError, InvalidAcceptTypeError, InvalidContentTypeError, InvalidJsonSemanticError, InvalidJsonSyntaxError, MiddlewareService
+from app.middleware_service import (
+    ClientCertMissingError,
+    ClientCertParsingError,
+    InvalidAcceptTypeError,
+    InvalidContentTypeError,
+    InvalidJsonSemanticError,
+    InvalidJsonSyntaxError,
+    MiddlewareService
+)
 
 
 app = FastAPI(title="FAIR Middleware API",
@@ -33,7 +41,7 @@ async def whoami(request: Request, service: Any = Depends(get_service)) -> JSONR
     client_cert = request.headers.get("X-Client-Cert")
     accept_type = request.headers.get("accept")
     try:
-        result = await service.whoami(request, client_cert, accept_type)
+        result = await service.whoami(client_cert, accept_type)
         return JSONResponse(
             content=result.model_dump(),
             status_code=200

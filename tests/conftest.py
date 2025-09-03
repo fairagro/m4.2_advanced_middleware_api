@@ -9,18 +9,41 @@ from cryptography.hazmat.primitives import serialization
 import datetime
 
 from app.middleware_api import app
-from app.middleware_service import MiddlewareService
+from app.middleware_service import ARCResponse, ARCStatus, CreateOrUpdateResponse, MiddlewareResponse, MiddlewareService
 from app.arc_store_gitlab_api import ARCStoreGitlabAPI
 
 
 @pytest.fixture
-def client() -> TestClient:
-    return TestClient(app)
+def client():
+    """TestClient-Fixture und sicheres Aufräumen der Dependency-Overrides."""
+    with TestClient(app) as c:
+        yield c
+    app.dependency_overrides.clear()
 
 @pytest.fixture
 def service() -> MiddlewareService:
     store = MagicMock()
     return MiddlewareService(store)
+
+@pytest.fixture
+def mock_service(monkeypatch):
+    """Mockt get_service() vollständig, ohne MiddlewareService zu referenzieren."""
+
+    class DummyService:
+        async def whoami(self, request, client_cert, accept_type):
+            return MiddlewareResponse(client_id="TestClient", message="ok")
+
+        async def create_or_update_arcs(self, data, client_cert, content_type, accept_type):
+            return CreateOrUpdateResponse(
+                client_id="TestClient",
+                message="ok",
+                arcs=[
+                    ARCResponse(id="abc123", status=ARCStatus.created, timestamp="2025-01-01T00:00:00Z")
+                ]
+            )
+
+    monkeypatch.setattr("app.middleware_api.get_service", lambda: DummyService())
+    return DummyService()
 
 @pytest.fixture(scope="session")
 def cert() -> str:

@@ -1,5 +1,5 @@
 import time
-from arctrl.arc import ARC
+from arctrl import ARC
 
 def arc_to_rocrate_json(arc_path: str, rocrate_output_path: str):
     # Lade ARC aus Datei

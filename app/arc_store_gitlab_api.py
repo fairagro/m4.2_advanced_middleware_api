@@ -5,8 +5,10 @@ import tempfile
 import gitlab
 from gitlab.exceptions import GitlabGetError, GitlabAuthenticationError, GitlabConnectionError
 import logging
-from arctrl.arc import ARC
+from arctrl import ARC
+
 from .arc_store import ARCStore
+
 
 logger = logging.getLogger(__name__)
 

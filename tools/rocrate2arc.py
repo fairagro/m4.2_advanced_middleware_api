@@ -1,7 +1,7 @@
 import cProfile
 import pstats
 
-from arctrl.arc import ARC
+from arctrl import ARC
 
 def rocrate_json_to_arc(rocrate_input_path: str, arc_path: str):
     # Lade ARC aus Datei

@@ -1,6 +1,6 @@
 from abc import ABC, abstractmethod
 from typing import Optional
-from arctrl.arc import ARC
+from arctrl import ARC
 
 # ----------- Interface -----------
 
