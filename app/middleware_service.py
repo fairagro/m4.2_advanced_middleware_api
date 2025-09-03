@@ -22,10 +22,12 @@ class MiddlewareResponse(BaseModel):
     client_id: str
     message: str
 
+
 class ARCResponse(BaseModel):
     id: str
     status: ARCStatus
     timestamp: str
+
 
 class CreateOrUpdateResponse(MiddlewareResponse):
     arcs: List[ARCResponse]
@@ -35,25 +37,31 @@ class MiddlewareError(Exception):
     """Basisklasse für Fehler in MiddlewareService"""
     pass
 
+
 class ClientCertMissingError(MiddlewareError):
     """Wird geworfen, wenn kein Zertifikat vorhanden ist"""
     pass
+
 
 class ClientCertParsingError(MiddlewareError):
     """Wird geworfen, wenn es Probleme beim Parsen des Client-Zertifikats gibt"""
     pass
 
+
 class InvalidContentTypeError(MiddlewareError):
     """Wird geworfen, wenn der Content-Type nicht passt"""
     pass
+
 
 class InvalidAcceptTypeError(MiddlewareError):
     """Wird geworfen, wenn der Accept-Type nicht passt"""
     pass
 
+
 class InvalidJsonSyntaxError(MiddlewareError):
     """Wird geworfen, wenn es Probleme beim Parsen des ARC JSON gibt"""
     pass
+
 
 class InvalidJsonSemanticError(MiddlewareError):
     """Wird geworfen, wenn es Probleme beim Parsen des ARC JSON gibt"""
@@ -82,10 +90,10 @@ class MiddlewareService:
             return bytes(value).decode() if isinstance(value, (bytes, bytearray, memoryview)) else str(value)
         except ValueError as e:
             raise ClientCertParsingError(
-                f"Invalid certificate format: {str(e)}")
+                f"Invalid certificate format: {str(e)}") from e
         except Exception as e:
             raise ClientCertParsingError(
-                f"Certificate parsing error: {str(e)}")
+                f"Certificate parsing error: {str(e)}") from e
 
     def _validate_content_type(self, content_type: str | None) -> None:
         if not content_type:
@@ -110,7 +118,7 @@ class MiddlewareService:
                     "Expected a JSON array of RO-Crates.")
             return crates
         except json.JSONDecodeError as e:
-            raise InvalidJsonSyntaxError(f"Invalid RO-Crate JSON: {str(e)}")
+            raise InvalidJsonSyntaxError(f"Invalid RO-Crate JSON: {str(e)}") from e
 
     def _create_arc_id(self, identifier: str, client_id: str) -> str:
         input_str = f"{identifier}:{client_id}"
@@ -123,7 +131,7 @@ class MiddlewareService:
             arc = ARC.from_rocrate_json_string(crate_json)
         except Exception as e:
             raise InvalidJsonSemanticError(
-                f"Error processing RO-Crate JSON: {str(e)}")
+                f"Error processing RO-Crate JSON: {str(e)}") from e
 
         identifier = getattr(arc, "Identifier", None)
         if not identifier:
@@ -164,7 +172,11 @@ class MiddlewareService:
         )
 
     # -------------------------- Create or Update ARCs --------------------------
-    async def create_or_update_arcs(self, data: str, client_cert: str | None, content_type: str | None, accept_type: str | None) -> CreateOrUpdateResponse:
+    async def create_or_update_arcs(
+            self, data: str,
+            client_cert: str | None,
+            content_type: str | None,
+            accept_type: str | None) -> CreateOrUpdateResponse:
         self._validate_content_type(content_type)
         self._validate_accept_type(accept_type)
         client_id = self._get_client_id(client_cert)

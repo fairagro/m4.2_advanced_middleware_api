@@ -5,9 +5,6 @@ from unittest.mock import MagicMock
 from gitlab.exceptions import GitlabGetError
 
 
-
-
-
 # -------------------- Hilfsfunktionen --------------------
 
 def test_compute_arc_hash(tmp_path, api):
@@ -16,26 +13,26 @@ def test_compute_arc_hash(tmp_path, api):
     h1 = api._compute_arc_hash(tmp_path)
     file.write_text("world")
     h2 = api._compute_arc_hash(tmp_path)
-    assert h1 != h2
+    assert h1 != h2 # nosec
 
 
 def test_get_or_create_project_found(api):
     project = MagicMock()
     project.path = "arc1"
-    api.gl.projects.list.return_value = [project]
+    api._gitlab.projects.list.return_value = [project]
     result = api._get_or_create_project("arc1")
-    assert result == project
+    assert result == project # nosec
 
 
 def test_get_or_create_project_create(api):
-    api.gl.projects.list.return_value = []
+    api._gitlab.projects.list.return_value = []
     group = MagicMock()
     group.id = 1
-    api.gl.groups.get.return_value = group
+    api._gitlab.groups.get.return_value = group
     project = MagicMock()
-    api.gl.projects.create.return_value = project
+    api._gitlab.projects.create.return_value = project
     result = api._get_or_create_project("arc1")
-    assert result == project
+    assert result == project # nosec
 
 
 # -------------------- Create/Update --------------------
@@ -73,7 +70,7 @@ def test_create_or_update_with_changes(api):
     project.commits.create.assert_called_once()
     args, kwargs = project.commits.create.call_args
     actions = args[0]["actions"]
-    assert any(a["file_path"] == ".arc_hash" for a in actions)
+    assert any(a["file_path"] == ".arc_hash" for a in actions) # nosec
 
 
 # -------------------- Get --------------------
@@ -91,20 +88,20 @@ def test_get_success(api, monkeypatch):
     fobj.encoding = None
     project.files.get.return_value = fobj
 
-    api.gl.projects.list.return_value = [project]
+    api._gitlab.projects.list.return_value = [project]
 
     dummy_arc = MagicMock()
     monkeypatch.setattr("app.arc_store_gitlab_api.ARC.try_load_async", lambda path: dummy_arc)
 
     arc = api.get("arc1")
-    assert arc == dummy_arc
-    project.files.get.assert_any_call(file_path="f.txt", ref=api.branch)
+    assert arc == dummy_arc # nosec
+    project.files.get.assert_any_call(file_path="f.txt", ref=api._branch)
 
 
 def test_get_not_found(api):
-    api.gl.projects.list.return_value = []
+    api._gitlab.projects.list.return_value = []
     arc = api.get("arcX")
-    assert arc is None
+    assert arc is None # nosec
 
 
 # -------------------- Delete --------------------
@@ -112,12 +109,12 @@ def test_get_not_found(api):
 def test_delete_found(api):
     project = MagicMock()
     project.path = "arc1"
-    api.gl.projects.list.return_value = [project]
+    api._gitlab.projects.list.return_value = [project]
     api.delete("arc1")
     project.delete.assert_called_once()
 
 
 def test_delete_not_found(api):
-    api.gl.projects.list.return_value = []
+    api._gitlab.projects.list.return_value = []
     # Sollte einfach durchlaufen, kein Fehler
     api.delete("arcX")

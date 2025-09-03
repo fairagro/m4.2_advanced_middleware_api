@@ -1,7 +1,12 @@
 import pytest
-from fastapi.testclient import TestClient
 
-from app.middleware_service import ClientCertMissingError, ClientCertParsingError, InvalidAcceptTypeError, MiddlewareResponse, MiddlewareService
+from app.middleware_service import (
+    ClientCertMissingError,
+    ClientCertParsingError,
+    InvalidAcceptTypeError,
+    MiddlewareResponse,
+    MiddlewareService
+)
 
 
 @pytest.mark.asyncio
@@ -10,8 +15,8 @@ async def test_authenticated(service: MiddlewareService, cert: str):
         client_cert=cert,
         accept_type="application/json")
     
-    assert isinstance(result, MiddlewareResponse)
-    assert result.client_id == "TestClient"
+    assert isinstance(result, MiddlewareResponse) # nosec
+    assert result.client_id == "TestClient" # nosec
 
 
 @pytest.mark.asyncio

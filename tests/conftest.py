@@ -8,17 +8,21 @@ from cryptography.hazmat.primitives.asymmetric import rsa
 from cryptography.hazmat.primitives import serialization
 import datetime
 
-from app.middleware_api import app
+from app.middleware_api import MiddlewareAPI
 from app.middleware_service import ARCResponse, ARCStatus, CreateOrUpdateResponse, MiddlewareResponse, MiddlewareService
 from app.arc_store_gitlab_api import ARCStoreGitlabAPI
 
 
 @pytest.fixture
-def client():
+def middleware_api():
+    return MiddlewareAPI("http://gitlab", "token", 1)
+
+@pytest.fixture
+def client(middleware_api):
     """TestClient-Fixture und sicheres Aufräumen der Dependency-Overrides."""
-    with TestClient(app) as c:
+    with TestClient(middleware_api.app) as c:
         yield c
-    app.dependency_overrides.clear()
+    middleware_api.app.dependency_overrides.clear()
 
 @pytest.fixture
 def service() -> MiddlewareService:
@@ -83,5 +87,5 @@ def cert() -> str:
 def api():
     """Erzeugt ein ARCPersistenceGitlabAPI mit gemocktem Gitlab."""
     api = ARCStoreGitlabAPI("http://gitlab", "token", 1)
-    api.gl = MagicMock()
+    api._gitlab = MagicMock()
     return api

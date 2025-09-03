@@ -1,8 +1,8 @@
 import uvicorn
-from middleware_api import app
+from middleware_api import middleware_api
 
 def main():
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+    uvicorn.run(middleware_api.app, host="127.0.0.1", port=8000)
 
 if __name__ == "__main__":
     main()

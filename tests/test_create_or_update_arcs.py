@@ -87,13 +87,13 @@ async def test_success(service: MiddlewareService, cert: str, rocrate: list[dict
         content_type="application/ro-crate+json",
         accept_type="application/json")
 
-    assert isinstance(result, CreateOrUpdateResponse)
-    assert result.client_id == "TestClient"
-    assert isinstance(result.arcs, list)
-    assert all(isinstance(a, ARCResponse) for a in result.arcs)
-    assert len(result.arcs) == len(rocrate)
-    assert all(is_valid_sha256(a.id) for a in result.arcs)
-    assert all(a.status == "created" for a in result.arcs)
+    assert isinstance(result, CreateOrUpdateResponse) # nosec
+    assert result.client_id == "TestClient" # nosec
+    assert isinstance(result.arcs, list) # nosec
+    assert all(isinstance(a, ARCResponse) for a in result.arcs) # nosec
+    assert len(result.arcs) == len(rocrate) # nosec
+    assert all(is_valid_sha256(a.id) for a in result.arcs) # nosec
+    assert all(a.status == "created" for a in result.arcs) # nosec
 
 
 @pytest.mark.asyncio

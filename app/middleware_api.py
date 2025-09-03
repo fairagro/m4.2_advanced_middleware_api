@@ -1,7 +1,6 @@
-from typing import Any
-from fastapi import FastAPI, HTTPException, Request
+from typing import Annotated
+from fastapi import FastAPI, HTTPException, Request, Depends
 from fastapi.responses import JSONResponse
-from fastapi.params import Depends
 
 from app.arc_store_gitlab_api import ARCStoreGitlabAPI
 from app.middleware_service import (
@@ -15,72 +14,86 @@ from app.middleware_service import (
 )
 
 
-app = FastAPI(title="FAIR Middleware API",
-              description="API for managing ARC (Advanced Research Context) objects")
+class MiddlewareAPI:
 
-store = ARCStoreGitlabAPI("http://gitlab", "token", 1)
-service = MiddlewareService(store)
-
-
-def get_service() -> MiddlewareService:
-    return service
-
-
-@app.exception_handler(Exception)
-async def unhandled_exception_handler(request: Request, exc: Exception):
-    return JSONResponse(
-        status_code=500,
-        content={
-            "detail": "Internal Server Error. Please contact support if the problem persists."
-        },
-    )
-
-
-@app.get("/v1/whoami")
-async def whoami(request: Request, service: Any = Depends(get_service)) -> JSONResponse:
-    client_cert = request.headers.get("X-Client-Cert")
-    accept_type = request.headers.get("accept")
-    try:
-        result = await service.whoami(client_cert, accept_type)
-        return JSONResponse(
-            content=result.model_dump(),
-            status_code=200
+    def __init__(self, gitlab_url: str, gitlab_token: str, gitlab_project_id: int):
+        self._store = ARCStoreGitlabAPI(gitlab_url, gitlab_token, gitlab_project_id)
+        self._service = MiddlewareService(self._store)
+        self._app = FastAPI(
+            title="FAIR Middleware API",
+            description="API for managing ARC (Advanced Research Context) objects"
         )
-    except ClientCertMissingError as e:
-        raise HTTPException(status_code=401, detail=str(e))
-    except ClientCertParsingError as e:
-        raise HTTPException(status_code=400, detail=str(e))
-    except InvalidAcceptTypeError as e:
-        raise HTTPException(status_code=406, detail=str(e))
+        self._setup_routes()
+        self._setup_exception_handlers()
+
+    @property
+    def app(self) -> FastAPI:
+        return self._app
+
+    def get_service(self) -> MiddlewareService:
+        return self._service
+
+    def _setup_exception_handlers(self):
+        @self._app.exception_handler(Exception)
+        async def unhandled_exception_handler(_request: Request, _exc: Exception):
+            return JSONResponse(
+                status_code=500,
+                content={"detail": "Internal Server Error. Please contact support if the problem persists."},
+            )
+
+    def _setup_routes(self):
+
+        @self._app.get("/v1/whoami")
+        async def whoami(
+            request: Request,
+            service: Annotated[MiddlewareService, Depends(self.get_service)]
+        ) -> JSONResponse:
+            client_cert = request.headers.get("X-Client-Cert")
+            accept_type = request.headers.get("accept")
+            try:
+                result = await service.whoami(client_cert, accept_type)
+                return JSONResponse(content=result.model_dump(), status_code=200)
+            except ClientCertMissingError as e:
+                raise HTTPException(status_code=401, detail=str(e)) from e
+            except ClientCertParsingError as e:
+                raise HTTPException(status_code=400, detail=str(e)) from e
+            except InvalidAcceptTypeError as e:
+                raise HTTPException(status_code=406, detail=str(e)) from e
+
+        @self._app.post("/v1/arcs")
+        async def create_or_update_arcs(
+            request: Request,
+            service: Annotated[MiddlewareService, Depends(self.get_service)]
+        ) -> JSONResponse:
+            client_cert = request.headers.get("X-Client-Cert")
+            content_type = request.headers.get("content-type")
+            accept_type = request.headers.get("accept")
+            data = (await request.body()).decode("utf-8")
+            try:
+                result = await service.create_or_update_arcs(
+                    data, client_cert, content_type, accept_type
+                )
+                return JSONResponse(
+                    content=result.model_dump(),
+                    status_code=201 if any(a.status == "created" for a in result.arcs) else 200,
+                    headers={"Location": f"/v1/arcs/{result.arcs[0].id}" if result.arcs else ""}
+                )
+            except ClientCertMissingError as e:
+                raise HTTPException(status_code=401, detail=str(e)) from e
+            except ClientCertParsingError as e:
+                raise HTTPException(status_code=400, detail=str(e)) from e
+            except InvalidAcceptTypeError as e:
+                raise HTTPException(status_code=406, detail=str(e)) from e
+            except InvalidContentTypeError as e:
+                raise HTTPException(status_code=415, detail=str(e)) from e
+            except InvalidJsonSyntaxError as e:
+                raise HTTPException(status_code=400, detail=str(e)) from e
+            except InvalidJsonSemanticError as e:
+                raise HTTPException(status_code=422, detail=str(e)) from e
 
 
-@app.post("/v1/arcs")
-async def create_or_update_arcs(request: Request, service: Any = Depends(get_service)) -> JSONResponse:
-    client_cert = request.headers.get("X-Client-Cert")
-    content_type = request.headers.get("content-type")
-    accept_type = request.headers.get("accept")
-    data = (await request.body()).decode("utf-8")
-    try:
-        result = await service.create_or_update_arcs(
-            data, client_cert, content_type, accept_type
-        )
-        return JSONResponse(
-            content=result.model_dump(),
-            status_code=201 if any(a.status == "created" for a in result.arcs) else 200,
-            headers={"Location": f"/v1/arcs/{result.arcs[0].id}" if result.arcs else ""}
-        )
-    except ClientCertMissingError as e:
-        raise HTTPException(status_code=401, detail=str(e))
-    except ClientCertParsingError as e:
-        raise HTTPException(status_code=400, detail=str(e))
-    except InvalidAcceptTypeError as e:
-        raise HTTPException(status_code=406, detail=str(e))
-    except InvalidContentTypeError as e:
-        raise HTTPException(status_code=415, detail=str(e))
-    except InvalidJsonSyntaxError as e:
-        raise HTTPException(status_code=400, detail=str(e))
-    except InvalidJsonSemanticError as e:
-        raise HTTPException(status_code=422, detail=str(e))
+middleware_api = MiddlewareAPI("http://gitlab", "token", 1)
+
 
 # # -------------------------
 # # READ ARCs

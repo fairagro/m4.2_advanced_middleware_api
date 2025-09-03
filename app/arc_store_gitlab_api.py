@@ -16,18 +16,18 @@ class ARCStoreGitlabAPI(ARCStore):
 
     def __init__(self, gitlab_url: str, private_token: str, group_id: int, branch: str = "main"):
         logger.info("Initializing ARCPersistenceGitlabAPI")
-        self.gl = gitlab.Gitlab(gitlab_url, private_token=private_token)
-        self.group_id = group_id
-        self.branch = branch
+        self._gitlab = gitlab.Gitlab(gitlab_url, private_token=private_token)
+        self._group_id = group_id
+        self._branch = branch
 
     # -------------------------- Project Handling --------------------------
     def _get_or_create_project(self, arc_id: str):
-        projects = self.gl.projects.list(search=arc_id)
+        projects = self._gitlab.projects.list(search=arc_id)
         for project in projects:
             if project.path == arc_id:
                 return project
-        group = self.gl.groups.get(self.group_id)
-        return self.gl.projects.create({
+        group = self._gitlab.groups.get(self._group_id)
+        return self._gitlab.projects.create({
             "name": arc_id,
             "path": arc_id,
             "namespace_id": group.id,
@@ -35,7 +35,7 @@ class ARCStoreGitlabAPI(ARCStore):
         })
 
     def _find_project(self, arc_id: str):
-        projects = self.gl.projects.list(search=arc_id)
+        projects = self._gitlab.projects.list(search=arc_id)
         return next((p for p in projects if p.path == arc_id), None)
 
     # -------------------------- Hashing --------------------------
@@ -50,7 +50,7 @@ class ARCStoreGitlabAPI(ARCStore):
 
     def _load_old_hash(self, project) -> str | None:
         try:
-            old_hash_file = project.files.get(file_path=".arc_hash", ref=self.branch)
+            old_hash_file = project.files.get(file_path=".arc_hash", ref=self._branch)
             return base64.b64decode(old_hash_file.content).decode("utf-8").strip()
         except GitlabGetError:
             return None
@@ -70,7 +70,7 @@ class ARCStoreGitlabAPI(ARCStore):
 
     def _file_exists(self, project, file_path: str) -> bool:
         try:
-            project.files.get(file_path=file_path, ref=self.branch)
+            project.files.get(file_path=file_path, ref=self._branch)
             return True
         except GitlabGetError:
             return False
@@ -111,7 +111,7 @@ class ARCStoreGitlabAPI(ARCStore):
     # -------------------------- Commit --------------------------
     def _commit_actions(self, project, actions, arc_id: str):
         commit_data = {
-            "branch": self.branch,
+            "branch": self._branch,
             "commit_message": f"Add/update ARC {arc_id}",
             "actions": actions,
         }
@@ -158,11 +158,11 @@ class ARCStoreGitlabAPI(ARCStore):
             return None
 
     def _download_project_files(self, project, arc_path: Path):
-        tree = project.repository_tree(ref=self.branch, all=True, recursive=True)
+        tree = project.repository_tree(ref=self._branch, all=True, recursive=True)
         for entry in tree:
             if entry["type"] != "blob" or entry["path"] == ".arc_hash":
                 continue
-            f = project.files.get(file_path=entry["path"], ref=self.branch)
+            f = project.files.get(file_path=entry["path"], ref=self._branch)
             file_path = arc_path / entry["path"]
             file_path.parent.mkdir(parents=True, exist_ok=True)
             self._write_project_file(f, file_path)
