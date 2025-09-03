@@ -5,8 +5,6 @@ import pytest
 from app.middleware_service import (
     ARCResponse,
     CreateOrUpdateResponse,
-    InvalidAcceptTypeError,
-    InvalidContentTypeError,
     InvalidJsonSemanticError,
     InvalidJsonSyntaxError,
     MiddlewareService
@@ -80,12 +78,10 @@ def is_valid_sha256(s: str) -> bool:
         }]
     ]
 )
-async def test_success(service: MiddlewareService, cert: str, rocrate: list[dict[str, Any]]):
+async def test_success(service: MiddlewareService, rocrate: list[dict[str, Any]]):
     result = await service.create_or_update_arcs(
         data=json.dumps(rocrate),
-        client_cert=cert,
-        content_type="application/ro-crate+json",
-        accept_type="application/json")
+        client_id="TestClient")
 
     assert isinstance(result, CreateOrUpdateResponse) # nosec
     assert result.client_id == "TestClient" # nosec
@@ -120,54 +116,12 @@ async def test_success(service: MiddlewareService, cert: str, rocrate: list[dict
         }
     ]
 )
-async def test_invalid_json(service: MiddlewareService, cert: str, rocrate: str | dict[str, Any]):
+async def test_invalid_json(service: MiddlewareService, rocrate: str | dict[str, Any]):
     # Send invalid JSON (not a list)
     with pytest.raises(InvalidJsonSyntaxError):
         await service.create_or_update_arcs(
             data=json.dumps(rocrate) if isinstance(rocrate, dict) else rocrate,
-            client_cert=cert,
-            content_type="application/ro-crate+json",
-            accept_type="application/json")
-
-
-@pytest.mark.asyncio
-@pytest.mark.parametrize(
-    "content_type, accept_type, expected_exception",
-    [
-        ("application/json", "application/json", InvalidContentTypeError),
-        ("application/ro-crate+json", "application/text", InvalidAcceptTypeError),
-        ("application/ro-crate+json", "application/xml", InvalidAcceptTypeError),
-    ]
-)
-async def test_invalid_header(
-        service: MiddlewareService,
-        cert: str,
-        content_type: str,
-        accept_type: str,
-        expected_exception: type):
-    rocrate = [{
-        "@context": "https://w3id.org/ro/crate/1.1/context",
-        "@graph": [
-            {
-                "@id": "./",
-                "@type": "Dataset",
-                "additionalType": "Investigation",
-                "identifier": "ARC-002"
-            },
-            {
-                "@id": "ro-crate-metadata.json",
-                "@type": "CreativeWork",
-                "conformsTo": {"@id": "https://w3id.org/ro/crate/1.1"},
-                "about": {"@id": "./"}
-            }
-        ]
-    }]
-    with pytest.raises(expected_exception):
-        await service.create_or_update_arcs(
-            data=json.dumps(rocrate),
-            client_cert=cert,
-            content_type=content_type,
-            accept_type=accept_type)
+            client_id="TestClient")
 
 
 @pytest.mark.asyncio
@@ -226,6 +180,4 @@ async def test_element_missing(service: MiddlewareService, cert: str, rocrate: l
     with pytest.raises(InvalidJsonSemanticError):
         await service.create_or_update_arcs(
             data=json.dumps(rocrate),
-            client_cert=cert,
-            content_type="application/ro-crate+json",
-            accept_type="application/json")
+            client_id="TestClient")

@@ -4,8 +4,6 @@ from enum import Enum
 from datetime import datetime, timezone
 from typing import List, Dict
 from pydantic import BaseModel
-from cryptography import x509
-from cryptography.hazmat.backends import default_backend
 from arctrl import ARC
 
 from .arc_store import ARCStore
@@ -33,82 +31,25 @@ class CreateOrUpdateResponse(MiddlewareResponse):
     arcs: List[ARCResponse]
 
 
-class MiddlewareError(Exception):
+class MiddlewareServiceError(Exception):
     """Basisklasse für Fehler in MiddlewareService"""
     pass
 
 
-class ClientCertMissingError(MiddlewareError):
-    """Wird geworfen, wenn kein Zertifikat vorhanden ist"""
-    pass
-
-
-class ClientCertParsingError(MiddlewareError):
-    """Wird geworfen, wenn es Probleme beim Parsen des Client-Zertifikats gibt"""
-    pass
-
-
-class InvalidContentTypeError(MiddlewareError):
-    """Wird geworfen, wenn der Content-Type nicht passt"""
-    pass
-
-
-class InvalidAcceptTypeError(MiddlewareError):
-    """Wird geworfen, wenn der Accept-Type nicht passt"""
-    pass
-
-
-class InvalidJsonSyntaxError(MiddlewareError):
+class InvalidJsonSyntaxError(MiddlewareServiceError):
     """Wird geworfen, wenn es Probleme beim Parsen des ARC JSON gibt"""
     pass
 
 
-class InvalidJsonSemanticError(MiddlewareError):
+class InvalidJsonSemanticError(MiddlewareServiceError):
     """Wird geworfen, wenn es Probleme beim Parsen des ARC JSON gibt"""
     pass
 
 
 class MiddlewareService:
 
-    # Constants
-    SUPPORTED_CONTENT_TYPE = "application/ro-crate+json"
-    SUPPORTED_ACCEPT_TYPE = "application/json"
-
     def __init__(self, store: ARCStore):
         self._store = store
-
-    def _get_client_id(self, client_cert: str | None) -> str:
-        if not client_cert:
-            raise ClientCertMissingError("Client certificate missing")
-
-        try:
-            pem = client_cert.replace("\n", "\n")
-            cert_obj = x509.load_pem_x509_certificate(
-                pem.encode(), default_backend())
-            value = cert_obj.subject.get_attributes_for_oid(
-                x509.NameOID.COMMON_NAME)[0].value
-            return bytes(value).decode() if isinstance(value, (bytes, bytearray, memoryview)) else str(value)
-        except ValueError as e:
-            raise ClientCertParsingError(
-                f"Invalid certificate format: {str(e)}") from e
-        except Exception as e:
-            raise ClientCertParsingError(
-                f"Certificate parsing error: {str(e)}") from e
-
-    def _validate_content_type(self, content_type: str | None) -> None:
-        if not content_type:
-            raise InvalidContentTypeError(
-                f"Content-Type header is missing. Expected '{self.SUPPORTED_CONTENT_TYPE}'.")
-        if content_type != self.SUPPORTED_CONTENT_TYPE:
-            raise InvalidContentTypeError(
-                f"Unsupported Media Type. Supported types: '{self.SUPPORTED_CONTENT_TYPE}'."
-            )
-
-    def _validate_accept_type(self, accept: str | None) -> None:
-        if accept not in [self.SUPPORTED_ACCEPT_TYPE, "*/*"]:
-            raise InvalidAcceptTypeError(
-                f"Unsupported Response Type. Supported types: '{self.SUPPORTED_ACCEPT_TYPE}'."
-            )
 
     def _parse_rocrate_json(self, data: str) -> List[Dict]:
         try:
@@ -161,11 +102,7 @@ class MiddlewareService:
 
     # -------------------------- Whoami --------------------------
 
-    async def whoami(self, client_cert: str | None, accept_type: str | None) -> MiddlewareResponse:
-        client_id = self._get_client_id(client_cert)
-
-        self._validate_accept_type(accept_type)
-
+    async def whoami(self, client_id: str) -> MiddlewareResponse:
         return MiddlewareResponse(
             client_id=client_id,
             message="Client authenticated successfully"
@@ -173,16 +110,8 @@ class MiddlewareService:
 
     # -------------------------- Create or Update ARCs --------------------------
     async def create_or_update_arcs(
-            self, data: str,
-            client_cert: str | None,
-            content_type: str | None,
-            accept_type: str | None) -> CreateOrUpdateResponse:
-        self._validate_content_type(content_type)
-        self._validate_accept_type(accept_type)
-        client_id = self._get_client_id(client_cert)
-
+            self, data: str, client_id: str) -> CreateOrUpdateResponse:
         result = await self._process_arcs(data, client_id)
-
         return CreateOrUpdateResponse(
             client_id=client_id,
             message="ARCs processed successfully",

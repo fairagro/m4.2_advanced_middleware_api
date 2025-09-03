@@ -7,10 +7,6 @@ from app.middleware_api import MiddlewareAPI
 
 # Nur die Exception-Typen importieren, damit wir das HTTP-Mapping testen können
 from app.middleware_service import (
-    ClientCertMissingError,
-    ClientCertParsingError,
-    InvalidAcceptTypeError,
-    InvalidContentTypeError,
     InvalidJsonSemanticError,
     InvalidJsonSyntaxError,
 )
@@ -35,62 +31,60 @@ class DummyResponse:
 
 def override_service(api: MiddlewareAPI, obj):
     """Helfer zum Überschreiben der get_service-Dependency."""
-    get_service = api.get_service
-    api.app.dependency_overrides[get_service] = lambda: obj
+    api.app.dependency_overrides[api.get_service] = lambda: obj
 
 # -------------------------------------------------------------------
 # WHOAMI
 # -------------------------------------------------------------------
 
-def test_whoami_success(client, middleware_api):
-    class SvcOK:
-        async def whoami(self, client_cert, accept_type):
-            return DummyResponse({"client_id": "TestClient", "message": "ok"})
+def test_whoami_success(client, middleware_api, cert):
+    class Svc:
+        async def whoami(self, client_id):
+            return DummyResponse({"client_id": client_id, "message": "ok"})
 
-    override_service(middleware_api, SvcOK())
+    override_service(middleware_api, Svc())
 
     r = client.get(
         "/v1/whoami",
-        headers={"X-Client-Cert": "dummy", "accept": "application/json"},
+        headers={"X-Client-Cert": cert, "accept": "application/json"},
     )
     assert r.status_code == 200 # nosec
     body = r.json()
     assert body["client_id"] == "TestClient" # nosec
     assert body["message"] == "ok" # nosec
 
-
-@pytest.mark.parametrize(
-    "exc, expected",
-    [
-        (ClientCertMissingError("missing"), 401),
-        (ClientCertParsingError("bad cert"), 400),
-        (InvalidAcceptTypeError("bad accept"), 406),
-    ],
-)
-def test_whoami_exception_mapping(client, middleware_api, exc, expected):
-    class SvcFail:
-        async def whoami(self, *args, **kwargs):
-            raise exc
-
-    override_service(middleware_api, SvcFail())
-
+def test_whoami_invalid_accept(client, cert):
     r = client.get(
         "/v1/whoami",
-        headers={"X-Client-Cert": "dummy", "accept": "application/json"},
+        headers={"X-Client-Cert": cert, "accept": "application/xml"},
     )
-    assert r.status_code == expected # nosec
+    assert r.status_code == 406 # nosec
+
+def test_whoami_no_cert(client):
+    r = client.get(
+        "/v1/whoami",
+        headers={"accept": "application/json"},
+    )
+    assert r.status_code == 401 # nosec
+
+def test_whoami_invalid_cert(client):
+    r = client.get(
+        "/v1/whoami",
+        headers={"X-Client-Cert": "dumy cert", "accept": "application/json"},
+    )
+    assert r.status_code == 400 # nosec
 
 
 # -------------------------------------------------------------------
 # CREATE / UPDATE ARCS
 # -------------------------------------------------------------------
 
-def test_create_or_update_arcs_created(client, middleware_api):
+def test_create_or_update_arcs_created(client, middleware_api, cert):
     class SvcOK:
-        async def create_or_update_arcs(self, data, client_cert, content_type, accept_type):
+        async def create_or_update_arcs(self, data, client_id):
             return DummyResponse(
                 {
-                    "client_id": "TestClient",
+                    "client_id": client_id,
                     "message": "ok",
                     "arcs": [
                         {"id": "abc123", "status": "created", "timestamp": "2025-01-01T00:00:00Z"}
@@ -103,7 +97,7 @@ def test_create_or_update_arcs_created(client, middleware_api):
     r = client.post(
         "/v1/arcs",
         headers={
-            "X-Client-Cert": "dummy",
+            "X-Client-Cert": cert,
             "content-type": "application/ro-crate+json",
             "accept": "application/json",
         },
@@ -118,12 +112,12 @@ def test_create_or_update_arcs_created(client, middleware_api):
     assert r.headers.get("Location", "") != "" # nosec
 
 
-def test_create_or_update_arcs_updated(client, middleware_api):
+def test_create_or_update_arcs_updated(client, middleware_api, cert):
     class SvcOK:
-        async def create_or_update_arcs(self, data, client_cert, content_type, accept_type):
+        async def create_or_update_arcs(self, data, client_id):
             return DummyResponse(
                 {
-                    "client_id": "TestClient",
+                    "client_id": client_id,
                     "message": "ok",
                     "arcs": [
                         {"id": "abc123", "status": "updated", "timestamp": "2025-01-01T00:00:00Z"}
@@ -136,7 +130,7 @@ def test_create_or_update_arcs_updated(client, middleware_api):
     r = client.post(
         "/v1/arcs",
         headers={
-            "X-Client-Cert": "dummy",
+            "X-Client-Cert": cert,
             "content-type": "application/ro-crate+json",
             "accept": "application/json",
         },
@@ -150,17 +144,13 @@ def test_create_or_update_arcs_updated(client, middleware_api):
 @pytest.mark.parametrize(
     "exc, expected",
     [
-        (ClientCertMissingError("missing"), 401),
-        (ClientCertParsingError("bad cert"), 400),
-        (InvalidAcceptTypeError("bad accept"), 406),
-        (InvalidContentTypeError("bad content-type"), 415),
         (InvalidJsonSyntaxError("bad json"), 400),
         (InvalidJsonSemanticError("bad crate"), 422),
     ],
 )
-def test_create_or_update_arcs_exception_mapping(client, middleware_api, exc, expected):
+def test_create_or_update_arcs_invalid_json(client, middleware_api, cert, exc, expected):
     class SvcFail:
-        async def create_or_update_arcs(self, *args, **kwargs):
+        async def create_or_update_arcs(self, data, client_id):
             raise exc
 
     override_service(middleware_api, SvcFail())
@@ -168,10 +158,46 @@ def test_create_or_update_arcs_exception_mapping(client, middleware_api, exc, ex
     r = client.post(
         "/v1/arcs",
         headers={
-            "X-Client-Cert": "dummy",
+            "X-Client-Cert": cert,
             "content-type": "application/ro-crate+json",
             "accept": "application/json",
         },
         json=[{"dummy": "crate"}],
     )
     assert r.status_code == expected # nosec
+
+def test_create_or_update_arcs_invalid_accept(client, cert):
+    r = client.post(
+        "/v1/arcs",
+        headers={
+            "X-Client-Cert": cert,
+            "content-type": "application/ro-crate+json",
+            "accept": "application/xml",
+        },
+        json=[{"dummy": "crate"}],
+    )
+    assert r.status_code == 406 # nosec
+
+def test_create_or_update_arcs_no_cert(client):
+    r = client.post(
+        "/v1/arcs",
+        headers={
+            "content-type": "application/ro-crate+json",
+            "accept": "application/json",
+        },
+        json=[{"dummy": "crate"}],
+    )
+    assert r.status_code == 401 # nosec
+
+def test_create_or_update_arcs_invalid_cert(client):
+
+    r = client.post(
+        "/v1/arcs",
+        headers={
+            "X-Client-Cert": "dummy cert",
+            "content-type": "application/ro-crate+json",
+            "accept": "application/xml",
+        },
+        json=[{"dummy": "crate"}],
+    )
+    assert r.status_code == 400 # nosec

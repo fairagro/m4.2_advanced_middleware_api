@@ -1,13 +1,12 @@
 from typing import Annotated
 from fastapi import FastAPI, HTTPException, Request, Depends
+from fastapi.datastructures import Headers
 from fastapi.responses import JSONResponse
+from cryptography import x509
+from cryptography.hazmat.backends import default_backend
 
-from app.arc_store_gitlab_api import ARCStoreGitlabAPI
-from app.middleware_service import (
-    ClientCertMissingError,
-    ClientCertParsingError,
-    InvalidAcceptTypeError,
-    InvalidContentTypeError,
+from .arc_store_gitlab_api import ARCStoreGitlabAPI
+from .middleware_service import (
     InvalidJsonSemanticError,
     InvalidJsonSyntaxError,
     MiddlewareService
@@ -15,6 +14,10 @@ from app.middleware_service import (
 
 
 class MiddlewareAPI:
+
+    # Constants
+    SUPPORTED_CONTENT_TYPE = "application/ro-crate+json"
+    SUPPORTED_ACCEPT_TYPE = "application/json"
 
     def __init__(self, gitlab_url: str, gitlab_token: str, gitlab_project_id: int):
         self._store = ARCStoreGitlabAPI(gitlab_url, gitlab_token, gitlab_project_id)
@@ -33,7 +36,43 @@ class MiddlewareAPI:
     def get_service(self) -> MiddlewareService:
         return self._service
 
+    def _get_client_id(self, headers: Headers) -> str:
+        client_cert = headers.get("X-Client-Cert")
+        if not client_cert:
+            msg = "Client certificate missing"
+            raise HTTPException(status_code=401, detail=msg)
+
+        try:
+            pem = client_cert.replace("\n", "\n")
+            cert_obj = x509.load_pem_x509_certificate(
+                pem.encode(), default_backend())
+            value = cert_obj.subject.get_attributes_for_oid(
+                x509.NameOID.COMMON_NAME)[0].value
+            return bytes(value).decode() if isinstance(value, (bytes, bytearray, memoryview)) else str(value)
+        except ValueError as e:
+            raise HTTPException(
+                status_code=400, detail=f"Invalid certificate format: {str(e)}") from e
+        except Exception as e:
+            raise HTTPException(
+                status_code=400, detail=f"Certificate parsing error: {str(e)}") from e
+
+    def _validate_content_type(self, headers: Headers) -> None:
+        content_type = headers.get("content-type")
+        if not content_type:
+            msg = f"Content-Type header is missing. Expected '{self.SUPPORTED_CONTENT_TYPE}'."
+            raise HTTPException(status_code=415, detail=msg)
+        if content_type != self.SUPPORTED_CONTENT_TYPE:
+            msg = f"Unsupported Media Type. Supported types: '{self.SUPPORTED_CONTENT_TYPE}'."
+            raise HTTPException(status_code=415, detail=msg)
+
+    def _validate_accept_type(self, headers: Headers) -> None:
+        accept = headers.get("accept")
+        if accept not in [self.SUPPORTED_ACCEPT_TYPE, "*/*"]:
+            msg = f"Unsupported Response Type. Supported types: '{self.SUPPORTED_ACCEPT_TYPE}'."
+            raise HTTPException(status_code=406, detail=msg)
+
     def _setup_exception_handlers(self):
+
         @self._app.exception_handler(Exception)
         async def unhandled_exception_handler(_request: Request, _exc: Exception):
             return JSONResponse(
@@ -48,44 +87,27 @@ class MiddlewareAPI:
             request: Request,
             service: Annotated[MiddlewareService, Depends(self.get_service)]
         ) -> JSONResponse:
-            client_cert = request.headers.get("X-Client-Cert")
-            accept_type = request.headers.get("accept")
-            try:
-                result = await service.whoami(client_cert, accept_type)
-                return JSONResponse(content=result.model_dump(), status_code=200)
-            except ClientCertMissingError as e:
-                raise HTTPException(status_code=401, detail=str(e)) from e
-            except ClientCertParsingError as e:
-                raise HTTPException(status_code=400, detail=str(e)) from e
-            except InvalidAcceptTypeError as e:
-                raise HTTPException(status_code=406, detail=str(e)) from e
+            client_id = self._get_client_id(request.headers)
+            self._validate_accept_type(request.headers)
+            result = await service.whoami(client_id)
+            return JSONResponse(content=result.model_dump(), status_code=200)
 
         @self._app.post("/v1/arcs")
         async def create_or_update_arcs(
             request: Request,
             service: Annotated[MiddlewareService, Depends(self.get_service)]
         ) -> JSONResponse:
-            client_cert = request.headers.get("X-Client-Cert")
-            content_type = request.headers.get("content-type")
-            accept_type = request.headers.get("accept")
+            client_id = self._get_client_id(request.headers)
+            self._validate_accept_type(request.headers)
+            self._validate_content_type(request.headers)
             data = (await request.body()).decode("utf-8")
             try:
-                result = await service.create_or_update_arcs(
-                    data, client_cert, content_type, accept_type
-                )
+                result = await service.create_or_update_arcs(data, client_id)
                 return JSONResponse(
                     content=result.model_dump(),
                     status_code=201 if any(a.status == "created" for a in result.arcs) else 200,
                     headers={"Location": f"/v1/arcs/{result.arcs[0].id}" if result.arcs else ""}
                 )
-            except ClientCertMissingError as e:
-                raise HTTPException(status_code=401, detail=str(e)) from e
-            except ClientCertParsingError as e:
-                raise HTTPException(status_code=400, detail=str(e)) from e
-            except InvalidAcceptTypeError as e:
-                raise HTTPException(status_code=406, detail=str(e)) from e
-            except InvalidContentTypeError as e:
-                raise HTTPException(status_code=415, detail=str(e)) from e
             except InvalidJsonSyntaxError as e:
                 raise HTTPException(status_code=400, detail=str(e)) from e
             except InvalidJsonSemanticError as e:
