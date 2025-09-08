@@ -9,26 +9,26 @@ from arctrl import ARC
 from .arc_store import ARCStore
 
 
-class ARCStatus(str, Enum):
+class ArcStatus(str, Enum):
     created = "created"
     updated = "updated"
     deleted = "deleted"
     requested = "requested"
 
 
-class MiddlewareLogicResponse(BaseModel):
+class BusinessLogicResponse(BaseModel):
     client_id: str
     message: str
 
 
-class ARCResponse(BaseModel):
+class ArcResponse(BaseModel):
     id: str
-    status: ARCStatus
+    status: ArcStatus
     timestamp: str
 
 
-class CreateOrUpdateResponse(MiddlewareLogicResponse):
-    arcs: List[ARCResponse]
+class CreateOrUpdateArcsResponse(BusinessLogicResponse):
+    arcs: List[ArcResponse]
 
 
 class BusinessLogicError(Exception):
@@ -66,7 +66,7 @@ class BusinessLogic:
         arc_id = hashlib.sha256(input_str.encode("utf-8")).hexdigest()
         return arc_id
 
-    def _create_arc_from_rocrate(self, crate: Dict, client_id: str) -> ARCResponse:
+    def _create_arc_from_rocrate(self, crate: Dict, client_id: str) -> ArcResponse:
         try:
             crate_json = json.dumps(crate)
             arc = ARC.from_rocrate_json_string(crate_json)
@@ -81,15 +81,15 @@ class BusinessLogic:
             )
 
         exists = False  # TODO: Check if ARC already exists
-        status = ARCStatus.updated if exists else ARCStatus.created
+        status = ArcStatus.updated if exists else ArcStatus.created
 
-        return ARCResponse(
+        return ArcResponse(
             id=self._create_arc_id(identifier, client_id),
             status=status,
             timestamp=datetime.now(timezone.utc).isoformat() + "Z",
         )
 
-    async def _process_arcs(self, data: str, client_id: str) -> List[ARCResponse]:
+    async def _process_arcs(self, data: str, client_id: str) -> List[ArcResponse]:
         crates = self._parse_rocrate_json(data)
         result = []
 
@@ -102,9 +102,9 @@ class BusinessLogic:
 
     # -------------------------- Whoami --------------------------
 
-    async def whoami(self, client_id: str) -> MiddlewareLogicResponse:
+    async def whoami(self, client_id: str) -> BusinessLogicResponse:
         try:
-            return MiddlewareLogicResponse(
+            return BusinessLogicResponse(
                 client_id=client_id,
                 message="Client authenticated successfully"
             )
@@ -116,10 +116,10 @@ class BusinessLogic:
 
     # -------------------------- Create or Update ARCs --------------------------
     async def create_or_update_arcs(
-            self, data: str, client_id: str) -> CreateOrUpdateResponse:
+            self, data: str, client_id: str) -> CreateOrUpdateArcsResponse:
         try:
             result = await self._process_arcs(data, client_id)
-            return CreateOrUpdateResponse(
+            return CreateOrUpdateArcsResponse(
                 client_id=client_id,
                 message="ARCs processed successfully",
                 arcs=result,

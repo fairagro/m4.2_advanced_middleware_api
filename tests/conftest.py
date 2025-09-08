@@ -9,7 +9,7 @@ from cryptography.hazmat.primitives import serialization
 import datetime
 
 from middleware_api.api import Api
-from middleware_api.business_logic import ARCResponse, ARCStatus, CreateOrUpdateResponse, MiddlewareLogicResponse, BusinessLogic
+from middleware_api.business_logic import ArcResponse, ArcStatus, CreateOrUpdateArcsResponse, BusinessLogicResponse, BusinessLogic
 from middleware_api.arc_store_gitlab_api import ARCStoreGitlabAPI
 
 
@@ -35,14 +35,14 @@ def mock_service(monkeypatch):
 
     class DummyService:
         async def whoami(self, request, client_cert, accept_type):
-            return MiddlewareLogicResponse(client_id="TestClient", message="ok")
+            return BusinessLogicResponse(client_id="TestClient", message="ok")
 
         async def create_or_update_arcs(self, data, client_cert, content_type, accept_type):
-            return CreateOrUpdateResponse(
+            return CreateOrUpdateArcsResponse(
                 client_id="TestClient",
                 message="ok",
                 arcs=[
-                    ARCResponse(id="abc123", status=ARCStatus.created, timestamp="2025-01-01T00:00:00Z")
+                    ArcResponse(id="abc123", status=ArcStatus.created, timestamp="2025-01-01T00:00:00Z")
                 ]
             )
 

@@ -3,8 +3,8 @@ from typing import Any
 import pytest
 
 from middleware_api.business_logic import (
-    ARCResponse,
-    CreateOrUpdateResponse,
+    ArcResponse,
+    CreateOrUpdateArcsResponse,
     InvalidJsonSemanticError,
     InvalidJsonSyntaxError,
     BusinessLogic
@@ -83,10 +83,10 @@ async def test_success(service: BusinessLogic, rocrate: list[dict[str, Any]]):
         data=json.dumps(rocrate),
         client_id="TestClient")
 
-    assert isinstance(result, CreateOrUpdateResponse) # nosec
+    assert isinstance(result, CreateOrUpdateArcsResponse) # nosec
     assert result.client_id == "TestClient" # nosec
     assert isinstance(result.arcs, list) # nosec
-    assert all(isinstance(a, ARCResponse) for a in result.arcs) # nosec
+    assert all(isinstance(a, ArcResponse) for a in result.arcs) # nosec
     assert len(result.arcs) == len(rocrate) # nosec
     assert all(is_valid_sha256(a.id) for a in result.arcs) # nosec
     assert all(a.status == "created" for a in result.arcs) # nosec
