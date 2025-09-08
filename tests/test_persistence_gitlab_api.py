@@ -95,7 +95,7 @@ def test_get_success(api, monkeypatch):
 
     arc = api.get("arc1")
     assert arc == dummy_arc # nosec
-    project.files.get.assert_any_call(file_path="f.txt", ref=api._branch)
+    project.files.get.assert_any_call(file_path="f.txt", ref=api._config.branch)
 
 
 def test_get_not_found(api):

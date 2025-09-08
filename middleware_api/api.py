@@ -4,8 +4,9 @@ from fastapi.datastructures import Headers
 from fastapi.responses import JSONResponse
 from cryptography import x509
 from cryptography.hazmat.backends import default_backend
+from pydantic import HttpUrl
 
-from .arc_store.gitlab_api import GitlabApi
+from .arc_store.gitlab_api import GitlabApi, GitlabApiConfig
 from .business_logic import (
     InvalidJsonSemanticError,
     InvalidJsonSyntaxError,
@@ -20,7 +21,13 @@ class Api:
     SUPPORTED_ACCEPT_TYPE = "application/json"
 
     def __init__(self, gitlab_url: str, gitlab_token: str, gitlab_project_id: int):
-        self._store = GitlabApi(gitlab_url, gitlab_token, gitlab_project_id)
+        api_config= GitlabApiConfig(
+            url = HttpUrl(gitlab_url),
+            token = gitlab_token,
+            branch = "main",
+            group_id = str(gitlab_project_id)
+        )
+        self._store = GitlabApi(api_config)
         self._service = BusinessLogic(self._store)
         self._app = FastAPI(
             title="FAIR Middleware API",

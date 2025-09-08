@@ -1,5 +1,6 @@
 from unittest.mock import MagicMock
 from fastapi.testclient import TestClient
+from pydantic import HttpUrl
 import pytest
 from cryptography import x509
 from cryptography.x509.oid import NameOID
@@ -9,8 +10,14 @@ from cryptography.hazmat.primitives import serialization
 import datetime
 
 from middleware_api.api import Api
-from middleware_api.business_logic import ArcResponse, ArcStatus, CreateOrUpdateArcsResponse, BusinessLogicResponse, BusinessLogic
-from middleware_api.arc_store.gitlab_api import GitlabApi
+from middleware_api.business_logic import (
+    ArcResponse,
+    ArcStatus,
+    CreateOrUpdateArcsResponse,
+    BusinessLogicResponse,
+    BusinessLogic
+)
+from middleware_api.arc_store.gitlab_api import GitlabApi, GitlabApiConfig
 
 
 @pytest.fixture
@@ -86,6 +93,12 @@ def cert() -> str:
 @pytest.fixture
 def api():
     """Erzeugt ein ARCPersistenceGitlabAPI mit gemocktem Gitlab."""
-    api = GitlabApi("http://gitlab", "token", 1)
+    api_config = GitlabApiConfig(
+        url = HttpUrl("http://gitlab"),
+        token = "token",
+        group_id = "1",
+        branch = "main"
+    ) # nosec
+    api = GitlabApi(api_config)
     api._gitlab = MagicMock()
     return api
