@@ -7,12 +7,12 @@ from gitlab.exceptions import GitlabGetError, GitlabAuthenticationError, GitlabC
 import logging
 from arctrl import ARC
 
-from .arc_store import ARCStore
+from . import ArcStore
 
 
 logger = logging.getLogger(__name__)
 
-class ARCStoreGitlabAPI(ARCStore):
+class GitlabApi(ArcStore):
 
     def __init__(self, gitlab_url: str, private_token: str, group_id: int, branch: str = "main"):
         logger.info("Initializing ARCPersistenceGitlabAPI")
@@ -118,7 +118,7 @@ class ARCStoreGitlabAPI(ARCStore):
         project.commits.create(commit_data)
 
     # -------------------------- Create/Update --------------------------
-    def create_or_update(self, arc_id: str, arc) -> None:
+    def _create_or_update(self, arc_id: str, arc) -> None:
         try:
             project = self._get_or_create_project(arc_id)
             with tempfile.TemporaryDirectory() as tmp_root:
@@ -141,7 +141,7 @@ class ARCStoreGitlabAPI(ARCStore):
             raise
 
     # -------------------------- Get --------------------------
-    def get(self, arc_id: str):
+    def _get(self, arc_id: str):
         try:
             project = self._find_project(arc_id)
             if not project:
@@ -179,7 +179,7 @@ class ARCStoreGitlabAPI(ARCStore):
                 file_path.write_bytes(content_bytes)
 
     # -------------------------- Delete --------------------------
-    def delete(self, arc_id: str) -> None:
+    def _delete(self, arc_id: str) -> None:
         try:
             project = self._find_project(arc_id)
             if project:

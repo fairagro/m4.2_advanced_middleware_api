@@ -10,7 +10,7 @@ import datetime
 
 from middleware_api.api import Api
 from middleware_api.business_logic import ArcResponse, ArcStatus, CreateOrUpdateArcsResponse, BusinessLogicResponse, BusinessLogic
-from middleware_api.arc_store_gitlab_api import ARCStoreGitlabAPI
+from middleware_api.arc_store.gitlab_api import GitlabApi
 
 
 @pytest.fixture
@@ -86,6 +86,6 @@ def cert() -> str:
 @pytest.fixture
 def api():
     """Erzeugt ein ARCPersistenceGitlabAPI mit gemocktem Gitlab."""
-    api = ARCStoreGitlabAPI("http://gitlab", "token", 1)
+    api = GitlabApi("http://gitlab", "token", 1)
     api._gitlab = MagicMock()
     return api

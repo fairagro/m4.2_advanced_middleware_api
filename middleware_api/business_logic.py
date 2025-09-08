@@ -6,7 +6,7 @@ from typing import List, Dict
 from pydantic import BaseModel
 from arctrl import ARC
 
-from .arc_store import ARCStore
+from .arc_store import ArcStore
 
 
 class ArcStatus(str, Enum):
@@ -48,7 +48,7 @@ class InvalidJsonSemanticError(BusinessLogicError):
 
 class BusinessLogic:
 
-    def __init__(self, store: ARCStore):
+    def __init__(self, store: ArcStore):
         self._store = store
 
     def _parse_rocrate_json(self, data: str) -> List[Dict]:
