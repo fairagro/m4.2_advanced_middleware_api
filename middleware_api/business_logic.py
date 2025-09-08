@@ -31,22 +31,22 @@ class CreateOrUpdateResponse(MiddlewareLogicResponse):
     arcs: List[ARCResponse]
 
 
-class MiddlewareLogicError(Exception):
+class BusinessLogicError(Exception):
     """Basisklasse für Fehler in MiddlewareService"""
     pass
 
 
-class InvalidJsonSyntaxError(MiddlewareLogicError):
+class InvalidJsonSyntaxError(BusinessLogicError):
     """Wird geworfen, wenn es Probleme beim Parsen des ARC JSON gibt"""
     pass
 
 
-class InvalidJsonSemanticError(MiddlewareLogicError):
+class InvalidJsonSemanticError(BusinessLogicError):
     """Wird geworfen, wenn es Probleme beim Parsen des ARC JSON gibt"""
     pass
 
 
-class MiddlewareLogic:
+class BusinessLogic:
 
     def __init__(self, store: ARCStore):
         self._store = store
@@ -108,8 +108,10 @@ class MiddlewareLogic:
                 client_id=client_id,
                 message="Client authenticated successfully"
             )
+        except BusinessLogicError:
+            raise
         except Exception as e:
-            raise MiddlewareLogicError(
+            raise BusinessLogicError(
                 f"unexpected error encountered: {str(e)}") from e
 
     # -------------------------- Create or Update ARCs --------------------------
@@ -122,8 +124,10 @@ class MiddlewareLogic:
                 message="ARCs processed successfully",
                 arcs=result,
             )
+        except BusinessLogicError:
+            raise
         except Exception as e:
-            raise MiddlewareLogicError(
+            raise BusinessLogicError(
                 f"unexpected error encountered: {str(e)}") from e
 
     # # -------------------------

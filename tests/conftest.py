@@ -8,14 +8,14 @@ from cryptography.hazmat.primitives.asymmetric import rsa
 from cryptography.hazmat.primitives import serialization
 import datetime
 
-from app.middleware_api import MiddlewareAPI
-from app.middleware_logic import ARCResponse, ARCStatus, CreateOrUpdateResponse, MiddlewareLogicResponse, MiddlewareLogic
-from app.arc_store_gitlab_api import ARCStoreGitlabAPI
+from middleware_api.api import Api
+from middleware_api.business_logic import ARCResponse, ARCStatus, CreateOrUpdateResponse, MiddlewareLogicResponse, BusinessLogic
+from middleware_api.arc_store_gitlab_api import ARCStoreGitlabAPI
 
 
 @pytest.fixture
 def middleware_api():
-    return MiddlewareAPI("http://gitlab", "token", 1)
+    return Api("http://gitlab", "token", 1)
 
 @pytest.fixture
 def client(middleware_api):
@@ -25,9 +25,9 @@ def client(middleware_api):
     middleware_api.app.dependency_overrides.clear()
 
 @pytest.fixture
-def service() -> MiddlewareLogic:
+def service() -> BusinessLogic:
     store = MagicMock()
-    return MiddlewareLogic(store)
+    return BusinessLogic(store)
 
 @pytest.fixture
 def mock_service(monkeypatch):

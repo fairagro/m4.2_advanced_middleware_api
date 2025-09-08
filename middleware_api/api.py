@@ -6,14 +6,14 @@ from cryptography import x509
 from cryptography.hazmat.backends import default_backend
 
 from .arc_store_gitlab_api import ARCStoreGitlabAPI
-from .middleware_logic import (
+from .business_logic import (
     InvalidJsonSemanticError,
     InvalidJsonSyntaxError,
-    MiddlewareLogic
+    BusinessLogic
 )
 
 
-class MiddlewareAPI:
+class Api:
 
     # Constants
     SUPPORTED_CONTENT_TYPE = "application/ro-crate+json"
@@ -21,7 +21,7 @@ class MiddlewareAPI:
 
     def __init__(self, gitlab_url: str, gitlab_token: str, gitlab_project_id: int):
         self._store = ARCStoreGitlabAPI(gitlab_url, gitlab_token, gitlab_project_id)
-        self._service = MiddlewareLogic(self._store)
+        self._service = BusinessLogic(self._store)
         self._app = FastAPI(
             title="FAIR Middleware API",
             description="API for managing ARC (Advanced Research Context) objects"
@@ -33,7 +33,7 @@ class MiddlewareAPI:
     def app(self) -> FastAPI:
         return self._app
 
-    def get_service(self) -> MiddlewareLogic:
+    def get_service(self) -> BusinessLogic:
         return self._service
 
     def _get_client_id(self, headers: Headers) -> str:
@@ -85,7 +85,7 @@ class MiddlewareAPI:
         @self._app.get("/v1/whoami")
         async def whoami(
             request: Request,
-            service: Annotated[MiddlewareLogic, Depends(self.get_service)]
+            service: Annotated[BusinessLogic, Depends(self.get_service)]
         ) -> JSONResponse:
             client_id = self._get_client_id(request.headers)
             self._validate_accept_type(request.headers)
@@ -95,7 +95,7 @@ class MiddlewareAPI:
         @self._app.post("/v1/arcs")
         async def create_or_update_arcs(
             request: Request,
-            service: Annotated[MiddlewareLogic, Depends(self.get_service)]
+            service: Annotated[BusinessLogic, Depends(self.get_service)]
         ) -> JSONResponse:
             client_id = self._get_client_id(request.headers)
             self._validate_accept_type(request.headers)
@@ -114,7 +114,7 @@ class MiddlewareAPI:
                 raise HTTPException(status_code=422, detail=str(e)) from e
 
 
-middleware_api = MiddlewareAPI("http://gitlab", "token", 1)
+middleware_api = Api("http://gitlab", "token", 1)
 
 
 # # -------------------------

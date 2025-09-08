@@ -1,5 +1,5 @@
 import uvicorn
-from .middleware_api import middleware_api
+from .api import middleware_api
 
 def main():
     uvicorn.run(middleware_api.app, host="127.0.0.1", port=8000)

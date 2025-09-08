@@ -1,15 +1,15 @@
 from unittest.mock import MagicMock
 import pytest
 
-from app.middleware_logic import (
+from middleware_api.business_logic import (
     MiddlewareLogicResponse,
-    MiddlewareLogic
+    BusinessLogic
 )
 
 
 @pytest.mark.asyncio
 async def test_whoami_returns_middleware_response():
-    service = MiddlewareLogic(store=MagicMock())  # store kannst du mocken oder None setzen
+    service = BusinessLogic(store=MagicMock())  # store kannst du mocken oder None setzen
     client_id = "TestClient"
 
     result = await service.whoami(client_id)

@@ -3,10 +3,10 @@
 import pytest
 
 # Importiere die echte FastAPI-App und die echte get_service-Factory
-from app.middleware_api import MiddlewareAPI
+from middleware_api.api import Api
 
 # Nur die Exception-Typen importieren, damit wir das HTTP-Mapping testen können
-from app.middleware_logic import (
+from middleware_api.business_logic import (
     InvalidJsonSemanticError,
     InvalidJsonSyntaxError,
 )
@@ -29,7 +29,7 @@ class DummyResponse:
         return self._payload
 
 
-def override_service(api: MiddlewareAPI, obj):
+def override_service(api: Api, obj):
     """Helfer zum Überschreiben der get_service-Dependency."""
     api.app.dependency_overrides[api.get_service] = lambda: obj
 
