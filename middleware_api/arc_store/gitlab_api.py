@@ -4,7 +4,11 @@ from pathlib import Path
 import tempfile
 from typing import Annotated
 import gitlab
-from gitlab.exceptions import GitlabGetError, GitlabAuthenticationError, GitlabConnectionError
+from gitlab.exceptions import (
+    GitlabGetError,
+    GitlabAuthenticationError,
+    GitlabConnectionError
+)
 import logging
 from arctrl import ARC
 from pydantic import BaseModel, Field, HttpUrl
