@@ -104,7 +104,7 @@ class Api:
             return JSONResponse(content=result.model_dump())
 
         @self._app.get("/v1/liveness")
-        async def health(request: Request) -> JSONResponse:
+        async def liveness(request: Request) -> JSONResponse:
             self._validate_accept_type(request.headers)
             return JSONResponse(content={"message": "living"})
 

@@ -7,11 +7,24 @@
 version: 2
 
 updates:
-  - package-ecosystem: "devcontainers"
-    directory: "/"
+  - package-ecosystem: devcontainers
+    directory: /
     schedule:
       interval: weekly
-  - package-ecosystem: "uv"
-    directory: "/"                     # oder Unterverzeichnis, falls Projekt nicht im Root liegt
+  - package-ecosystem: uv
+    directory: /                     # oder Unterverzeichnis, falls Projekt nicht im Root liegt
     schedule:
-      interval: "weekly"              # oder "daily", "monthly"
+      interval: weekly              # oder "daily", "monthly"
+  - package-ecosystem: docker
+    directory: /  # Pfad zu deinem Dockerfile
+    schedule:
+      interval: weekly
+    allow:
+      - dependency-type: all
+    ignore:
+      - dependency-name: python
+        versions:
+          - latest  # do not update to 'latest'
+      - dependency-name: alpine
+        versions:
+          - latest  # do not update to 'latest'
