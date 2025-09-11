@@ -101,7 +101,12 @@ class Api:
             client_id = self._get_client_id(request.headers)
             self._validate_accept_type(request.headers)
             result = await service.whoami(client_id)
-            return JSONResponse(content=result.model_dump(), status_code=200)
+            return JSONResponse(content=result.model_dump())
+
+        @self._app.get("/v1/liveness")
+        async def health(request: Request) -> JSONResponse:
+            self._validate_accept_type(request.headers)
+            return JSONResponse(content={"message": "living"})
 
         @self._app.post("/v1/arcs")
         async def create_or_update_arcs(
