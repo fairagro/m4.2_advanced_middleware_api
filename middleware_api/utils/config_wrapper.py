@@ -29,11 +29,11 @@ class ConfigWrapper:
     def _build_path(self, key: str) -> str:
         return f"{self._path}_{key}" if self._path else key
 
-    def _wrap(self, value: ValueType | None, key: str) -> WrapType:
+    def _wrap(self, value: "ValueType | None", key: str) -> WrapType:
         return ConfigWrapper._from_value(value, self._build_path(key))
 
     @staticmethod
-    def _from_value(value: ValueType | None, path: str) -> WrapType:
+    def _from_value(value: "ValueType | None", path: str) -> WrapType:
         if isinstance(value, dict):
             return ConfigWrapperDict(value, path)
         if isinstance(value, list):
@@ -60,7 +60,7 @@ class ConfigWrapper:
             return cls.from_data(data, prefix)
 
     @staticmethod
-    def _get_path_str(value: ValueType | None, key: KeyType) -> str:
+    def _get_path_str(value: "ValueType | None", key: KeyType) -> str:
         if isinstance(value, dict) and 'id' in value:
             return cast(str, value['id'])
         return str(key)
@@ -75,7 +75,7 @@ class ConfigWrapper:
         raise NotImplementedError(
             "Please do not use class 'ConfigWrapper' directly, but a derived class")  
 
-    def get(self, key: KeyType, default_value: ValueType | None = None) -> WrapType:
+    def get(self, key: KeyType, default_value: "ValueType | None" = None) -> WrapType:
         """
         Returns the value of a config key. If the value is a dict or list, it's again
         wrapped into to ConfigWrapper object.
