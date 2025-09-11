@@ -16,11 +16,12 @@ logger = logging.getLogger(__name__)
 
 
 class GitlabApiConfig(BaseModel):
+
     url: Annotated[HttpUrl, Field(
         description="URL of the gitlab server to store ARCs in"
     )]
-    group_id: Annotated[str, Field(
-        description="The gitlab group_id to store ARC repos in"
+    group: Annotated[str, Field(
+        description="The gitlab group the ARC repos belong to"
     )]
     branch: Annotated[str, Field(
         description="The git branch to use for ARC repos",
@@ -45,7 +46,7 @@ class GitlabApi(ArcStore):
         for project in projects:
             if project.path == arc_id:
                 return project
-        group = self._gitlab.groups.get(self._config.group_id)
+        group = self._gitlab.groups.get(self._config.group)
         return self._gitlab.projects.create({
             "name": arc_id,
             "path": arc_id,

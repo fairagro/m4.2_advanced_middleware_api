@@ -96,7 +96,7 @@ def api():
     api_config = GitlabApiConfig(
         url = HttpUrl("http://gitlab"),
         token = "token",
-        group_id = "1",
+        group = "1",
         branch = "main"
     ) # nosec
     api = GitlabApi(api_config)

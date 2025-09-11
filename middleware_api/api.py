@@ -25,7 +25,7 @@ class Api:
             url = HttpUrl(gitlab_url),
             token = gitlab_token,
             branch = "main",
-            group_id = str(gitlab_project_id)
+            group = str(gitlab_project_id)
         )
         self._store = GitlabApi(api_config)
         self._service = BusinessLogic(self._store)
