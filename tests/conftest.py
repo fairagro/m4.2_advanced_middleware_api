@@ -22,7 +22,7 @@ from middleware_api.arc_store.gitlab_api import GitlabApi, GitlabApiConfig
 
 @pytest.fixture
 def middleware_api():
-    return Api("http://gitlab", "token", 1)
+    return Api()
 
 @pytest.fixture
 def client(middleware_api):

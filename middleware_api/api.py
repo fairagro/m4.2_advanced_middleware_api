@@ -1,12 +1,14 @@
-from typing import Annotated
+import os
+from pathlib import Path
+from typing import Annotated, cast
 from fastapi import FastAPI, HTTPException, Request, Depends
 from fastapi.datastructures import Headers
 from fastapi.responses import JSONResponse
 from cryptography import x509
 from cryptography.hazmat.backends import default_backend
-from pydantic import HttpUrl
 
-from .arc_store.gitlab_api import GitlabApi, GitlabApiConfig
+from .config import Config
+from .arc_store.gitlab_api import GitlabApi
 from .business_logic import (
     InvalidJsonSemanticError,
     InvalidJsonSyntaxError,
@@ -19,15 +21,17 @@ class Api:
     # Constants
     SUPPORTED_CONTENT_TYPE = "application/ro-crate+json"
     SUPPORTED_ACCEPT_TYPE = "application/json"
+    CONFIG_ENV_VAR_NAME = "MIDDLEWARE_API_CONFIG"
 
-    def __init__(self, gitlab_url: str, gitlab_token: str, gitlab_project_id: int):
-        api_config= GitlabApiConfig(
-            url = HttpUrl(gitlab_url),
-            token = gitlab_token,
-            branch = "main",
-            group = str(gitlab_project_id)
-        )
-        self._store = GitlabApi(api_config)
+    def __init__(self, config_path: Path | None = None):
+        config_path_from_env =  os.environ.get(Api.CONFIG_ENV_VAR_NAME)
+        if config_path_from_env:
+            config_path = Path(config_path_from_env)
+        if config_path is None:
+            config_path = Path("./config.yaml")
+        self._config = Config.from_yaml_file(config_path)
+
+        self._store = GitlabApi(self._config.gitlab_api)
         self._service = BusinessLogic(self._store)
         self._app = FastAPI(
             title="FAIR Middleware API",
@@ -39,6 +43,14 @@ class Api:
     @property
     def app(self) -> FastAPI:
         return self._app
+
+    @property
+    def listen_addr(self) -> str:
+        return cast(str, self._config.listen_addr)
+
+    @property
+    def listen_port(self) -> int:
+        return self._config.listen_port
 
     def get_service(self) -> BusinessLogic:
         return self._service
@@ -121,7 +133,7 @@ class Api:
                 raise HTTPException(status_code=422, detail=str(e)) from e
 
 
-middleware_api = Api("http://gitlab", "token", 1)
+middleware_api = Api()
 
 
 # # -------------------------
