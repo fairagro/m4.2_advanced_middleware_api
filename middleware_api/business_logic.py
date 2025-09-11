@@ -80,7 +80,8 @@ class BusinessLogic:
                 "RO-Crate JSON must contain an 'Identifier' in the ISA object."
             )
 
-        exists = False  # TODO: Check if ARC already exists
+        exists = self._store.exists(identifier)
+        self._store.create_or_update(identifier, arc)
         status = ArcStatus.updated if exists else ArcStatus.created
 
         return ArcResponse(
@@ -96,7 +97,6 @@ class BusinessLogic:
         for crate in crates:
             arc_response = self._create_arc_from_rocrate(crate, client_id)
             result.append(arc_response)
-            # TODO: persist ARC to database or file system
 
         return result
 

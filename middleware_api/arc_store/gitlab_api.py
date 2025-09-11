@@ -4,11 +4,7 @@ from pathlib import Path
 import tempfile
 from typing import Annotated
 import gitlab
-from gitlab.exceptions import (
-    GitlabGetError,
-    GitlabAuthenticationError,
-    GitlabConnectionError
-)
+from gitlab.exceptions import GitlabGetError
 import logging
 from arctrl import ARC
 from pydantic import BaseModel, Field, HttpUrl
@@ -144,43 +140,31 @@ class GitlabApi(ArcStore):
 
     # -------------------------- Create/Update --------------------------
     def _create_or_update(self, arc_id: str, arc) -> None:
-        try:
-            project = self._get_or_create_project(arc_id)
-            with tempfile.TemporaryDirectory() as tmp_root:
-                arc_path = Path(tmp_root) / arc_id
-                arc_path.mkdir(parents=True, exist_ok=True)
-                arc.Write(str(arc_path))
+        project = self._get_or_create_project(arc_id)
+        with tempfile.TemporaryDirectory() as tmp_root:
+            arc_path = Path(tmp_root) / arc_id
+            arc_path.mkdir(parents=True, exist_ok=True)
+            arc.Write(str(arc_path))
 
-                new_hash = self._compute_arc_hash(arc_path)
-                old_hash = self._load_old_hash(project)
+            new_hash = self._compute_arc_hash(arc_path)
+            old_hash = self._load_old_hash(project)
 
-                if new_hash == old_hash:
-                    return
+            if new_hash == old_hash:
+                return
 
-                actions = self._prepare_file_actions(project, arc_path, old_hash)
-                self._commit_actions(project, actions, arc_id)
-        except (GitlabAuthenticationError, GitlabConnectionError):
-            raise
-        except Exception:
-            logger.exception(f"Unexpected error in create_or_update({arc_id})")
-            raise
+            actions = self._prepare_file_actions(project, arc_path, old_hash)
+            self._commit_actions(project, actions, arc_id)
 
     # -------------------------- Get --------------------------
     def _get(self, arc_id: str):
-        try:
-            project = self._find_project(arc_id)
-            if not project:
-                return None
-            with tempfile.TemporaryDirectory() as tmp_root:
-                arc_path = Path(tmp_root) / arc_id
-                arc_path.mkdir(parents=True, exist_ok=True)
-                self._download_project_files(project, arc_path)
-                return ARC.try_load_async(str(arc_path))
-        except (GitlabAuthenticationError, GitlabConnectionError):
+        project = self._find_project(arc_id)
+        if not project:
             return None
-        except Exception:
-            logger.exception(f"Unexpected error in get({arc_id})")
-            return None
+        with tempfile.TemporaryDirectory() as tmp_root:
+            arc_path = Path(tmp_root) / arc_id
+            arc_path.mkdir(parents=True, exist_ok=True)
+            self._download_project_files(project, arc_path)
+            return ARC.try_load_async(str(arc_path))
 
     def _download_project_files(self, project, arc_path: Path):
         tree = project.repository_tree(ref=self._config.branch, all=True, recursive=True)
@@ -205,14 +189,15 @@ class GitlabApi(ArcStore):
 
     # -------------------------- Delete --------------------------
     def _delete(self, arc_id: str) -> None:
-        try:
-            project = self._find_project(arc_id)
-            if project:
-                project.delete()
-            else:
-                logger.warning(f"Project '{arc_id}' not found for deletion.")
-        except (GitlabAuthenticationError, GitlabConnectionError):
-            raise
-        except Exception:
-            logger.exception(f"Unexpected error in delete({arc_id})")
-            raise
+        project = self._find_project(arc_id)
+        if project:
+            project.delete()
+        else:
+            logger.warning(f"Project '{arc_id}' not found for deletion.")
+
+    # -------------------------- Delete --------------------------
+    def _exists(self, arc_id: str) -> bool:
+        project = self._find_project(arc_id)
+        if project:
+            return True
+        return False
