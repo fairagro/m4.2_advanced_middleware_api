@@ -1,0 +1,4 @@
+gitlab_api:
+  url: https://datahub-dev.ipk-gatersleben.de
+  group: ""
+  token: ""

@@ -1,6 +1,6 @@
 import os
 from pathlib import Path
-from typing import Annotated, cast
+from typing import Annotated
 from fastapi import FastAPI, HTTPException, Request, Depends
 from fastapi.datastructures import Headers
 from fastapi.responses import JSONResponse
@@ -43,14 +43,6 @@ class Api:
     @property
     def app(self) -> FastAPI:
         return self._app
-
-    @property
-    def listen_addr(self) -> str:
-        return cast(str, self._config.listen_addr)
-
-    @property
-    def listen_port(self) -> int:
-        return self._config.listen_port
 
     def get_service(self) -> BusinessLogic:
         return self._service
