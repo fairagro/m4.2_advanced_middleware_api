@@ -28,7 +28,7 @@ class GitlabApiConfig(BaseModel):
         default="main"
     )]
     token: Annotated[str, Field(
-        description="A gitlab token with CRUD permissions to the gitlab project"
+        description="A gitlab token with CRUD permissions to the gitlab group"
     )]
 
 

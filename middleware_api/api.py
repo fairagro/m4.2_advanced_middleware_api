@@ -131,6 +131,7 @@ class Api:
 
 
 middleware_api = Api()
+app = middleware_api.app
 
 
 # # -------------------------
