@@ -35,7 +35,7 @@ class Api:
         self._service = BusinessLogic(self._store)
         self._app = FastAPI(
             title="FAIR Middleware API",
-            description="API for managing ARC (Advanced Research Context) objects"
+            description="API for managing ARC (Advanced Research Context) objects",
         )
         self._setup_routes()
         self._setup_exception_handlers()
@@ -54,7 +54,7 @@ class Api:
             raise HTTPException(status_code=401, detail=msg)
 
         try:
-            pem = client_cert.replace("\n", "\n")
+            pem = client_cert.replace("\\n", "\n")
             cert_obj = x509.load_pem_x509_certificate(
                 pem.encode(), default_backend())
             value = cert_obj.subject.get_attributes_for_oid(
