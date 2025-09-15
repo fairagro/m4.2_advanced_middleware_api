@@ -34,6 +34,7 @@ def client(middleware_api):
 @pytest.fixture
 def service() -> BusinessLogic:
     store = MagicMock()
+    store.exists.return_value = False
     return BusinessLogic(store)
 
 @pytest.fixture
