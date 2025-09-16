@@ -21,10 +21,3 @@ updates:
       interval: weekly
     allow:
       - dependency-type: all
-    ignore:
-      - dependency-name: python
-        versions:
-          - latest  # do not update to 'latest'
-      - dependency-name: alpine
-        versions:
-          - latest  # do not update to 'latest'
