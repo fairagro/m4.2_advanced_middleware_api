@@ -11,13 +11,16 @@ updates:
     directory: /
     schedule:
       interval: weekly
+    target-branch: testing
   - package-ecosystem: uv
-    directory: /                     # oder Unterverzeichnis, falls Projekt nicht im Root liegt
+    directory: /
     schedule:
-      interval: weekly              # oder "daily", "monthly"
+      interval: weekly
+    target-branch: testing
   - package-ecosystem: docker
-    directory: /  # Pfad zu deinem Dockerfile
+    directory: /
     schedule:
       interval: weekly
     allow:
       - dependency-type: all
+    target-branch: testing
