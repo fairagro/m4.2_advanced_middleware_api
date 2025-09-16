@@ -1,4 +1,4 @@
-from unittest.mock import MagicMock
+from unittest.mock import AsyncMock, MagicMock
 from fastapi.testclient import TestClient
 from pydantic import HttpUrl
 import pytest
@@ -29,6 +29,7 @@ def client(middleware_api):
 def service() -> BusinessLogic:
     store = MagicMock()
     store.exists.return_value = False
+    store.create_or_update = AsyncMock()
     return BusinessLogic(store)
 
 @pytest.fixture
@@ -52,7 +53,7 @@ def mock_service(monkeypatch):
     return DummyService()
 
 @pytest.fixture
-def api():
+def gitlab_api():
     """Erzeugt ein ARCPersistenceGitlabAPI mit gemocktem Gitlab."""
     api_config = GitlabApiConfig(
         url = HttpUrl("http://gitlab"),
