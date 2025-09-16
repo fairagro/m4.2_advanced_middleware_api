@@ -4,7 +4,7 @@ import pytest
 
 
 @pytest.mark.asyncio
-def test_whoami_with_client_cert(client: TestClient, cert: str):
+async def test_whoami_with_client_cert(client: TestClient, cert: str):
     # Optional Base64 encodieren, falls dein Code das erwartet
     cert_with_linebreaks = cert.replace("\\n", "\n")
 

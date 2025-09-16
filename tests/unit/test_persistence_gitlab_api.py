@@ -38,7 +38,8 @@ def test_get_or_create_project_create(gitlab_api):
 
 # -------------------- Create/Update --------------------
 
-def test_create_or_update_no_changes(gitlab_api):
+@pytest.mark.asyncio
+async def test_create_or_update_no_changes(gitlab_api):
     """Wenn Hash gleich ist, darf kein Commit passieren."""
     arc = MagicMock()
     arc.Write = lambda path: (Path(path) / "f.txt").write_text("abc")
@@ -49,7 +50,7 @@ def test_create_or_update_no_changes(gitlab_api):
     gitlab_api._get_or_create_project = lambda arc_id: project
     gitlab_api._compute_arc_hash = lambda path: "dummyhash"
 
-    gitlab_api.create_or_update("arc1", arc)
+    await gitlab_api.create_or_update("arc1", arc)
     project.commits.create.assert_not_called()
 
 
