@@ -29,7 +29,7 @@ FROM alpine@sha256:4bcff63911fcb4448bd4fdacec207030997caf25e9bea4045fa6c8c44de31
 
 WORKDIR /middleware_api
 
-ENV UVICORN_HOST=127.0.0.1
+ENV UVICORN_HOST=0.0.0.0
 ENV UVICORN_PORT=8000
 ENV MIDDLEWARE_API_CONFIG=/middleware_api/demo_config.yaml
 

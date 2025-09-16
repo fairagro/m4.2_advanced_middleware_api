@@ -1,3 +1,4 @@
+import asyncio
 import base64
 import hashlib
 from pathlib import Path
@@ -7,7 +8,7 @@ import gitlab
 from gitlab.exceptions import GitlabGetError
 import logging
 from arctrl import ARC
-from pydantic import BaseModel, Field, HttpUrl
+from pydantic import BaseModel, Field, HttpUrl, field_validator
 
 from . import ArcStore
 
@@ -21,7 +22,8 @@ class GitlabApiConfig(BaseModel):
         description="URL of the gitlab server to store ARCs in"
     )]
     group: Annotated[str, Field(
-        description="The gitlab group the ARC repos belong to"
+        description="The gitlab group the ARC repos belong to",
+        min_length=1    # may not be empty
     )]
     branch: Annotated[str, Field(
         description="The git branch to use for ARC repos",
@@ -30,6 +32,12 @@ class GitlabApiConfig(BaseModel):
     token: Annotated[str, Field(
         description="A gitlab token with CRUD permissions to the gitlab group"
     )]
+
+    @field_validator("group", mode="before")
+    def to_lowercase(cls, v: str) -> str:
+        if isinstance(v, str):
+            return v.lower().strip()
+        return v
 
 
 class GitlabApi(ArcStore):
@@ -139,12 +147,16 @@ class GitlabApi(ArcStore):
         project.commits.create(commit_data)
 
     # -------------------------- Create/Update --------------------------
-    def _create_or_update(self, arc_id: str, arc) -> None:
+    async def _create_or_update(self, arc_id: str, arc) -> None:
         project = self._get_or_create_project(arc_id)
         with tempfile.TemporaryDirectory() as tmp_root:
             arc_path = Path(tmp_root) / arc_id
             arc_path.mkdir(parents=True, exist_ok=True)
-            arc.Write(str(arc_path))
+
+            # arc.Write is using asyncio internally, but is not async itself.
+            # We need to run it our event loop to avoid blocking.
+            loop = asyncio.get_running_loop()
+            await loop.run_in_executor(None, arc.Write, str(arc_path))
 
             new_hash = self._compute_arc_hash(arc_path)
             old_hash = self._load_old_hash(project)
