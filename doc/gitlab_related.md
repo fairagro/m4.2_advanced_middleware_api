@@ -11,7 +11,12 @@ middle, please perform the following steps:
    features:
 
    * scopes: api, write_repository
-   * role: maintainer
+   * role: owner/maintainer
+
+   Note: if you would like to run the integration tests defined within this repo,
+   you're access token needs to have the owner role, because the tests will delete
+   all repos to be in a deterministic state. In a prodoctive scenario, the maintainer
+   role will be sufficient.
 
 3. Add the add group (as well as the URL of your DataHub instance) to your FAIRagro
    advanced middleware config file
