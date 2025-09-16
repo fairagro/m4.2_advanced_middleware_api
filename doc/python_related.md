@@ -128,4 +128,3 @@ We can also build an run the docker image:
 docker build . -t middleware_api
 docker run -p 8000:8000 middleware_api
 ```
-

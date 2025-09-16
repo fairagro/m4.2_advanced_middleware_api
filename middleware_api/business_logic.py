@@ -1,3 +1,4 @@
+import asyncio
 import hashlib
 import json
 from enum import Enum
@@ -66,7 +67,7 @@ class BusinessLogic:
         arc_id = hashlib.sha256(input_str.encode("utf-8")).hexdigest()
         return arc_id
 
-    def _create_arc_from_rocrate(self, crate: Dict, client_id: str) -> ArcResponse:
+    async def _create_arc_from_rocrate(self, crate: Dict, client_id: str) -> ArcResponse:
         try:
             crate_json = json.dumps(crate)
             arc = ARC.from_rocrate_json_string(crate_json)
@@ -81,7 +82,7 @@ class BusinessLogic:
             )
 
         exists = self._store.exists(identifier)
-        self._store.create_or_update(identifier, arc)
+        await self._store.create_or_update(identifier, arc)
         status = ArcStatus.updated if exists else ArcStatus.created
 
         return ArcResponse(
@@ -92,13 +93,11 @@ class BusinessLogic:
 
     async def _process_arcs(self, data: str, client_id: str) -> List[ArcResponse]:
         crates = self._parse_rocrate_json(data)
-        result = []
-
-        for crate in crates:
-            arc_response = self._create_arc_from_rocrate(crate, client_id)
-            result.append(arc_response)
-
-        return result
+        tasks = [
+            self._create_arc_from_rocrate(crate, client_id)
+            for crate in crates
+        ]
+        return await asyncio.gather(*tasks)
 
     # -------------------------- Whoami --------------------------
 
