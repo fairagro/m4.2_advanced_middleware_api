@@ -19,7 +19,7 @@ class ArcStoreError(Exception):
 class ArcStore(ABC):
 
     @abstractmethod
-    def _create_or_update(self, arc_id: str, arc: ARC) -> None:
+    async def _create_or_update(self, arc_id: str, arc: ARC) -> None:
         """creates or updates an ARC"""
         raise NotImplementedError('`ArcStore._create_or_update` is not implemented')
 
@@ -38,9 +38,9 @@ class ArcStore(ABC):
         """checks if an ARC of a given id already exists"""
         raise NotImplementedError('`ArcStore._exists` is not implemented')
 
-    def create_or_update(self, arc_id: str, arc: ARC) -> None:
+    async def create_or_update(self, arc_id: str, arc: ARC) -> None:
         try:
-            return self._create_or_update(arc_id, arc)
+            return await self._create_or_update(arc_id, arc)
         except ArcStoreError:
             raise
         except Exception as e:
