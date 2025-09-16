@@ -1,5 +1,6 @@
 import json
 from typing import Any
+from unittest.mock import patch
 import pytest
 
 from middleware_api.business_logic import (
@@ -78,7 +79,7 @@ def is_valid_sha256(s: str) -> bool:
         }]
     ]
 )
-async def test_success(service: BusinessLogic, rocrate: list[dict[str, Any]]):
+async def test_create_arc_success(service: BusinessLogic, rocrate: list[dict[str, Any]]):
     result = await service.create_or_update_arcs(
         data=json.dumps(rocrate),
         client_id="TestClient")
@@ -90,6 +91,39 @@ async def test_success(service: BusinessLogic, rocrate: list[dict[str, Any]]):
     assert len(result.arcs) == len(rocrate) # nosec
     assert all(is_valid_sha256(a.id) for a in result.arcs) # nosec
     assert all(a.status == "created" for a in result.arcs) # nosec
+
+@pytest.mark.asyncio
+async def test_update_arc_success(service: BusinessLogic):
+    rocrate = [{  # One item
+        "@context": "https://w3id.org/ro/crate/1.1/context",
+        "@graph": [
+            {
+                "@id": "./",
+                "@type": "Dataset",
+                "additionalType": "Investigation",
+                "identifier": "ARC-001"
+            },
+            {
+                "@id": "ro-crate-metadata.json",
+                "@type": "CreativeWork",
+                "conformsTo": {"@id": "https://w3id.org/ro/crate/1.1"},
+                "about": {"@id": "./"}
+            }
+        ]
+    }]
+
+    with patch.object(service._store, "exists", return_value=True):
+        result = await service.create_or_update_arcs(
+            data=json.dumps(rocrate),
+            client_id="TestClient")
+
+        assert isinstance(result, CreateOrUpdateArcsResponse) # nosec
+        assert result.client_id == "TestClient" # nosec
+        assert isinstance(result.arcs, list) # nosec
+        assert all(isinstance(a, ArcResponse) for a in result.arcs) # nosec
+        assert len(result.arcs) == len(rocrate) # nosec
+        assert all(is_valid_sha256(a.id) for a in result.arcs) # nosec
+        assert all(a.status == "updated" for a in result.arcs) # nosec
 
 
 @pytest.mark.asyncio

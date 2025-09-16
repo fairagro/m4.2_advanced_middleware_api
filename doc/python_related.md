@@ -70,13 +70,61 @@ not be part of the project dependencies:
 uv pip install <package name>
 ```
 
-## Testing with the `uvicorn` API server
+## Testing the FAIRagro middleware API
 
-To run the API on your local dev machine, issue:
+There's are bunch of possibilities to run the FAIRagro middleware service in
+a test environment. Note that we assume in all cases that the current working
+directory is the project base directory (i.e. the one that has been created
+by `git clone`).
+
+The middleware will listen on `http://0.0.0.0:8000` by default. You can
+change this by passing the command line args `--host` and/or `--port`.
+You will be able to access a swagger API browser by appending `/docs` to the
+URL.
+
+### Running by executing `main.py`
+
+We can start the middleware api by executing the python main file:
 
 ```bash
-uvicorn app.main:app
+PYTHONPATH=. python middleware_api/main.py
 ```
 
-The API will listen on `http://127.0.0.1:8000`, you can access swagger docs
-under `http://127.0.0.1:8000/docs`.
+The `PYTHONPATH` needs to be set, so `main.py` can find the `middleware_api`
+module.
+
+### Running the `middleware_api.main` module
+
+We can also execute the `middleware_api.main` module:
+
+```bash
+python -m middleware_api.main
+```
+
+If you do this in the project directory, there is no need to set the
+`PYTHONPATH`.
+
+### Running via `uvicorn`
+
+To run the middleware api via `uvicorn` command line tool:
+
+```bash
+uvicorn middleware_api.api:app
+```
+
+### Running via `fastapi`
+
+To run the middleware api via `fastapi` command line tool:
+
+```bash
+fastapi run middleware_api/api.py --app app
+```
+
+### Using the docker image
+
+We can also build an run the docker image:
+
+```bash
+docker build . -t middleware_api
+docker run -p 8000:8000 middleware_api
+```

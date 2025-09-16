@@ -1,5 +1,3 @@
-import os
-from pathlib import Path
 from typing import Annotated
 from fastapi import FastAPI, HTTPException, Request, Depends
 from fastapi.datastructures import Headers
@@ -21,21 +19,18 @@ class Api:
     # Constants
     SUPPORTED_CONTENT_TYPE = "application/ro-crate+json"
     SUPPORTED_ACCEPT_TYPE = "application/json"
-    CONFIG_ENV_VAR_NAME = "MIDDLEWARE_API_CONFIG"
 
-    def __init__(self, config_path: Path | None = None):
-        config_path_from_env =  os.environ.get(Api.CONFIG_ENV_VAR_NAME)
-        if config_path_from_env:
-            config_path = Path(config_path_from_env)
-        if config_path is None:
-            config_path = Path("./config.yaml")
-        self._config = Config.from_yaml_file(config_path)
-
+    def __init__(self, config: Config | None = None):
+        if config:
+            self._config = config
+        else:
+            # Either load config file from env var or use default path
+            self._config = Config.from_env_var()
         self._store = GitlabApi(self._config.gitlab_api)
         self._service = BusinessLogic(self._store)
         self._app = FastAPI(
             title="FAIR Middleware API",
-            description="API for managing ARC (Advanced Research Context) objects"
+            description="API for managing ARC (Advanced Research Context) objects",
         )
         self._setup_routes()
         self._setup_exception_handlers()
@@ -54,7 +49,7 @@ class Api:
             raise HTTPException(status_code=401, detail=msg)
 
         try:
-            pem = client_cert.replace("\n", "\n")
+            pem = client_cert.replace("\\n", "\n")
             cert_obj = x509.load_pem_x509_certificate(
                 pem.encode(), default_backend())
             value = cert_obj.subject.get_attributes_for_oid(
