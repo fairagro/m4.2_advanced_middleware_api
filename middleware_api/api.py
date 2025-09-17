@@ -6,19 +6,20 @@ and content type validation.
 """
 
 from typing import Annotated
-from fastapi import FastAPI, HTTPException, Request, Depends
-from fastapi.datastructures import Headers
-from fastapi.responses import JSONResponse
+
 from cryptography import x509
 from cryptography.hazmat.backends import default_backend
+from fastapi import Depends, FastAPI, HTTPException, Request
+from fastapi.datastructures import Headers
+from fastapi.responses import JSONResponse
 
-from .config import Config
 from .arc_store.gitlab_api import GitlabApi
 from .business_logic import (
+    BusinessLogic,
     InvalidJsonSemanticError,
     InvalidJsonSyntaxError,
-    BusinessLogic
 )
+from .config import Config
 
 
 class Api:
@@ -82,19 +83,23 @@ class Api:
 
         try:
             pem = client_cert.replace("\\n", "\n")
-            cert_obj = x509.load_pem_x509_certificate(
-                pem.encode(), default_backend())
-            value = cert_obj.subject.get_attributes_for_oid(
-                x509.NameOID.COMMON_NAME)[0].value
-            return (bytes(value).decode()
-                   if isinstance(value, bytes | bytearray | memoryview)
-                   else str(value))
+            cert_obj = x509.load_pem_x509_certificate(pem.encode(), default_backend())
+            value = cert_obj.subject.get_attributes_for_oid(x509.NameOID.COMMON_NAME)[
+                0
+            ].value
+            return (
+                bytes(value).decode()
+                if isinstance(value, bytes | bytearray | memoryview)
+                else str(value)
+            )
         except ValueError as e:
             raise HTTPException(
-                status_code=400, detail=f"Invalid certificate format: {str(e)}") from e
+                status_code=400, detail=f"Invalid certificate format: {str(e)}"
+            ) from e
         except Exception as e:
             raise HTTPException(
-                status_code=400, detail=f"Certificate parsing error: {str(e)}") from e
+                status_code=400, detail=f"Certificate parsing error: {str(e)}"
+            ) from e
 
     def _validate_content_type(self, headers: Headers) -> None:
         content_type = headers.get("content-type")
@@ -114,8 +119,10 @@ class Api:
     def _validate_accept_type(self, headers: Headers) -> None:
         accept = headers.get("accept")
         if accept not in [self.SUPPORTED_ACCEPT_TYPE, "*/*"]:
-            msg = (f"Unsupported Response Type. "
-                  f"Supported types: '{self.SUPPORTED_ACCEPT_TYPE}'.")
+            msg = (
+                f"Unsupported Response Type. "
+                f"Supported types: '{self.SUPPORTED_ACCEPT_TYPE}'."
+            )
             raise HTTPException(status_code=406, detail=msg)
 
     def _setup_exception_handlers(self):
@@ -126,7 +133,7 @@ class Api:
                 status_code=500,
                 content={
                     "detail": "Internal Server Error. "
-                             "Please contact support if the problem persists."
+                    "Please contact support if the problem persists."
                 },
             )
 
@@ -135,7 +142,7 @@ class Api:
         @self._app.get("/v1/whoami")
         async def whoami(
             request: Request,
-            service: Annotated[BusinessLogic, Depends(self.get_service)]
+            service: Annotated[BusinessLogic, Depends(self.get_service)],
         ) -> JSONResponse:
             client_id = self._get_client_id(request.headers)
             self._validate_accept_type(request.headers)
@@ -150,7 +157,7 @@ class Api:
         @self._app.post("/v1/arcs")
         async def create_or_update_arcs(
             request: Request,
-            service: Annotated[BusinessLogic, Depends(self.get_service)]
+            service: Annotated[BusinessLogic, Depends(self.get_service)],
         ) -> JSONResponse:
             client_id = self._get_client_id(request.headers)
             self._validate_accept_type(request.headers)
@@ -164,7 +171,7 @@ class Api:
                     status_code=(
                         201 if any(a.status == "created" for a in result.arcs) else 200
                     ),
-                    headers={"Location": location}
+                    headers={"Location": location},
                 )
             except InvalidJsonSyntaxError as e:
                 raise HTTPException(status_code=400, detail=str(e)) from e

@@ -1,7 +1,9 @@
 """Tool to convert ARC files to RO-Crate JSON format."""
 
 import time
+
 from arctrl import ARC
+
 
 def arc_to_rocrate_json(arc_path: str, rocrate_output_path: str):
     """Convert an ARC file to RO-Crate JSON format and save to a file."""
@@ -21,8 +23,10 @@ def arc_to_rocrate_json(arc_path: str, rocrate_output_path: str):
     with open(rocrate_output_path, "w", encoding="utf-8") as f:
         f.write(rocrate)
 
+
 if __name__ == "__main__":
     import sys
+
     if len(sys.argv) != 3:
         print("Usage: python arc2rocrate.py <input.arc> <output.json>")
         sys.exit(1)

@@ -4,18 +4,17 @@ Overriding single entries in the yaml tree by env vars or docker
 secret files in /run/secrets.
 """
 
+import os
 from abc import abstractmethod
 from collections.abc import Generator
-import os
 from pathlib import Path
 from typing import cast, overload
 
 import yaml
 
-
 type KeyType = str | int
 type DictType = dict[str, "ValueType"]
-type ListType  = list["ValueType"]
+type ListType = list["ValueType"]
 type ValueType = DictType | ListType | str
 type WrapType = "ConfigWrapper | str | None"
 
@@ -81,8 +80,8 @@ class ConfigWrapper:
 
     @staticmethod
     def _get_path_str(value: "ValueType | None", key: KeyType) -> str:
-        if isinstance(value, dict) and 'id' in value:
-            return cast(str, value['id'])
+        if isinstance(value, dict) and "id" in value:
+            return cast(str, value["id"])
         return str(key)
 
     @overload
@@ -105,7 +104,8 @@ class ConfigWrapper:
 
         """
         raise NotImplementedError(
-            "Please do not use class 'ConfigWrapper' directly, but a derived class")
+            "Please do not use class 'ConfigWrapper' directly, but a derived class"
+        )
 
     def get(self, key: KeyType, default_value: "ValueType | None" = None) -> WrapType:
         """Return the value of a config key.
@@ -155,7 +155,8 @@ class ConfigWrapper:
 
         """
         raise NotImplementedError(
-            "Please do not use class 'ConfigWrapper' directly, but a derived class")
+            "Please do not use class 'ConfigWrapper' directly, but a derived class"
+        )
 
     @abstractmethod
     def items(self) -> Generator[tuple[KeyType, WrapType], None, None]:
@@ -166,7 +167,8 @@ class ConfigWrapper:
 
         """
         raise NotImplementedError(
-            "Please do not use class 'ConfigWrapper' directly, but a derived class")
+            "Please do not use class 'ConfigWrapper' directly, but a derived class"
+        )
 
     @abstractmethod
     def __len__(self) -> int:
@@ -177,11 +179,12 @@ class ConfigWrapper:
 
         """
         raise NotImplementedError(
-            "Please do not use class 'ConfigWrapper' directly, but a derived class")
+            "Please do not use class 'ConfigWrapper' directly, but a derived class"
+        )
 
     def _override_key_access(self, key: str) -> str | None:
         # self._path should alwys be upper case
-        full_key = self._path + '_' + key.upper()
+        full_key = self._path + "_" + key.upper()
 
         # 1️⃣ Check ENV
         if full_key in os.environ:
@@ -259,6 +262,7 @@ class ConfigWrapperDict(ConfigWrapper):
 
         """
         return len(self._all_keys())
+
 
 class ConfigWrapperList(ConfigWrapper):
     """A ConfigWrapper flavour that specifically wraps lists."""

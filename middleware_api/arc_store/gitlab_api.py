@@ -4,16 +4,16 @@ import asyncio
 import base64
 import hashlib
 import logging
-from pathlib import Path
 import tempfile
+from pathlib import Path
 from typing import Annotated
+
 import gitlab
-from gitlab.exceptions import GitlabGetError
 from arctrl import ARC
+from gitlab.exceptions import GitlabGetError
 from pydantic import BaseModel, Field, HttpUrl, field_validator
 
 from . import ArcStore
-
 
 logger = logging.getLogger(__name__)
 
@@ -21,20 +21,23 @@ logger = logging.getLogger(__name__)
 class GitlabApiConfig(BaseModel):
     """Configuration for Gitlab API ArcStore."""
 
-    url: Annotated[HttpUrl, Field(
-        description="URL of the gitlab server to store ARCs in"
-    )]
-    group: Annotated[str, Field(
-        description="The gitlab group the ARC repos belong to",
-        min_length=1    # may not be empty
-    )]
-    branch: Annotated[str, Field(
-        description="The git branch to use for ARC repos",
-        default="main"
-    )]
-    token: Annotated[str, Field(
-        description="A gitlab token with CRUD permissions to the gitlab group"
-    )]
+    url: Annotated[
+        HttpUrl, Field(description="URL of the gitlab server to store ARCs in")
+    ]
+    group: Annotated[
+        str,
+        Field(
+            description="The gitlab group the ARC repos belong to",
+            min_length=1,  # may not be empty
+        ),
+    ]
+    branch: Annotated[
+        str, Field(description="The git branch to use for ARC repos", default="main")
+    ]
+    token: Annotated[
+        str,
+        Field(description="A gitlab token with CRUD permissions to the gitlab group"),
+    ]
 
     @field_validator("group", mode="before")
     def to_lowercase(self, v: str) -> str:
@@ -65,7 +68,8 @@ class GitlabApi(ArcStore):
         logger.info("Initializing ARCPersistenceGitlabAPI")
         self._config = config
         self._gitlab = gitlab.Gitlab(
-            str(self._config.url), private_token=self._config.token)
+            str(self._config.url), private_token=self._config.token
+        )
 
     # -------------------------- Project Handling --------------------------
     def _get_or_create_project(self, arc_id: str):
@@ -74,12 +78,14 @@ class GitlabApi(ArcStore):
             if project.path == arc_id:
                 return project
         group = self._gitlab.groups.get(self._config.group)
-        return self._gitlab.projects.create({
-            "name": arc_id,
-            "path": arc_id,
-            "namespace_id": group.id,
-            "initialize_with_readme": False,
-        })
+        return self._gitlab.projects.create(
+            {
+                "name": arc_id,
+                "path": arc_id,
+                "namespace_id": group.id,
+                "initialize_with_readme": False,
+            }
+        )
 
     def _find_project(self, arc_id: str):
         projects = self._gitlab.projects.list(search=arc_id)
@@ -98,23 +104,27 @@ class GitlabApi(ArcStore):
     def _load_old_hash(self, project) -> str | None:
         try:
             old_hash_file = project.files.get(
-                file_path=".arc_hash", ref=self._config.branch)
+                file_path=".arc_hash", ref=self._config.branch
+            )
             return base64.b64decode(old_hash_file.content).decode("utf-8").strip()
         except GitlabGetError:
             return None
 
     # -------------------------- File Actions --------------------------
     def _prepare_file_actions(
-            self, project, arc_path: Path, old_hash: str | None) -> list:
+        self, project, arc_path: Path, old_hash: str | None
+    ) -> list:
         actions = []
         for file_path in arc_path.rglob("*"):
             if not file_path.is_file():
                 continue
             relative_path = str(file_path.relative_to(arc_path))
-            action_type = ("update" if self._file_exists(project, relative_path)
-                          else "create")
+            action_type = (
+                "update" if self._file_exists(project, relative_path) else "create"
+            )
             actions.append(
-                self._build_file_action(file_path, relative_path, action_type))
+                self._build_file_action(file_path, relative_path, action_type)
+            )
         # ARC hash action separat hinzufügen
         actions.append(self._build_hash_action(old_hash, arc_path))
         return actions
@@ -127,7 +137,8 @@ class GitlabApi(ArcStore):
             return False
 
     def _build_file_action(
-            self, file_path: Path, relative_path: str, action_type: str) -> dict:
+        self, file_path: Path, relative_path: str, action_type: str
+    ) -> dict:
         """Erstellt ein Action-Dict für eine Datei (Text oder Binär)."""
         content_bytes = file_path.read_bytes()
         if self._is_text_file(content_bytes):
@@ -156,7 +167,7 @@ class GitlabApi(ArcStore):
         return {
             "action": "create" if not old_hash else "update",
             "file_path": ".arc_hash",
-            "content": self._compute_arc_hash(arc_path)
+            "content": self._compute_arc_hash(arc_path),
         }
 
     # -------------------------- Commit --------------------------
@@ -202,7 +213,8 @@ class GitlabApi(ArcStore):
 
     def _download_project_files(self, project, arc_path: Path):
         tree = project.repository_tree(
-            ref=self._config.branch, all=True, recursive=True)
+            ref=self._config.branch, all=True, recursive=True
+        )
         for entry in tree:
             if entry["type"] != "blob" or entry["path"] == ".arc_hash":
                 continue

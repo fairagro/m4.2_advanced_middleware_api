@@ -5,27 +5,27 @@ description = "Add your description here"
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
-    "arctrl>=3.0.0b3",
-    "cryptography>=45.0.6",
-    "fastapi>=0.116.1",
-    "python-gitlab>=6.2.0",
-    "pyyaml>=6.0.2",
-    "uvicorn>=0.35.0",
+  "arctrl>=3.0.0b3",
+  "cryptography>=45.0.6",
+  "fastapi>=0.116.1",
+  "python-gitlab>=6.2.0",
+  "pyyaml>=6.0.2",
+  "uvicorn>=0.35.0",
 ]
 
 [dependency-groups]
 dev = [
-    "fastapi[standard]>=0.116.1",
-    "httpx>=0.28.1",
-    "pylint>=3.3.8",
-    "pytest>=8.4.1",
-    "pytest-asyncio>=1.1.0",
-    "pytest-cov>=7.0.0",
+  "fastapi[standard]>=0.116.1",
+  "httpx>=0.28.1",
+  "pylint>=3.3.8",
+  "pytest>=8.4.1",
+  "pytest-asyncio>=1.1.0",
+  "pytest-cov>=7.0.0",
 ]
 
 [tool.ruff]
 # Welche Regel-Sets aktiviert sind:
-select = [
+lint.select = [
   "E",   # pycodestyle errors
   "W",   # pycodestyle warnings
   "F",   # pyflakes
@@ -38,7 +38,7 @@ select = [
 ]
 
 # Regeln, die du evtl. nicht willst
-ignore = [
+lint.ignore = [
   "D203", # kein Leerzeile vor Klassen-Docstring
   "D213", # Docstring-Zeilenanfang
 ]
@@ -47,9 +47,9 @@ ignore = [
 line-length = 120
 
 # Für cyclomatic complexity, entspricht pylint's R1260 etc.
-[tool.ruff.mccabe]
+[tool.ruff.lint.mccabe]
 max-complexity = 10
 
 # Docstring-Regeln aktivieren, damit es wie pylint C0114/15/16 meckert
-[tool.ruff.pydocstyle]
-convention = "pep257"  # oder "numpy", oder "google"
+[tool.ruff.lint.pydocstyle]
+convention = "pep257" # oder "numpy", oder "google"

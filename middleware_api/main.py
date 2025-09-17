@@ -1,8 +1,11 @@
 """Entry point for running the Middleware API with Uvicorn."""
 
 import sys
+
 import uvicorn
+
 from middleware_api.api import middleware_api
+
 
 def main():
     """Call uvicorn.main() to pass control to uvicorn.
@@ -19,7 +22,8 @@ def main():
     # Rebuild sys.argv for uvicorn.main()
     sys.argv = ["uvicorn", app_path] + sys.argv[1:]
 
-    uvicorn.main() # pylint: disable=no-value-for-parameter
+    uvicorn.main()  # pylint: disable=no-value-for-parameter
+
 
 if __name__ == "__main__":
     main()

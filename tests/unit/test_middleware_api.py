@@ -1,4 +1,4 @@
-""""Unit tests for the FastAPI middleware API endpoints."""
+"""Unit tests for the FastAPI middleware API endpoints."""
 
 import pytest
 
@@ -15,6 +15,7 @@ class DummyArc:
     def __init__(self, data: dict):
         """Initialize the DummyArc with data from a dictionary."""
         self.__dict__.update(data)
+
 
 class DummyResponse:
     """Helper object that mimics a BusinessLogicResponse model."""
@@ -36,12 +37,15 @@ def override_service(api: Api, obj):
     """Helfer zum Überschreiben der get_service-Dependency."""
     api.app.dependency_overrides[api.get_service] = lambda: obj
 
+
 # -------------------------------------------------------------------
 # WHOAMI
 # -------------------------------------------------------------------
 
+
 def test_whoami_success(client, middleware_api, cert):
     """Test the /v1/whoami endpoint with a valid certificate and accept header."""
+
     class Svc:
         async def whoami(self, client_id):
             return DummyResponse({"client_id": client_id, "message": "ok"})
@@ -52,10 +56,11 @@ def test_whoami_success(client, middleware_api, cert):
         "/v1/whoami",
         headers={"X-Client-Cert": cert, "accept": "application/json"},
     )
-    assert r.status_code == 200 # nosec
+    assert r.status_code == 200  # nosec
     body = r.json()
-    assert body["client_id"] == "TestClient" # nosec
-    assert body["message"] == "ok" # nosec
+    assert body["client_id"] == "TestClient"  # nosec
+    assert body["message"] == "ok"  # nosec
+
 
 def test_whoami_invalid_accept(client, cert):
     """Test the /v1/whoami endpoint with an invalid accept header."""
@@ -63,7 +68,8 @@ def test_whoami_invalid_accept(client, cert):
         "/v1/whoami",
         headers={"X-Client-Cert": cert, "accept": "application/xml"},
     )
-    assert r.status_code == 406 # nosec
+    assert r.status_code == 406  # nosec
+
 
 def test_whoami_no_cert(client):
     """Test the /v1/whoami endpoint without a client certificate."""
@@ -71,7 +77,8 @@ def test_whoami_no_cert(client):
         "/v1/whoami",
         headers={"accept": "application/json"},
     )
-    assert r.status_code == 401 # nosec
+    assert r.status_code == 401  # nosec
+
 
 def test_whoami_invalid_cert(client):
     """Test the /v1/whoami endpoint with an invalid client certificate."""
@@ -79,15 +86,17 @@ def test_whoami_invalid_cert(client):
         "/v1/whoami",
         headers={"X-Client-Cert": "dumy cert", "accept": "application/json"},
     )
-    assert r.status_code == 400 # nosec
+    assert r.status_code == 400  # nosec
 
 
 # -------------------------------------------------------------------
 # CREATE / UPDATE ARCS
 # -------------------------------------------------------------------
 
+
 def test_create_or_update_arcs_created(client, middleware_api, cert):
     """Test creating a new ARC via the /v1/arcs endpoint."""
+
     class SvcOK:
         async def create_or_update_arcs(self, data, client_id):
             return DummyResponse(
@@ -98,7 +107,7 @@ def test_create_or_update_arcs_created(client, middleware_api, cert):
                         {
                             "id": "abc123",
                             "status": "created",
-                            "timestamp": "2025-01-01T00:00:00Z"
+                            "timestamp": "2025-01-01T00:00:00Z",
                         }
                     ],
                 }
@@ -115,17 +124,18 @@ def test_create_or_update_arcs_created(client, middleware_api, cert):
         },
         json=[{"dummy": "crate"}],
     )
-    assert r.status_code == 201 # nosec
+    assert r.status_code == 201  # nosec
     body = r.json()
-    assert body["client_id"] == "TestClient" # nosec
-    assert isinstance(body["arcs"], list) # nosec
-    assert body["arcs"][0]["status"] == "created" # nosec
+    assert body["client_id"] == "TestClient"  # nosec
+    assert isinstance(body["arcs"], list)  # nosec
+    assert body["arcs"][0]["status"] == "created"  # nosec
     # Location-Header gesetzt?
-    assert r.headers.get("Location", "") != "" # nosec
+    assert r.headers.get("Location", "") != ""  # nosec
 
 
 def test_create_or_update_arcs_updated(client, middleware_api, cert):
     """Test updating an existing ARC via the /v1/arcs endpoint."""
+
     class SvcOK:
         async def create_or_update_arcs(self, data, client_id):
             return DummyResponse(
@@ -136,7 +146,7 @@ def test_create_or_update_arcs_updated(client, middleware_api, cert):
                         {
                             "id": "abc123",
                             "status": "updated",
-                            "timestamp": "2025-01-01T00:00:00Z"
+                            "timestamp": "2025-01-01T00:00:00Z",
                         }
                     ],
                 }
@@ -155,7 +165,7 @@ def test_create_or_update_arcs_updated(client, middleware_api, cert):
     )
     assert r.status_code == 200  # nosec
     body = r.json()
-    assert body["arcs"][0]["status"] == "updated" # nosec
+    assert body["arcs"][0]["status"] == "updated"  # nosec
 
 
 @pytest.mark.parametrize(
@@ -166,8 +176,10 @@ def test_create_or_update_arcs_updated(client, middleware_api, cert):
     ],
 )
 def test_create_or_update_arcs_invalid_json(
-        client, middleware_api, cert, exc, expected):
+    client, middleware_api, cert, exc, expected
+):
     """Test error handling in the /v1/arcs endpoint."""
+
     class SvcFail:
         async def create_or_update_arcs(self, data, client_id):
             raise exc
@@ -183,7 +195,8 @@ def test_create_or_update_arcs_invalid_json(
         },
         json=[{"dummy": "crate"}],
     )
-    assert r.status_code == expected # nosec
+    assert r.status_code == expected  # nosec
+
 
 def test_create_or_update_arcs_invalid_accept(client, cert):
     """Test the /v1/arcs endpoint with an invalid accept header."""
@@ -196,7 +209,8 @@ def test_create_or_update_arcs_invalid_accept(client, cert):
         },
         json=[{"dummy": "crate"}],
     )
-    assert r.status_code == 406 # nosec
+    assert r.status_code == 406  # nosec
+
 
 def test_create_or_update_arcs_no_cert(client):
     """Test the /v1/arcs endpoint without a client certificate."""
@@ -208,7 +222,8 @@ def test_create_or_update_arcs_no_cert(client):
         },
         json=[{"dummy": "crate"}],
     )
-    assert r.status_code == 401 # nosec
+    assert r.status_code == 401  # nosec
+
 
 def test_create_or_update_arcs_invalid_cert(client):
     """Test the /v1/arcs endpoint with an invalid client certificate."""
@@ -221,4 +236,4 @@ def test_create_or_update_arcs_invalid_cert(client):
         },
         json=[{"dummy": "crate"}],
     )
-    assert r.status_code == 400 # nosec
+    assert r.status_code == 400  # nosec

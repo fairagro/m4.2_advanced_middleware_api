@@ -4,11 +4,11 @@ import base64
 from pathlib import Path
 from unittest.mock import MagicMock
 
-from gitlab.exceptions import GitlabGetError
 import pytest
-
+from gitlab.exceptions import GitlabGetError
 
 # -------------------- Hilfsfunktionen --------------------
+
 
 def test_compute_arc_hash(tmp_path, gitlab_api):
     """Tests the hash computation for ARC directories."""
@@ -17,7 +17,7 @@ def test_compute_arc_hash(tmp_path, gitlab_api):
     h1 = gitlab_api._compute_arc_hash(tmp_path)
     file.write_text("world")
     h2 = gitlab_api._compute_arc_hash(tmp_path)
-    assert h1 != h2 # nosec
+    assert h1 != h2  # nosec
 
 
 def test_get_or_create_project_found(gitlab_api):
@@ -26,7 +26,7 @@ def test_get_or_create_project_found(gitlab_api):
     project.path = "arc1"
     gitlab_api._gitlab.projects.list.return_value = [project]
     result = gitlab_api._get_or_create_project("arc1")
-    assert result == project # nosec
+    assert result == project  # nosec
 
 
 def test_get_or_create_project_create(gitlab_api):
@@ -38,10 +38,11 @@ def test_get_or_create_project_create(gitlab_api):
     project = MagicMock()
     gitlab_api._gitlab.projects.create.return_value = project
     result = gitlab_api._get_or_create_project("arc1")
-    assert result == project # nosec
+    assert result == project  # nosec
 
 
 # -------------------- Create/Update --------------------
+
 
 @pytest.mark.asyncio
 async def test_create_or_update_no_changes(gitlab_api):
@@ -66,6 +67,7 @@ async def test_create_or_update_with_changes(gitlab_api):
     arc.Write = lambda path: (Path(path) / "f.txt").write_text("abc")
 
     project = MagicMock()
+
     # kein .arc_hash vorhanden
     def raise_get(*args, **kwargs):
         raise GitlabGetError("not found", response_code=404)
@@ -78,10 +80,11 @@ async def test_create_or_update_with_changes(gitlab_api):
     project.commits.create.assert_called_once()
     args, kwargs = project.commits.create.call_args
     actions = args[0]["actions"]
-    assert any(a["file_path"] == ".arc_hash" for a in actions) # nosec
+    assert any(a["file_path"] == ".arc_hash" for a in actions)  # nosec
 
 
 # -------------------- Get --------------------
+
 
 def test_get_success(gitlab_api, monkeypatch):
     """Tests retrieving an ARC from GitLab."""
@@ -101,11 +104,11 @@ def test_get_success(gitlab_api, monkeypatch):
 
     dummy_arc = MagicMock()
     monkeypatch.setattr(
-        "middleware_api.arc_store.gitlab_api.ARC.try_load_async",
-        lambda path: dummy_arc)
+        "middleware_api.arc_store.gitlab_api.ARC.try_load_async", lambda path: dummy_arc
+    )
 
     arc = gitlab_api.get("arc1")
-    assert arc == dummy_arc # nosec
+    assert arc == dummy_arc  # nosec
     project.files.get.assert_any_call(file_path="f.txt", ref=gitlab_api._config.branch)
 
 
@@ -113,10 +116,11 @@ def test_get_not_found(gitlab_api):
     """Tests retrieving a non-existing ARC from GitLab."""
     gitlab_api._gitlab.projects.list.return_value = []
     arc = gitlab_api.get("arcX")
-    assert arc is None # nosec
+    assert arc is None  # nosec
 
 
 # -------------------- Delete --------------------
+
 
 def test_delete_found(gitlab_api):
     """Tests deleting an existing ARC from GitLab."""

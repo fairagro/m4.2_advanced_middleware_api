@@ -9,10 +9,11 @@ This module provides:
 import asyncio
 import hashlib
 import json
+from datetime import UTC, datetime
 from enum import Enum
-from datetime import datetime, UTC
-from pydantic import BaseModel
+
 from arctrl import ARC
+from pydantic import BaseModel
 
 from .arc_store import ArcStore
 
@@ -96,8 +97,7 @@ class BusinessLogic:
         try:
             crates = json.loads(data)
             if not isinstance(crates, list):
-                raise InvalidJsonSyntaxError(
-                    "Expected a JSON array of RO-Crates.")
+                raise InvalidJsonSyntaxError("Expected a JSON array of RO-Crates.")
             return crates
         except json.JSONDecodeError as e:
             raise InvalidJsonSyntaxError(f"Invalid RO-Crate JSON: {str(e)}") from e
@@ -108,13 +108,15 @@ class BusinessLogic:
         return arc_id
 
     async def _create_arc_from_rocrate(
-            self, crate: dict, client_id: str) -> ArcResponse:
+        self, crate: dict, client_id: str
+    ) -> ArcResponse:
         try:
             crate_json = json.dumps(crate)
             arc = ARC.from_rocrate_json_string(crate_json)
         except Exception as e:
             raise InvalidJsonSemanticError(
-                f"Error processing RO-Crate JSON: {str(e)}") from e
+                f"Error processing RO-Crate JSON: {str(e)}"
+            ) from e
 
         identifier = getattr(arc, "Identifier", None)
         if not identifier or identifier == "":
@@ -134,10 +136,7 @@ class BusinessLogic:
 
     async def _process_arcs(self, data: str, client_id: str) -> list[ArcResponse]:
         crates = self._parse_rocrate_json(data)
-        tasks = [
-            self._create_arc_from_rocrate(crate, client_id)
-            for crate in crates
-        ]
+        tasks = [self._create_arc_from_rocrate(crate, client_id) for crate in crates]
         return await asyncio.gather(*tasks)
 
     # -------------------------- Whoami --------------------------
@@ -157,18 +156,17 @@ class BusinessLogic:
         """
         try:
             return BusinessLogicResponse(
-                client_id=client_id,
-                message="Client authenticated successfully"
+                client_id=client_id, message="Client authenticated successfully"
             )
         except BusinessLogicError:
             raise
         except Exception as e:
-            raise BusinessLogicError(
-                f"unexpected error encountered: {str(e)}") from e
+            raise BusinessLogicError(f"unexpected error encountered: {str(e)}") from e
 
     # -------------------------- Create or Update ARCs --------------------------
     async def create_or_update_arcs(
-            self, data: str, client_id: str) -> CreateOrUpdateArcsResponse:
+        self, data: str, client_id: str
+    ) -> CreateOrUpdateArcsResponse:
         """Create or update ARCs based on the provided RO-Crate JSON data.
 
         Args:
@@ -195,8 +193,7 @@ class BusinessLogic:
         except BusinessLogicError:
             raise
         except Exception as e:
-            raise BusinessLogicError(
-                f"unexpected error encountered: {str(e)}") from e
+            raise BusinessLogicError(f"unexpected error encountered: {str(e)}") from e
 
     # # -------------------------
     # # READ ARCs
