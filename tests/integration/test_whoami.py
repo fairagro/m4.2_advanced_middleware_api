@@ -1,3 +1,4 @@
+"""Integration tests for the /v1/whoami endpoint."""
 
 from fastapi.testclient import TestClient
 import pytest
@@ -5,7 +6,7 @@ import pytest
 
 @pytest.mark.asyncio
 async def test_whoami_with_client_cert(client: TestClient, cert: str):
-    # Optional Base64 encodieren, falls dein Code das erwartet
+    """Test the /v1/whoami endpoint with a client certificate."""
     cert_with_linebreaks = cert.replace("\\n", "\n")
 
     headers = {

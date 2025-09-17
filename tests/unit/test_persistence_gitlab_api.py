@@ -1,3 +1,5 @@
+"""Unit tests for the GitLab API persistence layer."""
+
 import base64
 from pathlib import Path
 from unittest.mock import MagicMock
@@ -9,6 +11,7 @@ import pytest
 # -------------------- Hilfsfunktionen --------------------
 
 def test_compute_arc_hash(tmp_path, gitlab_api):
+    """Tests the hash computation for ARC directories."""
     file = tmp_path / "f.txt"
     file.write_text("hello")
     h1 = gitlab_api._compute_arc_hash(tmp_path)
@@ -18,6 +21,7 @@ def test_compute_arc_hash(tmp_path, gitlab_api):
 
 
 def test_get_or_create_project_found(gitlab_api):
+    """Tests finding an existing GitLab project."""
     project = MagicMock()
     project.path = "arc1"
     gitlab_api._gitlab.projects.list.return_value = [project]
@@ -26,6 +30,7 @@ def test_get_or_create_project_found(gitlab_api):
 
 
 def test_get_or_create_project_create(gitlab_api):
+    """Tests creating a new GitLab project if not found."""
     gitlab_api._gitlab.projects.list.return_value = []
     group = MagicMock()
     group.id = 1
@@ -40,7 +45,7 @@ def test_get_or_create_project_create(gitlab_api):
 
 @pytest.mark.asyncio
 async def test_create_or_update_no_changes(gitlab_api):
-    """Wenn Hash gleich ist, darf kein Commit passieren."""
+    """Tests that no commit is made if the ARC hash hasn't changed."""
     arc = MagicMock()
     arc.Write = lambda path: (Path(path) / "f.txt").write_text("abc")
 
@@ -56,7 +61,7 @@ async def test_create_or_update_no_changes(gitlab_api):
 
 @pytest.mark.asyncio
 async def test_create_or_update_with_changes(gitlab_api):
-    """Wenn Hash unterschiedlich ist, muss ein Commit erstellt werden."""
+    """Tests that a commit is made if the ARC hash has changed."""
     arc = MagicMock()
     arc.Write = lambda path: (Path(path) / "f.txt").write_text("abc")
 
@@ -79,6 +84,7 @@ async def test_create_or_update_with_changes(gitlab_api):
 # -------------------- Get --------------------
 
 def test_get_success(gitlab_api, monkeypatch):
+    """Tests retrieving an ARC from GitLab."""
     project = MagicMock()
     project.path = "arc1"
     project.repository_tree.return_value = [
@@ -94,7 +100,9 @@ def test_get_success(gitlab_api, monkeypatch):
     gitlab_api._gitlab.projects.list.return_value = [project]
 
     dummy_arc = MagicMock()
-    monkeypatch.setattr("middleware_api.arc_store.gitlab_api.ARC.try_load_async", lambda path: dummy_arc)
+    monkeypatch.setattr(
+        "middleware_api.arc_store.gitlab_api.ARC.try_load_async",
+        lambda path: dummy_arc)
 
     arc = gitlab_api.get("arc1")
     assert arc == dummy_arc # nosec
@@ -102,6 +110,7 @@ def test_get_success(gitlab_api, monkeypatch):
 
 
 def test_get_not_found(gitlab_api):
+    """Tests retrieving a non-existing ARC from GitLab."""
     gitlab_api._gitlab.projects.list.return_value = []
     arc = gitlab_api.get("arcX")
     assert arc is None # nosec
@@ -110,6 +119,7 @@ def test_get_not_found(gitlab_api):
 # -------------------- Delete --------------------
 
 def test_delete_found(gitlab_api):
+    """Tests deleting an existing ARC from GitLab."""
     project = MagicMock()
     project.path = "arc1"
     gitlab_api._gitlab.projects.list.return_value = [project]
@@ -118,6 +128,7 @@ def test_delete_found(gitlab_api):
 
 
 def test_delete_not_found(gitlab_api):
+    """Tests deleting a non-existing ARC from GitLab."""
     gitlab_api._gitlab.projects.list.return_value = []
     # Sollte einfach durchlaufen, kein Fehler
     gitlab_api.delete("arcX")

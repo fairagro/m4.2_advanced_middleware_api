@@ -1,3 +1,5 @@
+"""Unit tests for the create_or_update_arcs functionality in BusinessLogic."""
+
 import json
 from typing import Any
 from unittest.mock import patch
@@ -13,6 +15,7 @@ from middleware_api.business_logic import (
 
 
 def is_valid_sha256(s: str) -> bool:
+    """Check if a string is a valid SHA-256 hash."""
     if len(s) != 64:
         return False
     try:
@@ -79,7 +82,9 @@ def is_valid_sha256(s: str) -> bool:
         }]
     ]
 )
-async def test_create_arc_success(service: BusinessLogic, rocrate: list[dict[str, Any]]):
+async def test_create_arc_success(
+        service: BusinessLogic, rocrate: list[dict[str, Any]]):
+    """Test creating ARCs with valid RO-Crate JSON."""
     result = await service.create_or_update_arcs(
         data=json.dumps(rocrate),
         client_id="TestClient")
@@ -94,6 +99,7 @@ async def test_create_arc_success(service: BusinessLogic, rocrate: list[dict[str
 
 @pytest.mark.asyncio
 async def test_update_arc_success(service: BusinessLogic):
+    """Test updating an existing ARC."""
     rocrate = [{  # One item
         "@context": "https://w3id.org/ro/crate/1.1/context",
         "@graph": [
@@ -151,6 +157,7 @@ async def test_update_arc_success(service: BusinessLogic):
     ]
 )
 async def test_invalid_json(service: BusinessLogic, rocrate: str | dict[str, Any]):
+    """Test handling of invalid JSON syntax or structure."""
     # Send invalid JSON (not a list)
     with pytest.raises(InvalidJsonSyntaxError):
         await service.create_or_update_arcs(
@@ -210,7 +217,9 @@ async def test_invalid_json(service: BusinessLogic, rocrate: str | dict[str, Any
         }]
     ]
 )
-async def test_element_missing(service: BusinessLogic, cert: str, rocrate: list[dict[str, Any]]):
+async def test_element_missing(
+        service: BusinessLogic, cert: str, rocrate: list[dict[str, Any]]):
+    """Test handling of RO-Crate JSON missing required elements."""
     with pytest.raises(InvalidJsonSemanticError):
         await service.create_or_update_arcs(
             data=json.dumps(rocrate),

@@ -1,3 +1,11 @@
+"""Business logic module for handling ARC (Automated Research Compendium) operations.
+
+This module provides:
+- ARC status management and responses
+- JSON validation and processing
+- Business logic for creating, updating, and managing ARCs
+"""
+
 import asyncio
 import hashlib
 import json
@@ -11,6 +19,16 @@ from .arc_store import ArcStore
 
 
 class ArcStatus(str, Enum):
+    """Enumeration of possible ARC status values.
+
+    Values:
+        created: ARC was newly created
+        updated: ARC was updated
+        deleted: ARC was deleted
+        requested: ARC was requested
+
+    """
+
     created = "created"
     updated = "updated"
     deleted = "deleted"
@@ -18,38 +36,61 @@ class ArcStatus(str, Enum):
 
 
 class BusinessLogicResponse(BaseModel):
+    """Base response model for business logic operations.
+
+    Args:
+        BaseModel (_type_): Pydantic BaseModel for data validation and serialization.
+
+    """
+
     client_id: str
     message: str
 
 
 class ArcResponse(BaseModel):
+    """Response model for individual ARC operations.
+
+    Args:
+        BaseModel (_type_): Pydantic BaseModel for data validation and serialization.
+
+    """
+
     id: str
     status: ArcStatus
     timestamp: str
 
 
 class CreateOrUpdateArcsResponse(BusinessLogicResponse):
+    """Response model for create or update ARC operations."""
+
     arcs: List[ArcResponse]
 
 
 class BusinessLogicError(Exception):
-    """Basisklasse für Fehler in MiddlewareService"""
-    pass
+    """Base exception class for all business logic errors."""
 
 
 class InvalidJsonSyntaxError(BusinessLogicError):
-    """Wird geworfen, wenn es Probleme beim Parsen des ARC JSON gibt"""
-    pass
+    """Arises when there are issues parsing the ARC JSON syntax."""
 
 
 class InvalidJsonSemanticError(BusinessLogicError):
-    """Wird geworfen, wenn es Probleme beim Parsen des ARC JSON gibt"""
-    pass
+    """Arises when the ARC JSON syntax is valid but semantically incorrect.
+
+    For example, missing required fields or invalid values.
+    """
 
 
 class BusinessLogic:
+    """Core business logic for handling ARC operations."""
 
     def __init__(self, store: ArcStore):
+        """Initialize the BusinessLogic with the given ArcStore.
+
+        Args:
+            store (ArcStore): An instance of ArcStore for ARC persistence.
+
+        """
         self._store = store
 
     def _parse_rocrate_json(self, data: str) -> List[Dict]:
@@ -67,7 +108,8 @@ class BusinessLogic:
         arc_id = hashlib.sha256(input_str.encode("utf-8")).hexdigest()
         return arc_id
 
-    async def _create_arc_from_rocrate(self, crate: Dict, client_id: str) -> ArcResponse:
+    async def _create_arc_from_rocrate(
+            self, crate: Dict, client_id: str) -> ArcResponse:
         try:
             crate_json = json.dumps(crate)
             arc = ARC.from_rocrate_json_string(crate_json)
@@ -102,6 +144,18 @@ class BusinessLogic:
     # -------------------------- Whoami --------------------------
 
     async def whoami(self, client_id: str) -> BusinessLogicResponse:
+        """Whoami operation to identify the client.
+
+        Args:
+            client_id (str): The client identifier.
+
+        Raises:
+            BusinessLogicError: If an error occurs during the operation.
+
+        Returns:
+            BusinessLogicResponse: Response containing the client ID and message.
+
+        """
         try:
             return BusinessLogicResponse(
                 client_id=client_id,
@@ -116,6 +170,22 @@ class BusinessLogic:
     # -------------------------- Create or Update ARCs --------------------------
     async def create_or_update_arcs(
             self, data: str, client_id: str) -> CreateOrUpdateArcsResponse:
+        """Create or update ARCs based on the provided RO-Crate JSON data.
+
+        Args:
+            data (str): JSON string containing one or more RO-Crates.
+            client_id (str): The client identifier.
+
+        Raises:
+            InvalidJsonSyntaxError: If the JSON syntax is invalid.
+            InvalidJsonSemanticError: If the JSON is semantically incorrect.
+            BusinessLogicError: If an error occurs during the operation.
+
+        Returns:
+            CreateOrUpdateArcsResponse: Response containing details of the processed
+            ARCs.
+
+        """
         try:
             result = await self._process_arcs(data, client_id)
             return CreateOrUpdateArcsResponse(

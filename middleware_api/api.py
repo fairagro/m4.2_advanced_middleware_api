@@ -1,3 +1,10 @@
+"""FastAPI middleware for managing ARC (Advanced Research Context) objects.
+
+This module provides an API class that handles HTTP requests for creating, reading,
+updating and deleting ARC objects. It includes authentication via client certificates
+and content type validation.
+"""
+
 from typing import Annotated
 from fastapi import FastAPI, HTTPException, Request, Depends
 from fastapi.datastructures import Headers
@@ -15,12 +22,25 @@ from .business_logic import (
 
 
 class Api:
+    """FastAPI middleware for managing ARC (Advanced Research Context) objects.
+
+    This class provides methods and routes for handling HTTP requests related to ARC
+    objects, including authentication, content validation, and CRUD operations through
+    FastAPI endpoints.
+    """
 
     # Constants
     SUPPORTED_CONTENT_TYPE = "application/ro-crate+json"
     SUPPORTED_ACCEPT_TYPE = "application/json"
 
     def __init__(self, config: Config | None = None):
+        """Initialize the API with optional configuration.
+
+        Args:
+            config (Config | None, optional): Configuration object. If None, loads from
+            environment. Defaults to None.
+
+        """
         if config:
             self._config = config
         else:
@@ -37,9 +57,21 @@ class Api:
 
     @property
     def app(self) -> FastAPI:
+        """Get the FastAPI application instance.
+
+        Returns:
+            FastAPI: The configured FastAPI application.
+
+        """
         return self._app
 
     def get_service(self) -> BusinessLogic:
+        """Get the business logic service instance.
+
+        Returns:
+            BusinessLogic: The configured business logic service.
+
+        """
         return self._service
 
     def _get_client_id(self, headers: Headers) -> str:
@@ -54,7 +86,9 @@ class Api:
                 pem.encode(), default_backend())
             value = cert_obj.subject.get_attributes_for_oid(
                 x509.NameOID.COMMON_NAME)[0].value
-            return bytes(value).decode() if isinstance(value, (bytes, bytearray, memoryview)) else str(value)
+            return (bytes(value).decode()
+                   if isinstance(value, (bytes, bytearray, memoryview))
+                   else str(value))
         except ValueError as e:
             raise HTTPException(
                 status_code=400, detail=f"Invalid certificate format: {str(e)}") from e
@@ -65,16 +99,23 @@ class Api:
     def _validate_content_type(self, headers: Headers) -> None:
         content_type = headers.get("content-type")
         if not content_type:
-            msg = f"Content-Type header is missing. Expected '{self.SUPPORTED_CONTENT_TYPE}'."
+            msg = (
+                f"Content-Type header is missing. "
+                f"Expected '{self.SUPPORTED_CONTENT_TYPE}'."
+            )
             raise HTTPException(status_code=415, detail=msg)
         if content_type != self.SUPPORTED_CONTENT_TYPE:
-            msg = f"Unsupported Media Type. Supported types: '{self.SUPPORTED_CONTENT_TYPE}'."
+            msg = (
+                f"Unsupported Media Type. "
+                f"Supported types: '{self.SUPPORTED_CONTENT_TYPE}'."
+            )
             raise HTTPException(status_code=415, detail=msg)
 
     def _validate_accept_type(self, headers: Headers) -> None:
         accept = headers.get("accept")
         if accept not in [self.SUPPORTED_ACCEPT_TYPE, "*/*"]:
-            msg = f"Unsupported Response Type. Supported types: '{self.SUPPORTED_ACCEPT_TYPE}'."
+            msg = (f"Unsupported Response Type. "
+                  f"Supported types: '{self.SUPPORTED_ACCEPT_TYPE}'.")
             raise HTTPException(status_code=406, detail=msg)
 
     def _setup_exception_handlers(self):
@@ -83,7 +124,10 @@ class Api:
         async def unhandled_exception_handler(_request: Request, _exc: Exception):
             return JSONResponse(
                 status_code=500,
-                content={"detail": "Internal Server Error. Please contact support if the problem persists."},
+                content={
+                    "detail": "Internal Server Error. "
+                             "Please contact support if the problem persists."
+                },
             )
 
     def _setup_routes(self):
@@ -114,10 +158,13 @@ class Api:
             data = (await request.body()).decode("utf-8")
             try:
                 result = await service.create_or_update_arcs(data, client_id)
+                location = f"/v1/arcs/{result.arcs[0].id}" if result.arcs else ""
                 return JSONResponse(
                     content=result.model_dump(),
-                    status_code=201 if any(a.status == "created" for a in result.arcs) else 200,
-                    headers={"Location": f"/v1/arcs/{result.arcs[0].id}" if result.arcs else ""}
+                    status_code=(
+                        201 if any(a.status == "created" for a in result.arcs) else 200
+                    ),
+                    headers={"Location": location}
                 )
             except InvalidJsonSyntaxError as e:
                 raise HTTPException(status_code=400, detail=str(e)) from e

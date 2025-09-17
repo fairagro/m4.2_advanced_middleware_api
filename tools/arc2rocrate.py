@@ -1,13 +1,16 @@
+"""Tool to convert ARC files to RO-Crate JSON format."""
+
 import time
 from arctrl import ARC
 
 def arc_to_rocrate_json(arc_path: str, rocrate_output_path: str):
+    """Convert an ARC file to RO-Crate JSON format and save to a file."""
     # Lade ARC aus Datei
     start = time.perf_counter()
     arc = ARC.load(arc_path)
     end = time.perf_counter()
     print(f"Loading ARC took {end - start:.2f} seconds")
-    
+
     # Exportiere als RO-Crate JSON-Objekt
     start = time.perf_counter()
     rocrate = arc.ToROCrateJsonString()

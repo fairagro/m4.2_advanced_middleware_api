@@ -1,4 +1,4 @@
-"""Defines a bas class for ARC storage backends."""
+"""Contains the ArcStore interface and its implementations."""
 
 from abc import ABC, abstractmethod
 import logging

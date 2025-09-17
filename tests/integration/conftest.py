@@ -1,3 +1,5 @@
+"""Integration tests configuration and fixtures."""
+
 from dotenv import load_dotenv
 import os
 from fastapi.testclient import TestClient
@@ -13,6 +15,7 @@ load_dotenv()
 
 @pytest.fixture(scope="session")
 def config():
+    """Provide configuration for tests."""
     return {
         "gitlab_api": {
             "url": "https://datahub-dev.ipk-gatersleben.de",
@@ -23,6 +26,7 @@ def config():
 
 @pytest.fixture(scope="session")
 def gitlab_api(config):
+    """Provide a Gitlab API client for tests."""
     token = os.getenv("GITLAB_API_TOKEN")
     return Gitlab(
         config["gitlab_api"]["url"],
@@ -31,26 +35,25 @@ def gitlab_api(config):
 
 @pytest.fixture(scope="session")
 def gitlab_group(config, gitlab_api):
+    """Provide the Gitlab group for tests."""
     group = gitlab_api.groups.get(config["gitlab_api"]["group"])
     return group
 
 @pytest.fixture
 def middleware_api(config):
+    """Provide the Middleware API instance for tests."""
     config_validated = Config.from_data(config)
     return Api(config_validated)
 
 @pytest.fixture
 def client(middleware_api):
-    """TestClient-Fixture und sicheres Aufräumen der Dependency-Overrides."""
+    """Provide a TestClient for the Middleware API."""
     with TestClient(middleware_api.app) as c:
         yield c
 
 @pytest.fixture(scope="session", autouse=True)
 def cleanup_gitlab_group(gitlab_group, gitlab_api):
-    """
-    This fixture runs once per test session to clean up the GitLab group before the tests.
-    """
-
+    """Cleanup the Gitlab group before tests."""
     # dele all projects in the group
     for project in gitlab_group.projects.list(all=True):
         try:

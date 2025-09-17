@@ -1,3 +1,5 @@
+"""Implements an ArcStore using Gitlab API as backend."""
+
 import asyncio
 import base64
 import hashlib
@@ -17,6 +19,7 @@ logger = logging.getLogger(__name__)
 
 
 class GitlabApiConfig(BaseModel):
+    """Configuration for Gitlab API ArcStore."""
 
     url: Annotated[HttpUrl, Field(
         description="URL of the gitlab server to store ARCs in"
@@ -35,14 +38,30 @@ class GitlabApiConfig(BaseModel):
 
     @field_validator("group", mode="before")
     def to_lowercase(cls, v: str) -> str:
+        """Ensure group is lowercase and trimmed.
+
+        Args:
+            v (str): Input value.
+
+        Returns:
+            str: Normalized value.
+
+        """
         if isinstance(v, str):
             return v.lower().strip()
         return v
 
 
 class GitlabApi(ArcStore):
+    """Implements an ArcStore using Gitlab API as backend."""
 
     def __init__(self, config: GitlabApiConfig):
+        """Konstruktor.
+
+        Args:
+            config (GitlabApiConfig): Configuration for the Gitlab API ArcStore.
+
+        """
         logger.info("Initializing ARCPersistenceGitlabAPI")
         self._config = config
         self._gitlab = gitlab.Gitlab(
@@ -85,14 +104,17 @@ class GitlabApi(ArcStore):
             return None
 
     # -------------------------- File Actions --------------------------
-    def _prepare_file_actions(self, project, arc_path: Path, old_hash: str | None) -> list:
+    def _prepare_file_actions(
+            self, project, arc_path: Path, old_hash: str | None) -> list:
         actions = []
         for file_path in arc_path.rglob("*"):
             if not file_path.is_file():
                 continue
             relative_path = str(file_path.relative_to(arc_path))
-            action_type = "update" if self._file_exists(project, relative_path) else "create"
-            actions.append(self._build_file_action(file_path, relative_path, action_type))
+            action_type = ("update" if self._file_exists(project, relative_path)
+                          else "create")
+            actions.append(
+                self._build_file_action(file_path, relative_path, action_type))
         # ARC hash action separat hinzufügen
         actions.append(self._build_hash_action(old_hash, arc_path))
         return actions
@@ -104,7 +126,8 @@ class GitlabApi(ArcStore):
         except GitlabGetError:
             return False
 
-    def _build_file_action(self, file_path: Path, relative_path: str, action_type: str) -> dict:
+    def _build_file_action(
+            self, file_path: Path, relative_path: str, action_type: str) -> dict:
         """Erstellt ein Action-Dict für eine Datei (Text oder Binär)."""
         content_bytes = file_path.read_bytes()
         if self._is_text_file(content_bytes):
@@ -179,7 +202,8 @@ class GitlabApi(ArcStore):
             return ARC.try_load_async(str(arc_path))
 
     def _download_project_files(self, project, arc_path: Path):
-        tree = project.repository_tree(ref=self._config.branch, all=True, recursive=True)
+        tree = project.repository_tree(
+            ref=self._config.branch, all=True, recursive=True)
         for entry in tree:
             if entry["type"] != "blob" or entry["path"] == ".arc_hash":
                 continue

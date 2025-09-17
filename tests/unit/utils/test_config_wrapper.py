@@ -1,3 +1,5 @@
+"""Unit tests for the ConfigWrapper utility."""
+
 from pathlib import Path
 import pytest
 from middleware_api.utils.config_wrapper import (
@@ -8,6 +10,7 @@ from middleware_api.utils.config_wrapper import (
 
 @pytest.fixture
 def sample_dict():
+    """Sample dictionary for testing."""
     return {
         "foo": "bar",
         "nested": {
@@ -23,9 +26,11 @@ def sample_dict():
 
 @pytest.fixture
 def sample_list():
+    """Sample list for testing."""
     return ["a", "b", {"id": "c", "value": 42}]
 
 def test_dict_basic_access(sample_dict):
+    """Test basic access in ConfigWrapperDict."""
     cfg = ConfigWrapperDict(sample_dict)
     assert cfg["foo"] == "bar" #nosec
     nested = cfg["nested"]
@@ -33,16 +38,19 @@ def test_dict_basic_access(sample_dict):
     assert nested["key"] == "value" #nosec
 
 def test_dict_get_method(sample_dict):
+    """Test the get method in ConfigWrapperDict."""
     cfg = ConfigWrapperDict(sample_dict)
     assert cfg.get("foo") == "bar" #nosec
     assert cfg.get("nonexistent", "default") == "default" #nosec
 
 def test_dict_override_env(monkeypatch, sample_dict):
+    """Test environment variable override in ConfigWrapperDict."""
     monkeypatch.setenv("FOO_BAR", "env_value")
     cfg = ConfigWrapperDict({"bar": "original"}, path="foo")
     assert cfg["bar"] == "env_value" #nosec
 
 def test_list_override_env(monkeypatch, sample_dict):
+    """Test environment variable override in ConfigWrapperList."""
     monkeypatch.setenv("LIST_FOO_BAR", "baz")
     cfg = ConfigWrapper.from_data(sample_dict)
     assert isinstance(cfg, ConfigWrapper) #nosec
@@ -54,12 +62,14 @@ def test_list_override_env(monkeypatch, sample_dict):
     assert cfg_list_foo["bar"] == "baz" #nosec
 
 def test_dict_override_secret(tmp_path, sample_dict):
+    """Test secret file override in ConfigWrapperDict."""
     secret_file = tmp_path / "foo_secret"
     secret_file.write_text("secret_value")
     # Patch /run/secrets to tmp_path
     monkeypatch = pytest.MonkeyPatch()
     original_exists = Path.exists
-    monkeypatch.setattr(Path, "exists", lambda self: original_exists(tmp_path / self.name))
+    monkeypatch.setattr(
+        Path, "exists", lambda self: original_exists(tmp_path / self.name))
     original_read_text = Path.read_text
     monkeypatch.setattr(
         Path,
@@ -71,6 +81,7 @@ def test_dict_override_secret(tmp_path, sample_dict):
     monkeypatch.undo()
 
 def test_dict_iteration_and_len(monkeypatch):
+    """Test iteration and length in ConfigWrapperDict."""
     monkeypatch.setenv("FOO_NEWKEY", "val")
     cfg = ConfigWrapperDict({"bar": "baz"}, path="foo")
     keys = set(cfg)
@@ -82,6 +93,7 @@ def test_dict_iteration_and_len(monkeypatch):
     assert items["newkey"] == "val" #nosec
 
 def test_list_access_and_items(sample_list):
+    """Test access and items in ConfigWrapperList."""
     cfg = ConfigWrapperList(sample_list)
     assert cfg[0] == "a" #nosec
     item_2 = cfg[2]
