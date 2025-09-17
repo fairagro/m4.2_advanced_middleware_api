@@ -30,8 +30,8 @@ jobs:
 
       - name: Lint with pylint
         run: |
-          pylint middleware_api tests
+          uv run pylint middleware_api tests
 
       - name: Test with pytest
         run: |
-          pytest tests/unit
+          uv run pytest tests/unit
