@@ -2,7 +2,6 @@
 
 from abc import ABC, abstractmethod
 import logging
-from typing import Optional
 from arctrl import ARC
 
 
@@ -60,13 +59,11 @@ class ArcStore(ABC):
             raise
         except Exception as e:
             logger.exception(
-                f"Caught exception when trying to create or update ARC '{arc_id}': "
-                f"{str(e)}")
+                "Caught exception when trying to create or update ARC '%': %", arc_id, str(e))
             raise ArcStoreError(
-                f"general exception caught in "
-                f"`ArcStore.create_or_update`: {str(e)}") from e
+                "General exception caught in `ArcStore.create_or_update`: %", str(e)) from e
 
-    def get(self, arc_id: str) -> Optional[ARC]:
+    def get(self, arc_id: str) -> ARC | None:
         """_Get an ARC by its ID.
 
         Args:
@@ -78,10 +75,10 @@ class ArcStore(ABC):
         """
         try:
             return self._get(arc_id)
+        except ArcStoreError:
+            raise
         except Exception as e:
-            logger.exception(
-                f"Caught exception when trying to retrieve ARC '{arc_id}': "
-                f"{str(e)}")
+            logger.exception("Caught exception when trying to retrieve ARC '%': %", arc_id, str(e))
             return None
 
     def delete(self, arc_id: str) -> None:
@@ -102,11 +99,9 @@ class ArcStore(ABC):
         except ArcStoreError:
             raise
         except Exception as e:
-            logger.exception(
-                f"Caught exception when trying to delete ARC '{arc_id}': "
-                f"{str(e)}")
+            logger.exception("Caught exception when trying to delete ARC '%': %", arc_id, str(e))
             raise ArcStoreError(
-                f"general exception caught in `ArcStore.delete`: {str(e)}") from e
+                "general exception caught in `ArcStore.delete`: '%'", str(e)) from e
 
     def exists(self, arc_id: str) -> bool:
         """_Check if an ARC exists by its ID.
@@ -127,7 +122,6 @@ class ArcStore(ABC):
             raise
         except Exception as e:
             logger.exception(
-                f"Caught exception when trying to check if ARC '{arc_id}' exists: "
-                f"{str(e)}")
+                "Caught exception when trying to check if ARC '%' exists: %", arc_id, str(e))
             raise ArcStoreError(
-                f"general exception caught in `ArcStore.delete`: {str(e)}") from e
+                "General exception caught in `ArcStore.delete`: %", str(e)) from e

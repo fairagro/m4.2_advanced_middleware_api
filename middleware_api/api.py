@@ -87,7 +87,7 @@ class Api:
             value = cert_obj.subject.get_attributes_for_oid(
                 x509.NameOID.COMMON_NAME)[0].value
             return (bytes(value).decode()
-                   if isinstance(value, (bytes, bytearray, memoryview))
+                   if isinstance(value, bytes | bytearray | memoryview)
                    else str(value))
         except ValueError as e:
             raise HTTPException(
@@ -200,7 +200,7 @@ app = middleware_api.app
 #         raise HTTPException(status_code=404, detail="ARC not found")
 #     updated.id = arc_id
 #     updated.created_at = ARC_DB[arc_id]["created_at"]
-#     updated.updated_at = datetime.utcnow()
+#     updated.updated_at = datetime.now(UTC).isoformat() + "Z"
 #     ARC_DB[arc_id] = updated.dict()
 #     return updated
 
@@ -210,7 +210,7 @@ app = middleware_api.app
 #         raise HTTPException(status_code=404, detail="ARC not found")
 #     arc = ARC_DB[arc_id]
 #     arc.update(patch_data)
-#     arc["updated_at"] = datetime.utcnow()
+#     arc["updated_at"] = datetime.now(UTC).isoformat() + "Z"
 #     ARC_DB[arc_id] = arc
 #     return arc
 

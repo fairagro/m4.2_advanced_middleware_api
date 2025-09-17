@@ -19,4 +19,3 @@ async def test_whoami_with_client_cert(client: TestClient, cert: str):
     assert response.status_code == 200 # nosec
     body = response.json()
     assert body["client_id"] == "TestClient" # nosec
-

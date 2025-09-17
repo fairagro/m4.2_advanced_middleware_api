@@ -93,7 +93,7 @@ def test_get_success(gitlab_api, monkeypatch):
     ]
 
     fobj = MagicMock()
-    fobj.content = base64.b64encode("hello".encode()).decode()
+    fobj.content = base64.b64encode(b"hello").decode()
     fobj.encoding = None
     project.files.get.return_value = fobj
 

@@ -5,18 +5,19 @@ secret files in /run/secrets.
 """
 
 from abc import abstractmethod
+from collections.abc import Generator
 import os
 from pathlib import Path
-from typing import Dict, Generator, List, TypeAlias, cast, overload
+from typing import cast, overload
 
 import yaml
 
 
-KeyType: TypeAlias = str | int
-DictType: TypeAlias = Dict[str, "ValueType"]
-ListType: TypeAlias = List["ValueType"]
-ValueType: TypeAlias = "DictType | ListType | str"
-WrapType: TypeAlias = "ConfigWrapper | str | None"
+type KeyType = str | int
+type DictType = dict[str, "ValueType"]
+type ListType  = list["ValueType"]
+type ValueType = DictType | ListType | str
+type WrapType = "ConfigWrapper | str | None"
 
 
 class ConfigWrapper:
@@ -74,7 +75,7 @@ class ConfigWrapper:
     @classmethod
     def from_yaml_file(cls, path: Path, prefix: str = "") -> "ConfigWrapper":
         """Create a ConfigWrapper from a yaml file."""
-        with open(path, "r", encoding="utf-8") as f:
+        with open(path, encoding="utf-8") as f:
             data = yaml.safe_load(f) or {}
             return cls.from_data(data, prefix)
 
@@ -138,7 +139,7 @@ class ConfigWrapper:
 
         """
         unwrapped = ConfigWrapper._unwrap(self)
-        if isinstance(unwrapped, (dict, list)):
+        if isinstance(unwrapped, dict | list):
             return unwrapped
         raise TypeError(
             f"Unwrapped values must be of type list or dict, "
@@ -242,8 +243,7 @@ class ConfigWrapperDict(ConfigWrapper):
 
     def __iter__(self) -> Generator[str, None, None]:
         """Iterate over dict keys."""
-        for key in self._all_keys():
-            yield key
+        yield from self._all_keys()
 
     def items(self) -> Generator[tuple[str, WrapType], None, None]:
         """Iterate over key-value pairs."""
@@ -293,8 +293,7 @@ class ConfigWrapperList(ConfigWrapper):
 
     def __iter__(self) -> Generator[int, None, None]:
         """Iterate over list indices."""
-        for idx in range(len(self._data)):
-            yield idx
+        yield from range(len(self._data))
 
     def items(self) -> Generator[tuple[int, WrapType], None, None]:
         """Iterate over index-value pairs."""

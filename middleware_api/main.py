@@ -19,7 +19,7 @@ def main():
     # Rebuild sys.argv for uvicorn.main()
     sys.argv = ["uvicorn", app_path] + sys.argv[1:]
 
-    uvicorn.main()
+    uvicorn.main() # pylint: disable=no-value-for-parameter
 
 if __name__ == "__main__":
     main()

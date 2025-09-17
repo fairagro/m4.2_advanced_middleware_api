@@ -24,4 +24,32 @@ dev = [
 ]
 
 [tool.ruff]
-select = ["E", "F", "W", "C", "D"]  # D = Docstring Regeln
+# Welche Regel-Sets aktiviert sind:
+select = [
+  "E",   # pycodestyle errors
+  "W",   # pycodestyle warnings
+  "F",   # pyflakes
+  "C90", # mccabe (Komplexität)
+  "N",   # pep8-naming
+  "D",   # pydocstyle (Docstrings)
+  "UP",  # pyupgrade
+  "B",   # bugbear
+  "SIM", # flake8-simplify
+]
+
+# Regeln, die du evtl. nicht willst
+ignore = [
+  "D203", # kein Leerzeile vor Klassen-Docstring
+  "D213", # Docstring-Zeilenanfang
+]
+
+# Maximale Zeilenlänge wie in pylint (Standard: 100)
+line-length = 120
+
+# Für cyclomatic complexity, entspricht pylint's R1260 etc.
+[tool.ruff.mccabe]
+max-complexity = 10
+
+# Docstring-Regeln aktivieren, damit es wie pylint C0114/15/16 meckert
+[tool.ruff.pydocstyle]
+convention = "pep257"  # oder "numpy", oder "google"

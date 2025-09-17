@@ -3,12 +3,12 @@
 import asyncio
 import base64
 import hashlib
+import logging
 from pathlib import Path
 import tempfile
 from typing import Annotated
 import gitlab
 from gitlab.exceptions import GitlabGetError
-import logging
 from arctrl import ARC
 from pydantic import BaseModel, Field, HttpUrl, field_validator
 
@@ -37,7 +37,7 @@ class GitlabApiConfig(BaseModel):
     )]
 
     @field_validator("group", mode="before")
-    def to_lowercase(cls, v: str) -> str:
+    def to_lowercase(self, v: str) -> str:
         """Ensure group is lowercase and trimmed.
 
         Args:
@@ -136,13 +136,12 @@ class GitlabApi(ArcStore):
                 "file_path": relative_path,
                 "content": content_bytes.decode("utf-8"),
             }
-        else:
-            return {
-                "action": action_type,
-                "file_path": relative_path,
-                "content": base64.b64encode(content_bytes).decode("utf-8"),
-                "encoding": "base64",
-            }
+        return {
+            "action": action_type,
+            "file_path": relative_path,
+            "content": base64.b64encode(content_bytes).decode("utf-8"),
+            "encoding": "base64",
+        }
 
     def _is_text_file(self, content_bytes: bytes) -> bool:
         """Gibt True zurück, wenn Datei UTF-8-dekodierbar ist."""
@@ -229,11 +228,9 @@ class GitlabApi(ArcStore):
         if project:
             project.delete()
         else:
-            logger.warning(f"Project '{arc_id}' not found for deletion.")
+            logger.warning("Project '%' not found for deletion.", arc_id)
 
     # -------------------------- Delete --------------------------
     def _exists(self, arc_id: str) -> bool:
         project = self._find_project(arc_id)
-        if project:
-            return True
-        return False
+        return bool(project)

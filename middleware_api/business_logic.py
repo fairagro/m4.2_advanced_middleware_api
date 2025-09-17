@@ -10,8 +10,7 @@ import asyncio
 import hashlib
 import json
 from enum import Enum
-from datetime import datetime, timezone
-from typing import List, Dict
+from datetime import datetime, UTC
 from pydantic import BaseModel
 from arctrl import ARC
 
@@ -29,10 +28,10 @@ class ArcStatus(str, Enum):
 
     """
 
-    created = "created"
-    updated = "updated"
-    deleted = "deleted"
-    requested = "requested"
+    CREATED = "created"
+    UPDATED = "updated"
+    DELETED = "deleted"
+    REQUESTED = "requested"
 
 
 class BusinessLogicResponse(BaseModel):
@@ -63,7 +62,7 @@ class ArcResponse(BaseModel):
 class CreateOrUpdateArcsResponse(BusinessLogicResponse):
     """Response model for create or update ARC operations."""
 
-    arcs: List[ArcResponse]
+    arcs: list[ArcResponse]
 
 
 class BusinessLogicError(Exception):
@@ -93,7 +92,7 @@ class BusinessLogic:
         """
         self._store = store
 
-    def _parse_rocrate_json(self, data: str) -> List[Dict]:
+    def _parse_rocrate_json(self, data: str) -> list[dict]:
         try:
             crates = json.loads(data)
             if not isinstance(crates, list):
@@ -109,7 +108,7 @@ class BusinessLogic:
         return arc_id
 
     async def _create_arc_from_rocrate(
-            self, crate: Dict, client_id: str) -> ArcResponse:
+            self, crate: dict, client_id: str) -> ArcResponse:
         try:
             crate_json = json.dumps(crate)
             arc = ARC.from_rocrate_json_string(crate_json)
@@ -125,15 +124,15 @@ class BusinessLogic:
 
         exists = self._store.exists(identifier)
         await self._store.create_or_update(identifier, arc)
-        status = ArcStatus.updated if exists else ArcStatus.created
+        status = ArcStatus.UPDATED if exists else ArcStatus.CREATED
 
         return ArcResponse(
             id=self._create_arc_id(identifier, client_id),
             status=status,
-            timestamp=datetime.now(timezone.utc).isoformat() + "Z",
+            timestamp=datetime.now(UTC).isoformat() + "Z",
         )
 
-    async def _process_arcs(self, data: str, client_id: str) -> List[ArcResponse]:
+    async def _process_arcs(self, data: str, client_id: str) -> list[ArcResponse]:
         crates = self._parse_rocrate_json(data)
         tasks = [
             self._create_arc_from_rocrate(crate, client_id)
@@ -223,7 +222,7 @@ class BusinessLogic:
     #         raise HTTPException(status_code=404, detail="ARC not found")
     #     updated.id = arc_id
     #     updated.created_at = ARC_DB[arc_id]["created_at"]
-    #     updated.updated_at = datetime.utcnow()
+    #     updated.updated_at = datetime.now(UTC).isoformat() + "Z"
     #     ARC_DB[arc_id] = updated.dict()
     #     return updated
 
@@ -233,7 +232,7 @@ class BusinessLogic:
     #         raise HTTPException(status_code=404, detail="ARC not found")
     #     arc = ARC_DB[arc_id]
     #     arc.update(patch_data)
-    #     arc["updated_at"] = datetime.utcnow()
+    #     arc["updated_at"] = datetime.now(UTC).isoformat() + "Z"
     #     ARC_DB[arc_id] = arc
     #     return arc
 

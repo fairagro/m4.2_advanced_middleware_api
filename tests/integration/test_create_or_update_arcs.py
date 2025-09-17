@@ -1,10 +1,10 @@
 """Integration tests for creating or updating ARCs."""
 
+import json
 from pathlib import Path
 from fastapi.testclient import TestClient
 from gitlab import Gitlab
 import pytest
-import json
 
 
 @pytest.mark.asyncio

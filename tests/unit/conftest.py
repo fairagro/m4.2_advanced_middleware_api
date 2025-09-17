@@ -54,7 +54,7 @@ def mock_service(monkeypatch):
                 message="ok",
                 arcs=[
                     ArcResponse(id="abc123",
-                                status=ArcStatus.created,
+                                status=ArcStatus.CREATED,
                                 timestamp="2025-01-01T00:00:00Z")
                 ]
             )
