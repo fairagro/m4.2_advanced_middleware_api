@@ -128,6 +128,7 @@ async def test_update_arc_success(service: BusinessLogic):
         }
     ]
 
+    # pylint: disable=protected-access
     with patch.object(service._store, "exists", return_value=True):
         result = await service.create_or_update_arcs(
             data=json.dumps(rocrate), client_id="TestClient"
@@ -232,9 +233,7 @@ async def test_invalid_json(service: BusinessLogic, rocrate: str | dict[str, Any
         ],
     ],
 )
-async def test_element_missing(
-    service: BusinessLogic, cert: str, rocrate: list[dict[str, Any]]
-):
+async def test_element_missing(service: BusinessLogic, rocrate: list[dict[str, Any]]):
     """Test handling of RO-Crate JSON missing required elements."""
     with pytest.raises(InvalidJsonSemanticError):
         await service.create_or_update_arcs(

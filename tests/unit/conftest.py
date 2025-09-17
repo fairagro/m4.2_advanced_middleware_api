@@ -16,7 +16,7 @@ from middleware_api.business_logic import (
     CreateOrUpdateArcsResponse,
 )
 
-from ..shared_fixtures import cert  # noqa: F401
+from ..shared_fixtures import cert  # noqa: F401, pylint: disable=unused-import
 
 
 @pytest.fixture
@@ -26,7 +26,7 @@ def middleware_api():
 
 
 @pytest.fixture
-def client(middleware_api):
+def client(middleware_api):  # pylint: disable=redefined-outer-name
     """Provide a TestClient for the Middleware API.
 
     Also ensure cleanup of dependency overrides.
@@ -50,12 +50,16 @@ def mock_service(monkeypatch):
     """Provide a mocked BusinessLogic service."""
 
     class DummyService:
-        async def whoami(self, request, client_cert, accept_type):
+        """Dummy service with mocked methods."""
+
+        async def whoami(self, _request, _client_cert, _accept_type):
+            """Mock whoami method."""
             return BusinessLogicResponse(client_id="TestClient", message="ok")
 
         async def create_or_update_arcs(
-            self, data, client_cert, content_type, accept_type
+            self, _data, _client_cert, _content_type, _accept_type
         ):
+            """Mock create_or_update_arcs method."""
             return CreateOrUpdateArcsResponse(
                 client_id="TestClient",
                 message="ok",
@@ -68,7 +72,7 @@ def mock_service(monkeypatch):
                 ],
             )
 
-    monkeypatch.setattr("app.middleware_api.get_service", lambda: DummyService())
+    monkeypatch.setattr("app.middleware_api.get_service", DummyService)
     return DummyService()
 
 
@@ -79,5 +83,5 @@ def gitlab_api():
         url=HttpUrl("http://gitlab"), token="token", group="1", branch="main"
     )  # nosec
     api = GitlabApi(api_config)
-    api._gitlab = MagicMock()
+    api._gitlab = MagicMock()  # pylint: disable=protected-access
     return api

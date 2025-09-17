@@ -1,5 +1,7 @@
 """Unit tests for the GitLab API persistence layer."""
 
+# pylint: disable=protected-access
+
 import base64
 from pathlib import Path
 from unittest.mock import MagicMock
@@ -78,7 +80,7 @@ async def test_create_or_update_with_changes(gitlab_api):
 
     await gitlab_api.create_or_update("arc1", arc)
     project.commits.create.assert_called_once()
-    args, kwargs = project.commits.create.call_args
+    args, _kwargs = project.commits.create.call_args
     actions = args[0]["actions"]
     assert any(a["file_path"] == ".arc_hash" for a in actions)  # nosec
 

@@ -40,7 +40,8 @@ class GitlabApiConfig(BaseModel):
     ]
 
     @field_validator("group", mode="before")
-    def to_lowercase(self, v: str) -> str:
+    @classmethod
+    def to_lowercase(cls, v: str) -> str:
         """Ensure group is lowercase and trimmed.
 
         Args:
@@ -240,7 +241,7 @@ class GitlabApi(ArcStore):
         if project:
             project.delete()
         else:
-            logger.warning("Project '%' not found for deletion.", arc_id)
+            logger.warning("Project %s not found for deletion.", arc_id)
 
     # -------------------------- Delete --------------------------
     def _exists(self, arc_id: str) -> bool:

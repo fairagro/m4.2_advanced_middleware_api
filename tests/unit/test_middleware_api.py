@@ -9,7 +9,7 @@ from middleware_api.business_logic import (
 )
 
 
-class DummyArc:
+class DummyArc:  # pylint: disable=too-few-public-methods
     """Helper object that mimics an ArcResponse model."""
 
     def __init__(self, data: dict):
@@ -17,7 +17,7 @@ class DummyArc:
         self.__dict__.update(data)
 
 
-class DummyResponse:
+class DummyResponse:  # pylint: disable=too-few-public-methods
     """Helper object that mimics a BusinessLogicResponse model."""
 
     def __init__(self, payload: dict):
@@ -46,8 +46,11 @@ def override_service(api: Api, obj):
 def test_whoami_success(client, middleware_api, cert):
     """Test the /v1/whoami endpoint with a valid certificate and accept header."""
 
-    class Svc:
+    class Svc:  # pylint: disable=too-few-public-methods
+        """Service that always returns a successful response."""
+
         async def whoami(self, client_id):
+            """Mock whoami method."""
             return DummyResponse({"client_id": client_id, "message": "ok"})
 
     override_service(middleware_api, Svc())
@@ -97,8 +100,11 @@ def test_whoami_invalid_cert(client):
 def test_create_or_update_arcs_created(client, middleware_api, cert):
     """Test creating a new ARC via the /v1/arcs endpoint."""
 
-    class SvcOK:
-        async def create_or_update_arcs(self, data, client_id):
+    class SvcOK:  # pylint: disable=too-few-public-methods
+        """Service that always returns a created ARC."""
+
+        async def create_or_update_arcs(self, _data, client_id):
+            """Mock create_or_update_arcs method."""
             return DummyResponse(
                 {
                     "client_id": client_id,
@@ -136,8 +142,11 @@ def test_create_or_update_arcs_created(client, middleware_api, cert):
 def test_create_or_update_arcs_updated(client, middleware_api, cert):
     """Test updating an existing ARC via the /v1/arcs endpoint."""
 
-    class SvcOK:
-        async def create_or_update_arcs(self, data, client_id):
+    class SvcOK:  # pylint: disable=too-few-public-methods
+        """Service that always returns an updated ARC."""
+
+        async def create_or_update_arcs(self, _data, client_id):
+            """Mock create_or_update_arcs method."""
             return DummyResponse(
                 {
                     "client_id": client_id,
@@ -180,8 +189,11 @@ def test_create_or_update_arcs_invalid_json(
 ):
     """Test error handling in the /v1/arcs endpoint."""
 
-    class SvcFail:
-        async def create_or_update_arcs(self, data, client_id):
+    class SvcFail:  # pylint: disable=too-few-public-methods
+        """Service that always raises an exception."""
+
+        async def create_or_update_arcs(self, _data, _client_id):
+            """Mock create_or_update_arcs method that raises an exception."""
             raise exc
 
     override_service(middleware_api, SvcFail())
