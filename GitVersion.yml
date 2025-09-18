@@ -1,0 +1,15 @@
+mode: Mainline
+tag-prefix: v
+
+branches:
+  main:
+    increment: Patch
+    prevent-increment-of-merged-branch-version: true
+
+  feature:
+    increment: Patch
+    source-branches: [main]
+    tag: useBranchName
+    prevent-increment-of-merged-branch-version: true
+    regex: ^feature/(?<BranchName>.+)$
+    is-source-branch-for: []

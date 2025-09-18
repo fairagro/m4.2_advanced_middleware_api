@@ -1,0 +1,92 @@
+name: Feature Build
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write  # damit wir den VERSION-Commit pushen können
+
+jobs:
+  feature-build:
+    runs-on: ubuntu-latest
+
+    env:
+      GIT_USER_NAME: GitHub Pipeline
+      GIT_USER_EMAIL: github_pipeline@fairagro.net
+      IMAGE_NAME: zalf/fairagro_advanced_middleware_api
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - name: Set up GitVersion
+        id: gitversion
+        uses: gittools/actions/gitversion/execute@v3
+        with:
+          versionSpec: 5.x
+          updateAssemblyInfo: false
+          showVariable: FullSemVer
+
+      - name: Show computed feature version
+        run: 'echo "Feature Version: ${{ steps.gitversion.outputs.FullSemVer }}"'
+
+      - name: Update pyproject.toml with feature version and create tag
+        run: |
+          VERSION="${{ steps.gitversion.outputs.FullSemVer }}"
+          echo "Updating pyproject.toml version to $VERSION"
+
+          # Backup
+          cp pyproject.toml pyproject.toml.bak
+
+          sed -i "s/^version = \".*\"/version = \"$VERSION\"/" pyproject.toml
+
+          # Optional commit
+          git config user.name "${{ env.GIT_USER_NAME }}"
+          git config user.email "{{ env.GIT_USER_EMAIL }}"
+          git add pyproject.toml
+          git commit -m "Update version to $VERSION" || echo "No changes to commit"
+          git tag -a "v${VERSION}" -m "Release $VERSION"
+          git push origin HEAD:${GITHUB_REF#refs/heads/}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Docker metadata
+        id: metadata
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.IMAGE_NAME }}
+          tags: ${{ steps.gitversion.outputs.FullSemVer }}
+
+      # TODO: implement container structure tests
+      # - name: Build and export to Docker
+      #   uses: docker/build-push-action@v6
+      #   with:
+      #     load: true
+      #     tags: middleware:test
+      #     labels: ${{ steps.metadata.outputs.labels }} # we need the labels as they're checked for
+
+      # - name: Test image
+      #   uses: plexsystems/container-structure-test-action@v0.3.0
+      #   with:
+      #     image: middleware:test
+      #     config: test/container-structure-test/container-structure-test-config.yml
+
+      # Secrets are managed within the github GUI
+      - name: Log in to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USER }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Build & Push Docker Image
+        uses: docker/build-push-action@v6
+        with:
+          push: true
+          tags: ${{ steps.metadata.outputs.tags }}
+          labels: ${{ steps.metadata.outputs.labels }}
+

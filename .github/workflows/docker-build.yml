@@ -1,0 +1,106 @@
+name: Version & Docker
+
+on:
+  pull_request:
+    branches: [main]
+    types: [closed]
+
+permissions:
+  contents: read
+
+jobs:
+
+  determine-version:
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: write
+
+    outputs:
+      SemVer: ${{ steps.gitversion.outputs.SemVer }}  
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      # Prüfen des Labels für Version Bump
+      - name: Determine Version Bump
+        id: version-bump
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const allowedLabels = ["major version","minor version","patch version"];
+            const labels = context.payload.pull_request.labels.map(l => l.name);
+            const matching = labels.filter(l => allowedLabels.includes(l));
+            if (matching.length !== 1) {
+              core.setFailed(
+                `PR must have exactly one version label: ${allowedLabels.join(", ")}. Found: ${matching.join(", ") || "none"}`
+              );
+            } else {
+              core.setOutput("bump", matching[0].replace(" version",""));
+            }
+
+      # GitVersion für main Merge
+      - name: Run GitVersion
+        id: gitversion
+        uses: gittools/actions/gitversion/execute@v3
+        with:
+          versionSpec: "5.x"
+          updateAssemblyInfo: false
+          showVariable: SemVer
+          increment: ${{ steps.version-bump.outputs.bump }}
+
+      - name: Show calculated version
+        run: echo "Calculated Version: ${{ steps.gitversion.outputs.SemVer }}"
+
+      - name: Tag Version
+        run: |
+          git config --global user.email "github_actions@company.com"
+          git config --global user.name "GitHub Actions"
+          git tag -a "v${{ steps.gitversion.outputs.SemVer }}" -m "Release ${{ steps.gitversion.outputs.SemVer }}"
+          git push origin "v${{ steps.gitversion.outputs.SemVer }}"
+
+  docker-build-main:
+    runs-on: ubuntu-latest
+    needs: determine-version
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v5
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Docker metadata
+        id: metadata
+        uses: docker/metadata-action@v5
+        with:
+          images: myorg/middleware
+          tags: v${{ needs.determine-version.outputs.SemVer }}
+
+      - name: Build & Push Docker Image
+        uses: docker/build-push-action@v6
+        with:
+          push: true
+          tags: ${{ steps.metadata.outputs.tags }}
+          build-args: python_version=3.12
+
+  create-release:
+    runs-on: ubuntu-latest
+    needs: docker-build-main
+    permissions:
+      contents: write
+
+    steps:
+      - name: Create GitHub Release
+        uses: ncipollo/release-action@v1
+        with:
+          tag: v${{ needs.determine-version.outputs.SemVer }}
+          name: "Release v${{ needs.determine-version.outputs.SemVer }}"
+          body: |
+            Docker image: `myorg/middleware:v${{ needs.determine-version.outputs.SemVer }}`
+          draft: false
+          prerelease: false
