@@ -10,6 +10,11 @@ permissions:
 
 jobs:
 
+  env:
+    GIT_USER_NAME: GitHub Pipeline
+    GIT_USER_EMAIL: github_pipeline@fairagro.net
+    IMAGE_NAME: zalf/fairagro_advanced_middleware_api
+
   determine-version:
     runs-on: ubuntu-latest
 
@@ -17,12 +22,16 @@ jobs:
       contents: write
 
     outputs:
-      SemVer: ${{ steps.gitversion.outputs.SemVer }}  
+      SemVer: ${{ steps.gitversion.outputs.SemVer }}
+      Major: ${{ steps.gitversion.outputs.Major }}
+      Minor: ${{ steps.gitversion.outputs.Minor }}
+      Patch: ${{ steps.gitversion.outputs.Patch }}
 
     steps:
       - name: Checkout repo
         uses: actions/checkout@v5
         with:
+          ref: ${{ github.ref }}
           fetch-depth: 0
 
       # Prüfen des Labels für Version Bump
@@ -44,24 +53,36 @@ jobs:
             }
 
       # GitVersion für main Merge
-      - name: Run GitVersion
-        id: gitversion
-        uses: gittools/actions/gitversion/execute@v3
+      - name: Install GitVersion
+        uses: gittools/actions/gitversion/setup@v4
         with:
-          versionSpec: 5.x
-          updateAssemblyInfo: false
-          showVariable: SemVer
+          versionSpec: 6.x
+
+      - name: Execute GitVersion
+        id: gitversion
+        uses: gittools/actions/gitversion/execute@v4
+        with:
+          configFilePath: GitVersion.yml
           increment: ${{ steps.version-bump.outputs.bump }}
 
       - name: Show calculated version
         run: 'echo "Calculated Version: ${{ steps.gitversion.outputs.SemVer }}"'
 
-      - name: Tag Version
+      - name: Show computed feature version
         run: |
-          git config --global user.email "github_actions@company.com"
-          git config --global user.name "GitHub Actions"
-          git tag -a "v${{ steps.gitversion.outputs.SemVer }}" -m "Release ${{ steps.gitversion.outputs.SemVer }}"
-          git push origin "v${{ steps.gitversion.outputs.SemVer }}"
+          echo "FullSemVer: ${{ steps.gitversion.outputs.FullSemVer }}"
+          echo "SemVer:     ${{ steps.gitversion.outputs.SemVer }}"
+          echo "PreRelease: ${{ steps.gitversion.outputs.PreReleaseTag }}"
+
+      - name: Create git tag
+        run: |
+          VERSION="${{ steps.gitversion.outputs.SemVer }}"
+          git config user.name "${{ env.GIT_USER_NAME }}"
+          git config user.email "{{ env.GIT_USER_EMAIL }}"
+          git tag -a "v${VERSION}" -m "release $VERSION"
+          git push origin "v${VERSION}"
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
   docker-build-main:
     runs-on: ubuntu-latest
@@ -70,6 +91,8 @@ jobs:
     steps:
       - name: Checkout repo
         uses: actions/checkout@v5
+        with:
+          ref: ${{ github.ref }}
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
@@ -78,19 +101,30 @@ jobs:
         id: metadata
         uses: docker/metadata-action@v5
         with:
-          images: myorg/middleware
-          tags: v${{ needs.determine-version.outputs.SemVer }}
+          images: ${{ env.IMAGE_NAME }}
+          tags: |
+            type=semver,pattern={{version}},value=${{ needs.version.outputs.SemVer }}
+            type=raw,value=${{ needs.version.outputs.Major }}.${{ needs.version.outputs.Minor }}
+            type=raw,value=${{ needs.version.outputs.Major }}
+
+      # Secrets are managed within the github GUI
+      - name: Log in to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USER }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
 
       - name: Build & Push Docker Image
         uses: docker/build-push-action@v6
         with:
           push: true
           tags: ${{ steps.metadata.outputs.tags }}
-          build-args: python_version=3.12
+          labels: ${{ steps.metadata.outputs.labels }}
 
   create-release:
     runs-on: ubuntu-latest
     needs: docker-build-main
+
     permissions:
       contents: write
 
@@ -101,6 +135,6 @@ jobs:
           tag: v${{ needs.determine-version.outputs.SemVer }}
           name: "Release v${{ needs.determine-version.outputs.SemVer }}"
           body: |
-            Docker image: `myorg/middleware:v${{ needs.determine-version.outputs.SemVer }}`
+            Docker image: `${{ env.IMAGE_NAME }}:v${{ needs.determine-version.outputs.SemVer }}`
           draft: false
           prerelease: false

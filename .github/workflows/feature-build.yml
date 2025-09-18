@@ -66,7 +66,7 @@ jobs:
           git config user.name "${{ env.GIT_USER_NAME }}"
           git config user.email "{{ env.GIT_USER_EMAIL }}"
           git tag -a "v${VERSION}" -m "pre-release $VERSION"
-          git push origin HEAD:${GITHUB_REF#refs/heads/}
+          git push origin "v${VERSION}"
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
