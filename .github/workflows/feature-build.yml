@@ -36,22 +36,33 @@ jobs:
       - name: Show computed feature version
         run: 'echo "Feature Version: ${{ steps.gitversion.outputs.FullSemVer }}"'
 
-      - name: Update pyproject.toml with feature version and create tag
+      # pyproject.toml does not support pre-release versions
+      # - name: Update pyproject.toml with feature version and create tag
+      #   run: |
+      #     VERSION="${{ steps.gitversion.outputs.FullSemVer }}"
+      #     echo "Updating pyproject.toml version to $VERSION"
+
+      #     # Backup
+      #     cp pyproject.toml pyproject.toml.bak
+
+      #     sed -i "s/^version = \".*\"/version = \"$VERSION\"/" pyproject.toml
+
+      #     # Optional commit
+      #     git config user.name "${{ env.GIT_USER_NAME }}"
+      #     git config user.email "{{ env.GIT_USER_EMAIL }}"
+      #     git add pyproject.toml
+      #     git commit -m "Update version to $VERSION" || echo "No changes to commit"
+      #     git tag -a "v${VERSION}" -m "Release $VERSION"
+      #     git push origin HEAD:${GITHUB_REF#refs/heads/}
+      #   env:
+      #     GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Create git tag
         run: |
           VERSION="${{ steps.gitversion.outputs.FullSemVer }}"
-          echo "Updating pyproject.toml version to $VERSION"
-
-          # Backup
-          cp pyproject.toml pyproject.toml.bak
-
-          sed -i "s/^version = \".*\"/version = \"$VERSION\"/" pyproject.toml
-
-          # Optional commit
           git config user.name "${{ env.GIT_USER_NAME }}"
           git config user.email "{{ env.GIT_USER_EMAIL }}"
-          git add pyproject.toml
-          git commit -m "Update version to $VERSION" || echo "No changes to commit"
-          git tag -a "v${VERSION}" -m "Release $VERSION"
+          git tag -a "v${VERSION}" -m "pre-release $VERSION"
           git push origin HEAD:${GITHUB_REF#refs/heads/}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
