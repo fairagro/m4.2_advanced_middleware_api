@@ -1,5 +1,5 @@
 # ---- Build Stage ----
-FROM python:3.12.11-alpine3.22 AS builder
+FROM python:3.13.7-alpine3.22 AS builder
 
 # Installiere Build-Tools für native Builds
 RUN apk add --no-cache \
