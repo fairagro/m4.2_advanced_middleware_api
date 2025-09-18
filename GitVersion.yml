@@ -9,7 +9,7 @@ branches:
   feature:
     increment: Patch
     source-branches: [main]
-    tag: useBranchName
+    tag: '$(BranchName)-$(ShortSha)'
     prevent-increment-of-merged-branch-version: true
     regex: ^feature/(?<BranchName>.+)$
     is-source-branch-for: []
