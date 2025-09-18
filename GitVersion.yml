@@ -8,7 +8,7 @@ branches:
 
   feature:
     # Regex muss sowohl Slash als auch das bereits escaped '-' erlauben
-    regex: ^feature[/-](?<BranchName>[^/]+(?:[/-].*)?)$
+    regex: ^feature[/-](?<BranchName>.+)$
     label: {BranchName}
     increment: Patch
     source-branches: [main]
