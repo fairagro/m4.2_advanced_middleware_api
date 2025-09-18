@@ -48,13 +48,13 @@ jobs:
         id: gitversion
         uses: gittools/actions/gitversion/execute@v3
         with:
-          versionSpec: "5.x"
+          versionSpec: 5.x
           updateAssemblyInfo: false
           showVariable: SemVer
           increment: ${{ steps.version-bump.outputs.bump }}
 
       - name: Show calculated version
-        run: echo "Calculated Version: ${{ steps.gitversion.outputs.SemVer }}"
+        run: 'echo "Calculated Version: ${{ steps.gitversion.outputs.SemVer }}"'
 
       - name: Tag Version
         run: |
