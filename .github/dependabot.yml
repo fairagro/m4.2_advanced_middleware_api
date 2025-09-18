@@ -11,16 +11,16 @@ updates:
     directory: /
     schedule:
       interval: weekly
-    target-branch: testing
+    target-branch: main
   - package-ecosystem: uv
     directory: /
     schedule:
       interval: weekly
-    target-branch: testing
+    target-branch: main
   - package-ecosystem: docker
     directory: /
     schedule:
       interval: weekly
     allow:
       - dependency-type: all
-    target-branch: testing
+    target-branch: main
