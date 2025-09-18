@@ -4,12 +4,12 @@ tag-prefix: v
 branches:
   main:
     increment: Patch
-    prevent-increment-of-merged-branch-version: true
+    prevent-increment-of-merged-branch: true
 
   feature:
     # Regex muss sowohl Slash als auch das bereits escaped '-' erlauben
-    regex: '^feature[/-](?<BranchName>[^/]+(?:[/-].*)?)$'
-    label: '{BranchName}'         # <-- geschweifte Klammern, 'label' verwenden
+    regex: ^feature[/-](?<BranchName>[^/]+(?:[/-].*)?)$
+    label: {BranchName}
     increment: Patch
-    source-branches: ['main']
-    prevent-increment-of-merged-branch-version: true
+    source-branches: [main]
+    prevent-increment-of-merged-branch: true
