@@ -1,15 +1,12 @@
-mode: Mainline
+mode: ContinuousDelivery
 tag-prefix: v
 
 branches:
   main:
     increment: Patch
-    prevent-increment-of-merged-branch-version: true
 
   feature:
     increment: Patch
     source-branches: [main]
     tag: '$(name)'
-    prevent-increment-of-merged-branch-version: true
     regex: ^feature/(?<name>.+)$
-    is-source-branch-for: []
