@@ -34,7 +34,10 @@ jobs:
           configFilePath: GitVersion.yml
 
       - name: Show computed feature version
-        run: 'echo "Feature Version: ${{ steps.gitversion.outputs.FullSemVer }}"'
+        run: |
+          echo "FullSemVer: ${{ steps.gitversion.outputs.FullSemVer }}"
+          echo "SemVer:     ${{ steps.gitversion.outputs.SemVer }}"
+          echo "PreRelease: ${{ steps.gitversion.outputs.PreReleaseTag }}"
 
       # pyproject.toml does not support pre-release versions
       # - name: Update pyproject.toml with feature version and create tag
