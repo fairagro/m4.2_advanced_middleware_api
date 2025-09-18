@@ -19,6 +19,7 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v5
         with:
+          ref: ${{ github.ref }}
           fetch-depth: 0
 
       - name: Install GitVersion
@@ -30,7 +31,6 @@ jobs:
         id: gitversion
         uses: gittools/actions/gitversion/execute@v4
         with:
-          useConfigFile: true
           configFilePath: GitVersion.yml
 
       - name: Show computed feature version
