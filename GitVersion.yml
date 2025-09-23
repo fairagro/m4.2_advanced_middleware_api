@@ -9,7 +9,7 @@ branches:
   feature:
     increment: Patch
     source-branches: [main]
-    label: '{BranchName}'
+    label: "{BranchName}"
     prevent-increment:
       of-merged-branch: true
     regex: ^feature/(?<BranchName>.+)$

@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: write  # damit wir den VERSION-Commit pushen können
+  contents: write # damit wir den VERSION-Commit pushen können
 
 jobs:
   feature-build:
@@ -107,4 +107,3 @@ jobs:
           push: true
           tags: ${{ steps.metadata.outputs.tags }}
           labels: ${{ steps.metadata.outputs.labels }}
-
