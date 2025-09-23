@@ -57,7 +57,8 @@ jobs:
         uses: gittools/actions/gitversion/execute@v4
         with:
           configFilePath: GitVersion.yml
-          increment: ${{ steps.version-bump.outputs.bump }}
+          overrideConfig: |
+            increment: ${{ steps.version-bump.outputs.bump }}
 
       - name: Show calculated version
         run: |
