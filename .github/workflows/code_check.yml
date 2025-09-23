@@ -2,6 +2,8 @@ name: Python Code Check
 
 on:
   push:
+    branches:
+      - feature/*
   workflow_dispatch:
 
 permissions:
