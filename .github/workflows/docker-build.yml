@@ -48,7 +48,7 @@ jobs:
             console.log("Matching labels:", matching);
             const result = matching[0].replace(" version","");
             console.log("Determined version bump:", result);
-            return { bump: result };
+            core.setOutput("bump", result);
 
       # GitVersion für main Merge
       - name: Install GitVersion
