@@ -24,7 +24,6 @@ jobs:
               core.setFailed("This workflow must be triggered by a pull_request event.");
               return;
             }
-            console.log("PR labels:", pr ? pr.labels : "PR not found");
             const labels = pr.labels.map(l => l.name);
             const matching = labels.filter(l => allowedLabels.includes(l));
             if (matching.length !== 1) {
