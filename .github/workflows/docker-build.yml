@@ -43,8 +43,12 @@ jobs:
             const allowedLabels = ["major version","minor version","patch version"];
             const pr = context.payload.pull_request;
             const labels = pr.labels.map(l => l.name);
+            console.log("Labels on PR:", labels);
             const matching = labels.filter(l => allowedLabels.includes(l));
-            return { bump: matching[0].replace(" version","") };
+            console.log("Matching labels:", matching);
+            const result = matching[0].replace(" version","");
+            console.log("Determined version bump:", result);
+            return { bump: result };
 
       # GitVersion für main Merge
       - name: Install GitVersion
