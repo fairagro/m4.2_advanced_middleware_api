@@ -37,6 +37,9 @@ jobs:
             console.log("Labels on PR:", labels);
             const matching = labels.filter(l => allowedLabels.includes(l));
             console.log("Matching labels:", matching);
+            if (matching.length === 0) {
+              throw new Error("No version label found on the PR. Please add one of: " + allowedLabels.join(", "));
+            }
             const result = matching[0].replace(" version","");
             console.log("Determined version label:", result);
             core.setOutput("result", result);
