@@ -1,16 +1,17 @@
-tag-prefix: v
+workflow: GitHubFlow/v1
 
-branches:
-  main:
-    increment: Patch
-    # prevent-increment:
-    #   of-merged-branch: true
+# mode: ContinuousDelivery
+# tag-prefix: v
 
-  feature:
-    increment: Patch
-    source-branches: [main]
-    label: "{BranchName}"
-    prevent-increment:
-      of-merged-branch: true
-    regex: ^feature/(?<BranchName>.+)$
-    is-source-branch-for: []
+# branches:
+#   main:
+#     merge-message-strategy: MergeMessage
+
+#   feature:
+#     increment: Patch
+#     source-branches: [main]
+#     label: "{BranchName}"
+#     prevent-increment:
+#       of-merged-branch: true
+#     regex: ^feature/(?<BranchName>.+)$
+#     is-source-branch-for: []
