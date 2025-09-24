@@ -1,4 +1,5 @@
 workflow: GitHubFlow/v1
+tag-prefix: v
 
 # mode: ContinuousDelivery
 # tag-prefix: v
