@@ -62,7 +62,7 @@ jobs:
         with:
           configFilePath: GitVersion.yml
           overrideConfig: |
-            increment: ${{ steps.version-bump.outputs.bump }}
+            increment=${{ steps.version-bump.outputs.bump }}
 
       - name: Show calculated version
         run: |
