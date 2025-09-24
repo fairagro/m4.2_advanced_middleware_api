@@ -49,6 +49,6 @@ jobs:
           MERGE_COMMIT=$(git log -1 --merges --pretty=format:%H)
           VERSION_LABEL=${{ steps.version-label.outputs.result }}
           git config user.name "${{ env.GIT_USER_NAME }}"
-          git config user.email "{{ env.GIT_USER_EMAIL }}"
+          git config user.email "${{ env.GIT_USER_EMAIL }}"
           git commit --amend -m "$(git log -1 --pretty=%B) +semver: $VERSION_LABEL"
           git push --force
