@@ -1,0 +1,6 @@
+tag-prefix: v
+
+branches:
+  main:
+    increment: Minor
+

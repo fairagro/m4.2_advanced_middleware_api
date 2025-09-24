@@ -63,7 +63,6 @@ jobs:
           configFilePath: GitVersion.yml
           overrideConfig: |
             increment=${{ steps.version-bump.outputs.bump }}
-            mode=ContinuousDelivery
 
       - name: Show calculated version
         run: |

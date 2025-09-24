@@ -3,8 +3,8 @@ tag-prefix: v
 branches:
   main:
     increment: Patch
-    prevent-increment:
-      of-merged-branch: true
+    # prevent-increment:
+    #   of-merged-branch: true
 
   feature:
     increment: Patch
