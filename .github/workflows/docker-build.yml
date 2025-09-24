@@ -60,10 +60,7 @@ jobs:
         id: gitversion
         uses: gittools/actions/gitversion/execute@v4
         with:
-          configFilePath: GitVersion.yml
-          overrideConfig: |
-            increment=${{ steps.version-bump.outputs.bump }}
-            mode=ContinuousDelivery
+          configFilePath: GitVersion.${{ steps.version-bump.outputs.bump }}.yml
 
       - name: Show calculated version
         run: |
@@ -129,7 +126,7 @@ jobs:
         uses: ncipollo/release-action@v1
         with:
           tag: v${{ needs.version.outputs.SemVer }}
-          name: "Release v${{ needs.version.outputs.SemVer }}"
+          name: Release v${{ needs.version.outputs.SemVer }}
           body: |
             Docker image: `${{ env.IMAGE_NAME }}:v${{ needs.version.outputs.SemVer }}`
           draft: false
