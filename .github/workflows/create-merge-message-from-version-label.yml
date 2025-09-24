@@ -42,7 +42,7 @@ jobs:
             }
             const result = matching[0].replace(" version","");
             console.log("Determined version label:", result);
-            core.setOutput("result", result);
+            return result;
 
       - name: Amend merge commit message
         run: |
@@ -50,5 +50,5 @@ jobs:
           VERSION_LABEL=${{ steps.version-label.outputs.result }}
           git config user.name "${{ env.GIT_USER_NAME }}"
           git config user.email "${{ env.GIT_USER_EMAIL }}"
-          git commit --amend -m "$(git log -1 --pretty=%B) +semver: $VERSION_LABEL"
-          git push --force
+          git tag -a "v-$VERSION_LABEL" $MERGE_COMMIT -m "+semver: $VERSION_LABEL"
+          git push origin --tags
