@@ -33,6 +33,8 @@ env:
 jobs:
   docker-build-test:
     name: Docker Build and Test
+    permissions:
+      contents: read
     uses: ./.github/workflows/docker-build.yml
     with:
       push_to_registry: true
