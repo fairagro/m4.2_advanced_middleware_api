@@ -246,7 +246,7 @@ jobs:
           else
             echo "- **Result**: ⚠️ Cannot compare - one or both scan results missing" >> $GITHUB_STEP_SUMMARY
           fi
-          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### 📋 Scan Results Available In:" >> $GITHUB_STEP_SUMMARY
           
           echo "### �📊 Scan Results Available In:" >> $GITHUB_STEP_SUMMARY
           echo "- **GitHub Security Tab**: SARIF results for both scan types" >> $GITHUB_STEP_SUMMARY
