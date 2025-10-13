@@ -42,7 +42,7 @@ jobs:
 
     - name: Linting with pylint
       run: |
-        uv run pylint middleware_api/ --fail-under=8.0 --output-format=colorized
+        uv run pylint middleware_api/ tests/ --fail-under=8.0 --output-format=colorized
       continue-on-error: false
 
     - name: Type checking with mypy
