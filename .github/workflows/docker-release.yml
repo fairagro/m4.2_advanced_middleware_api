@@ -221,7 +221,7 @@ jobs:
           fi
           echo "" >> $GITHUB_STEP_SUMMARY
           
-          echo "### � Trivy Scan Comparison" >> $GITHUB_STEP_SUMMARY
+          echo "### 🔍 Trivy Scan Comparison" >> $GITHUB_STEP_SUMMARY
           if [[ -f "trivy-image-results.sarif" && -f "trivy-sbom-results.sarif" ]]; then
             IMAGE_FINDINGS=$(jq '.runs[0].results | length' trivy-image-results.sarif 2>/dev/null || echo "0")
             SBOM_FINDINGS=$(jq '.runs[0].results | length' trivy-sbom-results.sarif 2>/dev/null || echo "0")
