@@ -192,6 +192,8 @@ jobs:
   container-structure-test:
     needs: [calculate-version, build-docker-image]
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     if: needs.build-docker-image.result == 'success'
 
     steps:
