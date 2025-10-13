@@ -3,6 +3,9 @@ name: Python Code Quality (Reusable)
 on:
   workflow_call: {}
 
+permissions:
+  contents: read
+
 jobs:
   code-quality:
     runs-on: ubuntu-latest
