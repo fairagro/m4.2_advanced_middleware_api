@@ -248,7 +248,6 @@ jobs:
           fi
           echo "### 📋 Scan Results Available In:" >> $GITHUB_STEP_SUMMARY
           
-          echo "### �📊 Scan Results Available In:" >> $GITHUB_STEP_SUMMARY
           echo "- **GitHub Security Tab**: SARIF results for both scan types" >> $GITHUB_STEP_SUMMARY
           echo "- **Artifacts**: Full SARIF reports attached to workflow run" >> $GITHUB_STEP_SUMMARY
 
