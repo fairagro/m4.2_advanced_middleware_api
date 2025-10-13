@@ -190,7 +190,7 @@ jobs:
 
       - name: Security Scan Summary
         run: |
-          echo "## �️ Security Scan Results" >> $GITHUB_STEP_SUMMARY
+          echo "## 🔒 Security Scan Results" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "**Scanning Strategy**: Using Trivy for comprehensive vulnerability detection" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
