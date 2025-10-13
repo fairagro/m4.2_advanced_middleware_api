@@ -91,7 +91,7 @@ disallow_incomplete_defs = true
 
 [tool.bandit]
 exclude_dirs = ["tests", "venv", ".venv"]
-skips = ["B101", "B601"]  # Skip assert_used and shell injection (if you want to allow them)
+skips = ["B101"]  # Skip assert_used. Do not skip shell injection (B601) to ensure security.
 
 # Docstring-Regeln aktivieren, damit es wie pylint C0114/15/16 meckert
 [tool.ruff.lint.pydocstyle]
