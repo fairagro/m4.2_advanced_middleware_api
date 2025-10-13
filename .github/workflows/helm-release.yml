@@ -1,0 +1,212 @@
+name: Create Helm Chart Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      version_bump:
+        description: 'Version bump type for Helm chart release'
+        required: true
+        default: 'patch'
+        type: choice
+        options:
+        - major
+        - minor
+        - patch
+
+env:
+  GIT_USER_NAME: ${{ vars.GIT_USER_NAME || 'GitHub Pipeline' }}
+  GIT_USER_EMAIL: ${{ vars.GIT_USER_EMAIL || 'github_pipeline@fairagro.net' }}
+  DOCKERHUB_NAMESPACE: ${{ vars.DOCKERHUB_NAMESPACE || 'zalf' }}
+  IMAGE_NAME: ${{ vars.IMAGE_NAME || 'fairagro_advanced_middleware_api' }}
+  GITVERSION_TAG_PREFIX: ${{ vars.GITVERSION_TAG_PREFIX || '.*-chart-v' }}
+
+jobs:
+  calculate-version:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    outputs:
+      version: ${{ env.IS_FEATURE_BRANCH == 'true' && steps.gitversion.outputs.semVer || steps.gitversion.outputs.majorMinorPatch }}
+    env:
+      IS_FEATURE_BRANCH: ${{ startsWith(github.ref_name, 'feature/') }}
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: gittools/actions/gitversion/setup@v4
+        with:
+          versionSpec: '6.4.x'
+
+      - name: Create GitVersion config
+        uses: DamianReeves/write-file-action@master
+        with:
+          path: GitVersion.yml
+          write-mode: overwrite
+          contents: |
+            mode: ContinuousDeployment
+            tag-prefix: '${{ env.GITVERSION_TAG_PREFIX }}'
+            semantic-version-format: Strict
+            branches:
+              main:
+                label: ''
+                increment: ${{ inputs.version_bump }}
+              feature:
+                regex: ^feature/(?<BranchName>.+)$
+                label: '{BranchName}'
+                increment: Inherit
+                track-merge-target: false
+
+      - name: Execute GitVersion
+        id: gitversion
+        uses: gittools/actions/gitversion/execute@v4
+
+      - name: Debug version info
+        run: |
+          echo "🔧 Helm Version Configuration:"
+          echo "  - Branch: ${{ github.ref_name }}"
+          echo "  - Is feature branch: ${{ env.IS_FEATURE_BRANCH }}"
+          echo "  - Version bump input: ${{ github.event.inputs.version_bump || 'patch (default)' }}"
+          echo ""
+          echo "📊 GitVersion Results:"
+          echo "  - SemVer: ${{ steps.gitversion.outputs.semVer }}"
+          echo "  - MajorMinorPatch: ${{ steps.gitversion.outputs.majorMinorPatch }}"
+          echo "  - Final version: ${{ env.IS_FEATURE_BRANCH == 'true' && steps.gitversion.outputs.semVer || steps.gitversion.outputs.majorMinorPatch }}"
+
+  helm-release:
+    needs: calculate-version
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    env:
+      TIMESTAMP: ${{ github.run_id }}${{ github.run_attempt }}
+      RELEASE_TAG: ${{ github.run_id }}${{ github.run_attempt }}-chart-v${{ needs.calculate-version.outputs.version }}
+      CHART_VERSION: ${{ needs.calculate-version.outputs.version }}
+      DOCKERHUB_AVAILABLE: ${{ secrets.DOCKERHUB_USER != '' && secrets.DOCKERHUB_TOKEN != '' }}
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: azure/setup-helm@v4
+        with:
+          version: '3.14.0'
+
+      - name: Log release info
+        run: |
+          echo "📋 Release prepared (all variables defined in YAML):"
+          echo "  - Release tag: ${{ env.RELEASE_TAG }}"
+          echo "  - Chart version: ${{ env.CHART_VERSION }}"
+          echo "  - App version: (read from Chart.yaml by Helm)"
+          echo "  - DockerHub available: ${{ env.DOCKERHUB_AVAILABLE }}"
+
+      - name: Create version tag
+        id: create_tag
+        uses: mathieudutour/github-tag-action@v6.2
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          custom_tag: ${{ env.RELEASE_TAG }}
+          tag_prefix: ""
+
+      - name: Package Helm chart
+        id: package_chart
+        run: |
+          # Package Helm chart (app-version is read from Chart.yaml automatically)
+          helm package ./helm --version "${{ env.CHART_VERSION }}"
+
+          # Find the actual chart package name (helm package creates name based on Chart.yaml)
+          CHART_PACKAGE=$(ls *.tgz | head -1)
+          echo "chart-package=$CHART_PACKAGE" >> $GITHUB_OUTPUT
+          echo "📦 Created Helm chart package: $CHART_PACKAGE"
+
+      - name: Log release info
+        run: |
+          if [[ "${{ github.ref_name }}" == "main" ]]; then
+            echo "Creating GitHub release for final Helm release"
+            echo "✅ Git tag: ${{ env.RELEASE_TAG }}"
+            echo "✅ GitHub release: Will be created"
+          else
+            echo "Feature branch release - tracking version progression"
+            echo "✅ Git tag: ${{ env.RELEASE_TAG }} (for GitVersion tracking)"
+            echo "⏭️ GitHub release: Skipped (feature branch)"
+          fi
+
+      - name: Create GitHub Release (Draft)
+        if: github.ref_name == 'main'
+        id: draft_release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ env.RELEASE_TAG }}
+          name: "chart-v${{ env.CHART_VERSION }}"
+          body: |
+            ## Helm Chart Release v${{ env.CHART_VERSION }}
+
+            **Chart Version**: ${{ env.CHART_VERSION }}
+
+            ```bash
+            helm upgrade --install fairagro-middleware ./helm \
+              --set image.repository=${{ env.DOCKERHUB_NAMESPACE }}/${{ env.IMAGE_NAME }}
+            ```
+            
+            *(App version and image tag are defined in the Helm chart's Chart.yaml and values.yaml)*
+          files: ${{ steps.package_chart.outputs.chart-package }}
+          draft: true
+          make_latest: true
+          generate_release_notes: true
+          append_body: true
+
+      - name: Finalize Release
+        if: github.ref_name == 'main'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          echo "🔍 Looking for draft release with tag: ${{ env.RELEASE_TAG }}"
+
+          # Give GitHub API a moment to index the new release
+          sleep 5
+
+          # Try to get the release ID from the draft release we just created
+          if RELEASE_ID=$(gh api repos/${{ github.repository }}/releases/tags/${{ env.RELEASE_TAG }} --jq '.id' 2>/dev/null); then
+            echo "✅ Found release ID via tag: $RELEASE_ID"
+          else
+            echo "⚠️ Release not found via tag, searching in all releases..."
+
+            # Search for the release by version in all releases
+            RELEASE_ID=$(gh api repos/${{ github.repository }}/releases --jq '.[] | select(.tag_name == "${{ env.RELEASE_TAG }}") | .id')
+
+            if [[ -n "$RELEASE_ID" ]]; then
+              echo "✅ Found release ID via search: $RELEASE_ID"
+            else
+              echo "❌ Release not found at all!"
+              exit 1
+            fi
+          fi
+
+          # Convert draft to final release
+          gh api repos/${{ github.repository }}/releases/$RELEASE_ID \
+            --method PATCH \
+            --field draft=false
+          echo "🎉 Release finalized successfully"
+
+      - name: Login to Docker Hub
+        if: github.ref_name == 'main' && env.DOCKERHUB_AVAILABLE == 'true'
+        uses: docker/login-action@v3
+        with:
+          registry: registry-1.docker.io
+          username: ${{ secrets.DOCKERHUB_USER }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Push Helm chart to DockerHub
+        if: github.ref_name == 'main' && env.DOCKERHUB_AVAILABLE == 'true'
+        run: |
+          helm push ${{ steps.package_chart.outputs.chart-package }} oci://registry-1.docker.io/${{ env.DOCKERHUB_NAMESPACE }}
+          echo "✅ Pushed to DockerHub: ${{ env.DOCKERHUB_NAMESPACE }}/${{ steps.package_chart.outputs.chart-package }}"
+
+      - name: Skip DockerHub push (missing credentials)
+        if: github.ref_name == 'main' && env.DOCKERHUB_AVAILABLE != 'true'
+        run: |
+          echo "⏭️ Skipping DockerHub push - missing credentials (DOCKERHUB_USER and/or DOCKERHUB_TOKEN)"
+          echo "💡 Configure DockerHub secrets to enable automatic chart publishing"

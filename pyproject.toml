@@ -21,6 +21,10 @@ dev = [
   "pytest>=8.4.1",
   "pytest-asyncio>=1.1.0",
   "pytest-cov>=7.0.0",
+  "black>=24.0.0",
+  "isort>=5.13.0",
+  "mypy>=1.11.0",
+  "bandit>=1.7.0",
 ]
 
 [tool.ruff]
@@ -49,6 +53,45 @@ line-length = 120
 # Für cyclomatic complexity, entspricht pylint's R1260 etc.
 [tool.ruff.lint.mccabe]
 max-complexity = 10
+
+[tool.black]
+line-length = 88
+target-version = ['py312']
+include = '\.pyi?$'
+extend-exclude = '''
+/(
+  # directories
+  \.eggs
+  | \.git
+  | \.hg
+  | \.mypy_cache
+  | \.tox
+  | \.venv
+  | build
+  | dist
+)/
+'''
+
+[tool.isort]
+profile = "black"
+multi_line_output = 3
+include_trailing_comma = true
+force_grid_wrap = 0
+use_parentheses = true
+ensure_newline_before_comments = true
+line_length = 88
+known_first_party = ["middleware_api"]
+
+[tool.mypy]
+python_version = "3.12"
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = true
+disallow_incomplete_defs = true
+
+[tool.bandit]
+exclude_dirs = ["tests", "venv", ".venv"]
+skips = ["B101", "B601"]  # Skip assert_used and shell injection (if you want to allow them)
 
 # Docstring-Regeln aktivieren, damit es wie pylint C0114/15/16 meckert
 [tool.ruff.lint.pydocstyle]

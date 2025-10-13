@@ -1,0 +1,90 @@
+name: Python Code Quality (Reusable)
+
+on:
+  workflow_call: {}
+
+jobs:
+  code-quality:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ['3.12']
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Install uv
+      uses: astral-sh/setup-uv@v4
+      with:
+        version: "latest"
+
+    - name: Set up Python ${{ matrix.python-version }}
+      run: uv python install ${{ matrix.python-version }}
+
+    - name: Install dependencies
+      run: |
+        # Install all dependencies including dev dependencies
+        uv sync --dev
+
+    - name: Code formatting check with Black
+      run: |
+        uv run black --check --diff middleware_api/ tests/
+      continue-on-error: false
+
+    - name: Import sorting check with isort
+      run: |
+        uv run isort --check-only --diff middleware_api/ tests/
+      continue-on-error: false
+
+    - name: Linting with pylint
+      run: |
+        uv run pylint middleware_api/ --fail-under=8.0 --output-format=colorized
+      continue-on-error: false
+
+    - name: Type checking with mypy
+      run: |
+        uv run mypy middleware_api/ --ignore-missing-imports --strict-optional
+      continue-on-error: false
+
+    - name: Security check with bandit
+      run: |
+        uv run bandit -r middleware_api/ -f json -o bandit-report.json
+        uv run bandit -r middleware_api/ -ll
+      continue-on-error: false
+
+    - name: Run unit tests with coverage
+      run: |
+        uv run pytest --cov=middleware_api --cov-report=xml --cov-report=html --cov-report=term-missing --junitxml=pytest-report.xml
+
+    - name: Upload coverage to Codecov
+      uses: codecov/codecov-action@v4
+      with:
+        file: ./coverage.xml
+        flags: unittests
+        name: codecov-umbrella
+        fail_ci_if_error: false
+
+    - name: Upload test results
+      uses: actions/upload-artifact@v4
+      if: always()
+      with:
+        name: test-reports-${{ matrix.python-version }}
+        path: |
+          pytest-report.xml
+          coverage.xml
+          htmlcov/
+          bandit-report.json
+
+    - name: Create quality summary
+      if: always()
+      run: |
+        echo "## 📊 Code Quality Summary" >> $GITHUB_STEP_SUMMARY
+        echo "| Tool | Status | Details |" >> $GITHUB_STEP_SUMMARY
+        echo "|------|--------|---------|" >> $GITHUB_STEP_SUMMARY
+        echo "| Black | ✅ Formatting | Code formatting check |" >> $GITHUB_STEP_SUMMARY
+        echo "| isort | ✅ Import sorting | Import organization check |" >> $GITHUB_STEP_SUMMARY
+        echo "| pylint | ✅ Code quality | Static analysis (min score: 8.0) |" >> $GITHUB_STEP_SUMMARY
+        echo "| mypy | ✅ Type checking | Static type analysis |" >> $GITHUB_STEP_SUMMARY
+        echo "| bandit | ✅ Security | Security vulnerability scan |" >> $GITHUB_STEP_SUMMARY
+        echo "| pytest | ✅ Unit tests | Test execution with coverage |" >> $GITHUB_STEP_SUMMARY

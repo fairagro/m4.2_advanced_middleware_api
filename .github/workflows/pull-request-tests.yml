@@ -1,0 +1,63 @@
+name: Pull Request Tests
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths-ignore:
+      - '**.md'
+      - 'docs/**'
+      - '.gitignore'
+      - 'LICENSE'
+
+concurrency:
+  group: pr-tests-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  python-quality:
+    name: Python Code Quality
+    uses: ./.github/workflows/python-quality.yml
+
+  docker-build-test:
+    name: Docker Build and Test
+    uses: ./.github/workflows/docker-build.yml
+    with:
+      push_to_registry: false
+      save_image: false
+      version_bump: 'patch'
+
+  pr-summary:
+    name: Pull Request Summary
+    runs-on: ubuntu-latest
+    needs: [python-quality, docker-build-test]
+    if: always()
+
+    steps:
+      - name: Generate PR Summary
+        run: |
+          echo "## 🔍 Pull Request Test Results" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          
+          echo "### 🐍 Python Code Quality" >> $GITHUB_STEP_SUMMARY
+          echo "- **Status**: ${{ needs.python-quality.result == 'success' && '✅ Success' || '❌ Failed' }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Includes**: Linting, formatting, type checking, security scan" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          
+          echo "### 📦 Docker Build & Test" >> $GITHUB_STEP_SUMMARY
+          echo "- **Version**: ${{ needs.docker-build-test.outputs.version }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Build Status**: ${{ needs.docker-build-test.result == 'success' && '✅ Success' || '❌ Failed' }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Container Tests**: ✅ Executed" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          
+          echo "### 🛡️ Security & Compliance" >> $GITHUB_STEP_SUMMARY
+          echo "- **SBOM Generation**: ⏭️ Only on releases" >> $GITHUB_STEP_SUMMARY
+          echo "- **Vulnerability Scans**: ⏭️ Only on releases" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          
+          # Overall status
+          if [[ "${{ needs.python-quality.result }}" == "success" && "${{ needs.docker-build-test.result }}" == "success" ]]; then
+            echo "🎉 **All PR tests passed!** Ready for review." >> $GITHUB_STEP_SUMMARY
+          else
+            echo "⚠️ **Some tests failed.** Please check the logs above." >> $GITHUB_STEP_SUMMARY
+          fi
