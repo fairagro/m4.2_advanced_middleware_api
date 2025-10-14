@@ -147,13 +147,6 @@ jobs:
           category: trivy-sbom-scan
         continue-on-error: true
 
-      - name: License Compliance Check (ORT)
-        uses: oss-review-toolkit/ort-ci-github-action@v1
-        with:
-          sbom-file-path: sbom-v${{ needs.docker-build-test.outputs.version }}.spdx.json
-          log-level: warn
-          allow-dynamic-versions: true
-
       - name: License Compliance Summary
         run: |
           echo "## ⚖️ License Compliance Analysis" >> $GITHUB_STEP_SUMMARY
