@@ -3,18 +3,18 @@ FROM python:3.12.11-alpine3.22 AS builder
 
 # Installiere Build-Tools für native Builds
 RUN apk add --no-cache \
-    build-base=0.5-r3 \
-    python3-dev=3.12.11-r0 \
-    libffi-dev=3.4.8-r0 \
-    openssl-dev=3.5.2-r0 \
-    cargo=1.87.0-r0
+    build-base \
+    python3-dev \
+    libffi-dev \
+    openssl-dev \
+    cargo
 
 WORKDIR /middleware_api
 
 COPY . /middleware_api
 
 # Upgrade pip und installiere Abhängigkeiten
-RUN pip install --no-cache-dir --upgrade pip==25.2 uv==0.8.17 \
+RUN pip install --no-cache-dir --upgrade pip==25.2 uv==0.9.2 \
     && uv sync --no-dev \
     && uv pip install pyinstaller \
     && . /middleware_api/.venv/bin/activate \
@@ -35,7 +35,7 @@ COPY --from=builder /middleware_api/dist/middleware_api .
 COPY config.yaml $MIDDLEWARE_API_CONFIG
 
 # Create non-root user and group and fix permissions
-RUN apk add --no-cache curl=8.14.1-r1 \
+RUN apk add --no-cache curl \
     && addgroup -S middleware && adduser -S middleware -G middleware \
     && chown -R middleware:middleware /middleware_api
 
