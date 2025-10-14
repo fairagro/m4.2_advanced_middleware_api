@@ -3,10 +3,10 @@
 import cProfile
 import pstats
 
-from arctrl import ARC
+from arctrl import ARC  # type: ignore[import-untyped]
 
 
-def rocrate_json_to_arc(rocrate_input_path: str, arc_path: str):
+def rocrate_json_to_arc(rocrate_input_path: str, arc_path: str) -> None:
     """Convert a RO-Crate JSON file to ARC format and save to a file."""
     with open(rocrate_input_path, encoding="utf-8") as f:
         rocrate_json = f.read()

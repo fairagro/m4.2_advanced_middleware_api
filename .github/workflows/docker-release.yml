@@ -46,11 +46,11 @@ jobs:
     needs: docker-build-test
     runs-on: ubuntu-latest
     if: needs.docker-build-test.result == 'success'
-    
+
     permissions:
       contents: read
       security-events: write  # Required for SARIF upload
-      
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -72,20 +72,20 @@ jobs:
           output-file: sbom-v${{ needs.docker-build-test.outputs.version }}.spdx.json
           format: spdx-json
           artifact-name: sbom-v${{ needs.docker-build-test.outputs.version }}.spdx.json
-          
+
       - name: Analyze SBOM completeness
         run: |
           echo "## 📋 SBOM Analysis for Python/uv Application" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          
+
           # Count packages in SBOM
           SBOM_FILE="sbom-v${{ needs.docker-build-test.outputs.version }}.spdx.json"
           SPDX_PACKAGES=$(jq '.packages | length' "$SBOM_FILE" 2>/dev/null || echo "0")
-          
+
           echo "### 📊 Package Count" >> $GITHUB_STEP_SUMMARY
           echo "- **SPDX SBOM**: $SPDX_PACKAGES packages detected" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          
+
           # Analyze package types specifically for Python
           if [[ -f "$SBOM_FILE" ]]; then
             echo "### 🐍 Python Production Dependencies" >> $GITHUB_STEP_SUMMARY
@@ -94,7 +94,7 @@ jobs:
             jq -r '.packages[] | select(.name != null and (.name | test("python|py|flask|werkzeug|jinja|click"; "i"))) | "\(.name) (\(.versionInfo // "unknown"))"' "$SBOM_FILE" | head -15 >> $GITHUB_STEP_SUMMARY
             echo '```' >> $GITHUB_STEP_SUMMARY
             echo "" >> $GITHUB_STEP_SUMMARY
-            
+
             echo "### 📦 System Packages (Debian/APT)" >> $GITHUB_STEP_SUMMARY
             echo '```' >> $GITHUB_STEP_SUMMARY
             jq -r '.packages[] | select(.name != null and (.name | test("lib|curl|apt|deb"; "i"))) | "\(.name) (\(.versionInfo // "unknown"))"' "$SBOM_FILE" | head -10 >> $GITHUB_STEP_SUMMARY
@@ -142,25 +142,25 @@ jobs:
           sbom-file-path: sbom-v${{ needs.docker-build-test.outputs.version }}.spdx.json
           log-level: warn
           allow-dynamic-versions: true
-          
-      - name: License Compliance Summary  
+
+      - name: License Compliance Summary
         run: |
           echo "## ⚖️ License Compliance Analysis" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "**Your Project License**: MIT (very permissive)" >> $GITHUB_STEP_SUMMARY
           echo "**Compatibility Strategy**: MIT allows mixing with most licenses" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          
+
           # Quick license summary from SBOM
           echo "### 📊 Detected Licenses in Dependencies" >> $GITHUB_STEP_SUMMARY
           echo '```' >> $GITHUB_STEP_SUMMARY
           jq -r '.packages[] | select(.licenseConcluded != null and .licenseConcluded != "NOASSERTION" and .licenseConcluded != "") | .licenseConcluded' "sbom-v${{ needs.docker-build-test.outputs.version }}.spdx.json" | sort | uniq -c | sort -nr >> $GITHUB_STEP_SUMMARY
           echo '```' >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          
+
           # Check for copyleft licenses that might require attention
           COPYLEFT=$(jq -r '.packages[] | select(.licenseConcluded != null and (.licenseConcluded | test("GPL|LGPL|AGPL|CDDL|EPL|MPL"; "i"))) | "\(.name): \(.licenseConcluded)"' "sbom-v${{ needs.docker-build-test.outputs.version }}.spdx.json")
-          
+
           if [[ -n "$COPYLEFT" && "$COPYLEFT" != "" ]]; then
             echo "⚠️ **Copyleft Licenses Detected** (review recommended):" >> $GITHUB_STEP_SUMMARY
             echo '```' >> $GITHUB_STEP_SUMMARY
@@ -170,32 +170,32 @@ jobs:
           else
             echo "✅ **No problematic copyleft licenses detected**" >> $GITHUB_STEP_SUMMARY
           fi
-          
+
           # Count non-standard licenses (LicenseRef-*)
           LICENSEREF_COUNT=$(jq -r '.packages[] | select(.licenseConcluded != null and (.licenseConcluded | startswith("LicenseRef-"))) | .licenseConcluded' "sbom-v${{ needs.docker-build-test.outputs.version }}.spdx.json" | wc -l)
           if [[ "$LICENSEREF_COUNT" -gt 0 ]]; then
             echo "" >> $GITHUB_STEP_SUMMARY
             echo "📄 **Non-standard licenses**: $LICENSEREF_COUNT (typically system libraries - usually safe)" >> $GITHUB_STEP_SUMMARY
           fi
-          
+
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "### 📋 MIT License Compatibility Reference" >> $GITHUB_STEP_SUMMARY
           echo "**Note**: This is a general reference - actual issues are reported above if found." >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "- **✅ Always Compatible**: Apache-2.0, BSD variants, ISC, CC0-1.0" >> $GITHUB_STEP_SUMMARY
-          echo "- **⚠️ Would Need Review**: GPL variants, LGPL, AGPL, CDDL, EPL, MPL" >> $GITHUB_STEP_SUMMARY  
+          echo "- **⚠️ Would Need Review**: GPL variants, LGPL, AGPL, CDDL, EPL, MPL" >> $GITHUB_STEP_SUMMARY
           echo "- **✅ System Libraries**: LicenseRef-* (Debian packages - safe for distribution)" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "💡 **MIT allows almost everything** - you can include dependencies with any license in binary distributions" >> $GITHUB_STEP_SUMMARY
 
-          echo "## 🛡️ Security Scan Results" >> $GITHUB_STEP_SUMMARY
+      - name: Security Scan Summary
         run: |
           echo "## 🔒 Security Scan Results" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "**Scanning Strategy**: Using Trivy for comprehensive vulnerability detection" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          
-          # Parse Trivy Image results (Image-based)  
+
+          # Parse Trivy Image results (Image-based)
           echo "### 🐳 Trivy Image Scan" >> $GITHUB_STEP_SUMMARY
           if [[ -f "trivy-image-results.sarif" ]]; then
             TRIVY_IMAGE_RESULTS=$(jq '.runs[0].results | length' trivy-image-results.sarif 2>/dev/null || echo "0")
@@ -207,7 +207,7 @@ jobs:
             echo "- ❌ No Trivy Image results available" >> $GITHUB_STEP_SUMMARY
           fi
           echo "" >> $GITHUB_STEP_SUMMARY
-          
+
           # Parse Trivy SBOM results (SBOM-based)
           echo "### 📋 Trivy SBOM Scan" >> $GITHUB_STEP_SUMMARY
           if [[ -f "trivy-sbom-results.sarif" ]]; then
@@ -220,15 +220,15 @@ jobs:
             echo "- ❌ No Trivy SBOM results available" >> $GITHUB_STEP_SUMMARY
           fi
           echo "" >> $GITHUB_STEP_SUMMARY
-          
+
           echo "### 🔍 Trivy Scan Comparison" >> $GITHUB_STEP_SUMMARY
           if [[ -f "trivy-image-results.sarif" && -f "trivy-sbom-results.sarif" ]]; then
             IMAGE_FINDINGS=$(jq '.runs[0].results | length' trivy-image-results.sarif 2>/dev/null || echo "0")
             SBOM_FINDINGS=$(jq '.runs[0].results | length' trivy-sbom-results.sarif 2>/dev/null || echo "0")
-            
+
             echo "- **Image Scan**: $IMAGE_FINDINGS findings" >> $GITHUB_STEP_SUMMARY
             echo "- **SBOM Scan**: $SBOM_FINDINGS findings" >> $GITHUB_STEP_SUMMARY
-            
+
             if [[ "$IMAGE_FINDINGS" -eq "$SBOM_FINDINGS" ]]; then
               echo "- **Result**: ✅ Both scans found identical number of issues" >> $GITHUB_STEP_SUMMARY
             elif [[ "$IMAGE_FINDINGS" -gt "$SBOM_FINDINGS" ]]; then
@@ -238,7 +238,7 @@ jobs:
               DIFF=$((SBOM_FINDINGS - IMAGE_FINDINGS))
               echo "- **Result**: 📋 SBOM scan found $DIFF additional issues (dependency-focused analysis)" >> $GITHUB_STEP_SUMMARY
             fi
-            
+
             # Compare CVE overlaps if both have results
             if [[ "$IMAGE_FINDINGS" -gt 0 && "$SBOM_FINDINGS" -gt 0 ]]; then
               echo "- **Analysis**: Both scanning methods complement each other" >> $GITHUB_STEP_SUMMARY
@@ -247,7 +247,7 @@ jobs:
             echo "- **Result**: ⚠️ Cannot compare - one or both scan results missing" >> $GITHUB_STEP_SUMMARY
           fi
           echo "### 📋 Scan Results Available In:" >> $GITHUB_STEP_SUMMARY
-          
+
           echo "- **GitHub Security Tab**: SARIF results for both scan types" >> $GITHUB_STEP_SUMMARY
           echo "- **Artifacts**: Full SARIF reports attached to workflow run" >> $GITHUB_STEP_SUMMARY
 

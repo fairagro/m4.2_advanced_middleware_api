@@ -1,6 +1,9 @@
 """Unit tests for the FastAPI middleware API endpoints."""
 
+from typing import Any
+
 import pytest
+from fastapi.testclient import TestClient
 
 from middleware_api.api import Api
 from middleware_api.business_logic import (
@@ -12,7 +15,7 @@ from middleware_api.business_logic import (
 class DummyArc:  # pylint: disable=too-few-public-methods
     """Helper object that mimics an ArcResponse model."""
 
-    def __init__(self, data: dict):
+    def __init__(self, data: dict[str, Any]) -> None:
         """Initialize the DummyArc with data from a dictionary."""
         self.__dict__.update(data)
 
@@ -20,7 +23,7 @@ class DummyArc:  # pylint: disable=too-few-public-methods
 class DummyResponse:  # pylint: disable=too-few-public-methods
     """Helper object that mimics a BusinessLogicResponse model."""
 
-    def __init__(self, payload: dict):
+    def __init__(self, payload: dict[str, Any]) -> None:
         """Initialize the DummyResponse with data from a dictionary."""
         self._payload = payload
         self.client_id = payload.get("client_id")
@@ -33,7 +36,7 @@ class DummyResponse:  # pylint: disable=too-few-public-methods
         return self._payload
 
 
-def override_service(api: Api, obj):
+def override_service(api: Api, obj: Any) -> None:
     """Helfer zum Überschreiben der get_service-Dependency."""
     api.app.dependency_overrides[api.get_service] = lambda: obj
 
@@ -43,13 +46,13 @@ def override_service(api: Api, obj):
 # -------------------------------------------------------------------
 
 
-def test_whoami_success(client, middleware_api, cert):
+def test_whoami_success(client: TestClient, middleware_api: Api, cert: str) -> None:
     """Test the /v1/whoami endpoint with a valid certificate and accept header."""
 
     class Svc:  # pylint: disable=too-few-public-methods
         """Service that always returns a successful response."""
 
-        async def whoami(self, client_id):
+        async def whoami(self, client_id: str) -> DummyResponse:
             """Mock whoami method."""
             return DummyResponse({"client_id": client_id, "message": "ok"})
 
@@ -65,7 +68,7 @@ def test_whoami_success(client, middleware_api, cert):
     assert body["message"] == "ok"  # nosec
 
 
-def test_whoami_invalid_accept(client, cert):
+def test_whoami_invalid_accept(client: TestClient, cert: str) -> None:
     """Test the /v1/whoami endpoint with an invalid accept header."""
     r = client.get(
         "/v1/whoami",
@@ -74,7 +77,7 @@ def test_whoami_invalid_accept(client, cert):
     assert r.status_code == 406  # nosec
 
 
-def test_whoami_no_cert(client):
+def test_whoami_no_cert(client: TestClient) -> None:
     """Test the /v1/whoami endpoint without a client certificate."""
     r = client.get(
         "/v1/whoami",
@@ -83,7 +86,7 @@ def test_whoami_no_cert(client):
     assert r.status_code == 401  # nosec
 
 
-def test_whoami_invalid_cert(client):
+def test_whoami_invalid_cert(client: TestClient) -> None:
     """Test the /v1/whoami endpoint with an invalid client certificate."""
     r = client.get(
         "/v1/whoami",
@@ -97,13 +100,13 @@ def test_whoami_invalid_cert(client):
 # -------------------------------------------------------------------
 
 
-def test_create_or_update_arcs_created(client, middleware_api, cert):
+def test_create_or_update_arcs_created(client: TestClient, middleware_api: Api, cert: str) -> None:
     """Test creating a new ARC via the /v1/arcs endpoint."""
 
     class SvcOK:  # pylint: disable=too-few-public-methods
         """Service that always returns a created ARC."""
 
-        async def create_or_update_arcs(self, _data, client_id):
+        async def create_or_update_arcs(self, _data: str, client_id: str) -> DummyResponse:
             """Mock create_or_update_arcs method."""
             return DummyResponse(
                 {
@@ -139,13 +142,13 @@ def test_create_or_update_arcs_created(client, middleware_api, cert):
     assert r.headers.get("Location", "") != ""  # nosec
 
 
-def test_create_or_update_arcs_updated(client, middleware_api, cert):
+def test_create_or_update_arcs_updated(client: TestClient, middleware_api: Api, cert: str) -> None:
     """Test updating an existing ARC via the /v1/arcs endpoint."""
 
     class SvcOK:  # pylint: disable=too-few-public-methods
         """Service that always returns an updated ARC."""
 
-        async def create_or_update_arcs(self, _data, client_id):
+        async def create_or_update_arcs(self, _data: Any, client_id: str) -> DummyResponse:
             """Mock create_or_update_arcs method."""
             return DummyResponse(
                 {
@@ -185,14 +188,14 @@ def test_create_or_update_arcs_updated(client, middleware_api, cert):
     ],
 )
 def test_create_or_update_arcs_invalid_json(
-    client, middleware_api, cert, exc, expected
-):
+    client: TestClient, middleware_api: Api, cert: str, exc: Exception, expected: int
+) -> None:
     """Test error handling in the /v1/arcs endpoint."""
 
     class SvcFail:  # pylint: disable=too-few-public-methods
         """Service that always raises an exception."""
 
-        async def create_or_update_arcs(self, _data, _client_id):
+        async def create_or_update_arcs(self, _data: Any, _client_id: str) -> None:
             """Mock create_or_update_arcs method that raises an exception."""
             raise exc
 
@@ -210,7 +213,7 @@ def test_create_or_update_arcs_invalid_json(
     assert r.status_code == expected  # nosec
 
 
-def test_create_or_update_arcs_invalid_accept(client, cert):
+def test_create_or_update_arcs_invalid_accept(client: TestClient, cert: str) -> None:
     """Test the /v1/arcs endpoint with an invalid accept header."""
     r = client.post(
         "/v1/arcs",
@@ -224,7 +227,7 @@ def test_create_or_update_arcs_invalid_accept(client, cert):
     assert r.status_code == 406  # nosec
 
 
-def test_create_or_update_arcs_no_cert(client):
+def test_create_or_update_arcs_no_cert(client: TestClient) -> None:
     """Test the /v1/arcs endpoint without a client certificate."""
     r = client.post(
         "/v1/arcs",
@@ -237,7 +240,7 @@ def test_create_or_update_arcs_no_cert(client):
     assert r.status_code == 401  # nosec
 
 
-def test_create_or_update_arcs_invalid_cert(client):
+def test_create_or_update_arcs_invalid_cert(client: TestClient) -> None:
     """Test the /v1/arcs endpoint with an invalid client certificate."""
     r = client.post(
         "/v1/arcs",

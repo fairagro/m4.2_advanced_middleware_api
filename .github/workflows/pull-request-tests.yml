@@ -40,23 +40,23 @@ jobs:
         run: |
           echo "## 🔍 Pull Request Test Results" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          
+
           echo "### 🐍 Python Code Quality" >> $GITHUB_STEP_SUMMARY
           echo "- **Status**: ${{ needs.python-quality.result == 'success' && '✅ Success' || '❌ Failed' }}" >> $GITHUB_STEP_SUMMARY
           echo "- **Includes**: Linting, formatting, type checking, security scan" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          
+
           echo "### 📦 Docker Build & Test" >> $GITHUB_STEP_SUMMARY
           echo "- **Version**: ${{ needs.docker-build-test.outputs.version }}" >> $GITHUB_STEP_SUMMARY
           echo "- **Build Status**: ${{ needs.docker-build-test.result == 'success' && '✅ Success' || '❌ Failed' }}" >> $GITHUB_STEP_SUMMARY
           echo "- **Container Tests**: ✅ Executed" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          
+
           echo "### 🛡️ Security & Compliance" >> $GITHUB_STEP_SUMMARY
           echo "- **SBOM Generation**: ⏭️ Only on releases" >> $GITHUB_STEP_SUMMARY
           echo "- **Vulnerability Scans**: ⏭️ Only on releases" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          
+
           # Overall status
           if [[ "${{ needs.python-quality.result }}" == "success" && "${{ needs.docker-build-test.result }}" == "success" ]]; then
             echo "🎉 **All PR tests passed!** Ready for review." >> $GITHUB_STEP_SUMMARY

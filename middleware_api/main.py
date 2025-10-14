@@ -7,7 +7,7 @@ import uvicorn
 from middleware_api.api import middleware_api
 
 
-def main():
+def main() -> None:
     """Call uvicorn.main() to pass control to uvicorn.
 
     We wan't uvicorn to evaluate all command line parameters, so we do not

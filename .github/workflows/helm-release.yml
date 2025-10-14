@@ -150,7 +150,7 @@ jobs:
             helm upgrade --install fairagro-middleware ./helm \
               --set image.repository=${{ env.DOCKERHUB_NAMESPACE }}/${{ env.IMAGE_NAME }}
             ```
-            
+
             *(App version and image tag are defined in the Helm chart's Chart.yaml and values.yaml)*
           files: ${{ steps.package_chart.outputs.chart-package }}
           draft: true

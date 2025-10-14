@@ -91,7 +91,10 @@
 		"vscode": {
 			// Add the IDs of extensions you want installed when the container is created.
 			"extensions": [
-				"signageos.signageos-vscode-sops",
+				"jeff-hykin.better-dockerfile-syntax",
+				"ms-azuretools.vscode-docker",
+				"formulahendry.docker-explorer",
+				"shipitsmarter.sops-edit",
 				"davidanson.vscode-markdownlint",
 				"samuelcolvin.jinjahtml",
 				"tamasfe.even-better-toml",
@@ -105,10 +108,14 @@
 				"donjayamanne.githistory",
 				"codezombiech.gitignore",
 				"github.copilot",
-				"github.copilot-chat"
+				"github.copilot-chat",
+				"matangover.mypy"
 			]
 		}
 	},
+
+	// Load encrypted environment variables automatically (with error tolerance)
+	"postStartCommand": "./scripts/load-env.sh || echo 'Secrets loading failed, but container started successfully'",
 
 	// Uncomment to connect as root instead. More info: https://aka.ms/dev-containers-non-root.
 	"remoteUser": "vscode"

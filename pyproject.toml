@@ -25,6 +25,9 @@ dev = [
   "isort>=5.13.0",
   "mypy>=1.11.0",
   "bandit>=1.7.0",
+  "types-pyyaml>=6.0.12.20250915",
+  "pre-commit>=4.0.0",
+  "pytest-env>=1.2.0",
 ]
 
 [tool.ruff]
@@ -33,6 +36,7 @@ lint.select = [
   "E",   # pycodestyle errors
   "W",   # pycodestyle warnings
   "F",   # pyflakes
+  "I",   # isort (import sorting)
   "C90", # mccabe (Komplexität)
   "N",   # pep8-naming
   "D",   # pydocstyle (Docstrings)
@@ -50,37 +54,24 @@ lint.ignore = [
 # Maximale Zeilenlänge wie in pylint (Standard: 100)
 line-length = 120
 
+# Formatierungs-Einstellungen (konsistent mit Black)
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+skip-magic-trailing-comma = false
+line-ending = "auto"
+
 # Für cyclomatic complexity, entspricht pylint's R1260 etc.
 [tool.ruff.lint.mccabe]
 max-complexity = 10
 
-[tool.black]
-line-length = 120
-target-version = ['py312']
-include = '\.pyi?$'
-extend-exclude = '''
-/(
-  # directories
-  \.eggs
-  | \.git
-  | \.hg
-  | \.mypy_cache
-  | \.tox
-  | \.venv
-  | build
-  | dist
-)/
-'''
+# Import sorting (replaces isort)
+[tool.ruff.lint.isort]
+known-first-party = ["middleware_api"]
+force-single-line = false
+combine-as-imports = true
 
-[tool.isort]
-profile = "black"
-multi_line_output = 3
-include_trailing_comma = true
-force_grid_wrap = 0
-use_parentheses = true
-ensure_newline_before_comments = true
-line_length = 120
-known_first_party = ["middleware_api"]
+# Black and isort replaced by ruff format - configurations removed to avoid conflicts
 
 [tool.mypy]
 python_version = "3.12"
@@ -96,3 +87,12 @@ skips = ["B101"]  # Skip assert_used. Do not skip shell injection (B601) to ensu
 # Docstring-Regeln aktivieren, damit es wie pylint C0114/15/16 meckert
 [tool.ruff.lint.pydocstyle]
 convention = "pep257" # oder "numpy", oder "google"
+
+[tool.pylint.format]
+max-line-length = 120
+
+[tool.pylint.messages_control]
+disable = [
+    "C0114",  # missing-module-docstring - bereits durch ruff D100 abgedeckt
+    "too-few-public-methods",  # oft bei Test-Klassen nicht relevant
+]

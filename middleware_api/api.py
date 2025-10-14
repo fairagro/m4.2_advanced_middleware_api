@@ -34,7 +34,7 @@ class Api:
     SUPPORTED_CONTENT_TYPE = "application/ro-crate+json"
     SUPPORTED_ACCEPT_TYPE = "application/json"
 
-    def __init__(self, config: Config | None = None):
+    def __init__(self, config: Config | None = None) -> None:
         """Initialize the API with optional configuration.
 
         Args:
@@ -84,61 +84,37 @@ class Api:
         try:
             pem = client_cert.replace("\\n", "\n")
             cert_obj = x509.load_pem_x509_certificate(pem.encode(), default_backend())
-            value = cert_obj.subject.get_attributes_for_oid(x509.NameOID.COMMON_NAME)[
-                0
-            ].value
-            return (
-                bytes(value).decode()
-                if isinstance(value, bytes | bytearray | memoryview)
-                else str(value)
-            )
+            value = cert_obj.subject.get_attributes_for_oid(x509.NameOID.COMMON_NAME)[0].value
+            return bytes(value).decode() if isinstance(value, bytes | bytearray | memoryview) else str(value)
         except ValueError as e:
-            raise HTTPException(
-                status_code=400, detail=f"Invalid certificate format: {str(e)}"
-            ) from e
+            raise HTTPException(status_code=400, detail=f"Invalid certificate format: {str(e)}") from e
         except Exception as e:
-            raise HTTPException(
-                status_code=400, detail=f"Certificate parsing error: {str(e)}"
-            ) from e
+            raise HTTPException(status_code=400, detail=f"Certificate parsing error: {str(e)}") from e
 
     def _validate_content_type(self, headers: Headers) -> None:
         content_type = headers.get("content-type")
         if not content_type:
-            msg = (
-                f"Content-Type header is missing. "
-                f"Expected '{self.SUPPORTED_CONTENT_TYPE}'."
-            )
+            msg = f"Content-Type header is missing. " f"Expected '{self.SUPPORTED_CONTENT_TYPE}'."
             raise HTTPException(status_code=415, detail=msg)
         if content_type != self.SUPPORTED_CONTENT_TYPE:
-            msg = (
-                f"Unsupported Media Type. "
-                f"Supported types: '{self.SUPPORTED_CONTENT_TYPE}'."
-            )
+            msg = f"Unsupported Media Type. " f"Supported types: '{self.SUPPORTED_CONTENT_TYPE}'."
             raise HTTPException(status_code=415, detail=msg)
 
     def _validate_accept_type(self, headers: Headers) -> None:
         accept = headers.get("accept")
         if accept not in [self.SUPPORTED_ACCEPT_TYPE, "*/*"]:
-            msg = (
-                f"Unsupported Response Type. "
-                f"Supported types: '{self.SUPPORTED_ACCEPT_TYPE}'."
-            )
+            msg = f"Unsupported Response Type. " f"Supported types: '{self.SUPPORTED_ACCEPT_TYPE}'."
             raise HTTPException(status_code=406, detail=msg)
 
-    def _setup_exception_handlers(self):
-
+    def _setup_exception_handlers(self) -> None:
         @self._app.exception_handler(Exception)
-        async def unhandled_exception_handler(_request: Request, _exc: Exception):
+        async def unhandled_exception_handler(_request: Request, _exc: Exception) -> JSONResponse:
             return JSONResponse(
                 status_code=500,
-                content={
-                    "detail": "Internal Server Error. "
-                    "Please contact support if the problem persists."
-                },
+                content={"detail": "Internal Server Error. " "Please contact support if the problem persists."},
             )
 
-    def _setup_routes(self):
-
+    def _setup_routes(self) -> None:
         @self._app.get("/v1/whoami")
         async def whoami(
             request: Request,
@@ -168,9 +144,7 @@ class Api:
                 location = f"/v1/arcs/{result.arcs[0].id}" if result.arcs else ""
                 return JSONResponse(
                     content=result.model_dump(),
-                    status_code=(
-                        201 if any(a.status == "created" for a in result.arcs) else 200
-                    ),
+                    status_code=(201 if any(a.status == "created" for a in result.arcs) else 200),
                     headers={"Location": location},
                 )
             except InvalidJsonSyntaxError as e:
