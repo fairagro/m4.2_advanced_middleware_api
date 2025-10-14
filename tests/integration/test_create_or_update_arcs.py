@@ -2,6 +2,7 @@
 
 import json
 from pathlib import Path
+from typing import Any
 
 import pytest
 from fastapi.testclient import TestClient
@@ -17,8 +18,8 @@ from gitlab import Gitlab
     ],
 )
 async def test_create_arcs(
-    client: TestClient, cert: str, gitlab_api: Gitlab, config: dict, json_info: dict
-):
+    client: TestClient, cert: str, gitlab_api: Gitlab, config: dict[str, Any], json_info: dict[str, Any]
+) -> None:
     """Test creating ARCs via the /v1/arcs endpoint."""
     cert_with_linebreaks = cert.replace("\\n", "\n")
 
@@ -26,9 +27,7 @@ async def test_create_arcs(
         "X-Client-Cert": cert_with_linebreaks,
         "content-type": "application/ro-crate+json",
     }
-    arc_json_path = (
-        Path(__file__).parent.parent.parent / "ro_crates" / json_info["file_name"]
-    )
+    arc_json_path = Path(__file__).parent.parent.parent / "ro_crates" / json_info["file_name"]
     with arc_json_path.open("r", encoding="utf-8") as f:
         body = [json.load(f)]
 

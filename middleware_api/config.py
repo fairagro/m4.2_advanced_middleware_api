@@ -2,7 +2,7 @@
 
 import os
 from pathlib import Path
-from typing import Annotated
+from typing import Annotated, Self, cast
 
 from pydantic import BaseModel, Field
 
@@ -16,28 +16,29 @@ class Config(BaseModel):
     gitlab_api: Annotated[GitlabApiConfig, Field(description="Gitlab API config")]
 
     @classmethod
-    def from_config_wrapper(cls, wrapper: ConfigWrapper) -> "Config":
+    def from_config_wrapper(cls, wrapper: ConfigWrapper) -> Self:
         """Create Config from ConfigWrapper.
 
         Args:
             wrapper (ConfigWrapper): Wrapped configuration data.
 
         Returns:
-            Config: Configuration instance.
+            Self: Configuration instance.
 
         """
         unwrapped = wrapper.unwrap()
-        return cls.model_validate(unwrapped)
+        # Cast to satisfy MyPy's warn_return_any=true setting
+        return cast(Self, cls.model_validate(unwrapped))
 
     @classmethod
-    def from_data(cls, data: dict) -> "Config":
+    def from_data(cls, data: dict) -> Self:
         """Create Config from raw data dictionary.
 
         Args:
             data (dict): Raw configuration data.
 
         Returns:
-            Config: Configuration instance.
+            Self: Configuration instance.
 
         """
         wrapper = ConfigWrapper.from_data(data)

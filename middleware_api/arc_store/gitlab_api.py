@@ -6,11 +6,12 @@ import hashlib
 import logging
 import tempfile
 from pathlib import Path
-from typing import Annotated
+from typing import Annotated, Any
 
 import gitlab
-from arctrl import ARC
+from arctrl import ARC  # type: ignore[import-untyped]
 from gitlab.exceptions import GitlabGetError
+from gitlab.v4.objects import Project, ProjectFile
 from pydantic import BaseModel, Field, HttpUrl, field_validator
 
 from . import ArcStore
@@ -21,9 +22,7 @@ logger = logging.getLogger(__name__)
 class GitlabApiConfig(BaseModel):
     """Configuration for Gitlab API ArcStore."""
 
-    url: Annotated[
-        HttpUrl, Field(description="URL of the gitlab server to store ARCs in")
-    ]
+    url: Annotated[HttpUrl, Field(description="URL of the gitlab server to store ARCs in")]
     group: Annotated[
         str,
         Field(
@@ -31,9 +30,7 @@ class GitlabApiConfig(BaseModel):
             min_length=1,  # may not be empty
         ),
     ]
-    branch: Annotated[
-        str, Field(description="The git branch to use for ARC repos", default="main")
-    ]
+    branch: Annotated[str, Field(description="The git branch to use for ARC repos", default="main")]
     token: Annotated[
         str,
         Field(description="A gitlab token with CRUD permissions to the gitlab group"),
@@ -59,7 +56,7 @@ class GitlabApiConfig(BaseModel):
 class GitlabApi(ArcStore):
     """Implements an ArcStore using Gitlab API as backend."""
 
-    def __init__(self, config: GitlabApiConfig):
+    def __init__(self, config: GitlabApiConfig) -> None:
         """Konstruktor.
 
         Args:
@@ -68,12 +65,10 @@ class GitlabApi(ArcStore):
         """
         logger.info("Initializing ARCPersistenceGitlabAPI")
         self._config = config
-        self._gitlab = gitlab.Gitlab(
-            str(self._config.url), private_token=self._config.token
-        )
+        self._gitlab = gitlab.Gitlab(str(self._config.url), private_token=self._config.token)
 
     # -------------------------- Project Handling --------------------------
-    def _get_or_create_project(self, arc_id: str):
+    def _get_or_create_project(self, arc_id: str) -> Project:
         projects = self._gitlab.projects.list(search=arc_id)
         for project in projects:
             if project.path == arc_id:
@@ -88,7 +83,7 @@ class GitlabApi(ArcStore):
             }
         )
 
-    def _find_project(self, arc_id: str):
+    def _find_project(self, arc_id: str) -> Project | None:
         projects = self._gitlab.projects.list(search=arc_id)
         return next((p for p in projects if p.path == arc_id), None)
 
@@ -102,44 +97,34 @@ class GitlabApi(ArcStore):
                         sha.update(chunk)
         return sha.hexdigest()
 
-    def _load_old_hash(self, project) -> str | None:
+    def _load_old_hash(self, project: Project) -> str | None:
         try:
-            old_hash_file = project.files.get(
-                file_path=".arc_hash", ref=self._config.branch
-            )
+            old_hash_file = project.files.get(file_path=".arc_hash", ref=self._config.branch)
             return base64.b64decode(old_hash_file.content).decode("utf-8").strip()
         except GitlabGetError:
             return None
 
     # -------------------------- File Actions --------------------------
-    def _prepare_file_actions(
-        self, project, arc_path: Path, old_hash: str | None
-    ) -> list:
+    def _prepare_file_actions(self, project: Project, arc_path: Path, old_hash: str | None) -> list[dict[str, Any]]:
         actions = []
         for file_path in arc_path.rglob("*"):
             if not file_path.is_file():
                 continue
             relative_path = str(file_path.relative_to(arc_path))
-            action_type = (
-                "update" if self._file_exists(project, relative_path) else "create"
-            )
-            actions.append(
-                self._build_file_action(file_path, relative_path, action_type)
-            )
+            action_type = "update" if self._file_exists(project, relative_path) else "create"
+            actions.append(self._build_file_action(file_path, relative_path, action_type))
         # ARC hash action separat hinzufügen
         actions.append(self._build_hash_action(old_hash, arc_path))
         return actions
 
-    def _file_exists(self, project, file_path: str) -> bool:
+    def _file_exists(self, project: Project, file_path: str) -> bool:
         try:
             project.files.get(file_path=file_path, ref=self._config.branch)
             return True
         except GitlabGetError:
             return False
 
-    def _build_file_action(
-        self, file_path: Path, relative_path: str, action_type: str
-    ) -> dict:
+    def _build_file_action(self, file_path: Path, relative_path: str, action_type: str) -> dict[str, Any]:
         """Erstellt ein Action-Dict für eine Datei (Text oder Binär)."""
         content_bytes = file_path.read_bytes()
         if self._is_text_file(content_bytes):
@@ -163,7 +148,7 @@ class GitlabApi(ArcStore):
         except UnicodeDecodeError:
             return False
 
-    def _build_hash_action(self, old_hash: str | None, arc_path: Path) -> dict:
+    def _build_hash_action(self, old_hash: str | None, arc_path: Path) -> dict[str, Any]:
         """Erstellt die Commit-Action für die .arc_hash Datei."""
         return {
             "action": "create" if not old_hash else "update",
@@ -172,7 +157,7 @@ class GitlabApi(ArcStore):
         }
 
     # -------------------------- Commit --------------------------
-    def _commit_actions(self, project, actions, arc_id: str):
+    def _commit_actions(self, project: Project, actions: list[dict[str, Any]], arc_id: str) -> None:
         commit_data = {
             "branch": self._config.branch,
             "commit_message": f"Add/update ARC {arc_id}",
@@ -181,7 +166,7 @@ class GitlabApi(ArcStore):
         project.commits.create(commit_data)
 
     # -------------------------- Create/Update --------------------------
-    async def _create_or_update(self, arc_id: str, arc) -> None:
+    async def _create_or_update(self, arc_id: str, arc: ARC) -> None:
         project = self._get_or_create_project(arc_id)
         with tempfile.TemporaryDirectory() as tmp_root:
             arc_path = Path(tmp_root) / arc_id
@@ -202,7 +187,7 @@ class GitlabApi(ArcStore):
             self._commit_actions(project, actions, arc_id)
 
     # -------------------------- Get --------------------------
-    def _get(self, arc_id: str):
+    def _get(self, arc_id: str) -> ARC | None:
         project = self._find_project(arc_id)
         if not project:
             return None
@@ -212,10 +197,8 @@ class GitlabApi(ArcStore):
             self._download_project_files(project, arc_path)
             return ARC.try_load_async(str(arc_path))
 
-    def _download_project_files(self, project, arc_path: Path):
-        tree = project.repository_tree(
-            ref=self._config.branch, all=True, recursive=True
-        )
+    def _download_project_files(self, project: Project, arc_path: Path) -> None:
+        tree = project.repository_tree(ref=self._config.branch, all=True, recursive=True)
         for entry in tree:
             if entry["type"] != "blob" or entry["path"] == ".arc_hash":
                 continue
@@ -224,7 +207,7 @@ class GitlabApi(ArcStore):
             file_path.parent.mkdir(parents=True, exist_ok=True)
             self._write_project_file(f, file_path)
 
-    def _write_project_file(self, f, file_path: Path):
+    def _write_project_file(self, f: ProjectFile, file_path: Path) -> None:
         content_bytes = base64.b64decode(f.content)
         if getattr(f, "encoding", None) == "base64":
             file_path.write_bytes(content_bytes)

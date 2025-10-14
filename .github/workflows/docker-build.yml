@@ -1,119 +1,227 @@
-name: Version & Docker
+name: Docker Build and Test (Reusable)
 
 on:
-  # pull_request:
-  #   branches: [main]
-  #   types: [closed]
-  push:
-    branches: [main]
-
-permissions:
-  contents: read
+  workflow_call:
+    inputs:
+      push_to_registry:
+        description: 'Whether to push to DockerHub registry'
+        required: false
+        type: boolean
+        default: false
+      save_image:
+        description: 'Whether to save Docker image as artifact for reuse'
+        required: false
+        type: boolean
+        default: false
+      version_bump:
+        description: 'Version bump type for GitVersion'
+        required: false
+        type: string
+        default: 'patch'
+    outputs:
+      version:
+        description: 'Calculated version'
+        value: ${{ jobs.calculate-version.outputs.version }}
+      SemVer:
+        description: 'Semantic version'
+        value: ${{ jobs.calculate-version.outputs.SemVer }}
+      Major:
+        description: 'Major version'
+        value: ${{ jobs.calculate-version.outputs.Major }}
+      Minor:
+        description: 'Minor version'
+        value: ${{ jobs.calculate-version.outputs.Minor }}
+      image-digest:
+        description: 'Docker image digest'
+        value: ${{ jobs.build-docker-image.outputs.image-digest }}
+      dockerhub-pushed:
+        description: 'Whether image was pushed to DockerHub'
+        value: ${{ jobs.build-docker-image.outputs.dockerhub-pushed }}
 
 env:
-  GIT_USER_NAME: GitHub Pipeline
-  GIT_USER_EMAIL: github_pipeline@fairagro.net
-  IMAGE_NAME: zalf/fairagro_advanced_middleware_api
+  GIT_USER_NAME: ${{ vars.GIT_USER_NAME || 'GitHub Pipeline' }}
+  GIT_USER_EMAIL: ${{ vars.GIT_USER_EMAIL || 'github_pipeline@fairagro.net' }}
+  IMAGE_NAME: ${{ vars.IMAGE_NAME || 'fairagro_advanced_middleware_api' }}
+  DOCKERHUB_NAMESPACE: ${{ vars.DOCKERHUB_NAMESPACE || 'zalf' }}
+  IMAGE_TITLE: ${{ vars.IMAGE_TITLE || 'FairAgro Advanced Middleware API' }}
+  IMAGE_DESCRIPTION: ${{ vars.IMAGE_DESCRIPTION || 'Advanced middleware API for FairAgro platform' }}
+  GITVERSION_TAG_PREFIX: ${{ vars.GITVERSION_TAG_PREFIX || '.*-docker-v' }}
+  DOCKER_PLATFORMS: ${{ vars.DOCKER_PLATFORMS || 'linux/amd64' }}
 
 jobs:
-  version:
+  calculate-version:
     runs-on: ubuntu-latest
-
     permissions:
-      contents: write
-
+      contents: read
     outputs:
-      SemVer: ${{ steps.gitversion.outputs.SemVer }}
-      Major: ${{ steps.gitversion.outputs.Major }}
-      Minor: ${{ steps.gitversion.outputs.Minor }}
-      Patch: ${{ steps.gitversion.outputs.Patch }}
+      version: ${{ env.IS_FEATURE_BRANCH == 'true' && steps.gitversion.outputs.semVer || steps.gitversion.outputs.majorMinorPatch }}
+      SemVer: ${{ steps.gitversion.outputs.semVer }}
+      Major: ${{ steps.gitversion.outputs.major }}
+      Minor: ${{ steps.gitversion.outputs.minor }}
+    env:
+      IS_FEATURE_BRANCH: ${{ startsWith(github.ref_name, 'feature/') }}
 
     steps:
-      - name: Checkout repo
-        uses: actions/checkout@v5
+      - uses: actions/checkout@v4
         with:
-          ref: ${{ github.ref }}
           fetch-depth: 0
 
-      # GitVersion für main Merge
-      - name: Install GitVersion
-        uses: gittools/actions/gitversion/setup@v4
+      - uses: gittools/actions/gitversion/setup@v4
         with:
-          versionSpec: 6.x
+          versionSpec: '6.4.x'
+
+      - name: Create GitVersion config
+        uses: DamianReeves/write-file-action@master
+        with:
+          path: GitVersion.yml
+          write-mode: overwrite
+          contents: |
+            mode: ContinuousDeployment
+            tag-prefix: '${{ env.GITVERSION_TAG_PREFIX }}'
+            semantic-version-format: Strict
+            branches:
+              main:
+                label: ''
+                increment: ${{ inputs.version_bump }}
+              feature:
+                regex: ^feature/(?<BranchName>.+)$
+                label: '{BranchName}'
+                increment: Inherit
+                track-merge-target: false
 
       - name: Execute GitVersion
         id: gitversion
         uses: gittools/actions/gitversion/execute@v4
-        with:
-          # configFilePath: GitVersion.${{ steps.version-bump.outputs.bump }}.yml
-          configFilePath: GitVersion.yml
 
-      - name: Show calculated version
+      - name: Debug version info
         run: |
-          echo "Calculated Version: ${{ steps.gitversion.outputs.SemVer }}"
+          echo "🔧 Version Bump Configuration:"
+          echo "  - Input version_bump: ${{ inputs.version_bump }}"
+          echo "  - Branch: ${{ github.ref_name }}"
+          echo "  - Is feature branch: ${{ env.IS_FEATURE_BRANCH }}"
+          echo ""
+          echo "📊 GitVersion Results:"
+          echo "  - SemVer: ${{ steps.gitversion.outputs.semVer }}"
+          echo "  - MajorMinorPatch: ${{ steps.gitversion.outputs.majorMinorPatch }}"
+          echo "  - Final version: ${{ env.IS_FEATURE_BRANCH == 'true' && steps.gitversion.outputs.semVer || steps.gitversion.outputs.majorMinorPatch }}"
 
-      - name: Show computed feature version
-        run: |
-          echo "FullSemVer: ${{ steps.gitversion.outputs.FullSemVer }}"
-          echo "SemVer:     ${{ steps.gitversion.outputs.SemVer }}"
-          echo "PreRelease: ${{ steps.gitversion.outputs.PreReleaseTag }}"
-
-      - name: Create git tag
-        run: |
-          VERSION="${{ steps.gitversion.outputs.SemVer }}"
-          git config user.name "${{ env.GIT_USER_NAME }}"
-          git config user.email "{{ env.GIT_USER_EMAIL }}"
-          git tag -a "v${VERSION}" -m "release $VERSION"
-          git push origin "v${VERSION}"
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-  docker-build-main:
+  build-docker-image:
+    needs: calculate-version
     runs-on: ubuntu-latest
-    needs: version
+    permissions:
+      contents: read
+    outputs:
+      image-digest: ${{ steps.build.outputs.digest }}
+      dockerhub-pushed: ${{ env.DOCKERHUB_AVAILABLE == 'true' && inputs.push_to_registry }}
+
+    env:
+      DOCKERHUB_AVAILABLE: ${{ secrets.DOCKERHUB_USER != '' && secrets.DOCKERHUB_TOKEN != '' }}
 
     steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
-      - name: Docker metadata
-        id: metadata
-        uses: docker/metadata-action@v5
-        with:
-          images: ${{ env.IMAGE_NAME }}
-          tags: |
-            type=semver,pattern={{version}},value=${{ needs.version.outputs.SemVer }}
-            type=raw,value=${{ needs.version.outputs.Major }}.${{ needs.version.outputs.Minor }}
-            type=raw,value=${{ needs.version.outputs.Major }}
-
-      # Secrets are managed within the github GUI
-      - name: Log in to Docker Hub
+      - name: Login to DockerHub
+        if: env.DOCKERHUB_AVAILABLE == 'true' && inputs.push_to_registry
         uses: docker/login-action@v3
         with:
           username: ${{ secrets.DOCKERHUB_USER }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
-      - name: Build & Push Docker Image
+      - name: Extract metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: |
+            ${{ env.DOCKERHUB_AVAILABLE == 'true' && inputs.push_to_registry && format('{0}/{1}', env.DOCKERHUB_NAMESPACE, env.IMAGE_NAME) || '' }}
+          tags: |
+            type=semver,pattern={{version}},value=${{ needs.calculate-version.outputs.SemVer }}
+            type=raw,value=${{ needs.calculate-version.outputs.Major }}.${{ needs.calculate-version.outputs.Minor }},enable=${{ !contains(github.ref_name, 'feature/') }}
+            type=raw,value=${{ needs.calculate-version.outputs.Major }},enable=${{ !contains(github.ref_name, 'feature/') }}
+            type=raw,value=latest,enable=${{ !contains(github.ref_name, 'feature/') }}
+          labels: |
+            org.opencontainers.image.title=${{ env.IMAGE_TITLE }}
+            org.opencontainers.image.description=${{ env.IMAGE_DESCRIPTION }}
+            org.opencontainers.image.url=https://github.com/${{ github.repository }}
+            org.opencontainers.image.source=https://github.com/${{ github.repository }}
+            org.opencontainers.image.version=v${{ needs.calculate-version.outputs.version }}
+            org.opencontainers.image.created=${{ github.event.repository.updated_at }}
+            org.opencontainers.image.revision=${{ github.sha }}
+
+      - name: Build Docker image
+        id: build
         uses: docker/build-push-action@v6
         with:
-          push: true
-          tags: ${{ steps.metadata.outputs.tags }}
-          labels: ${{ steps.metadata.outputs.labels }}
+          context: .
+          platforms: linux/amd64
+          push: ${{ env.DOCKERHUB_AVAILABLE == 'true' && inputs.push_to_registry }}
+          load: true
+          tags: |
+            local/${{ env.IMAGE_NAME }}:${{ needs.calculate-version.outputs.version }}
+            ${{ env.DOCKERHUB_AVAILABLE == 'true' && inputs.push_to_registry && format('{0}/{1}:{2}', env.DOCKERHUB_NAMESPACE, env.IMAGE_NAME, needs.calculate-version.outputs.version) || '' }}
+            ${{ env.DOCKERHUB_AVAILABLE == 'true' && inputs.push_to_registry && !contains(github.ref_name, 'feature/') && format('{0}/{1}:latest', env.DOCKERHUB_NAMESPACE, env.IMAGE_NAME) || '' }}
+          build-args: |
+            APP_VERSION=v${{ needs.calculate-version.outputs.version }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
 
-  create-release:
+      - name: Save Docker image as artifact
+        if: inputs.save_image
+        run: |
+          docker save local/${{ env.IMAGE_NAME }}:${{ needs.calculate-version.outputs.version }} | gzip > docker-image.tar.gz
+
+      - name: Upload Docker image artifact
+        if: inputs.save_image
+        uses: actions/upload-artifact@v4
+        with:
+          name: docker-image-${{ needs.calculate-version.outputs.version }}
+          path: docker-image.tar.gz
+          retention-days: 1
+
+      - name: Log push status
+        run: |
+          if [[ "${{ env.DOCKERHUB_AVAILABLE }}" == "true" && "${{ inputs.push_to_registry }}" == "true" ]]; then
+            echo "✅ Image pushed to DockerHub"
+          else
+            echo "⏭️ DockerHub push skipped"
+          fi
+
+  container-structure-test:
+    needs: [calculate-version, build-docker-image]
     runs-on: ubuntu-latest
-    needs: version
-
     permissions:
-      contents: write
+      contents: read
+    if: needs.build-docker-image.result == 'success'
 
     steps:
-      - name: Create GitHub Release
-        uses: ncipollo/release-action@v1
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build image for testing
+        uses: docker/build-push-action@v6
         with:
-          tag: v${{ needs.version.outputs.SemVer }}
-          name: Release v${{ needs.version.outputs.SemVer }}
-          body: |
-            Docker image: `${{ env.IMAGE_NAME }}:v${{ needs.version.outputs.SemVer }}`
-          draft: false
-          prerelease: false
+          context: .
+          load: true
+          tags: test-image:latest
+          build-args: |
+            APP_VERSION=v${{ needs.calculate-version.outputs.version }}
+
+      - name: Run Container Structure Tests
+        uses: plexsystems/container-structure-test-action@v0.3.0
+        with:
+          image: test-image:latest
+          config: tests/container-structure-test.yaml
+
+      - name: Summary
+        if: always()
+        run: |
+          echo "## 🐳 Container Structure Test Summary" >> $GITHUB_STEP_SUMMARY
+          echo "**Image**: test-image:latest" >> $GITHUB_STEP_SUMMARY
+          echo "**Config**: tests/container-structure-test.yaml" >> $GITHUB_STEP_SUMMARY
+          echo "**Version**: v${{ needs.calculate-version.outputs.version }}" >> $GITHUB_STEP_SUMMARY

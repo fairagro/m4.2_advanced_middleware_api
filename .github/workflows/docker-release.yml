@@ -1,0 +1,396 @@
+name: Create Docker Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      version_bump:
+        description: 'Version bump type (only used for main branch releases)'
+        required: false
+        default: 'patch'
+        type: choice
+        options:
+        - major
+        - minor
+        - patch
+
+env:
+  GIT_USER_NAME: ${{ vars.GIT_USER_NAME || 'GitHub Pipeline' }}
+  GIT_USER_EMAIL: ${{ vars.GIT_USER_EMAIL || 'github_pipeline@fairagro.net' }}
+  IMAGE_NAME: ${{ vars.IMAGE_NAME || 'fairagro_advanced_middleware_api' }}
+  DOCKERHUB_NAMESPACE: ${{ vars.DOCKERHUB_NAMESPACE || 'zalf' }}
+  IMAGE_TITLE: ${{ vars.IMAGE_TITLE || 'FairAgro Advanced Middleware API' }}
+  IMAGE_DESCRIPTION: ${{ vars.IMAGE_DESCRIPTION || 'Advanced middleware API for FairAgro platform' }}
+  # Derived static variables
+  GITVERSION_TAG_PREFIX: ${{ vars.GITVERSION_TAG_PREFIX || '.*-docker-v' }}
+  DOCKER_PLATFORMS: ${{ vars.DOCKER_PLATFORMS || 'linux/amd64' }}
+  # Conditional variables using expressions - SINGLE SOURCE OF TRUTH
+  IS_FEATURE_BRANCH: ${{ startsWith(github.ref_name, 'feature/') }}
+  IS_MAIN_BRANCH: ${{ github.ref_name == 'main' }}
+  RELEASE_TYPE: ${{ startsWith(github.ref_name, 'feature/') && 'feature' || 'final' }}
+  VERSION_INCREMENT: ${{ github.event.inputs.version_bump || 'patch' }}
+  CREATE_GITHUB_RELEASE: ${{ github.ref_name == 'main' }}
+
+jobs:
+  docker-build-test:
+    name: Docker Build and Test
+    permissions:
+      contents: read
+    uses: ./.github/workflows/docker-build.yml
+    with:
+      push_to_registry: true
+      save_image: true  # Save image for security scanning
+      version_bump: ${{ startsWith(github.ref_name, 'feature/') && 'patch' || (github.event.inputs.version_bump || 'patch') }}
+    secrets: inherit
+
+  security-scan-release:
+    needs: docker-build-test
+    runs-on: ubuntu-latest
+    if: needs.docker-build-test.result == 'success'
+
+    permissions:
+      contents: read
+      security-events: write  # Required for SARIF upload
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Download Docker image artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: docker-image-${{ needs.docker-build-test.outputs.version }}
+
+      - name: Load Docker image
+        run: |
+          docker load < docker-image.tar.gz
+          echo "✅ Docker image loaded: local/${{ env.IMAGE_NAME }}:${{ needs.docker-build-test.outputs.version }}"
+
+      - name: Generate SBOM
+        uses: anchore/sbom-action@v0
+        with:
+          image: local/${{ env.IMAGE_NAME }}:${{ needs.docker-build-test.outputs.version }}
+          output-file: sbom-v${{ needs.docker-build-test.outputs.version }}.spdx.json
+          format: spdx-json
+          artifact-name: sbom-v${{ needs.docker-build-test.outputs.version }}.spdx.json
+
+      - name: Analyze SBOM completeness
+        run: |
+          echo "## 📋 SBOM Analysis for Python/uv Application" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+
+          # Count packages in SBOM
+          SBOM_FILE="sbom-v${{ needs.docker-build-test.outputs.version }}.spdx.json"
+          SPDX_PACKAGES=$(jq '.packages | length' "$SBOM_FILE" 2>/dev/null || echo "0")
+
+          echo "### 📊 Package Count" >> $GITHUB_STEP_SUMMARY
+          echo "- **SPDX SBOM**: $SPDX_PACKAGES packages detected" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+
+          # Analyze package types specifically for Python
+          if [[ -f "$SBOM_FILE" ]]; then
+            echo "### 🐍 Python Production Dependencies" >> $GITHUB_STEP_SUMMARY
+            echo "**Note**: Only production dependencies should be present (no pytest, pylint, etc.)" >> $GITHUB_STEP_SUMMARY
+            echo '```' >> $GITHUB_STEP_SUMMARY
+            jq -r '.packages[] | select(.name != null and (.name | test("python|py|flask|werkzeug|jinja|click"; "i"))) | "\(.name) (\(.versionInfo // "unknown"))"' "$SBOM_FILE" | head -15 >> $GITHUB_STEP_SUMMARY
+            echo '```' >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+
+            echo "### 📦 System Packages (Debian/APT)" >> $GITHUB_STEP_SUMMARY
+            echo '```' >> $GITHUB_STEP_SUMMARY
+            jq -r '.packages[] | select(.name != null and (.name | test("lib|curl|apt|deb"; "i"))) | "\(.name) (\(.versionInfo // "unknown"))"' "$SBOM_FILE" | head -10 >> $GITHUB_STEP_SUMMARY
+            echo '```' >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+          fi
+
+      - name: Security scan with Trivy (Image)
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: local/${{ env.IMAGE_NAME }}:${{ needs.docker-build-test.outputs.version }}
+          format: sarif
+          output: trivy-image-results.sarif
+          severity: 'CRITICAL,HIGH,MEDIUM'  # Skip LOW severity to reduce noise
+          ignore-unfixed: true  # Focus on fixable vulnerabilities
+
+      - name: Security scan with Trivy (SBOM)
+        uses: aquasecurity/trivy-action@master
+        with:
+          scan-type: sbom
+          input: sbom-v${{ needs.docker-build-test.outputs.version }}.spdx.json
+          format: sarif
+          output: trivy-sbom-results.sarif
+          scan-ref: sbom-v${{ needs.docker-build-test.outputs.version }}.spdx.json
+          severity: 'CRITICAL,HIGH,MEDIUM'  # Skip LOW severity to reduce noise
+          ignore-unfixed: true  # Focus on fixable vulnerabilities
+
+      - name: Upload Trivy Image SARIF results
+        uses: github/codeql-action/upload-sarif@v3
+        if: always()
+        with:
+          sarif_file: trivy-image-results.sarif
+          category: trivy-image-scan
+
+      - name: Upload Trivy SBOM SARIF results
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: trivy-sbom-results.sarif
+          category: trivy-sbom-scan
+        continue-on-error: true
+
+      - name: License Compliance Check (ORT)
+        uses: oss-review-toolkit/ort-ci-github-action@v1
+        with:
+          sbom-file-path: sbom-v${{ needs.docker-build-test.outputs.version }}.spdx.json
+          log-level: warn
+          allow-dynamic-versions: true
+
+      - name: License Compliance Summary
+        run: |
+          echo "## ⚖️ License Compliance Analysis" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Your Project License**: MIT (very permissive)" >> $GITHUB_STEP_SUMMARY
+          echo "**Compatibility Strategy**: MIT allows mixing with most licenses" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+
+          # Quick license summary from SBOM
+          echo "### 📊 Detected Licenses in Dependencies" >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+          jq -r '.packages[] | select(.licenseConcluded != null and .licenseConcluded != "NOASSERTION" and .licenseConcluded != "") | .licenseConcluded' "sbom-v${{ needs.docker-build-test.outputs.version }}.spdx.json" | sort | uniq -c | sort -nr >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+
+          # Check for copyleft licenses that might require attention
+          COPYLEFT=$(jq -r '.packages[] | select(.licenseConcluded != null and (.licenseConcluded | test("GPL|LGPL|AGPL|CDDL|EPL|MPL"; "i"))) | "\(.name): \(.licenseConcluded)"' "sbom-v${{ needs.docker-build-test.outputs.version }}.spdx.json")
+
+          if [[ -n "$COPYLEFT" && "$COPYLEFT" != "" ]]; then
+            echo "⚠️ **Copyleft Licenses Detected** (review recommended):" >> $GITHUB_STEP_SUMMARY
+            echo '```' >> $GITHUB_STEP_SUMMARY
+            echo "$COPYLEFT" >> $GITHUB_STEP_SUMMARY
+            echo '```' >> $GITHUB_STEP_SUMMARY
+            echo "**Note**: These may require derivative works to use the same license" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "✅ **No problematic copyleft licenses detected**" >> $GITHUB_STEP_SUMMARY
+          fi
+
+          # Count non-standard licenses (LicenseRef-*)
+          LICENSEREF_COUNT=$(jq -r '.packages[] | select(.licenseConcluded != null and (.licenseConcluded | startswith("LicenseRef-"))) | .licenseConcluded' "sbom-v${{ needs.docker-build-test.outputs.version }}.spdx.json" | wc -l)
+          if [[ "$LICENSEREF_COUNT" -gt 0 ]]; then
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "📄 **Non-standard licenses**: $LICENSEREF_COUNT (typically system libraries - usually safe)" >> $GITHUB_STEP_SUMMARY
+          fi
+
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### 📋 MIT License Compatibility Reference" >> $GITHUB_STEP_SUMMARY
+          echo "**Note**: This is a general reference - actual issues are reported above if found." >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "- **✅ Always Compatible**: Apache-2.0, BSD variants, ISC, CC0-1.0" >> $GITHUB_STEP_SUMMARY
+          echo "- **⚠️ Would Need Review**: GPL variants, LGPL, AGPL, CDDL, EPL, MPL" >> $GITHUB_STEP_SUMMARY
+          echo "- **✅ System Libraries**: LicenseRef-* (Debian packages - safe for distribution)" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "💡 **MIT allows almost everything** - you can include dependencies with any license in binary distributions" >> $GITHUB_STEP_SUMMARY
+
+      - name: Security Scan Summary
+        run: |
+          echo "## 🔒 Security Scan Results" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Scanning Strategy**: Using Trivy for comprehensive vulnerability detection" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+
+          # Parse Trivy Image results (Image-based)
+          echo "### 🐳 Trivy Image Scan" >> $GITHUB_STEP_SUMMARY
+          if [[ -f "trivy-image-results.sarif" ]]; then
+            TRIVY_IMAGE_RESULTS=$(jq '.runs[0].results | length' trivy-image-results.sarif 2>/dev/null || echo "0")
+            TRIVY_IMAGE_CRITICAL=$(jq '.runs[0].results[] | select(.level == "error") | length' trivy-image-results.sarif 2>/dev/null || echo "0")
+            echo "- **Total findings**: $TRIVY_IMAGE_RESULTS" >> $GITHUB_STEP_SUMMARY
+            echo "- **Critical/High**: $TRIVY_IMAGE_CRITICAL" >> $GITHUB_STEP_SUMMARY
+            echo "- **Coverage**: Direct image layer analysis, OS packages, secrets, misconfigurations" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "- ❌ No Trivy Image results available" >> $GITHUB_STEP_SUMMARY
+          fi
+          echo "" >> $GITHUB_STEP_SUMMARY
+
+          # Parse Trivy SBOM results (SBOM-based)
+          echo "### 📋 Trivy SBOM Scan" >> $GITHUB_STEP_SUMMARY
+          if [[ -f "trivy-sbom-results.sarif" ]]; then
+            TRIVY_SBOM_RESULTS=$(jq '.runs[0].results | length' trivy-sbom-results.sarif 2>/dev/null || echo "0")
+            TRIVY_SBOM_CRITICAL=$(jq '.runs[0].results[] | select(.level == "error") | length' trivy-sbom-results.sarif 2>/dev/null || echo "0")
+            echo "- **Total findings**: $TRIVY_SBOM_RESULTS" >> $GITHUB_STEP_SUMMARY
+            echo "- **Critical/High**: $TRIVY_SBOM_CRITICAL" >> $GITHUB_STEP_SUMMARY
+            echo "- **Coverage**: SBOM-based vulnerability detection with Trivy's curated database" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "- ❌ No Trivy SBOM results available" >> $GITHUB_STEP_SUMMARY
+          fi
+          echo "" >> $GITHUB_STEP_SUMMARY
+
+          echo "### 🔍 Trivy Scan Comparison" >> $GITHUB_STEP_SUMMARY
+          if [[ -f "trivy-image-results.sarif" && -f "trivy-sbom-results.sarif" ]]; then
+            IMAGE_FINDINGS=$(jq '.runs[0].results | length' trivy-image-results.sarif 2>/dev/null || echo "0")
+            SBOM_FINDINGS=$(jq '.runs[0].results | length' trivy-sbom-results.sarif 2>/dev/null || echo "0")
+
+            echo "- **Image Scan**: $IMAGE_FINDINGS findings" >> $GITHUB_STEP_SUMMARY
+            echo "- **SBOM Scan**: $SBOM_FINDINGS findings" >> $GITHUB_STEP_SUMMARY
+
+            if [[ "$IMAGE_FINDINGS" -eq "$SBOM_FINDINGS" ]]; then
+              echo "- **Result**: ✅ Both scans found identical number of issues" >> $GITHUB_STEP_SUMMARY
+            elif [[ "$IMAGE_FINDINGS" -gt "$SBOM_FINDINGS" ]]; then
+              DIFF=$((IMAGE_FINDINGS - SBOM_FINDINGS))
+              echo "- **Result**: 🔍 Image scan found $DIFF additional issues (layer analysis, configs, secrets)" >> $GITHUB_STEP_SUMMARY
+            else
+              DIFF=$((SBOM_FINDINGS - IMAGE_FINDINGS))
+              echo "- **Result**: 📋 SBOM scan found $DIFF additional issues (dependency-focused analysis)" >> $GITHUB_STEP_SUMMARY
+            fi
+
+            # Compare CVE overlaps if both have results
+            if [[ "$IMAGE_FINDINGS" -gt 0 && "$SBOM_FINDINGS" -gt 0 ]]; then
+              echo "- **Analysis**: Both scanning methods complement each other" >> $GITHUB_STEP_SUMMARY
+            fi
+          else
+            echo "- **Result**: ⚠️ Cannot compare - one or both scan results missing" >> $GITHUB_STEP_SUMMARY
+          fi
+          echo "### 📋 Scan Results Available In:" >> $GITHUB_STEP_SUMMARY
+
+          echo "- **GitHub Security Tab**: SARIF results for both scan types" >> $GITHUB_STEP_SUMMARY
+          echo "- **Artifacts**: Full SARIF reports attached to workflow run" >> $GITHUB_STEP_SUMMARY
+
+  create-release:
+    needs: [docker-build-test, security-scan-release]
+    runs-on: ubuntu-latest
+    if: needs.docker-build-test.result == 'success' && needs.security-scan-release.result == 'success'
+
+    permissions:
+      contents: write
+
+    env:
+      TIMESTAMP: ${{ github.run_id }}${{ github.run_attempt }}
+      RELEASE_TAG: ${{ github.run_id }}${{ github.run_attempt }}-docker-v${{ needs.docker-build-test.outputs.version }}
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Download SBOM artifact (final releases only)
+        uses: actions/download-artifact@v4
+        with:
+          name: sbom-v${{ needs.docker-build-test.outputs.version }}.spdx.json
+
+      # Note: SPDX SBOM is generated in security-scan-release job
+      # and downloaded as part of the SBOM artifact above
+
+      - name: Create version tag
+        id: create_tag
+        uses: mathieudutour/github-tag-action@v6.2
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          custom_tag: ${{ env.RELEASE_TAG }}
+          tag_prefix: ""
+
+      - name: Log release info
+        run: |
+          if [[ "${{ env.RELEASE_TYPE }}" == "final" ]]; then
+            echo "Creating GitHub release for final release (main branch)"
+            echo "✅ Git tag: ${{ env.RELEASE_TAG }}"
+            echo "✅ GitHub release: Will be created"
+          else
+            echo "Feature branch release - tracking version progression"
+            echo "✅ Git tag: ${{ env.RELEASE_TAG }} (for GitVersion tracking)"
+            echo "⏭️ GitHub release: Skipped (feature branch)"
+            echo "💡 This tag helps GitVersion increment properly on subsequent builds"
+          fi
+
+      - name: Create GitHub Release (Draft)
+        if: env.RELEASE_TYPE == 'final'
+        id: draft_release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ env.RELEASE_TAG }}
+          name: "docker-v${{ needs.docker-build-test.outputs.version }}"
+          body: |
+            ## Docker Release v${{ needs.docker-build-test.outputs.version }}
+
+            **Docker Image**: ${{ needs.docker-build-test.outputs.dockerhub-pushed == 'true' && format('{0}/{1}:{2}', env.DOCKERHUB_NAMESPACE, env.IMAGE_NAME, needs.docker-build-test.outputs.version) || '⚠️ Not pushed to DockerHub (missing credentials)' }}
+            **Image Digest**: `${{ needs.docker-build-test.outputs.image-digest }}`
+
+            - ✅ Security scan completed (see Security tab)
+            - ✅ SBOM attached (sbom-v${{ needs.docker-build-test.outputs.version }}.spdx.json)
+            - 🐳 Platform: linux/amd64
+
+            ### Installation
+            ${{ needs.docker-build-test.outputs.dockerhub-pushed == 'true' && '```bash
+            # Pull and run the Docker image
+            docker pull ' || '⚠️ **Image not available on DockerHub** (missing credentials)
+
+            The Docker image was built locally but not pushed to DockerHub.
+            You can build it yourself:
+
+            ```bash
+            # Build the image locally
+            git clone https://github.com/' }}${{ needs.docker-build-test.outputs.dockerhub-pushed == 'true' && format('{0}/{1}:{2}', env.DOCKERHUB_NAMESPACE, env.IMAGE_NAME, needs.docker-build-test.outputs.version) || format('{0}
+            cd {1}
+            git checkout {2}
+            docker build -t local/{3}:{4} .', github.repository, github.repository, github.sha, env.IMAGE_NAME, needs.docker-build-test.outputs.version) }}
+            ```
+          files: |
+            sbom-v${{ needs.docker-build-test.outputs.version }}.spdx.json
+          draft: true
+          make_latest: true
+          generate_release_notes: true
+          append_body: true
+          fail_on_unmatched_files: true
+
+      - name: Finalize Release
+        if: env.RELEASE_TYPE == 'final'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          echo "🔍 Looking for draft release with tag: ${{ env.RELEASE_TAG }}"
+
+          # Give GitHub API a moment to index the new release
+          sleep 5
+
+          # Try to get the release ID from the draft release we just created
+          if RELEASE_ID=$(gh api repos/${{ github.repository }}/releases/tags/${{ env.RELEASE_TAG }} --jq '.id' 2>/dev/null); then
+            echo "✅ Found release ID via tag: $RELEASE_ID"
+          else
+            echo "⚠️ Release not found via tag, searching in all releases..."
+
+            # Search for the release by version in all releases
+            RELEASE_ID=$(gh api repos/${{ github.repository }}/releases --jq '.[] | select(.tag_name == "${{ env.RELEASE_TAG }}") | .id')
+
+            if [[ -n "$RELEASE_ID" ]]; then
+              echo "✅ Found release ID via search: $RELEASE_ID"
+            else
+              echo "❌ Release not found at all!"
+              exit 1
+            fi
+          fi
+
+          # Convert draft to final release
+          gh api repos/${{ github.repository }}/releases/$RELEASE_ID \
+            --method PATCH \
+            --field draft=false
+          echo "🎉 Release finalized successfully"
+
+  update-helm-chart:
+    needs: [docker-build-test, security-scan-release]
+    runs-on: ubuntu-latest
+    if: needs.docker-build-test.outputs.dockerhub-pushed == 'true' && needs.security-scan-release.result == 'success'
+
+    permissions:
+      contents: write
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Update Chart.yaml appVersion
+        run: |
+          sed -i "s/^appVersion:.*/appVersion: \"${{ needs.docker-build-test.outputs.version }}\"/" helm/Chart.yaml
+
+      - name: Commit and push Chart.yaml changes
+        uses: stefanzweifel/git-auto-commit-action@v5
+        with:
+          commit_message: "chore(helm): update appVersion to ${{ needs.docker-build-test.outputs.version }}"
+          file_pattern: "helm/Chart.yaml"
+          commit_user_name: "${{ env.GIT_USER_NAME }}"
+          commit_user_email: "${{ env.GIT_USER_EMAIL }}"

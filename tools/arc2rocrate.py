@@ -2,10 +2,10 @@
 
 import time
 
-from arctrl import ARC
+from arctrl import ARC  # type: ignore[import-untyped]
 
 
-def arc_to_rocrate_json(arc_path: str, rocrate_output_path: str):
+def arc_to_rocrate_json(arc_path: str, rocrate_output_path: str) -> None:
     """Convert an ARC file to RO-Crate JSON format and save to a file."""
     # Lade ARC aus Datei
     start = time.perf_counter()

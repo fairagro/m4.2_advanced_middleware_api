@@ -12,7 +12,7 @@ import json
 from datetime import UTC, datetime
 from enum import Enum
 
-from arctrl import ARC
+from arctrl import ARC  # type: ignore[import-untyped]
 from pydantic import BaseModel
 
 from .arc_store import ArcStore
@@ -84,7 +84,7 @@ class InvalidJsonSemanticError(BusinessLogicError):
 class BusinessLogic:
     """Core business logic for handling ARC operations."""
 
-    def __init__(self, store: ArcStore):
+    def __init__(self, store: ArcStore) -> None:
         """Initialize the BusinessLogic with the given ArcStore.
 
         Args:
@@ -107,22 +107,16 @@ class BusinessLogic:
         arc_id = hashlib.sha256(input_str.encode("utf-8")).hexdigest()
         return arc_id
 
-    async def _create_arc_from_rocrate(
-        self, crate: dict, client_id: str
-    ) -> ArcResponse:
+    async def _create_arc_from_rocrate(self, crate: dict, client_id: str) -> ArcResponse:
         try:
             crate_json = json.dumps(crate)
             arc = ARC.from_rocrate_json_string(crate_json)
         except Exception as e:
-            raise InvalidJsonSemanticError(
-                f"Error processing RO-Crate JSON: {str(e)}"
-            ) from e
+            raise InvalidJsonSemanticError(f"Error processing RO-Crate JSON: {str(e)}") from e
 
         identifier = getattr(arc, "Identifier", None)
         if not identifier or identifier == "":
-            raise InvalidJsonSemanticError(
-                "RO-Crate JSON must contain an 'Identifier' in the ISA object."
-            )
+            raise InvalidJsonSemanticError("RO-Crate JSON must contain an 'Identifier' in the ISA object.")
 
         exists = self._store.exists(identifier)
         await self._store.create_or_update(identifier, arc)
@@ -155,18 +149,14 @@ class BusinessLogic:
 
         """
         try:
-            return BusinessLogicResponse(
-                client_id=client_id, message="Client authenticated successfully"
-            )
+            return BusinessLogicResponse(client_id=client_id, message="Client authenticated successfully")
         except BusinessLogicError:
             raise
         except Exception as e:
             raise BusinessLogicError(f"unexpected error encountered: {str(e)}") from e
 
     # -------------------------- Create or Update ARCs --------------------------
-    async def create_or_update_arcs(
-        self, data: str, client_id: str
-    ) -> CreateOrUpdateArcsResponse:
+    async def create_or_update_arcs(self, data: str, client_id: str) -> CreateOrUpdateArcsResponse:
         """Create or update ARCs based on the provided RO-Crate JSON data.
 
         Args:
