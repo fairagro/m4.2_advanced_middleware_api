@@ -109,7 +109,8 @@
 				"codezombiech.gitignore",
 				"github.copilot",
 				"github.copilot-chat",
-				"matangover.mypy"
+				"matangover.mypy",
+				"charliermarsh.ruff"
 			]
 		}
 	},
