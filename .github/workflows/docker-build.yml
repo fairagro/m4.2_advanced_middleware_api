@@ -83,11 +83,18 @@ jobs:
               main:
                 label: ''
                 increment: ${{ inputs.version_bump }}
+                prevent-increment:
+                  of-merged-branch: true
+                track-merge-target: false
+                source-branches: []
               feature:
                 regex: ^feature/(?<BranchName>.+)$
                 label: '{BranchName}'
-                increment: Inherit
-                track-merge-target: false
+                increment: None
+                prevent-increment:
+                  when-current-commit-tagged: false
+                track-merge-target: true
+                source-branches: ['main']
 
       - name: Execute GitVersion
         id: gitversion
