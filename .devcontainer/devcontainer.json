@@ -76,7 +76,8 @@
 		"ghcr.io/devcontainers-extra/features/ruff:1": {
 			"version": "latest"
 		},
-		"ghcr.io/jungaretti/features/vim:1": {}
+		"ghcr.io/jungaretti/features/vim:1": {},
+		"ghcr.io/schlich/cst-devcontainer-feature/container-structure-test:1": {}
 	},
 
 	"containerEnv": {
