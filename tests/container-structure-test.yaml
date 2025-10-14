@@ -1,0 +1,57 @@
+# Container Structure Test Configuration
+# Tests the built Docker image for security, structure, and functionality
+# Documentation: https://github.com/GoogleContainerTools/container-structure-test
+
+schemaVersion: 2.0.0
+
+# File existence tests
+fileExistenceTests:
+  - name: 'Middleware API executable'
+    path: '/middleware_api/middleware_api'
+    shouldExist: true
+    permissions: '-rwxr-xr-x'
+
+  - name: 'Configuration file'
+    path: '/middleware_api/demo_config.yaml'
+    shouldExist: true
+    permissions: '-rw-r--r--'
+
+# File content tests
+fileContentTests:
+  - name: 'Non-root user created'
+    path: '/etc/passwd'
+    expectedContents: ['middleware:.*']
+
+  - name: 'Non-root group created'
+    path: '/etc/group'
+    expectedContents: ['middleware:.*']
+
+# Command tests
+commandTests:
+  - name: 'Middleware API executable is working'
+    command: '/middleware_api/middleware_api'
+    args: ['--help']
+    exitCode: 0
+
+  - name: 'Python is not installed in final image'
+    command: 'which'
+    args: ['python']
+    exitCode: 1  # Should fail because Python is not in the final image
+
+  - name: 'Curl is available for health checks'
+    command: 'which'
+    args: ['curl']
+    exitCode: 0
+
+# Metadata tests
+metadataTest:
+  exposedPorts: ['8000']
+  user: 'middleware'
+  workdir: '/middleware_api'
+  env:
+    - key: 'UVICORN_HOST'
+      value: '0.0.0.0'
+    - key: 'UVICORN_PORT'
+      value: '8000'
+    - key: 'MIDDLEWARE_API_CONFIG'
+      value: '/middleware_api/demo_config.yaml'
