@@ -165,7 +165,7 @@ jobs:
           context: .
           platforms: linux/amd64
           push: ${{ env.DOCKERHUB_AVAILABLE == 'true' && inputs.push_to_registry }}
-          load: true
+          load: ${{ inputs.save_image || !inputs.push_to_registry }}
           tags: |
             ${{ env.DOCKERHUB_AVAILABLE == 'true' && inputs.push_to_registry && format('{0}/{1}:{2}', env.DOCKERHUB_NAMESPACE, env.IMAGE_NAME, needs.calculate-version.outputs.version) || format('local/{0}:{1}', env.IMAGE_NAME, needs.calculate-version.outputs.version) }}
             ${{ env.DOCKERHUB_AVAILABLE == 'true' && inputs.push_to_registry && !contains(github.ref_name, 'feature/') && format('{0}/{1}:latest', env.DOCKERHUB_NAMESPACE, env.IMAGE_NAME) || '' }}
@@ -175,13 +175,19 @@ jobs:
           cache-to: type=gha,mode=max
 
       - name: Save Docker image as artifact
+        if: inputs.save_image
         run: |
-          # Determine the correct local tag
-          LOCAL_TAG="${{ env.DOCKERHUB_AVAILABLE == 'true' && inputs.push_to_registry && format('{0}/{1}:{2}', env.DOCKERHUB_NAMESPACE, env.IMAGE_NAME, needs.calculate-version.outputs.version) || format('local/{0}:{1}', env.IMAGE_NAME, needs.calculate-version.outputs.version) }}"
-          echo "Saving image: $LOCAL_TAG"
-          docker save "$LOCAL_TAG" | gzip > docker-image.tar.gz
+          # Use the DockerHub tag if pushed, otherwise local tag
+          if [[ "${{ env.DOCKERHUB_AVAILABLE }}" == "true" && "${{ inputs.push_to_registry }}" == "true" ]]; then
+            IMAGE_TAG="${{ env.DOCKERHUB_NAMESPACE }}/${{ env.IMAGE_NAME }}:${{ needs.calculate-version.outputs.version }}"
+          else
+            IMAGE_TAG="local/${{ env.IMAGE_NAME }}:${{ needs.calculate-version.outputs.version }}"
+          fi
+          echo "Saving image: $IMAGE_TAG"
+          docker save "$IMAGE_TAG" | gzip > docker-image.tar.gz
 
       - name: Upload Docker image artifact
+        if: inputs.save_image
         uses: actions/upload-artifact@v4
         with:
           name: docker-image-${{ needs.calculate-version.outputs.version }}

@@ -63,12 +63,23 @@ jobs:
       - name: Load Docker image
         run: |
           docker load < docker-image.tar.gz
-          echo "✅ Docker image loaded: local/${{ env.IMAGE_NAME }}:${{ needs.docker-build-test.outputs.version }}"
+
+          # Determine the correct image tag that was saved
+          if [[ "${{ needs.docker-build-test.outputs.dockerhub-pushed }}" == "true" ]]; then
+            IMAGE_TAG="${{ env.DOCKERHUB_NAMESPACE }}/${{ env.IMAGE_NAME }}:${{ needs.docker-build-test.outputs.version }}"
+            echo "✅ Docker image loaded from DockerHub: $IMAGE_TAG"
+          else
+            IMAGE_TAG="local/${{ env.IMAGE_NAME }}:${{ needs.docker-build-test.outputs.version }}"
+            echo "✅ Docker image loaded locally: $IMAGE_TAG"
+          fi
+
+          # Export for next steps
+          echo "SBOM_IMAGE_TAG=$IMAGE_TAG" >> $GITHUB_ENV
 
       - name: Generate SBOM
         uses: anchore/sbom-action@v0
         with:
-          image: local/${{ env.IMAGE_NAME }}:${{ needs.docker-build-test.outputs.version }}
+          image: ${{ env.SBOM_IMAGE_TAG }}
           output-file: sbom-v${{ needs.docker-build-test.outputs.version }}.spdx.json
           format: spdx-json
           artifact-name: sbom-v${{ needs.docker-build-test.outputs.version }}.spdx.json
@@ -105,7 +116,7 @@ jobs:
       - name: Security scan with Trivy (Image)
         uses: aquasecurity/trivy-action@master
         with:
-          image-ref: local/${{ env.IMAGE_NAME }}:${{ needs.docker-build-test.outputs.version }}
+          image-ref: ${{ env.SBOM_IMAGE_TAG }}
           format: sarif
           output: trivy-image-results.sarif
           severity: 'CRITICAL,HIGH,MEDIUM'  # Skip LOW severity to reduce noise
