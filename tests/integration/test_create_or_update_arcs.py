@@ -18,7 +18,11 @@ from gitlab import Gitlab
     ],
 )
 async def test_create_arcs(
-    client: TestClient, cert: str, gitlab_api: Gitlab, config: dict[str, Any], json_info: dict[str, Any]
+    client: TestClient,
+    cert: str,
+    gitlab_api: Gitlab,
+    config: dict[str, Any],
+    json_info: dict[str, Any],
 ) -> None:
     """Test creating ARCs via the /v1/arcs endpoint."""
     cert_with_linebreaks = cert.replace("\\n", "\n")

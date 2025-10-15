@@ -26,7 +26,6 @@ jobs:
     uses: ./.github/workflows/docker-build.yml
     with:
       push_to_registry: false
-      save_image: false
       version_bump: 'patch'
 
   pr-summary:

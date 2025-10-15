@@ -8,11 +8,7 @@ on:
         required: false
         type: boolean
         default: false
-      save_image:
-        description: 'Whether to save Docker image as artifact for reuse'
-        required: false
-        type: boolean
-        default: false
+
       version_bump:
         description: 'Version bump type for GitVersion'
         required: false
@@ -160,8 +156,7 @@ jobs:
           push: ${{ env.DOCKERHUB_AVAILABLE == 'true' && inputs.push_to_registry }}
           load: true
           tags: |
-            local/${{ env.IMAGE_NAME }}:${{ needs.calculate-version.outputs.version }}
-            ${{ env.DOCKERHUB_AVAILABLE == 'true' && inputs.push_to_registry && format('{0}/{1}:{2}', env.DOCKERHUB_NAMESPACE, env.IMAGE_NAME, needs.calculate-version.outputs.version) || '' }}
+            ${{ env.DOCKERHUB_AVAILABLE == 'true' && inputs.push_to_registry && format('{0}/{1}:{2}', env.DOCKERHUB_NAMESPACE, env.IMAGE_NAME, needs.calculate-version.outputs.version) || format('local/{0}:{1}', env.IMAGE_NAME, needs.calculate-version.outputs.version) }}
             ${{ env.DOCKERHUB_AVAILABLE == 'true' && inputs.push_to_registry && !contains(github.ref_name, 'feature/') && format('{0}/{1}:latest', env.DOCKERHUB_NAMESPACE, env.IMAGE_NAME) || '' }}
           build-args: |
             APP_VERSION=v${{ needs.calculate-version.outputs.version }}
@@ -169,12 +164,17 @@ jobs:
           cache-to: type=gha,mode=max
 
       - name: Save Docker image as artifact
-        if: inputs.save_image
         run: |
-          docker save local/${{ env.IMAGE_NAME }}:${{ needs.calculate-version.outputs.version }} | gzip > docker-image.tar.gz
+          # Use the DockerHub tag if pushed, otherwise local tag
+          if [[ "${{ env.DOCKERHUB_AVAILABLE }}" == "true" && "${{ inputs.push_to_registry }}" == "true" ]]; then
+            IMAGE_TAG="${{ env.DOCKERHUB_NAMESPACE }}/${{ env.IMAGE_NAME }}:${{ needs.calculate-version.outputs.version }}"
+          else
+            IMAGE_TAG="local/${{ env.IMAGE_NAME }}:${{ needs.calculate-version.outputs.version }}"
+          fi
+          echo "Saving image: $IMAGE_TAG"
+          docker save "$IMAGE_TAG" | gzip > docker-image.tar.gz
 
       - name: Upload Docker image artifact
-        if: inputs.save_image
         uses: actions/upload-artifact@v4
         with:
           name: docker-image-${{ needs.calculate-version.outputs.version }}
@@ -200,28 +200,62 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-
-      - name: Build image for testing
-        uses: docker/build-push-action@v6
+      - name: Download Docker image artifact
+        uses: actions/download-artifact@v4
         with:
-          context: .
-          load: true
-          tags: test-image:latest
-          build-args: |
-            APP_VERSION=v${{ needs.calculate-version.outputs.version }}
+          name: docker-image-${{ needs.calculate-version.outputs.version }}
+
+      - name: Load Docker image
+        run: |
+          echo "📦 Loading Docker image from artifact..."
+          docker load < docker-image.tar.gz
+
+          # List loaded images for verification
+          echo "🔍 Loaded images:"
+          docker images --format "table {{.Repository}}\t{{.Tag}}\t{{.Size}}"
+
+      - name: Determine image tag for tests
+        id: image-tag
+        run: |
+          DOCKERHUB_AVAILABLE="${{ secrets.DOCKERHUB_USER != '' && secrets.DOCKERHUB_TOKEN != '' }}"
+          PUSH_TO_REGISTRY="${{ inputs.push_to_registry }}"
+          
+          if [[ "$DOCKERHUB_AVAILABLE" == "true" && "$PUSH_TO_REGISTRY" == "true" ]]; then
+            IMAGE_TAG="${{ env.DOCKERHUB_NAMESPACE }}/${{ env.IMAGE_NAME }}:${{ needs.calculate-version.outputs.version }}"
+            echo "Using DockerHub image: $IMAGE_TAG"
+          else
+            IMAGE_TAG="local/${{ env.IMAGE_NAME }}:${{ needs.calculate-version.outputs.version }}"
+            echo "Using local image: $IMAGE_TAG"
+          fi
+          
+          echo "image-tag=$IMAGE_TAG" >> $GITHUB_OUTPUT
+          
+          # Verify image exists
+          echo "🔍 Checking if image exists..."
+          if docker image inspect "$IMAGE_TAG" > /dev/null 2>&1; then
+            echo "✅ Image found: $IMAGE_TAG"
+          else
+            echo "❌ Image not found: $IMAGE_TAG"
+            echo "Available images:"
+            docker images
+            exit 1
+          fi
 
       - name: Run Container Structure Tests
         uses: plexsystems/container-structure-test-action@v0.3.0
         with:
-          image: test-image:latest
+          image: ${{ steps.image-tag.outputs.image-tag }}
           config: tests/container-structure-test.yaml
 
       - name: Summary
         if: always()
         run: |
           echo "## 🐳 Container Structure Test Summary" >> $GITHUB_STEP_SUMMARY
-          echo "**Image**: test-image:latest" >> $GITHUB_STEP_SUMMARY
-          echo "**Config**: tests/container-structure-test.yaml" >> $GITHUB_STEP_SUMMARY
           echo "**Version**: v${{ needs.calculate-version.outputs.version }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Config**: tests/container-structure-test.yaml" >> $GITHUB_STEP_SUMMARY
+          echo "**Status**: ${{ job.status }}" >> $GITHUB_STEP_SUMMARY
+          if [[ "${{ job.status }}" == "success" ]]; then
+            echo "✅ **All container structure tests passed!**" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "❌ **Container structure tests failed!**" >> $GITHUB_STEP_SUMMARY
+          fi

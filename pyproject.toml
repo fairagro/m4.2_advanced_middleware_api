@@ -21,10 +21,9 @@ dev = [
   "pytest>=8.4.1",
   "pytest-asyncio>=1.1.0",
   "pytest-cov>=7.0.0",
-  "black>=24.0.0",
-  "isort>=5.13.0",
   "mypy>=1.11.0",
   "bandit>=1.7.0",
+  "ruff>=0.1.0",
   "types-pyyaml>=6.0.12.20250915",
   "pre-commit>=4.0.0",
   "pytest-env>=1.2.0",
@@ -59,7 +58,7 @@ line-length = 120
 quote-style = "double"
 indent-style = "space"
 skip-magic-trailing-comma = false
-line-ending = "auto"
+line-ending = "lf"
 
 # Für cyclomatic complexity, entspricht pylint's R1260 etc.
 [tool.ruff.lint.mccabe]

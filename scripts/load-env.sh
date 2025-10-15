@@ -8,6 +8,23 @@
 ENCRYPTED_FILE=".env.integration.enc"
 DECRYPTED_FILE=".env"
 
+# Check if .env file already exists and is not empty
+if [ -f "$DECRYPTED_FILE" ] && [ -s "$DECRYPTED_FILE" ]; then
+    echo "✅ $DECRYPTED_FILE already exists and is not empty - skipping decryption"
+
+    # Still load for current shell if not already loaded
+    if [ -z "$GITLAB_API_TOKEN" ]; then
+        echo "🔄 Loading existing environment variables..."
+        set -a
+        source "$DECRYPTED_FILE"
+        set +a
+        echo "✅ Environment variables loaded from existing $DECRYPTED_FILE"
+    else
+        echo "✅ Environment variables already loaded"
+    fi
+    exit 0
+fi
+
 # Check if SOPS is available
 if ! command -v sops &> /dev/null; then
     echo "⚠️ SOPS not available - skipping secrets loading"

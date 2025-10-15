@@ -27,7 +27,9 @@ def middleware_api() -> Api:
 
 
 @pytest.fixture
-def client(middleware_api: Api) -> Generator[TestClient, None, None]:  # pylint: disable=redefined-outer-name
+def client(
+    middleware_api: Api,
+) -> Generator[TestClient, None, None]:  # pylint: disable=redefined-outer-name
     """Provide a TestClient for the Middleware API.
 
     Also ensure cleanup of dependency overrides.
@@ -58,7 +60,11 @@ def mock_service(monkeypatch: pytest.MonkeyPatch) -> object:
             return BusinessLogicResponse(client_id="TestClient", message="ok")
 
         async def create_or_update_arcs(
-            self, _data: object, _client_cert: object, _content_type: object, _accept_type: object
+            self,
+            _data: object,
+            _client_cert: object,
+            _content_type: object,
+            _accept_type: object,
         ) -> CreateOrUpdateArcsResponse:
             """Mock create_or_update_arcs method."""
             return CreateOrUpdateArcsResponse(

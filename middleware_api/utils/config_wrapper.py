@@ -65,7 +65,7 @@ class ConfigWrapper:
         """
         wrapped = cls._from_value(data, prefix)
         if not isinstance(wrapped, ConfigWrapper):
-            raise TypeError(f"'ConfigWrapper' only wraps lists or dicts. " f"You're trying to wrap a '{type(data)}'")
+            raise TypeError(f"'ConfigWrapper' only wraps lists or dicts. You're trying to wrap a '{type(data)}'")
         return wrapped
 
     @classmethod
@@ -129,9 +129,9 @@ class ConfigWrapper:
 
         """
         unwrapped = ConfigWrapper._unwrap(self)
-        if isinstance(unwrapped, dict | list):
+        if isinstance(unwrapped, (dict, list)):
             return unwrapped
-        raise TypeError(f"Unwrapped values must be of type list or dict, " f"found '{type(unwrapped)}'")
+        raise TypeError(f"Unwrapped values must be of type list or dict, found '{type(unwrapped)}'")
 
     @abstractmethod
     def __iter__(self) -> Generator[KeyType, None, None]:

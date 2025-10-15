@@ -45,7 +45,7 @@ sops .env.integration.enc
 uv run pytest tests/integration/
 
 # Oder mit explizitem Laden:
-source ./scripts/load-env.sh
+./scripts/load-env.sh
 uv run pytest tests/integration/
 ```
 
@@ -122,7 +122,7 @@ sops -d .env.integration
 sops -d .env.integration
 
 # Lade Secrets manuell
-source ./scripts/load-env.sh
+./scripts/load-env.sh
 echo $GITLAB_API_TOKEN
 ```
 
