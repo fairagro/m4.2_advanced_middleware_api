@@ -32,8 +32,8 @@ jobs:
 
     - name: Code formatting and linting check with Ruff
       run: |
-        # Auto-format first, then check linting
-        uv run ruff format middleware_api/ tests/
+        # Check formatting (do not auto-format), then check linting
+        uv run ruff format --check --diff middleware_api/ tests/
         uv run ruff check middleware_api/ tests/
       continue-on-error: false
 
