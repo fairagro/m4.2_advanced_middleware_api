@@ -1,0 +1,55 @@
+# Pre-commit configuration
+# See https://pre-commit.com for more information
+# See https://pre-commit.com/hooks.html for more hooks
+
+repos:
+  # Built-in hooks
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v5.0.0
+    hooks:
+      - id: trailing-whitespace
+      - id: end-of-file-fixer
+      - id: check-yaml
+      - id: check-added-large-files
+      - id: check-merge-conflict
+      - id: check-toml
+      - id: debug-statements
+
+  # Ruff - Fast linting and formatting (replaces black + isort)
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.8.4
+    hooks:
+      - id: ruff
+        args: [--fix, --exit-non-zero-on-fix]
+      - id: ruff-format
+
+  # mypy - Type checking
+  - repo: https://github.com/pre-commit/mirrors-mypy
+    rev: v1.13.0
+    hooks:
+      - id: mypy
+        additional_dependencies: [types-PyYAML]
+        args: [--ignore-missing-imports]
+        files: ^middleware_api/
+
+  # bandit - Security linting
+  - repo: https://github.com/pycqa/bandit
+    rev: 1.8.6
+    hooks:
+      - id: bandit
+        args: [-r, --skip, B101]
+        files: ^middleware_api/
+        exclude: ^tests/
+
+  # Load environment variables (secrets) for other hooks
+  # pytest - Run only unit tests (integration tests need external services)
+  - repo: local
+    hooks:
+      - id: pytest-unit
+        name: pytest-unit
+        entry: uv run pytest tests/unit/
+        language: system
+        types: [python]
+        pass_filenames: false
+        always_run: true
+        args: [--tb=short]

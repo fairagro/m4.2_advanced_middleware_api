@@ -8,7 +8,7 @@ import os
 from abc import abstractmethod
 from collections.abc import Generator
 from pathlib import Path
-from typing import cast, overload
+from typing import cast
 
 import yaml
 
@@ -65,10 +65,7 @@ class ConfigWrapper:
         """
         wrapped = cls._from_value(data, prefix)
         if not isinstance(wrapped, ConfigWrapper):
-            raise TypeError(
-                f"'ConfigWrapper' only wraps lists or dicts. "
-                f"You're trying to wrap a '{type(data)}'"
-            )
+            raise TypeError(f"'ConfigWrapper' only wraps lists or dicts. You're trying to wrap a '{type(data)}'")
         return wrapped
 
     @classmethod
@@ -84,11 +81,6 @@ class ConfigWrapper:
             return cast(str, value["id"])
         return str(key)
 
-    @overload
-    def __getitem__(self, key: str) -> WrapType: ...
-    @overload
-    def __getitem__(self, key: int) -> WrapType: ...
-
     @abstractmethod
     def __getitem__(self, key: KeyType) -> WrapType:
         """Return the value for the given key from the configuration.
@@ -103,9 +95,7 @@ class ConfigWrapper:
             NotImplementedError: When called on the base class.
 
         """
-        raise NotImplementedError(
-            "Please do not use class 'ConfigWrapper' directly, but a derived class"
-        )
+        raise NotImplementedError("Please do not use class 'ConfigWrapper' directly, but a derived class")
 
     def get(self, key: KeyType, default_value: "ValueType | None" = None) -> WrapType:
         """Return the value of a config key.
@@ -139,12 +129,9 @@ class ConfigWrapper:
 
         """
         unwrapped = ConfigWrapper._unwrap(self)
-        if isinstance(unwrapped, dict | list):
+        if isinstance(unwrapped, (dict, list)):
             return unwrapped
-        raise TypeError(
-            f"Unwrapped values must be of type list or dict, "
-            f"found '{type(unwrapped)}'"
-        )
+        raise TypeError(f"Unwrapped values must be of type list or dict, found '{type(unwrapped)}'")
 
     @abstractmethod
     def __iter__(self) -> Generator[KeyType, None, None]:
@@ -154,9 +141,7 @@ class ConfigWrapper:
             A generator yielding keys of the configuration.
 
         """
-        raise NotImplementedError(
-            "Please do not use class 'ConfigWrapper' directly, but a derived class"
-        )
+        raise NotImplementedError("Please do not use class 'ConfigWrapper' directly, but a derived class")
 
     @abstractmethod
     def items(self) -> Generator[tuple[KeyType, WrapType], None, None]:
@@ -166,9 +151,7 @@ class ConfigWrapper:
             A generator yielding tuples of (key, value) pairs from the configuration.
 
         """
-        raise NotImplementedError(
-            "Please do not use class 'ConfigWrapper' directly, but a derived class"
-        )
+        raise NotImplementedError("Please do not use class 'ConfigWrapper' directly, but a derived class")
 
     @abstractmethod
     def __len__(self) -> int:
@@ -178,9 +161,7 @@ class ConfigWrapper:
             The number of items in the configuration.
 
         """
-        raise NotImplementedError(
-            "Please do not use class 'ConfigWrapper' directly, but a derived class"
-        )
+        raise NotImplementedError("Please do not use class 'ConfigWrapper' directly, but a derived class")
 
     def _override_key_access(self, key: str) -> str | None:
         # self._path should alwys be upper case
@@ -228,16 +209,19 @@ class ConfigWrapperDict(ConfigWrapper):
                     keys.add(key_suffix.lower())
         return keys
 
-    def __getitem__(self, key: str) -> WrapType:
+    def __getitem__(self, key: KeyType) -> WrapType:
         """Return the value for the given key from the configuration.
 
         Args:
-            key (str): The key to lookup in the configuration.
+            key: The key to lookup in the configuration.
 
         Returns:
             WrapType: The value associated with the key, wrapped if necessary.
 
         """
+        if not isinstance(key, str):
+            raise TypeError(f"ConfigWrapperDict only supports string keys, got {type(key)}")
+
         override_value = self._override_key_access(key)
         if override_value is not None:
             return override_value
@@ -278,7 +262,7 @@ class ConfigWrapperList(ConfigWrapper):
         super().__init__(path)
         self._data = data
 
-    def __getitem__(self, key: int) -> WrapType:
+    def __getitem__(self, key: KeyType) -> WrapType:
         """Return the value at the specified index in the list.
 
         Args:
@@ -288,6 +272,9 @@ class ConfigWrapperList(ConfigWrapper):
             The value at the specified index, wrapped if necessary.
 
         """
+        if not isinstance(key, int):
+            raise TypeError(f"ConfigWrapperList only supports integer keys, got {type(key)}")
+
         value = self._data[key]
         key_str = ConfigWrapper._get_path_str(value, key)
         override_value = self._override_key_access(key_str)

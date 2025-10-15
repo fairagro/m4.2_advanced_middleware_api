@@ -5,7 +5,7 @@ from fastapi.testclient import TestClient
 
 
 @pytest.mark.asyncio
-async def test_whoami_with_client_cert(client: TestClient, cert: str):
+async def test_whoami_with_client_cert(client: TestClient, cert: str) -> None:
     """Test the /v1/whoami endpoint with a client certificate."""
     cert_with_linebreaks = cert.replace("\\n", "\n")
 

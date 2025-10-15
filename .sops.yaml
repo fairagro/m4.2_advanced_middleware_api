@@ -1,0 +1,4 @@
+# SOPS configuration
+creation_rules:
+  - path_regex: \.env\.integration\.enc$
+    pgp: CC7B10CE8D78010ABB043F8DB1C462E90012ECFE

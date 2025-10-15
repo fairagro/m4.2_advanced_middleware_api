@@ -1,0 +1,43 @@
+# Container Structure Test Configuration
+# Tests the built Docker image for security, structure, and functionality
+# Documentation: https://github.com/GoogleContainerTools/container-structure-test
+
+schemaVersion: 2.0.0
+
+# File existence tests
+fileExistenceTests:
+  - name: 'Middleware API executable'
+    path: '/middleware_api/middleware_api'
+    shouldExist: true
+
+  - name: 'Configuration file exists'
+    path: '/middleware_api/demo_config.yaml'
+    shouldExist: true
+
+# File content tests
+fileContentTests:
+  - name: 'Non-root user created'
+    path: '/etc/passwd'
+    expectedContents: ['middleware:.*']
+
+  - name: 'Non-root group created'
+    path: '/etc/group'
+    expectedContents: ['middleware:.*']
+
+# Command tests
+commandTests:
+  - name: 'Curl is available for health checks'
+    command: 'sh'
+    args: ['-lc', 'command -v curl']
+    exitCode: 0
+
+  - name: 'Python is not in final image (security)'
+    command: 'sh'
+    args: ['-lc', 'command -v python3']
+    exitCode: 127  # Command not found - Python not in final image (security)
+
+# Metadata tests (simplified)
+metadataTest:
+  exposedPorts: ['8000']
+  user: 'middleware'
+  workdir: '/middleware_api'
