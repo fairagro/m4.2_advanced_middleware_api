@@ -220,36 +220,11 @@ jobs:
           echo "🔍 Loaded images:"
           docker images --format "table {{.Repository}}\t{{.Tag}}\t{{.Size}}"
 
-      - name: Install Container Structure Test
-        run: |
-          echo "📦 Installing container-structure-test..."
-          curl -LO https://storage.googleapis.com/container-structure-test/latest/container-structure-test-linux-amd64
-          chmod +x container-structure-test-linux-amd64
-          sudo mv container-structure-test-linux-amd64 /usr/local/bin/container-structure-test
-          container-structure-test version
-
       - name: Run Container Structure Tests
-        run: |
-          # Determine the correct image tag that was loaded
-          DOCKERHUB_AVAILABLE="${{ secrets.DOCKERHUB_USER != '' && secrets.DOCKERHUB_TOKEN != '' }}"
-          PUSH_TO_REGISTRY="${{ inputs.push_to_registry }}"
-
-          if [[ "$DOCKERHUB_AVAILABLE" == "true" && "$PUSH_TO_REGISTRY" == "true" ]]; then
-            IMAGE_TAG="${{ env.DOCKERHUB_NAMESPACE }}/${{ env.IMAGE_NAME }}:${{ needs.calculate-version.outputs.version }}"
-          else
-            IMAGE_TAG="local/${{ env.IMAGE_NAME }}:${{ needs.calculate-version.outputs.version }}"
-          fi
-
-          echo "🧪 Running Container Structure Tests on image: $IMAGE_TAG"
-
-          if [ -f "tests/container-structure-test.yaml" ]; then
-            echo "🔍 Using config: tests/container-structure-test.yaml"
-            container-structure-test test --image "$IMAGE_TAG" --config tests/container-structure-test.yaml
-            echo "✅ Container structure tests passed!"
-          else
-            echo "⚠️ No container structure test config found - skipping tests"
-            echo "💡 This is expected if container structure tests are not needed"
-          fi
+        uses: plexsystems/container-structure-test-action@v0.3.0
+        with:
+          image: ${{ env.DOCKERHUB_AVAILABLE == 'true' && inputs.push_to_registry && format('{0}/{1}:{2}', env.DOCKERHUB_NAMESPACE, env.IMAGE_NAME, needs.calculate-version.outputs.version) || format('local/{0}:{1}', env.IMAGE_NAME, needs.calculate-version.outputs.version) }}
+          config: tests/container-structure-test.yaml
 
       - name: Summary
         if: always()
