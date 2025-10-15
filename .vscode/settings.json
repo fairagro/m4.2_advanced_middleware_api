@@ -22,11 +22,13 @@
   "terminal.integrated.profiles.linux": {
     "bash": {
       "path": "bash",
-      "args": ["-c", "source ./scripts/load-env.sh 2>/dev/null || true; exec bash"]
+      "args": ["-c", "./scripts/load-env.sh 2>/dev/null || true; exec bash"]
     }
   },
   "terminal.integrated.defaultProfile.linux": "bash",
 
   "sops-edit.onlyUseButtons": false,
-  "sops-edit.tempFilePreExtension": "decrypted"
+  "sops-edit.tempFilePreExtension": "decrypted",
+
+  "mypy.dmypyExecutable": "${workspaceFolder}/.venv/bin/dmypy"
 }
