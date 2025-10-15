@@ -59,7 +59,7 @@ line-length = 120
 quote-style = "double"
 indent-style = "space"
 skip-magic-trailing-comma = false
-line-ending = "auto"
+line-ending = "lf"
 
 # Für cyclomatic complexity, entspricht pylint's R1260 etc.
 [tool.ruff.lint.mccabe]
