@@ -155,9 +155,8 @@ jobs:
           platforms: linux/amd64
           push: ${{ env.DOCKERHUB_AVAILABLE == 'true' && inputs.push_to_registry }}
           load: true
-          tags: |
-            ${{ env.DOCKERHUB_AVAILABLE == 'true' && inputs.push_to_registry && format('{0}/{1}:{2}', env.DOCKERHUB_NAMESPACE, env.IMAGE_NAME, needs.calculate-version.outputs.version) || format('local/{0}:{1}', env.IMAGE_NAME, needs.calculate-version.outputs.version) }}
-            ${{ env.DOCKERHUB_AVAILABLE == 'true' && inputs.push_to_registry && !contains(github.ref_name, 'feature/') && format('{0}/{1}:latest', env.DOCKERHUB_NAMESPACE, env.IMAGE_NAME) || '' }}
+          tags: ${{ env.DOCKERHUB_AVAILABLE == 'true' && inputs.push_to_registry && steps.meta.outputs.tags || format('local/{0}:{1}', env.IMAGE_NAME, needs.calculate-version.outputs.version) }}
+          labels: ${{ steps.meta.outputs.labels }}
           build-args: |
             APP_VERSION=v${{ needs.calculate-version.outputs.version }}
           cache-from: type=gha
