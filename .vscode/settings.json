@@ -20,5 +20,7 @@
   "sops-edit.onlyUseButtons": false,
   "sops-edit.tempFilePreExtension": "decrypted",
 
-  "mypy.dmypyExecutable": "${workspaceFolder}/.venv/bin/dmypy"
+  "mypy.dmypyExecutable": "${workspaceFolder}/.venv/bin/dmypy",
+
+  "ruff.format.backend": "uv"
 }
