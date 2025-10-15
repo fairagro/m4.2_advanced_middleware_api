@@ -38,7 +38,6 @@ jobs:
     uses: ./.github/workflows/docker-build.yml
     with:
       push_to_registry: true
-      save_image: true  # Save image for security scanning
       version_bump: ${{ startsWith(github.ref_name, 'feature/') && 'patch' || (github.event.inputs.version_bump || 'patch') }}
     secrets: inherit
 

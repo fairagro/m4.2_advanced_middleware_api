@@ -8,11 +8,7 @@ on:
         required: false
         type: boolean
         default: false
-      save_image:
-        description: 'Whether to save Docker image as artifact for reuse'
-        required: false
-        type: boolean
-        default: false
+
       version_bump:
         description: 'Version bump type for GitVersion'
         required: false
@@ -158,7 +154,7 @@ jobs:
           context: .
           platforms: linux/amd64
           push: ${{ env.DOCKERHUB_AVAILABLE == 'true' && inputs.push_to_registry }}
-          load: ${{ inputs.save_image || !inputs.push_to_registry }}
+          load: true
           tags: |
             ${{ env.DOCKERHUB_AVAILABLE == 'true' && inputs.push_to_registry && format('{0}/{1}:{2}', env.DOCKERHUB_NAMESPACE, env.IMAGE_NAME, needs.calculate-version.outputs.version) || format('local/{0}:{1}', env.IMAGE_NAME, needs.calculate-version.outputs.version) }}
             ${{ env.DOCKERHUB_AVAILABLE == 'true' && inputs.push_to_registry && !contains(github.ref_name, 'feature/') && format('{0}/{1}:latest', env.DOCKERHUB_NAMESPACE, env.IMAGE_NAME) || '' }}
@@ -168,7 +164,6 @@ jobs:
           cache-to: type=gha,mode=max
 
       - name: Save Docker image as artifact
-        if: inputs.save_image
         run: |
           # Use the DockerHub tag if pushed, otherwise local tag
           if [[ "${{ env.DOCKERHUB_AVAILABLE }}" == "true" && "${{ inputs.push_to_registry }}" == "true" ]]; then
@@ -180,7 +175,6 @@ jobs:
           docker save "$IMAGE_TAG" | gzip > docker-image.tar.gz
 
       - name: Upload Docker image artifact
-        if: inputs.save_image
         uses: actions/upload-artifact@v4
         with:
           name: docker-image-${{ needs.calculate-version.outputs.version }}
@@ -200,20 +194,18 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
-    if: needs.build-docker-image.result == 'success' && (inputs.save_image || !inputs.push_to_registry)
+    if: needs.build-docker-image.result == 'success'
 
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
 
       - name: Download Docker image artifact
-        if: inputs.save_image
         uses: actions/download-artifact@v4
         with:
           name: docker-image-${{ needs.calculate-version.outputs.version }}
 
       - name: Load Docker image
-        if: inputs.save_image
         run: |
           echo "📦 Loading Docker image from artifact..."
           docker load < docker-image.tar.gz
