@@ -42,7 +42,9 @@ def config() -> "DictType | ListType":
 
 
 @pytest.fixture(scope="session")
-def gitlab_api(config: dict[str, Any]) -> Gitlab:  # pylint: disable=redefined-outer-name
+def gitlab_api(
+    config: dict[str, Any],
+) -> Gitlab:  # pylint: disable=redefined-outer-name
     """Provide a Gitlab API client for tests."""
     token = os.getenv("GITLAB_API_TOKEN")
     return Gitlab(config["gitlab_api"]["url"], private_token=token)
@@ -56,14 +58,18 @@ def gitlab_group(config: dict[str, Any], gitlab_api: Gitlab) -> Any:  # pylint: 
 
 
 @pytest.fixture
-def middleware_api(config: dict[str, Any]) -> Api:  # pylint: disable=redefined-outer-name
+def middleware_api(
+    config: dict[str, Any],
+) -> Api:  # pylint: disable=redefined-outer-name
     """Provide the Middleware API instance for tests."""
     config_validated = Config.from_data(config)
     return Api(config_validated)
 
 
 @pytest.fixture
-def client(middleware_api: Api) -> Generator[TestClient, None, None]:  # pylint: disable=redefined-outer-name
+def client(
+    middleware_api: Api,
+) -> Generator[TestClient, None, None]:  # pylint: disable=redefined-outer-name
     """Provide a TestClient for the Middleware API."""
     with TestClient(middleware_api.app) as c:
         yield c

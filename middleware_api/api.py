@@ -14,11 +14,7 @@ from fastapi.datastructures import Headers
 from fastapi.responses import JSONResponse
 
 from .arc_store.gitlab_api import GitlabApi
-from .business_logic import (
-    BusinessLogic,
-    InvalidJsonSemanticError,
-    InvalidJsonSyntaxError,
-)
+from .business_logic import BusinessLogic, InvalidJsonSemanticError, InvalidJsonSyntaxError
 from .config import Config
 
 
@@ -94,16 +90,16 @@ class Api:
     def _validate_content_type(self, headers: Headers) -> None:
         content_type = headers.get("content-type")
         if not content_type:
-            msg = f"Content-Type header is missing. " f"Expected '{self.SUPPORTED_CONTENT_TYPE}'."
+            msg = f"Content-Type header is missing. Expected '{self.SUPPORTED_CONTENT_TYPE}'."
             raise HTTPException(status_code=415, detail=msg)
         if content_type != self.SUPPORTED_CONTENT_TYPE:
-            msg = f"Unsupported Media Type. " f"Supported types: '{self.SUPPORTED_CONTENT_TYPE}'."
+            msg = f"Unsupported Media Type. Supported types: '{self.SUPPORTED_CONTENT_TYPE}'."
             raise HTTPException(status_code=415, detail=msg)
 
     def _validate_accept_type(self, headers: Headers) -> None:
         accept = headers.get("accept")
         if accept not in [self.SUPPORTED_ACCEPT_TYPE, "*/*"]:
-            msg = f"Unsupported Response Type. " f"Supported types: '{self.SUPPORTED_ACCEPT_TYPE}'."
+            msg = f"Unsupported Response Type. Supported types: '{self.SUPPORTED_ACCEPT_TYPE}'."
             raise HTTPException(status_code=406, detail=msg)
 
     def _setup_exception_handlers(self) -> None:
@@ -111,7 +107,7 @@ class Api:
         async def unhandled_exception_handler(_request: Request, _exc: Exception) -> JSONResponse:
             return JSONResponse(
                 status_code=500,
-                content={"detail": "Internal Server Error. " "Please contact support if the problem persists."},
+                content={"detail": "Internal Server Error. Please contact support if the problem persists."},
             )
 
     def _setup_routes(self) -> None:

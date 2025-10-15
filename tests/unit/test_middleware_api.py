@@ -6,10 +6,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from middleware_api.api import Api
-from middleware_api.business_logic import (
-    InvalidJsonSemanticError,
-    InvalidJsonSyntaxError,
-)
+from middleware_api.business_logic import InvalidJsonSemanticError, InvalidJsonSyntaxError
 
 
 class DummyArc:  # pylint: disable=too-few-public-methods
