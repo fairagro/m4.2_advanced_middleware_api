@@ -195,7 +195,7 @@ class GitlabApi(ArcStore):
             arc_path = Path(tmp_root) / arc_id
             arc_path.mkdir(parents=True, exist_ok=True)
             self._download_project_files(project, arc_path)
-            return ARC.try_load_async(str(arc_path))
+            return ARC.load(str(arc_path))
 
     def _download_project_files(self, project: Project, arc_path: Path) -> None:
         tree = project.repository_tree(ref=self._config.branch, all=True, recursive=True)
