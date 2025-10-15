@@ -203,6 +203,7 @@ class GitlabApi(ArcStore):
             except Exception as e:
                 logger.error("Unexpected error loading ARC for %s: %s", arc_id, e, exc_info=True)
                 raise
+
     def _download_project_files(self, project: Project, arc_path: Path) -> None:
         tree = project.repository_tree(ref=self._config.branch, all=True, recursive=True)
         for entry in tree:

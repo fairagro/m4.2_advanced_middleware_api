@@ -28,12 +28,13 @@ jobs:
     - name: Install dependencies
       run: |
         # Install all dependencies including dev dependencies
-        uv sync --dev
+        uv sync --all-groups
 
     - name: Code formatting and linting check with Ruff
       run: |
+        # Auto-format first, then check linting
+        uv run ruff format middleware_api/ tests/
         uv run ruff check middleware_api/ tests/
-        uv run ruff format --check middleware_api/ tests/
       continue-on-error: false
 
     - name: Linting with pylint
