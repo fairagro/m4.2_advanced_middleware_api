@@ -207,11 +207,13 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Download Docker image artifact
+        if: inputs.save_image
         uses: actions/download-artifact@v4
         with:
           name: docker-image-${{ needs.calculate-version.outputs.version }}
 
       - name: Load Docker image
+        if: inputs.save_image
         run: |
           echo "📦 Loading Docker image from artifact..."
           docker load < docker-image.tar.gz
