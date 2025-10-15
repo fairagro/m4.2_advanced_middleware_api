@@ -111,7 +111,7 @@
 				"github.copilot",
 				"github.copilot-chat",
 				"matangover.mypy",
-				"charliermarsh.ruff"
+				"astral-sh.ruff"
 			]
 		}
 	},
