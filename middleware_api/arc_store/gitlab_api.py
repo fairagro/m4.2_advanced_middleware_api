@@ -22,8 +22,7 @@ logger = logging.getLogger(__name__)
 class GitlabApiConfig(BaseModel):
     """Configuration for Gitlab API ArcStore."""
 
-    url: Annotated[HttpUrl, Field(
-        description="URL of the gitlab server to store ARCs in")]
+    url: Annotated[HttpUrl, Field(description="URL of the gitlab server to store ARCs in")]
     group: Annotated[
         str,
         Field(
@@ -31,8 +30,7 @@ class GitlabApiConfig(BaseModel):
             min_length=1,  # may not be empty
         ),
     ]
-    branch: Annotated[str, Field(
-        description="The git branch to use for ARC repos", default="main")]
+    branch: Annotated[str, Field(description="The git branch to use for ARC repos", default="main")]
     token: Annotated[
         str,
         Field(description="A gitlab token with CRUD permissions to the gitlab group"),
@@ -67,8 +65,7 @@ class GitlabApi(ArcStore):
         """
         logger.info("Initializing ARCPersistenceGitlabAPI")
         self._config = config
-        self._gitlab = gitlab.Gitlab(
-            str(self._config.url), private_token=self._config.token)
+        self._gitlab = gitlab.Gitlab(str(self._config.url), private_token=self._config.token)
 
     # -------------------------- Project Handling --------------------------
     def _get_or_create_project(self, arc_id: str) -> Project:
@@ -102,8 +99,7 @@ class GitlabApi(ArcStore):
 
     def _load_old_hash(self, project: Project) -> str | None:
         try:
-            old_hash_file = project.files.get(
-                file_path=".arc_hash", ref=self._config.branch)
+            old_hash_file = project.files.get(file_path=".arc_hash", ref=self._config.branch)
             return base64.b64decode(old_hash_file.content).decode("utf-8").strip()
         except GitlabGetError:
             return None
@@ -115,10 +111,8 @@ class GitlabApi(ArcStore):
             if not file_path.is_file():
                 continue
             relative_path = str(file_path.relative_to(arc_path))
-            action_type = "update" if self._file_exists(
-                project, relative_path) else "create"
-            actions.append(self._build_file_action(
-                file_path, relative_path, action_type))
+            action_type = "update" if self._file_exists(project, relative_path) else "create"
+            actions.append(self._build_file_action(file_path, relative_path, action_type))
         # ARC hash action separat hinzufügen
         actions.append(self._build_hash_action(old_hash, arc_path))
         return actions
@@ -207,18 +201,15 @@ class GitlabApi(ArcStore):
                 logger.warning("ARC files for %s not found: %s", arc_id, e)
                 return None
             except Exception as e:
-                logger.error("Unexpected error loading ARC for %s: %s",
-                             arc_id, e, exc_info=True)
+                logger.error("Unexpected error loading ARC for %s: %s", arc_id, e, exc_info=True)
                 raise
 
     def _download_project_files(self, project: Project, arc_path: Path) -> None:
-        tree = project.repository_tree(
-            ref=self._config.branch, all=True, recursive=True)
+        tree = project.repository_tree(ref=self._config.branch, all=True, recursive=True)
         for entry in tree:
             if entry["type"] != "blob" or entry["path"] == ".arc_hash":
                 continue
-            f = project.files.get(
-                file_path=entry["path"], ref=self._config.branch)
+            f = project.files.get(file_path=entry["path"], ref=self._config.branch)
             file_path = arc_path / entry["path"]
             file_path.parent.mkdir(parents=True, exist_ok=True)
             self._write_project_file(f, file_path)

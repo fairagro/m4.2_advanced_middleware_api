@@ -22,5 +22,8 @@
 
   "mypy.dmypyExecutable": "${workspaceFolder}/.venv/bin/dmypy",
 
-  "ruff.format.backend": "uv"
+  // Ruff Extension Settings - ensure consistency with script
+  "ruff.configuration": "./pyproject.toml",
+  "ruff.path": ["uv", "run", "ruff"],
+  "ruff.importStrategy": "fromEnvironment"
 }
