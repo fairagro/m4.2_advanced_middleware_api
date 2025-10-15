@@ -27,13 +27,13 @@ fileContentTests:
 # Command tests
 commandTests:
   - name: 'Curl is available for health checks'
-    command: 'which'
-    args: ['curl']
+    command: 'sh'
+    args: ['-lc', 'command -v curl']
     exitCode: 0
 
   - name: 'Python is not in final image (security)'
-    command: 'which'
-    args: ['python3']
+    command: 'sh'
+    args: ['-lc', 'command -v python3']
     exitCode: 1  # Should fail - Python not in final image
 
 # Metadata tests (simplified)
