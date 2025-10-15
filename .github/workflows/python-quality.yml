@@ -28,7 +28,7 @@ jobs:
     - name: Install dependencies
       run: |
         # Install all dependencies including dev dependencies
-        uv sync --dev
+        uv sync --group dev
 
     - name: Code formatting and linting check with Ruff
       run: |
