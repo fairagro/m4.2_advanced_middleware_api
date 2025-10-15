@@ -55,7 +55,8 @@ async def test_create_or_update_no_changes(gitlab_api: Any) -> None:
 
     project = MagicMock()
     # .arc_hash mit "dummyhash" vorhanden
-    project.files.get.return_value.content = base64.b64encode(b"dummyhash").decode()
+    project.files.get.return_value.content = base64.b64encode(
+        b"dummyhash").decode()
     gitlab_api._get_or_create_project = lambda arc_id: project
     gitlab_api._compute_arc_hash = lambda path: "dummyhash"
 
@@ -106,11 +107,13 @@ def test_get_success(gitlab_api: Any, monkeypatch: Any) -> None:
     gitlab_api._gitlab.projects.list.return_value = [project]
 
     dummy_arc = MagicMock()
-    monkeypatch.setattr("middleware_api.arc_store.gitlab_api.ARC.try_load_async", lambda path: dummy_arc)
+    monkeypatch.setattr(
+        "middleware_api.arc_store.gitlab_api.ARC.load", lambda path: dummy_arc)
 
     arc = gitlab_api.get("arc1")
     assert arc == dummy_arc  # nosec
-    project.files.get.assert_any_call(file_path="f.txt", ref=gitlab_api._config.branch)
+    project.files.get.assert_any_call(
+        file_path="f.txt", ref=gitlab_api._config.branch)
 
 
 def test_get_not_found(gitlab_api: Any) -> None:
