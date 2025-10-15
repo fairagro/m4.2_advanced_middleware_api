@@ -200,7 +200,7 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
-    if: needs.build-docker-image.result == 'success'
+    if: needs.build-docker-image.result == 'success' && (inputs.save_image || !inputs.push_to_registry)
 
     steps:
       - name: Checkout code
@@ -222,10 +222,37 @@ jobs:
           echo "🔍 Loaded images:"
           docker images --format "table {{.Repository}}\t{{.Tag}}\t{{.Size}}"
 
+      - name: Determine image tag for tests
+        id: image-tag
+        run: |
+          DOCKERHUB_AVAILABLE="${{ secrets.DOCKERHUB_USER != '' && secrets.DOCKERHUB_TOKEN != '' }}"
+          PUSH_TO_REGISTRY="${{ inputs.push_to_registry }}"
+          
+          if [[ "$DOCKERHUB_AVAILABLE" == "true" && "$PUSH_TO_REGISTRY" == "true" ]]; then
+            IMAGE_TAG="${{ env.DOCKERHUB_NAMESPACE }}/${{ env.IMAGE_NAME }}:${{ needs.calculate-version.outputs.version }}"
+            echo "Using DockerHub image: $IMAGE_TAG"
+          else
+            IMAGE_TAG="local/${{ env.IMAGE_NAME }}:${{ needs.calculate-version.outputs.version }}"
+            echo "Using local image: $IMAGE_TAG"
+          fi
+          
+          echo "image-tag=$IMAGE_TAG" >> $GITHUB_OUTPUT
+          
+          # Verify image exists
+          echo "🔍 Checking if image exists..."
+          if docker image inspect "$IMAGE_TAG" > /dev/null 2>&1; then
+            echo "✅ Image found: $IMAGE_TAG"
+          else
+            echo "❌ Image not found: $IMAGE_TAG"
+            echo "Available images:"
+            docker images
+            exit 1
+          fi
+
       - name: Run Container Structure Tests
         uses: plexsystems/container-structure-test-action@v0.3.0
         with:
-          image: ${{ env.DOCKERHUB_AVAILABLE == 'true' && inputs.push_to_registry && format('{0}/{1}:{2}', env.DOCKERHUB_NAMESPACE, env.IMAGE_NAME, needs.calculate-version.outputs.version) || format('local/{0}:{1}', env.IMAGE_NAME, needs.calculate-version.outputs.version) }}
+          image: ${{ steps.image-tag.outputs.image-tag }}
           config: tests/container-structure-test.yaml
 
       - name: Summary
