@@ -21,6 +21,12 @@ dev = [
   "pytest>=8.4.1",
   "pytest-asyncio>=1.1.0",
   "pytest-cov>=7.0.0",
+  "mypy>=1.11.0",
+  "bandit>=1.7.0",
+  "ruff>=0.1.0",
+  "types-pyyaml>=6.0.12.20250915",
+  "pre-commit>=4.0.0",
+  "pytest-env>=1.2.0",
 ]
 
 [tool.ruff]
@@ -29,6 +35,7 @@ lint.select = [
   "E",   # pycodestyle errors
   "W",   # pycodestyle warnings
   "F",   # pyflakes
+  "I",   # isort (import sorting)
   "C90", # mccabe (Komplexität)
   "N",   # pep8-naming
   "D",   # pydocstyle (Docstrings)
@@ -46,10 +53,45 @@ lint.ignore = [
 # Maximale Zeilenlänge wie in pylint (Standard: 100)
 line-length = 120
 
+# Formatierungs-Einstellungen (konsistent mit Black)
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+skip-magic-trailing-comma = false
+line-ending = "lf"
+
 # Für cyclomatic complexity, entspricht pylint's R1260 etc.
 [tool.ruff.lint.mccabe]
 max-complexity = 10
 
+# Import sorting (replaces isort)
+[tool.ruff.lint.isort]
+known-first-party = ["middleware_api"]
+force-single-line = false
+combine-as-imports = true
+
+# Black and isort replaced by ruff format - configurations removed to avoid conflicts
+
+[tool.mypy]
+python_version = "3.12"
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = true
+disallow_incomplete_defs = true
+
+[tool.bandit]
+exclude_dirs = ["tests", "venv", ".venv"]
+skips = ["B101"]  # Skip assert_used. Do not skip shell injection (B601) to ensure security.
+
 # Docstring-Regeln aktivieren, damit es wie pylint C0114/15/16 meckert
 [tool.ruff.lint.pydocstyle]
 convention = "pep257" # oder "numpy", oder "google"
+
+[tool.pylint.format]
+max-line-length = 120
+
+[tool.pylint.messages_control]
+disable = [
+    "C0114",  # missing-module-docstring - bereits durch ruff D100 abgedeckt
+    "too-few-public-methods",  # oft bei Test-Klassen nicht relevant
+]

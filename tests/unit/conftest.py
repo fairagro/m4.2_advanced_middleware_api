@@ -1,5 +1,6 @@
 """Unit tests for the FAIRagro middleware API."""
 
+from collections.abc import Generator
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
@@ -20,13 +21,15 @@ from ..shared_fixtures import cert  # noqa: F401, pylint: disable=unused-import
 
 
 @pytest.fixture
-def middleware_api():
+def middleware_api() -> Api:
     """Provide the Middleware API instance for tests."""
     return Api()
 
 
 @pytest.fixture
-def client(middleware_api):  # pylint: disable=redefined-outer-name
+def client(
+    middleware_api: Api,
+) -> Generator[TestClient, None, None]:  # pylint: disable=redefined-outer-name
     """Provide a TestClient for the Middleware API.
 
     Also ensure cleanup of dependency overrides.
@@ -46,19 +49,23 @@ def service() -> BusinessLogic:
 
 
 @pytest.fixture
-def mock_service(monkeypatch):
+def mock_service(monkeypatch: pytest.MonkeyPatch) -> object:
     """Provide a mocked BusinessLogic service."""
 
     class DummyService:
         """Dummy service with mocked methods."""
 
-        async def whoami(self, _request, _client_cert, _accept_type):
+        async def whoami(self, _request: object, _client_cert: object, _accept_type: object) -> BusinessLogicResponse:
             """Mock whoami method."""
             return BusinessLogicResponse(client_id="TestClient", message="ok")
 
         async def create_or_update_arcs(
-            self, _data, _client_cert, _content_type, _accept_type
-        ):
+            self,
+            _data: object,
+            _client_cert: object,
+            _content_type: object,
+            _accept_type: object,
+        ) -> CreateOrUpdateArcsResponse:
             """Mock create_or_update_arcs method."""
             return CreateOrUpdateArcsResponse(
                 client_id="TestClient",
@@ -77,11 +84,9 @@ def mock_service(monkeypatch):
 
 
 @pytest.fixture
-def gitlab_api():
+def gitlab_api() -> GitlabApi:
     """Provide a GitlabApi instance with a mocked Gitlab client."""
-    api_config = GitlabApiConfig(
-        url=HttpUrl("http://gitlab"), token="token", group="1", branch="main"
-    )  # nosec
+    api_config = GitlabApiConfig(url=HttpUrl("http://gitlab"), token="token", group="1", branch="main")  # nosec
     api = GitlabApi(api_config)
     api._gitlab = MagicMock()  # pylint: disable=protected-access
     return api

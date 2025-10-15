@@ -8,7 +8,7 @@ from middleware_api.business_logic import BusinessLogic, BusinessLogicResponse
 
 
 @pytest.mark.asyncio
-async def test_whoami_returns_middleware_response():
+async def test_whoami_returns_middleware_response() -> None:
     """Test that whoami returns a BusinessLogicResponse."""
     service = BusinessLogic(store=MagicMock())
     client_id = "TestClient"

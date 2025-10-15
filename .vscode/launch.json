@@ -12,6 +12,20 @@
             "console": "integratedTerminal",
             "args": "ro_crates/test.json scratch/test_ARC",
             "justMyCode": false,
+        },
+        {
+            "name": "Debug Unit Tests",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/.venv/bin/pytest",
+            "args": [
+                "tests/unit/",
+                "-v",
+                "--tb=short"
+            ],
+            "console": "integratedTerminal",
+            "justMyCode": false,
+            "cwd": "${workspaceFolder}"
         }
     ]
 }

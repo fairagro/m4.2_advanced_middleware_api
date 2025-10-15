@@ -4,6 +4,7 @@
 
 import base64
 from pathlib import Path
+from typing import Any
 from unittest.mock import MagicMock
 
 import pytest
@@ -12,7 +13,7 @@ from gitlab.exceptions import GitlabGetError
 # -------------------- Hilfsfunktionen --------------------
 
 
-def test_compute_arc_hash(tmp_path, gitlab_api):
+def test_compute_arc_hash(tmp_path: Path, gitlab_api: Any) -> None:
     """Tests the hash computation for ARC directories."""
     file = tmp_path / "f.txt"
     file.write_text("hello")
@@ -22,7 +23,7 @@ def test_compute_arc_hash(tmp_path, gitlab_api):
     assert h1 != h2  # nosec
 
 
-def test_get_or_create_project_found(gitlab_api):
+def test_get_or_create_project_found(gitlab_api: Any) -> None:
     """Tests finding an existing GitLab project."""
     project = MagicMock()
     project.path = "arc1"
@@ -31,7 +32,7 @@ def test_get_or_create_project_found(gitlab_api):
     assert result == project  # nosec
 
 
-def test_get_or_create_project_create(gitlab_api):
+def test_get_or_create_project_create(gitlab_api: Any) -> None:
     """Tests creating a new GitLab project if not found."""
     gitlab_api._gitlab.projects.list.return_value = []
     group = MagicMock()
@@ -47,7 +48,7 @@ def test_get_or_create_project_create(gitlab_api):
 
 
 @pytest.mark.asyncio
-async def test_create_or_update_no_changes(gitlab_api):
+async def test_create_or_update_no_changes(gitlab_api: Any) -> None:
     """Tests that no commit is made if the ARC hash hasn't changed."""
     arc = MagicMock()
     arc.Write = lambda path: (Path(path) / "f.txt").write_text("abc")
@@ -63,7 +64,7 @@ async def test_create_or_update_no_changes(gitlab_api):
 
 
 @pytest.mark.asyncio
-async def test_create_or_update_with_changes(gitlab_api):
+async def test_create_or_update_with_changes(gitlab_api: Any) -> None:
     """Tests that a commit is made if the ARC hash has changed."""
     arc = MagicMock()
     arc.Write = lambda path: (Path(path) / "f.txt").write_text("abc")
@@ -71,7 +72,7 @@ async def test_create_or_update_with_changes(gitlab_api):
     project = MagicMock()
 
     # kein .arc_hash vorhanden
-    def raise_get(*args, **kwargs):
+    def raise_get(*args: Any, **kwargs: Any) -> None:
         raise GitlabGetError("not found", response_code=404)
 
     project.files.get.side_effect = raise_get
@@ -88,7 +89,7 @@ async def test_create_or_update_with_changes(gitlab_api):
 # -------------------- Get --------------------
 
 
-def test_get_success(gitlab_api, monkeypatch):
+def test_get_success(gitlab_api: Any, monkeypatch: Any) -> None:
     """Tests retrieving an ARC from GitLab."""
     project = MagicMock()
     project.path = "arc1"
@@ -105,16 +106,14 @@ def test_get_success(gitlab_api, monkeypatch):
     gitlab_api._gitlab.projects.list.return_value = [project]
 
     dummy_arc = MagicMock()
-    monkeypatch.setattr(
-        "middleware_api.arc_store.gitlab_api.ARC.try_load_async", lambda path: dummy_arc
-    )
+    monkeypatch.setattr("middleware_api.arc_store.gitlab_api.ARC.load", lambda path: dummy_arc)
 
     arc = gitlab_api.get("arc1")
     assert arc == dummy_arc  # nosec
     project.files.get.assert_any_call(file_path="f.txt", ref=gitlab_api._config.branch)
 
 
-def test_get_not_found(gitlab_api):
+def test_get_not_found(gitlab_api: Any) -> None:
     """Tests retrieving a non-existing ARC from GitLab."""
     gitlab_api._gitlab.projects.list.return_value = []
     arc = gitlab_api.get("arcX")
@@ -124,7 +123,7 @@ def test_get_not_found(gitlab_api):
 # -------------------- Delete --------------------
 
 
-def test_delete_found(gitlab_api):
+def test_delete_found(gitlab_api: Any) -> None:
     """Tests deleting an existing ARC from GitLab."""
     project = MagicMock()
     project.path = "arc1"
@@ -133,7 +132,7 @@ def test_delete_found(gitlab_api):
     project.delete.assert_called_once()
 
 
-def test_delete_not_found(gitlab_api):
+def test_delete_not_found(gitlab_api: Any) -> None:
     """Tests deleting a non-existing ARC from GitLab."""
     gitlab_api._gitlab.projects.list.return_value = []
     # Sollte einfach durchlaufen, kein Fehler

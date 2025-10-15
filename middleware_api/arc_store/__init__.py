@@ -3,7 +3,7 @@
 import logging
 from abc import ABC, abstractmethod
 
-from arctrl import ARC
+from arctrl import ARC  # type: ignore[import-untyped]
 
 logger = logging.getLogger(__name__)
 
@@ -62,9 +62,7 @@ class ArcStore(ABC):
                 arc_id,
                 str(e),
             )
-            raise ArcStoreError(
-                f"General exception caught in `ArcStore.create_or_update`: {str(e)}"
-            ) from e
+            raise ArcStoreError(f"General exception caught in `ArcStore.create_or_update`: {str(e)}") from e
 
     def get(self, arc_id: str) -> ARC | None:
         """_Get an ARC by its ID.
@@ -81,9 +79,7 @@ class ArcStore(ABC):
         except ArcStoreError:
             raise
         except Exception as e:
-            logger.exception(
-                "Caught exception when trying to retrieve ARC '%s': %s", arc_id, str(e)
-            )
+            logger.exception("Caught exception when trying to retrieve ARC '%s': %s", arc_id, str(e))
             raise
 
     def delete(self, arc_id: str) -> None:
@@ -104,12 +100,8 @@ class ArcStore(ABC):
         except ArcStoreError:
             raise
         except Exception as e:
-            logger.exception(
-                "Caught exception when trying to delete ARC '%s': %s", arc_id, str(e)
-            )
-            raise ArcStoreError(
-                f"general exception caught in `ArcStore.delete`: '{str(e)}'"
-            ) from e
+            logger.exception("Caught exception when trying to delete ARC '%s': %s", arc_id, str(e))
+            raise ArcStoreError(f"general exception caught in `ArcStore.delete`: '{str(e)}'") from e
 
     def exists(self, arc_id: str) -> bool:
         """_Check if an ARC exists by its ID.
@@ -134,6 +126,4 @@ class ArcStore(ABC):
                 arc_id,
                 str(e),
             )
-            raise ArcStoreError(
-                f"General exception caught in `ArcStore.delete`: {str(e)}"
-            ) from e
+            raise ArcStoreError(f"General exception caught in `ArcStore.delete`: {str(e)}") from e

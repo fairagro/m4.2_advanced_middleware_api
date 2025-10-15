@@ -32,9 +32,7 @@ def cert() -> str:
         .public_key(private_key.public_key())
         .serial_number(x509.random_serial_number())
         .not_valid_before(datetime.datetime.now(datetime.UTC))
-        .not_valid_after(
-            datetime.datetime.now(datetime.UTC) + datetime.timedelta(days=365)
-        )
+        .not_valid_after(datetime.datetime.now(datetime.UTC) + datetime.timedelta(days=365))
         .sign(private_key, hashes.SHA256())
     )
 

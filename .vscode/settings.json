@@ -2,6 +2,28 @@
   "python.testing.pytestArgs": ["tests"],
   "python.testing.unittestEnabled": false,
   "python.testing.pytestEnabled": true,
-  "python.envFile": "${workspaceFolder}/.env",
-  "python-envs.pythonProjects": []
+  "python.testing.autoTestDiscoverOnSaveEnabled": true,
+  "python.testing.pytestPath": ".venv/bin/pytest",
+  "python.testing.cwd": "${workspaceFolder}",
+  "python-envs.pythonProjects": [],
+
+  // Code formatting - use ruff for both linting and formatting
+  "[python]": {
+    "editor.formatOnSave": true,
+    "editor.codeActionsOnSave": {
+      "source.organizeImports": "explicit",
+      "source.fixAll.ruff": "explicit"
+    }
+  },
+  "python.defaultInterpreterPath": ".venv/bin/python",
+
+  "sops-edit.onlyUseButtons": false,
+  "sops-edit.tempFilePreExtension": "decrypted",
+
+  "mypy.dmypyExecutable": "${workspaceFolder}/.venv/bin/dmypy",
+
+  // Ruff Extension Settings - ensure consistency with script
+  "ruff.configuration": "./pyproject.toml",
+  "ruff.path": ["uv", "run", "ruff"],
+  "ruff.importStrategy": "fromEnvironment"
 }

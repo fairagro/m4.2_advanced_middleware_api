@@ -1,18 +1,15 @@
 """Unit tests for the ConfigWrapper utility."""
 
 from pathlib import Path
+from typing import Any
 
 import pytest
 
-from middleware_api.utils.config_wrapper import (
-    ConfigWrapper,
-    ConfigWrapperDict,
-    ConfigWrapperList,
-)
+from middleware_api.utils.config_wrapper import ConfigWrapper, ConfigWrapperDict, ConfigWrapperList, ListType
 
 
 @pytest.fixture
-def sample_dict():
+def sample_dict() -> dict[str, Any]:
     """Sample dictionary for testing."""
     return {
         "foo": "bar",
@@ -22,12 +19,14 @@ def sample_dict():
 
 
 @pytest.fixture
-def sample_list():
+def sample_list() -> list[Any]:
     """Sample list for testing."""
     return ["a", "b", {"id": "c", "value": 42}]
 
 
-def test_dict_basic_access(sample_dict):  # pylint: disable=redefined-outer-name
+def test_dict_basic_access(
+    sample_dict: dict[str, Any],
+) -> None:  # pylint: disable=redefined-outer-name
     """Test basic access in ConfigWrapperDict."""
     cfg = ConfigWrapperDict(sample_dict)
     assert cfg["foo"] == "bar"  # nosec
@@ -36,23 +35,25 @@ def test_dict_basic_access(sample_dict):  # pylint: disable=redefined-outer-name
     assert nested["key"] == "value"  # nosec
 
 
-def test_dict_get_method(sample_dict):  # pylint: disable=redefined-outer-name
+def test_dict_get_method(
+    sample_dict: dict[str, Any],
+) -> None:  # pylint: disable=redefined-outer-name
     """Test the get method in ConfigWrapperDict."""
     cfg = ConfigWrapperDict(sample_dict)
     assert cfg.get("foo") == "bar"  # nosec
     assert cfg.get("nonexistent", "default") == "default"  # nosec
 
 
-def test_dict_override_env(monkeypatch):  # pylint: disable=redefined-outer-name
+def test_dict_override_env(
+    monkeypatch: Any,
+) -> None:  # pylint: disable=redefined-outer-name
     """Test environment variable override in ConfigWrapperDict."""
     monkeypatch.setenv("FOO_BAR", "env_value")
     cfg = ConfigWrapperDict({"bar": "original"}, path="foo")
     assert cfg["bar"] == "env_value"  # nosec
 
 
-def test_list_override_env(
-    monkeypatch, sample_dict
-):  # pylint: disable=redefined-outer-name
+def test_list_override_env(monkeypatch: Any, sample_dict: dict[str, Any]) -> None:  # pylint: disable=redefined-outer-name
     """Test environment variable override in ConfigWrapperList."""
     monkeypatch.setenv("LIST_FOO_BAR", "baz")
     cfg = ConfigWrapper.from_data(sample_dict)
@@ -65,16 +66,16 @@ def test_list_override_env(
     assert cfg_list_foo["bar"] == "baz"  # nosec
 
 
-def test_dict_override_secret(tmp_path):  # pylint: disable=redefined-outer-name
+def test_dict_override_secret(
+    tmp_path: Path,
+) -> None:  # pylint: disable=redefined-outer-name
     """Test secret file override in ConfigWrapperDict."""
     secret_file = tmp_path / "foo_secret"
     secret_file.write_text("secret_value")
     # Patch /run/secrets to tmp_path
     monkeypatch = pytest.MonkeyPatch()
     original_exists = Path.exists
-    monkeypatch.setattr(
-        Path, "exists", lambda self: original_exists(tmp_path / self.name)
-    )
+    monkeypatch.setattr(Path, "exists", lambda self: original_exists(tmp_path / self.name))
     original_read_text = Path.read_text
     monkeypatch.setattr(
         Path,
@@ -87,7 +88,7 @@ def test_dict_override_secret(tmp_path):  # pylint: disable=redefined-outer-name
     monkeypatch.undo()
 
 
-def test_dict_iteration_and_len(monkeypatch):
+def test_dict_iteration_and_len(monkeypatch: Any) -> None:
     """Test iteration and length in ConfigWrapperDict."""
     monkeypatch.setenv("FOO_NEWKEY", "val")
     cfg = ConfigWrapperDict({"bar": "baz"}, path="foo")
@@ -100,7 +101,9 @@ def test_dict_iteration_and_len(monkeypatch):
     assert items["newkey"] == "val"  # nosec
 
 
-def test_list_access_and_items(sample_list):  # pylint: disable=redefined-outer-name
+def test_list_access_and_items(
+    sample_list: ListType,
+) -> None:  # pylint: disable=redefined-outer-name
     """Test access and items in ConfigWrapperList."""
     cfg = ConfigWrapperList(sample_list)
     assert cfg[0] == "a"  # nosec
