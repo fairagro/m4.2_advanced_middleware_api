@@ -30,14 +30,10 @@ jobs:
         # Install all dependencies including dev dependencies
         uv sync --dev
 
-    - name: Code formatting check with Black
+    - name: Code formatting and linting check with Ruff
       run: |
-        uv run black --check --diff middleware_api/ tests/
-      continue-on-error: false
-
-    - name: Import sorting check with isort
-      run: |
-        uv run isort --check-only --diff middleware_api/ tests/
+        uv run ruff check middleware_api/ tests/
+        uv run ruff format --check middleware_api/ tests/
       continue-on-error: false
 
     - name: Linting with pylint
@@ -85,8 +81,7 @@ jobs:
         echo "## 📊 Code Quality Summary" >> $GITHUB_STEP_SUMMARY
         echo "| Tool | Status | Details |" >> $GITHUB_STEP_SUMMARY
         echo "|------|--------|---------|" >> $GITHUB_STEP_SUMMARY
-        echo "| Black | ✅ Formatting | Code formatting check |" >> $GITHUB_STEP_SUMMARY
-        echo "| isort | ✅ Import sorting | Import organization check |" >> $GITHUB_STEP_SUMMARY
+        echo "| Ruff | ✅ Formatting & Linting | Code formatting and linting check |" >> $GITHUB_STEP_SUMMARY
         echo "| pylint | ✅ Code quality | Static analysis (min score: 8.0) |" >> $GITHUB_STEP_SUMMARY
         echo "| mypy | ✅ Type checking | Static type analysis |" >> $GITHUB_STEP_SUMMARY
         echo "| bandit | ✅ Security | Security vulnerability scan |" >> $GITHUB_STEP_SUMMARY
