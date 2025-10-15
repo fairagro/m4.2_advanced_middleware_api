@@ -34,7 +34,7 @@ commandTests:
   - name: 'Python is not in final image (security)'
     command: 'sh'
     args: ['-lc', 'command -v python3']
-    exitCode: 1  # Should fail - Python not in final image
+    exitCode: 127  # Command not found - Python not in final image (security)
 
 # Metadata tests (simplified)
 metadataTest:
