@@ -23,7 +23,7 @@ RUN pip install --no-cache-dir --upgrade pip==25.2 uv==0.9.2 \
 
 
 # # ---- Runtime Stage ----
-FROM alpine:3.22.1
+FROM alpine:3.22.2
 
 WORKDIR /middleware_api
 
