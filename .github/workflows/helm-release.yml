@@ -14,7 +14,6 @@ name: Create Helm Chart Release
 #         - major
 #         - minor
 #         - patch
-# inputs section moved to comment block above
 
 env:
   GIT_USER_NAME: ${{ vars.GIT_USER_NAME || 'GitHub Pipeline' }}
