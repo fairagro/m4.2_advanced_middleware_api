@@ -17,16 +17,6 @@
   },
   "python.defaultInterpreterPath": ".venv/bin/python",
 
-  // Terminal lädt automatisch Secrets
-  "terminal.integrated.shellIntegration.enabled": true,
-  "terminal.integrated.profiles.linux": {
-    "bash": {
-      "path": "bash",
-      "args": ["-c", "./scripts/load-env.sh 2>/dev/null || true; exec bash"]
-    }
-  },
-  "terminal.integrated.defaultProfile.linux": "bash",
-
   "sops-edit.onlyUseButtons": false,
   "sops-edit.tempFilePreExtension": "decrypted",
 
