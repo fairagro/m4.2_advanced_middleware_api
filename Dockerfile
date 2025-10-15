@@ -3,11 +3,11 @@ FROM python:3.12.11-alpine3.22 AS builder
 
 # Installiere Build-Tools für native Builds
 RUN apk add --no-cache \
-    build-base \
-    python3-dev \
-    libffi-dev \
-    openssl-dev \
-    cargo
+    build-base=0.5-r3 \
+    python3-dev=3.12.12-r0 \
+    libffi-dev=3.4.8-r0 \
+    openssl-dev=3.5.4-r0 \
+    cargo=1.87.0-r0
 
 WORKDIR /middleware_api
 
@@ -35,7 +35,7 @@ COPY --from=builder /middleware_api/dist/middleware_api .
 COPY config.yaml $MIDDLEWARE_API_CONFIG
 
 # Create non-root user and group and fix permissions
-RUN apk add --no-cache curl \
+RUN apk add --no-cache curl=8.14.1-r2 \
     && addgroup -S middleware && adduser -S middleware -G middleware \
     && chown -R middleware:middleware /middleware_api
 
