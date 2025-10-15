@@ -1,5 +1,5 @@
 # ---- Build Stage ----
-FROM python:3.12.11-alpine3.22 AS builder
+FROM python:3.14.0-alpine3.22 AS builder
 
 # Installiere Build-Tools für native Builds
 RUN apk add --no-cache \
@@ -23,7 +23,7 @@ RUN pip install --no-cache-dir --upgrade pip==25.2 uv==0.9.2 \
 
 
 # # ---- Runtime Stage ----
-FROM alpine:3.22.1
+FROM alpine:3.22.2
 
 WORKDIR /middleware_api
 
