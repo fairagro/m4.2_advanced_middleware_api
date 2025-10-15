@@ -374,27 +374,28 @@ jobs:
             --field draft=false
           echo "🎉 Release finalized successfully"
 
-  update-helm-chart:
-    needs: [docker-build-test, security-scan-release]
-    runs-on: ubuntu-latest
-    if: needs.docker-build-test.outputs.dockerhub-pushed == 'true' && needs.security-scan-release.result == 'success'
+  # currently there is no helm chart to update
+  # update-helm-chart:
+  #   needs: [docker-build-test, security-scan-release]
+  #   runs-on: ubuntu-latest
+  #   if: needs.docker-build-test.outputs.dockerhub-pushed == 'true' && needs.security-scan-release.result == 'success'
 
-    permissions:
-      contents: write
+  #   permissions:
+  #     contents: write
 
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
+  #   steps:
+  #     - uses: actions/checkout@v4
+  #       with:
+  #         fetch-depth: 0
 
-      - name: Update Chart.yaml appVersion
-        run: |
-          sed -i "s/^appVersion:.*/appVersion: \"${{ needs.docker-build-test.outputs.version }}\"/" helm/Chart.yaml
+  #     - name: Update Chart.yaml appVersion
+  #       run: |
+  #         sed -i "s/^appVersion:.*/appVersion: \"${{ needs.docker-build-test.outputs.version }}\"/" helm/Chart.yaml
 
-      - name: Commit and push Chart.yaml changes
-        uses: stefanzweifel/git-auto-commit-action@v5
-        with:
-          commit_message: "chore(helm): update appVersion to ${{ needs.docker-build-test.outputs.version }}"
-          file_pattern: "helm/Chart.yaml"
-          commit_user_name: "${{ env.GIT_USER_NAME }}"
-          commit_user_email: "${{ env.GIT_USER_EMAIL }}"
+  #     - name: Commit and push Chart.yaml changes
+  #       uses: stefanzweifel/git-auto-commit-action@v5
+  #       with:
+  #         commit_message: "chore(helm): update appVersion to ${{ needs.docker-build-test.outputs.version }}"
+  #         file_pattern: "helm/Chart.yaml"
+  #         commit_user_name: "${{ env.GIT_USER_NAME }}"
+  #         commit_user_email: "${{ env.GIT_USER_EMAIL }}"
