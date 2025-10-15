@@ -1,7 +1,11 @@
 name: Create Helm Chart Release
 
-on:
-  workflow_dispatch:
+# DEACTIVATED: Workflow currently not needed but kept for future use
+# To reactivate: remove this comment block and uncomment the 'on:' section below
+# on:
+#   workflow_dispatch:
+
+on: []  # Deactivated - no triggers
     inputs:
       version_bump:
         description: 'Version bump type for Helm chart release'
