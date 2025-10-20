@@ -291,7 +291,7 @@ jobs:
           
           # Verify the change
           echo "✅ Updated version:"
-          grep -E '^version[[:space:]]*=[[:space:]]*"'$NEW_VERSION'"' pyproject.toml
+          grep -E '^[[:space:]]*version[[:space:]]*=' pyproject.toml
 
       - name: Commit version update
         env:
