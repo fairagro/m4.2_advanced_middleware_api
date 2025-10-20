@@ -1,19 +1,22 @@
 name: Create Helm Chart Release
 
 # DEACTIVATED: Workflow currently not needed but kept for future use
-# To reactivate: uncomment the 'on:' section below
-# on:
-#   workflow_dispatch:
-#     inputs:
-#       version_bump:
-#         description: 'Version bump type for Helm chart release'
-#         required: true
-#         default: 'patch'
-#         type: choice
-#         options:
-#         - major
-#         - minor
-#         - patch
+# To reactivate: uncomment the workflow_dispatch section below and remove the schedule trigger
+on:
+  # Minimal trigger to keep workflow valid (runs never - Feb 30th doesn't exist)
+  schedule:
+    - cron: '0 0 30 2 *'
+  # workflow_dispatch:
+  #   inputs:
+  #     version_bump:
+  #       description: 'Version bump type for Helm chart release'
+  #       required: true
+  #       default: 'patch'
+  #       type: choice
+  #       options:
+  #       - major
+  #       - minor
+  #       - patch
 
 env:
   GIT_USER_NAME: ${{ vars.GIT_USER_NAME || 'GitHub Pipeline' }}

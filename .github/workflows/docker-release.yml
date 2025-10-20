@@ -373,6 +373,59 @@ jobs:
             --field draft=false
           echo "🎉 Release finalized successfully"
 
+  update-version:
+    name: Update pyproject.toml version
+    needs: [docker-build-test, create-release]
+    runs-on: ubuntu-latest
+    # Only run on main branch for final releases
+    if: github.ref_name == 'main' && needs.docker-build-test.result == 'success' && needs.create-release.result == 'success'
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          fetch-depth: 0
+
+      - name: Configure Git
+        run: |
+          git config user.name "${{ env.GIT_USER_NAME }}"
+          git config user.email "${{ env.GIT_USER_EMAIL }}"
+
+      - name: Update pyproject.toml version
+        env:
+          NEW_VERSION: ${{ needs.docker-build-test.outputs.version }}
+        run: |
+          echo "🔄 Updating pyproject.toml version to: $NEW_VERSION"
+          
+          # Update version in pyproject.toml using sed
+          sed -i "s/^version = \".*\"/version = \"$NEW_VERSION\"/" pyproject.toml
+          
+          # Verify the change
+          echo "✅ Updated version:"
+          grep "^version = " pyproject.toml
+
+      - name: Commit version update
+        env:
+          NEW_VERSION: ${{ needs.docker-build-test.outputs.version }}
+        run: |
+          # Check if there are changes to commit
+          if git diff --quiet pyproject.toml; then
+            echo "⏭️ No version changes to commit (version already up to date)"
+            exit 0
+          fi
+          
+          # Commit the version update
+          git add pyproject.toml
+          git commit -m "chore: bump version to $NEW_VERSION [skip ci]"
+          
+          # Push the changes
+          git push origin main
+          
+          echo "✅ Version updated and committed: $NEW_VERSION"
+
   # currently there is no helm chart to update
   # update-helm-chart:
   #   needs: [docker-build-test, security-scan-release]
