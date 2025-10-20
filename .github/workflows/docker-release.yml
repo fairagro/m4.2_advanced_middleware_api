@@ -416,6 +416,7 @@ jobs:
         env:
           NEW_VERSION: ${{ needs.docker-build-test.outputs.version }}
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          VERSION_BUMP: ${{ github.event.inputs.version_bump || 'patch' }}
         run: |
           # Check if there are changes to commit
           if git diff --quiet pyproject.toml; then
@@ -434,7 +435,7 @@ jobs:
           # Push the branch
           git push origin "$BRANCH_NAME"
           
-          # Create a pull request
+          # Create a pull request with version-specific label
           gh pr create \
             --title "chore: bump version to $NEW_VERSION" \
             --body "Automated version update after release $NEW_VERSION
@@ -443,12 +444,12 @@ jobs:
           
           **Auto-generated after**: Docker Release v$NEW_VERSION
           **Release Tag**: ${{ env.RELEASE_TAG }}
+          **Version bump type**: $VERSION_BUMP
           
           > This PR was automatically created by the Docker Release workflow." \
             --base main \
             --head "$BRANCH_NAME" \
-            --label "automated" \
-            --label "version-bump"
+            --label "${VERSION_BUMP} version"
           
           echo "✅ Pull request created for version update to $NEW_VERSION"
 
