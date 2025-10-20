@@ -449,7 +449,7 @@ jobs:
           > This PR was automatically created by the Docker Release workflow." \
             --base main \
             --head "$BRANCH_NAME" \
-            --label "${VERSION_BUMP} version"
+            --label "$VERSION_BUMP version"
           
           echo "✅ Pull request created for version update to $NEW_VERSION"
 
