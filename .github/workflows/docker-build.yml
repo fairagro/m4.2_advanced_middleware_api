@@ -308,7 +308,7 @@ jobs:
           git commit -m "chore: bump version to $NEW_VERSION [skip ci]"
           
           # Pull latest changes with rebase to avoid non-fast-forward errors
-          git pull --rebase --autostash origin main
+          git push origin "HEAD:${GITHUB_REF_NAME}"
           
           # Push the changes
           git push origin main
