@@ -287,7 +287,7 @@ jobs:
           echo "🔄 Updating pyproject.toml version to: $NEW_VERSION"
           
           # Update version in pyproject.toml using sed
-          sed -i "s/^version = \".*\"/version = \"$NEW_VERSION\"/" pyproject.toml
+          sed -E -i 's/^([[:space:]]*version[[:space:]]*=[[:space:]]*)".*"/\1"'"$NEW_VERSION"'"/' pyproject.toml
           
           # Verify the change
           echo "✅ Updated version:"
