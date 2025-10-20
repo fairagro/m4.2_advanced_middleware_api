@@ -381,6 +381,11 @@ jobs:
     if: github.ref_name == 'main' && needs.docker-build-test.result == 'success' && needs.create-release.result == 'success'
     permissions:
       contents: write
+      pull-requests: write
+
+    env:
+      TIMESTAMP: ${{ github.run_id }}${{ github.run_attempt }}
+      RELEASE_TAG: ${{ github.run_id }}${{ github.run_attempt }}-docker-v${{ needs.docker-build-test.outputs.version }}
 
     steps:
       - name: Checkout code
