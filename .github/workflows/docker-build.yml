@@ -258,3 +258,56 @@ jobs:
           else
             echo "❌ **Container structure tests failed!**" >> $GITHUB_STEP_SUMMARY
           fi
+
+  update-version:
+    name: Update pyproject.toml version
+    needs: [calculate-version, test-docker-image]
+    runs-on: ubuntu-latest
+    # Only run on main branch when pushing to registry (final releases)
+    if: github.ref_name == 'main' && inputs.push_to_registry == true
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          fetch-depth: 0
+
+      - name: Configure Git
+        run: |
+          git config user.name "${{ vars.GIT_USER_NAME || 'GitHub Pipeline' }}"
+          git config user.email "${{ vars.GIT_USER_EMAIL || 'github_pipeline@fairagro.net' }}"
+
+      - name: Update pyproject.toml version
+        env:
+          NEW_VERSION: ${{ needs.calculate-version.outputs.version }}
+        run: |
+          echo "🔄 Updating pyproject.toml version to: $NEW_VERSION"
+          
+          # Update version in pyproject.toml using sed
+          sed -i "s/^version = \".*\"/version = \"$NEW_VERSION\"/" pyproject.toml
+          
+          # Verify the change
+          echo "✅ Updated version:"
+          grep "^version = " pyproject.toml
+
+      - name: Commit version update
+        env:
+          NEW_VERSION: ${{ needs.calculate-version.outputs.version }}
+        run: |
+          # Check if there are changes to commit
+          if git diff --quiet pyproject.toml; then
+            echo "⏭️ No version changes to commit (version already up to date)"
+            exit 0
+          fi
+          
+          # Commit the version update
+          git add pyproject.toml
+          git commit -m "chore: bump version to $NEW_VERSION [skip ci]"
+          
+          # Push the changes
+          git push origin main
+          
+          echo "✅ Version updated and committed: $NEW_VERSION"
