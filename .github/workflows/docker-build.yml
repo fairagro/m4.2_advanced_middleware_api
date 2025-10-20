@@ -264,7 +264,7 @@ jobs:
     needs: [calculate-version, test-docker-image]
     runs-on: ubuntu-latest
     # Only run on main branch when pushing to registry (final releases)
-    if: github.ref_name == 'main' && inputs.push_to_registry == true
+    if: github.ref_name == 'main' && (inputs.push_to_registry == true || inputs.push_to_registry == 'true')
     permissions:
       contents: write
 
