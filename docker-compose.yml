@@ -1,0 +1,114 @@
+x-base-image: &base-image
+  image: whiterabbitsecurity/openxpki3:3.32.8
+
+services:
+  db:
+    restart: always
+    container_name: OpenXPKI_Database
+    image: mariadb:12.0.2
+    environment:
+      MYSQL_DATABASE: openxpki
+      MYSQL_USER: ${DB_USER}
+      MYSQL_PASSWORD: ${DB_PASSWORD}
+      MYSQL_ROOT_PASSWORD: rootpw
+    volumes:
+      - openxpkidb:/var/lib/mysql
+      - ./openxpki-config/contrib/sql/schema-mariadb.sql:/docker-entrypoint-initdb.d/schema-mariadb.sql:ro
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      start_period: 10s
+      interval: 10s
+      timeout: 5s
+      retries: 3
+
+  server:
+    << : *base-image
+    container_name: OpenXPKI_Server
+    user: openxpki:openxpki
+    group_add:
+      - openxpkiclient
+    tmpfs:
+      - /tmp
+    volumes:
+      - openxpkiclientsocket:/run/openxpki-clientd
+      - openxpkisocket:/run/openxpkid
+      - openxpkidownload:/var/www/download
+      - ./openxpki-config:/etc/openxpki:ro
+    environment:
+      DB_HOST: db
+      DB_NAME: openxpki
+      DB_USER: ${DB_USER}
+      DB_PASSWORD: ${DB_PASSWORD}
+    healthcheck:
+      test: /usr/bin/openxpkictl status server
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    depends_on:
+      db:
+        condition: service_healthy
+
+  client:
+    << : *base-image
+    container_name: OpenXPKI_Client
+    image: whiterabbitsecurity/openxpki3
+    command: /usr/bin/openxpkictl start client --nd
+    user: openxpkiclient:openxpkiclient
+    group_add:
+     - www-data
+    tmpfs:
+      - /tmp
+    volumes:
+      - ./openxpki-config/client.d:/etc/openxpki/client.d:ro
+      - openxpkisocket:/run/openxpkid
+      - openxpkiclientsocket:/run/openxpki-clientd
+    healthcheck:
+      test: /usr/bin/openxpkictl status client
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    depends_on:
+      server:
+        condition: service_healthy
+      db:
+        condition: service_healthy
+
+  web: &web-apache
+    << : *base-image
+    container_name: OpenXPKI_WebUI
+    command: /usr/bin/start-webserver apache
+    ports:
+      - "8080:80/tcp"
+      - "8443:443/tcp"
+    volumes:
+      - openxpkidownload:/var/www/download:ro
+      - openxpkiclientsocket:/run/openxpki-clientd
+      - ./openxpki-config/contrib/apache2-openxpki-site.conf:/etc/apache2/sites-enabled/openxpki.conf:ro
+    healthcheck:
+      test: wget -q http://localhost/healthcheck/ping
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    depends_on:
+      client:
+        condition: service_healthy
+
+  # web-nginx:
+  #   << : *web-apache
+  #   container_name: OpenXPKI_WebUI_nginx
+  #   command: /usr/bin/start-webserver nginx
+  #   volumes:
+  #     - ./openxpki-config/contrib/nginx-openxpki-site:/etc/nginx/sites-enabled/openxpki
+  #     - ./openxpki-config/tls/:/etc/openxpki/tls/
+  #     - openxpkiclientsocket:/run/openxpki-clientd
+  #     - openxpkidownload:/var/www/download:ro
+
+volumes:
+  openxpkidb:
+  openxpkisocket:
+  openxpkidownload:
+  openxpkiclientsocket:
+
+# secrets:
+#   client_key:
+#     file: ./openxpki_config/client.key
