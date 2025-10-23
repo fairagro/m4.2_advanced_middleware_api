@@ -5,6 +5,7 @@ updating and deleting ARC objects. It includes authentication via client certifi
 and content type validation.
 """
 
+import logging
 from typing import Annotated
 
 from cryptography import x509
@@ -38,11 +39,20 @@ class Api:
             environment. Defaults to None.
 
         """
+        self._logger = logging.getLogger("middleware_api")
+
         if config:
             self._config = config
+            logging.basicConfig(
+                level=getattr(logging, config.log_level),
+                format="%(asctime)s %(levelname)s %(name)s: %(message)s")
         else:
-            # Either load config file from env var or use default path
             self._config = Config.from_env_var()
+            logging.basicConfig(
+                level=getattr(logging, self._config.log_level),
+                format="%(asctime)s %(levelname)s %(name)s: %(message)s")
+            self._logger.info(
+                "Loaded config from environment variable or default path.")
         self._store = GitlabApi(self._config.gitlab_api)
         self._service = BusinessLogic(self._store)
         self._app = FastAPI(
@@ -72,9 +82,12 @@ class Api:
         return self._service
 
     def _get_client_id(self, headers: Headers) -> str:
-        client_cert = headers.get("X-Client-Cert")
+        # Debug log all header fields
+        self._logger.debug(f"Request headers: {dict(headers.items())}")
+
         if not client_cert:
             msg = "Client certificate missing"
+            self._logger.warning(msg)
             raise HTTPException(status_code=401, detail=msg)
 
         try:
@@ -83,31 +96,40 @@ class Api:
             value = cert_obj.subject.get_attributes_for_oid(x509.NameOID.COMMON_NAME)[0].value
             return bytes(value).decode() if isinstance(value, bytes | bytearray | memoryview) else str(value)
         except ValueError as e:
-            raise HTTPException(status_code=400, detail=f"Invalid certificate format: {str(e)}") from e
+            self._logger.error(f"Invalid certificate format: {str(e)}")
+            raise HTTPException(
+                status_code=400, detail=f"Invalid certificate format: {str(e)}") from e
         except Exception as e:
-            raise HTTPException(status_code=400, detail=f"Certificate parsing error: {str(e)}") from e
+            self._logger.error(f"Certificate parsing error: {str(e)}")
+            raise HTTPException(
+                status_code=400, detail=f"Certificate parsing error: {str(e)}") from e
 
     def _validate_content_type(self, headers: Headers) -> None:
         content_type = headers.get("content-type")
         if not content_type:
             msg = f"Content-Type header is missing. Expected '{self.SUPPORTED_CONTENT_TYPE}'."
+            self._logger.warning(msg)
             raise HTTPException(status_code=415, detail=msg)
         if content_type != self.SUPPORTED_CONTENT_TYPE:
             msg = f"Unsupported Media Type. Supported types: '{self.SUPPORTED_CONTENT_TYPE}'."
+            self._logger.warning(msg)
             raise HTTPException(status_code=415, detail=msg)
 
     def _validate_accept_type(self, headers: Headers) -> None:
         accept = headers.get("accept")
         if accept not in [self.SUPPORTED_ACCEPT_TYPE, "*/*"]:
             msg = f"Unsupported Response Type. Supported types: '{self.SUPPORTED_ACCEPT_TYPE}'."
+            self._logger.warning(msg)
             raise HTTPException(status_code=406, detail=msg)
 
     def _setup_exception_handlers(self) -> None:
         @self._app.exception_handler(Exception)
         async def unhandled_exception_handler(_request: Request, _exc: Exception) -> JSONResponse:
+            self._logger.error(f"Unhandled exception: {_exc}")
             return JSONResponse(
                 status_code=500,
-                content={"detail": "Internal Server Error. Please contact support if the problem persists."},
+                content={
+                    "detail": "Internal Server Error. Please contact support if the problem persists."},
             )
 
     def _setup_routes(self) -> None:
@@ -140,7 +162,8 @@ class Api:
                 location = f"/v1/arcs/{result.arcs[0].id}" if result.arcs else ""
                 return JSONResponse(
                     content=result.model_dump(),
-                    status_code=(201 if any(a.status == "created" for a in result.arcs) else 200),
+                    status_code=(201 if any(
+                        a.status == "created" for a in result.arcs) else 200),
                     headers={"Location": location},
                 )
             except InvalidJsonSyntaxError as e:
