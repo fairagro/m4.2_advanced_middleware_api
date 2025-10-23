@@ -9,11 +9,13 @@
 			"moby": true,
 			"installDockerBuildx": true,
 			"installDockerComposeSwitch": true,
-			"version": "28.3.3",
+			"disableIp6tables": true,
+			"version": "latest",
 			"dockerDashComposeVersion": "v2"
 		},
 		"ghcr.io/devcontainers/features/git-lfs:1": {
 			"autoPull": true,
+			"installDirectlyFromGitHubRelease": true,
 			"version": "latest"
 		},
 		"ghcr.io/devcontainers/features/github-cli:1": {
@@ -25,11 +27,11 @@
 			"version": "3.12"
 		},
 		"ghcr.io/eitsupi/devcontainer-features/jq-likes:2": {
-			"jqVersion": "1",
-			"yqVersion": "4",
-			"gojqVersion": "latest",
+			"jqVersion": "latest",
+			"yqVersion": "latest",
+			"gojqVersion": "none",
 			"xqVersion": "latest",
-			"jaqVersion": "1"
+			"jaqVersion": "none"
 		},
 		"ghcr.io/dhoeric/features/hadolint:1": {},
 		"ghcr.io/stuartleeks/dev-container-features/shell-history:0": {},
@@ -77,7 +79,9 @@
 			"version": "latest"
 		},
 		"ghcr.io/jungaretti/features/vim:1": {},
-		"ghcr.io/schlich/cst-devcontainer-feature/container-structure-test:1": {}
+		"ghcr.io/schlich/cst-devcontainer-feature/container-structure-test:1": {
+			"addAlias": true
+		}
 	},
 
 	"containerEnv": {
