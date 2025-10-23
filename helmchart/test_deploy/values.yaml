@@ -1,0 +1,26 @@
+tls:
+  serverCrtFile: server.crt
+  serverKeyFile: server.key
+  caCrtFile: ca.crt
+
+image:
+  repository: advanced-middleware-api
+  tag: test
+  imagePullPolicy: Never
+
+ingress:
+  enabled: true
+  annotations:
+    nginx.ingress.kubernetes.io/auth-tls-secret: ca-secret
+    nginx.ingress.kubernetes.io/auth-tls-verify-client: "on"
+    nginx.ingress.kubernetes.io/auth-tls-verify-depth: "1"
+    nginx.ingress.kubernetes.io/auth-tls-pass-certificate-to-upstream: "true"
+  hosts:
+    - host: chart-example.local
+      paths:
+        - path: /
+          pathType: ImplementationSpecific
+  tls:
+    - secretName: server-tls
+      hosts:
+        - chart-example.local

@@ -214,3 +214,9 @@ scratch/
 **/*.stats
 
 **/*.decrypted.*
+
+# Cryptographic keys and certificates for testing that are not meant to be committed
+helmchart/**/*.crt
+helmchart/**/*.key
+helmchart/**/*.csr
+helmchart/**/*.srl
