@@ -120,7 +120,9 @@
 				"github.copilot",
 				"github.copilot-chat",
 				"matangover.mypy",
-				"astral-sh.ruff"
+				"astral-sh.ruff",
+				"tim-koehler.helm-intellisense",
+				"vadzimnestsiarenka.helm-template-preview-and-more"
 			]
 		}
 	},

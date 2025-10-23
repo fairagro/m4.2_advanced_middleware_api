@@ -20,6 +20,8 @@
     "github.copilot-chat",
     "matangover.mypy",
     "astral-sh.ruff",
+    "tim-koehler.helm-intellisense",
+		"vadzimnestsiarenka.helm-template-preview-and-more",
     "ms-vscode-remote.remote-containers"
   ],
 }
