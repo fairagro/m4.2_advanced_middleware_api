@@ -81,6 +81,11 @@
 		"ghcr.io/jungaretti/features/vim:1": {},
 		"ghcr.io/schlich/cst-devcontainer-feature/container-structure-test:1": {
 			"addAlias": true
+		},
+		"ghcr.io/devcontainers/features/kubectl-helm-minikube:1": {
+			"version": "none",
+			"helm": "latest",
+			"minikube": "none"
 		}
 	},
 
