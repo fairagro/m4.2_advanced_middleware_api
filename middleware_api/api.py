@@ -5,6 +5,7 @@ updating and deleting ARC objects. It includes authentication via client certifi
 and content type validation.
 """
 
+import base64
 import logging
 from typing import Annotated
 
@@ -85,16 +86,24 @@ class Api:
         # Debug log all header fields
         self._logger.debug(f"Request headers: {dict(headers.items())}")
 
+        client_cert = headers.get("ssl-client-cert")
         if not client_cert:
             msg = "Client certificate missing"
             self._logger.warning(msg)
             raise HTTPException(status_code=401, detail=msg)
 
         try:
-            pem = client_cert.replace("\\n", "\n")
-            cert_obj = x509.load_pem_x509_certificate(pem.encode(), default_backend())
-            value = cert_obj.subject.get_attributes_for_oid(x509.NameOID.COMMON_NAME)[0].value
-            return bytes(value).decode() if isinstance(value, bytes | bytearray | memoryview) else str(value)
+            pem = base64.b64decode(client_cert)
+            cert_obj = x509.load_pem_x509_certificate(pem, default_backend())
+            value = cert_obj.subject.get_attributes_for_oid(
+                x509.NameOID.COMMON_NAME)[0].value
+            decoded_value = (
+                value.tobytes().decode() if isinstance(value, memoryview)
+                else value.decode() if isinstance(value, (bytes, bytearray))
+                else str(value)
+            )
+            self._logger.info(f"Client certificate parsed, CN={decoded_value}")
+            return decoded_value
         except ValueError as e:
             self._logger.error(f"Invalid certificate format: {str(e)}")
             raise HTTPException(
