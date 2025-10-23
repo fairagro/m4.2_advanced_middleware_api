@@ -83,9 +83,9 @@
 			"addAlias": true
 		},
 		"ghcr.io/devcontainers/features/kubectl-helm-minikube:1": {
-			"version": "none",
+			"version": "latest",
 			"helm": "latest",
-			"minikube": "none"
+			"minikube": "latest"
 		}
 	},
 
