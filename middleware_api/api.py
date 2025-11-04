@@ -32,7 +32,7 @@ class Api:
     SUPPORTED_CONTENT_TYPE = "application/ro-crate+json"
     SUPPORTED_ACCEPT_TYPE = "application/json"
 
-    def __init__(self, config: Config | None = None) -> None:
+    def __init__(self, app_config: Config) -> None:
         """Initialize the API with optional configuration.
 
         Args:
@@ -41,18 +41,7 @@ class Api:
 
         """
         self._logger = logging.getLogger("middleware_api")
-
-        if config:
-            self._config = config
-            logging.basicConfig(
-                level=getattr(logging, config.log_level), format="%(asctime)s %(levelname)s %(name)s: %(message)s"
-            )
-        else:
-            self._config = Config.from_env_var()
-            logging.basicConfig(
-                level=getattr(logging, self._config.log_level), format="%(asctime)s %(levelname)s %(name)s: %(message)s"
-            )
-            self._logger.info("Loaded config from environment variable or default path.")
+        self._config = app_config
         self._store = GitlabApi(self._config.gitlab_api)
         self._service = BusinessLogic(self._store)
         self._app = FastAPI(
@@ -197,7 +186,11 @@ class Api:
                 raise HTTPException(status_code=422, detail=str(e)) from e
 
 
-middleware_api = Api()
+config = Config.from_env_var()
+
+logging.basicConfig(level=getattr(logging, config.log_level), format="%(asctime)s %(levelname)s %(name)s: %(message)s")
+
+middleware_api = Api(config)
 app = middleware_api.app
 
 
