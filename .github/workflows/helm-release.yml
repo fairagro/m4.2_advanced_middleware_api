@@ -115,7 +115,7 @@ jobs:
         id: package_chart
         run: |
           # Package Helm chart (app-version is read from Chart.yaml automatically)
-          helm package ./helm --version "${{ env.CHART_VERSION }}"
+          helm package ./helmchart/advanced-middleware-api --version "${{ env.CHART_VERSION }}"
 
           # Find the actual chart package name (helm package creates name based on Chart.yaml)
           CHART_PACKAGE=$(ls *.tgz | head -1)
@@ -147,7 +147,7 @@ jobs:
             **Chart Version**: ${{ env.CHART_VERSION }}
 
             ```bash
-            helm upgrade --install fairagro-middleware ./helm \
+            helm upgrade --install fairagro-middleware ./helmchart/advanced-middleware-api \
               --set image.repository=${{ env.DOCKERHUB_NAMESPACE }}/${{ env.IMAGE_NAME }}
             ```
 
