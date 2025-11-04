@@ -45,15 +45,14 @@ class Api:
         if config:
             self._config = config
             logging.basicConfig(
-                level=getattr(logging, config.log_level),
-                format="%(asctime)s %(levelname)s %(name)s: %(message)s")
+                level=getattr(logging, config.log_level), format="%(asctime)s %(levelname)s %(name)s: %(message)s"
+            )
         else:
             self._config = Config.from_env_var()
             logging.basicConfig(
-                level=getattr(logging, self._config.log_level),
-                format="%(asctime)s %(levelname)s %(name)s: %(message)s")
-            self._logger.info(
-                "Loaded config from environment variable or default path.")
+                level=getattr(logging, self._config.log_level), format="%(asctime)s %(levelname)s %(name)s: %(message)s"
+            )
+            self._logger.info("Loaded config from environment variable or default path.")
         self._store = GitlabApi(self._config.gitlab_api)
         self._service = BusinessLogic(self._store)
         self._app = FastAPI(
@@ -85,16 +84,14 @@ class Api:
     def _get_client_id(self, headers: Headers) -> str:
         """Get client ID from certificate (mandatory mTLS)."""
         # Debug log all header fields
-        self._logger.debug(f"Request headers: {dict(headers.items())}")
+        self._logger.debug("Request headers: %s", dict(headers.items()))
 
         # Try multiple header sources for client certificate
-        client_cert = headers.get(
-            "ssl-client-cert") or headers.get("ssl-client-cert")
-        client_verify = headers.get(
-            "ssl-client-verify") or headers.get("ssl-client-verify", "NONE")
+        client_cert = headers.get("ssl-client-cert") or headers.get("ssl-client-cert")
+        client_verify = headers.get("ssl-client-verify") or headers.get("ssl-client-verify", "NONE")
 
-        self._logger.debug(f"Client cert header present: {bool(client_cert)}")
-        self._logger.debug(f"Client verify status: {client_verify}")
+        self._logger.debug("Client cert header present: %s", bool(client_cert))
+        self._logger.debug("Client verify status: %s", client_verify)
 
         if not client_cert:
             msg = "Client certificate required for access"
@@ -103,33 +100,36 @@ class Api:
 
         # Check if client certificate verification was successful
         if client_verify != "SUCCESS":
-            msg = f"Client certificate verification failed: {client_verify}"
-            self._logger.warning(msg)
-            raise HTTPException(status_code=401, detail=msg)
+            detail_msg = f"Client certificate verification failed: {client_verify}"
+            self._logger.warning(detail_msg)
+            raise HTTPException(status_code=401, detail=detail_msg)
 
         try:
             # URL decode the certificate first (NGINX sends it URL-encoded)
             cert_pem = unquote(client_cert)
-            self._logger.debug(
-                f"URL decoded certificate: {cert_pem[:100]}...")
+            self._logger.debug("URL decoded certificate: %s...", cert_pem[:100])
 
             # Parse the certificate
-            cert = x509.load_pem_x509_certificate(cert_pem.encode('utf-8'))
+            cert = x509.load_pem_x509_certificate(cert_pem.encode("utf-8"))
 
-            for attribute in cert.subject:
-                if attribute.oid == NameOID.COMMON_NAME:
-                    cn = attribute.value
+            # Extract Common Name from certificate subject
+            cn_attributes = cert.subject.get_attributes_for_oid(NameOID.COMMON_NAME)
+            if not cn_attributes:
+                msg = "Certificate subject does not contain Common Name (CN) attribute"
+                self._logger.warning(msg)
+                raise HTTPException(status_code=400, detail=msg)
 
-            self._logger.info(f"Client certificate parsed, CN={cn}")
+            cn = cn_attributes[0].value
+            self._logger.info("Client certificate parsed, CN=%s", cn)
             return cast(str, cn)
         except ValueError as e:
-            self._logger.error(f"Invalid certificate format: {str(e)}")
-            raise HTTPException(
-                status_code=400, detail=f"Invalid certificate format: {str(e)}") from e
+            error_msg = f"Invalid certificate format: {str(e)}"
+            self._logger.error(error_msg)
+            raise HTTPException(status_code=400, detail=error_msg) from e
         except Exception as e:
-            self._logger.error(f"Certificate parsing error: {str(e)}")
-            raise HTTPException(
-                status_code=400, detail=f"Certificate parsing error: {str(e)}") from e
+            error_msg = f"Certificate parsing error: {str(e)}"
+            self._logger.error(error_msg)
+            raise HTTPException(status_code=400, detail=error_msg) from e
 
     def _validate_content_type(self, headers: Headers) -> None:
         content_type = headers.get("content-type")
@@ -152,11 +152,10 @@ class Api:
     def _setup_exception_handlers(self) -> None:
         @self._app.exception_handler(Exception)
         async def unhandled_exception_handler(_request: Request, _exc: Exception) -> JSONResponse:
-            self._logger.error(f"Unhandled exception: {_exc}")
+            self._logger.error("Unhandled exception: %s", _exc)
             return JSONResponse(
                 status_code=500,
-                content={
-                    "detail": "Internal Server Error. Please contact support if the problem persists."},
+                content={"detail": "Internal Server Error. Please contact support if the problem persists."},
             )
 
     def _setup_routes(self) -> None:
@@ -189,8 +188,7 @@ class Api:
                 location = f"/v1/arcs/{result.arcs[0].id}" if result.arcs else ""
                 return JSONResponse(
                     content=result.model_dump(),
-                    status_code=(201 if any(
-                        a.status == "created" for a in result.arcs) else 200),
+                    status_code=(201 if any(a.status == "created" for a in result.arcs) else 200),
                     headers={"Location": location},
                 )
             except InvalidJsonSyntaxError as e:
