@@ -5,10 +5,12 @@ updating and deleting ARC objects. It includes authentication via client certifi
 and content type validation.
 """
 
-from typing import Annotated
+import logging
+from typing import Annotated, cast
+from urllib.parse import unquote
 
 from cryptography import x509
-from cryptography.hazmat.backends import default_backend
+from cryptography.x509.oid import NameOID
 from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.datastructures import Headers
 from fastapi.responses import JSONResponse
@@ -30,19 +32,15 @@ class Api:
     SUPPORTED_CONTENT_TYPE = "application/ro-crate+json"
     SUPPORTED_ACCEPT_TYPE = "application/json"
 
-    def __init__(self, config: Config | None = None) -> None:
+    def __init__(self, app_config: Config) -> None:
         """Initialize the API with optional configuration.
 
         Args:
-            config (Config | None, optional): Configuration object. If None, loads from
-            environment. Defaults to None.
+            app_config (Config): Configuration object.
 
         """
-        if config:
-            self._config = config
-        else:
-            # Either load config file from env var or use default path
-            self._config = Config.from_env_var()
+        self._logger = logging.getLogger("middleware_api")
+        self._config = app_config
         self._store = GitlabApi(self._config.gitlab_api)
         self._service = BusinessLogic(self._store)
         self._app = FastAPI(
@@ -72,39 +70,77 @@ class Api:
         return self._service
 
     def _get_client_id(self, headers: Headers) -> str:
-        client_cert = headers.get("X-Client-Cert")
+        """Get client ID from certificate (mandatory mTLS)."""
+        # Debug log all header fields
+        self._logger.debug("Request headers: %s", dict(headers.items()))
+
+        # Try multiple header sources for client certificate
+        client_cert = headers.get("ssl-client-cert") or headers.get("X-SSL-Client-Cert")
+        client_verify = headers.get("ssl-client-verify") or headers.get("X-SSL-Client-Verify", "NONE")
+
+        self._logger.debug("Client cert header present: %s", bool(client_cert))
+        self._logger.debug("Client verify status: %s", client_verify)
+
         if not client_cert:
-            msg = "Client certificate missing"
+            msg = "Client certificate required for access"
+            self._logger.warning(msg)
             raise HTTPException(status_code=401, detail=msg)
 
+        # Check if client certificate verification was successful
+        if client_verify != "SUCCESS":
+            detail_msg = f"Client certificate verification failed: {client_verify}"
+            self._logger.warning(detail_msg)
+            raise HTTPException(status_code=401, detail=detail_msg)
+
         try:
-            pem = client_cert.replace("\\n", "\n")
-            cert_obj = x509.load_pem_x509_certificate(pem.encode(), default_backend())
-            value = cert_obj.subject.get_attributes_for_oid(x509.NameOID.COMMON_NAME)[0].value
-            return bytes(value).decode() if isinstance(value, bytes | bytearray | memoryview) else str(value)
+            # URL decode the certificate first (NGINX sends it URL-encoded)
+            cert_pem = unquote(client_cert)
+            self._logger.debug("URL decoded certificate: %s...", cert_pem[:100])
+
+            # Parse the certificate
+            cert = x509.load_pem_x509_certificate(cert_pem.encode("utf-8"))
+
+            # Extract Common Name from certificate subject
+            cn_attributes = cert.subject.get_attributes_for_oid(NameOID.COMMON_NAME)
+            if not cn_attributes:
+                msg = "Certificate subject does not contain Common Name (CN) attribute"
+                self._logger.warning(msg)
+                raise HTTPException(status_code=400, detail=msg)
+
+            cn = cn_attributes[0].value
+            self._logger.info("Client certificate parsed, CN=%s", cn)
+            return cast(str, cn)
         except ValueError as e:
-            raise HTTPException(status_code=400, detail=f"Invalid certificate format: {str(e)}") from e
+            error_msg = f"Invalid certificate format: {str(e)}"
+            self._logger.error(error_msg)
+            raise HTTPException(status_code=400, detail=error_msg) from e
         except Exception as e:
-            raise HTTPException(status_code=400, detail=f"Certificate parsing error: {str(e)}") from e
+            error_msg = f"Certificate parsing error: {str(e)}"
+            self._logger.error(error_msg)
+            raise HTTPException(status_code=400, detail=error_msg) from e
 
     def _validate_content_type(self, headers: Headers) -> None:
         content_type = headers.get("content-type")
         if not content_type:
             msg = f"Content-Type header is missing. Expected '{self.SUPPORTED_CONTENT_TYPE}'."
+            self._logger.warning(msg)
             raise HTTPException(status_code=415, detail=msg)
         if content_type != self.SUPPORTED_CONTENT_TYPE:
             msg = f"Unsupported Media Type. Supported types: '{self.SUPPORTED_CONTENT_TYPE}'."
+            self._logger.warning(msg)
             raise HTTPException(status_code=415, detail=msg)
 
     def _validate_accept_type(self, headers: Headers) -> None:
         accept = headers.get("accept")
         if accept not in [self.SUPPORTED_ACCEPT_TYPE, "*/*"]:
             msg = f"Unsupported Response Type. Supported types: '{self.SUPPORTED_ACCEPT_TYPE}'."
+            self._logger.warning(msg)
             raise HTTPException(status_code=406, detail=msg)
 
     def _setup_exception_handlers(self) -> None:
         @self._app.exception_handler(Exception)
         async def unhandled_exception_handler(_request: Request, _exc: Exception) -> JSONResponse:
+            self._logger.error("Unhandled exception: %s", _exc)
             return JSONResponse(
                 status_code=500,
                 content={"detail": "Internal Server Error. Please contact support if the problem persists."},
@@ -149,7 +185,11 @@ class Api:
                 raise HTTPException(status_code=422, detail=str(e)) from e
 
 
-middleware_api = Api()
+config = Config.from_env_var()
+
+logging.basicConfig(level=getattr(logging, config.log_level), format="%(asctime)s %(levelname)s %(name)s: %(message)s")
+
+middleware_api = Api(config)
 app = middleware_api.app
 
 

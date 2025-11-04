@@ -9,7 +9,7 @@ async def test_whoami_with_client_cert(client: TestClient, cert: str) -> None:
     """Test the /v1/whoami endpoint with a client certificate."""
     cert_with_linebreaks = cert.replace("\\n", "\n")
 
-    headers = {"X-Client-Cert": cert_with_linebreaks, "accept": "application/json"}
+    headers = {"ssl-client-cert": cert_with_linebreaks, "ssl-client-verify": "SUCCESS", "accept": "application/json"}
 
     response = client.get("/v1/whoami", headers=headers)
 

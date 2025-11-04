@@ -16,14 +16,29 @@ from middleware_api.business_logic import (
     BusinessLogicResponse,
     CreateOrUpdateArcsResponse,
 )
+from middleware_api.config import Config
 
 from ..shared_fixtures import cert  # noqa: F401, pylint: disable=unused-import
 
 
 @pytest.fixture
-def middleware_api() -> Api:
+def config() -> Config:
+    """Provide a test Config instance with dummy values."""
+    return Config(
+        log_level="DEBUG",
+        gitlab_api=GitlabApiConfig(
+            url=HttpUrl("http://localhost:8080"),
+            token="test-token",
+            group="test-group",
+            branch="main",
+        ),
+    )
+
+
+@pytest.fixture
+def middleware_api(config: Config) -> Api:
     """Provide the Middleware API instance for tests."""
-    return Api()
+    return Api(config)
 
 
 @pytest.fixture

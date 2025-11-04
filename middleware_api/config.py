@@ -2,7 +2,7 @@
 
 import os
 from pathlib import Path
-from typing import Annotated, Self, cast
+from typing import Annotated, Literal, Self, cast
 
 from pydantic import BaseModel, Field
 
@@ -13,6 +13,9 @@ from middleware_api.utils.config_wrapper import ConfigWrapper
 class Config(BaseModel):
     """Configuration model for the Middleware API."""
 
+    log_level: Annotated[
+        Literal["CRITICAL", "ERROR", "WARNING", "INFO", "DEBUG", "NOTSET"], Field(description="Logging level")
+    ] = "INFO"
     gitlab_api: Annotated[GitlabApiConfig, Field(description="Gitlab API config")]
 
     @classmethod

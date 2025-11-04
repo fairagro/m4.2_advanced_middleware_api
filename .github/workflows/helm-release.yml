@@ -1,28 +1,23 @@
 name: Create Helm Chart Release
 
-# DEACTIVATED: Workflow currently not needed but kept for future use
-# To reactivate: uncomment the workflow_dispatch section below and remove the schedule trigger
 on:
-  # Minimal trigger to keep workflow valid (runs never - Feb 30th doesn't exist)
-  schedule:
-    - cron: '0 0 30 2 *'
-  # workflow_dispatch:
-  #   inputs:
-  #     version_bump:
-  #       description: 'Version bump type for Helm chart release'
-  #       required: true
-  #       default: 'patch'
-  #       type: choice
-  #       options:
-  #       - major
-  #       - minor
-  #       - patch
+  workflow_dispatch:
+    inputs:
+      version_bump:
+        description: 'Version bump type for Helm chart release'
+        required: true
+        default: 'patch'
+        type: choice
+        options:
+        - major
+        - minor
+        - patch
 
 env:
   GIT_USER_NAME: ${{ vars.GIT_USER_NAME || 'GitHub Pipeline' }}
   GIT_USER_EMAIL: ${{ vars.GIT_USER_EMAIL || 'github_pipeline@fairagro.net' }}
   DOCKERHUB_NAMESPACE: ${{ vars.DOCKERHUB_NAMESPACE || 'zalf' }}
-  IMAGE_NAME: ${{ vars.IMAGE_NAME || 'fairagro_advanced_middleware_api' }}
+  IMAGE_NAME: ${{ vars.IMAGE_NAME || 'fairagro-advanced-middleware-api' }}
   GITVERSION_TAG_PREFIX: ${{ vars.GITVERSION_TAG_PREFIX || '.*-chart-v' }}
 
 jobs:

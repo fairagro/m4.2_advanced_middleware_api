@@ -92,7 +92,7 @@ sops -e -i .env.integration
 
 ## Struktur
 
-```
+```bash
 .env.integration                     # Verschlüsselte Secrets (SOPS-managed)
 .sops.yaml                          # SOPS Konfiguration
 scripts/
