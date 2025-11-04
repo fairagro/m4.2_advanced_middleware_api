@@ -75,7 +75,7 @@ minikube image load advanced-middleware-api:test
 helm install api-test ./helmchart/advanced-middleware-api -f helmchart/test_deploy/values.yaml
 ```
 
-Note that the value file `helmchart/test_deploy/values.yaml` references the local docker image `advanced_middleware_api:test`.
+Note that the value file `helmchart/test_deploy/values.yaml` references the local docker image `advanced-middleware-api:test`.
 
 ### Test the api service
 
