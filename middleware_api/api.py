@@ -36,8 +36,7 @@ class Api:
         """Initialize the API with optional configuration.
 
         Args:
-            config (Config | None, optional): Configuration object. If None, loads from
-            environment. Defaults to None.
+            app_config (Config): Configuration object.
 
         """
         self._logger = logging.getLogger("middleware_api")

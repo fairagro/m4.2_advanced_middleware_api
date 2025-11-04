@@ -14,8 +14,7 @@ class Config(BaseModel):
     """Configuration model for the Middleware API."""
 
     log_level: Annotated[
-        Literal["CRITICAL", "ERROR", "WARNING", "INFO", "DEBUG", "NOTSET"],
-        Field(description="Logging level")
+        Literal["CRITICAL", "ERROR", "WARNING", "INFO", "DEBUG", "NOTSET"], Field(description="Logging level")
     ] = "INFO"
     gitlab_api: Annotated[GitlabApiConfig, Field(description="Gitlab API config")]
 
