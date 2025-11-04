@@ -9,6 +9,7 @@
 
   // Code formatting - use ruff for both linting and formatting
   "[python]": {
+    "editor.defaultFormatter": "charliermarsh.ruff",
     "editor.formatOnSave": true,
     "editor.codeActionsOnSave": {
       "source.organizeImports": "explicit",
