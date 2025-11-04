@@ -191,17 +191,15 @@ jobs:
             --field draft=false
           echo "🎉 Release finalized successfully"
 
-      - name: Login to Docker Hub
-        if: github.ref_name == 'main' && env.DOCKERHUB_AVAILABLE == 'true'
-        uses: docker/login-action@v3
-        with:
-          registry: registry-1.docker.io
-          username: ${{ secrets.DOCKERHUB_USER }}
-          password: ${{ secrets.DOCKERHUB_TOKEN }}
-
-      - name: Push Helm chart to DockerHub
+      - name: Login to Docker Hub and Push Helm chart
         if: github.ref_name == 'main' && env.DOCKERHUB_AVAILABLE == 'true'
         run: |
+          # Login to Helm registry with credentials
+          echo "🔑 Logging in to Docker Hub registry..."
+          echo "${{ secrets.DOCKERHUB_TOKEN }}" | helm registry login -u "${{ secrets.DOCKERHUB_USER }}" --password-stdin registry-1.docker.io
+          
+          # Push Helm chart to OCI registry
+          echo "📦 Pushing Helm chart to DockerHub OCI registry..."
           helm push ${{ steps.package_chart.outputs.chart-package }} oci://registry-1.docker.io/${{ env.DOCKERHUB_NAMESPACE }}
           echo "✅ Pushed to DockerHub: ${{ env.DOCKERHUB_NAMESPACE }}/${{ steps.package_chart.outputs.chart-package }}"
 
