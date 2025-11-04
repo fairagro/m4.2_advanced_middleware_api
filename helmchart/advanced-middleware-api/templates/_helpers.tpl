@@ -60,3 +60,14 @@ Create the name of the service account to use
 {{- default "default" .Values.serviceAccount.name }}
 {{- end }}
 {{- end }}
+
+{{/*
+Create the name of the CA TLS secret
+*/}}
+{{- define "advanced-middleware-api.caTlsSecretName" -}}
+{{- if .Values.tls.caTlsSecretName }}
+{{- .Values.tls.caTlsSecretName }}
+{{- else }}
+{{- include "advanced-middleware-api.fullname" . }}-ca-secret
+{{- end }}
+{{- end }}
