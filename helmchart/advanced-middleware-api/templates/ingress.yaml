@@ -12,6 +12,8 @@ metadata:
 spec:
   {{- with .Values.ingress.className }}
   ingressClassName: {{ . }}
+  {{- else }}
+  ingressClassName: nginx
   {{- end }}
   {{- if .Values.ingress.tls }}
   tls:

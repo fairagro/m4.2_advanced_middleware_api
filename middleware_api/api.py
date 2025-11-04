@@ -5,12 +5,12 @@ updating and deleting ARC objects. It includes authentication via client certifi
 and content type validation.
 """
 
-import base64
 import logging
-from typing import Annotated
+from typing import Annotated, cast
+from urllib.parse import unquote
 
 from cryptography import x509
-from cryptography.hazmat.backends import default_backend
+from cryptography.x509.oid import NameOID
 from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.datastructures import Headers
 from fastapi.responses import JSONResponse
@@ -83,27 +83,45 @@ class Api:
         return self._service
 
     def _get_client_id(self, headers: Headers) -> str:
+        """Get client ID from certificate (mandatory mTLS)."""
         # Debug log all header fields
         self._logger.debug(f"Request headers: {dict(headers.items())}")
 
-        client_cert = headers.get("ssl-client-cert")
+        # Try multiple header sources for client certificate
+        client_cert = headers.get(
+            "ssl-client-cert") or headers.get("ssl-client-cert")
+        client_verify = headers.get(
+            "ssl-client-verify") or headers.get("ssl-client-verify", "NONE")
+
+        self._logger.debug(f"Client cert header present: {bool(client_cert)}")
+        self._logger.debug(f"Client verify status: {client_verify}")
+
         if not client_cert:
-            msg = "Client certificate missing"
+            msg = "Client certificate required for access"
+            self._logger.warning(msg)
+            raise HTTPException(status_code=401, detail=msg)
+
+        # Check if client certificate verification was successful
+        if client_verify != "SUCCESS":
+            msg = f"Client certificate verification failed: {client_verify}"
             self._logger.warning(msg)
             raise HTTPException(status_code=401, detail=msg)
 
         try:
-            pem = base64.b64decode(client_cert)
-            cert_obj = x509.load_pem_x509_certificate(pem, default_backend())
-            value = cert_obj.subject.get_attributes_for_oid(
-                x509.NameOID.COMMON_NAME)[0].value
-            decoded_value = (
-                value.tobytes().decode() if isinstance(value, memoryview)
-                else value.decode() if isinstance(value, (bytes, bytearray))
-                else str(value)
-            )
-            self._logger.info(f"Client certificate parsed, CN={decoded_value}")
-            return decoded_value
+            # URL decode the certificate first (NGINX sends it URL-encoded)
+            cert_pem = unquote(client_cert)
+            self._logger.debug(
+                f"URL decoded certificate: {cert_pem[:100]}...")
+
+            # Parse the certificate
+            cert = x509.load_pem_x509_certificate(cert_pem.encode('utf-8'))
+
+            for attribute in cert.subject:
+                if attribute.oid == NameOID.COMMON_NAME:
+                    cn = attribute.value
+
+            self._logger.info(f"Client certificate parsed, CN={cn}")
+            return cast(str, cn)
         except ValueError as e:
             self._logger.error(f"Invalid certificate format: {str(e)}")
             raise HTTPException(

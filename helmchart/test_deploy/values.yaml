@@ -11,7 +11,9 @@ image:
 ingress:
   enabled: true
   annotations:
-    nginx.ingress.kubernetes.io/auth-tls-secret: ca-secret
+    nginx.ingress.kubernetes.io/backend-protocol: "HTTP"
+    # mTLS Konfiguration (wie beim funktionierenden reinen NGINX)
+    nginx.ingress.kubernetes.io/auth-tls-secret: default/ca-secret
     nginx.ingress.kubernetes.io/auth-tls-verify-client: "on"
     nginx.ingress.kubernetes.io/auth-tls-verify-depth: "1"
     nginx.ingress.kubernetes.io/auth-tls-pass-certificate-to-upstream: "true"

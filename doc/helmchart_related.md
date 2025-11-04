@@ -11,10 +11,31 @@ Some files need for the test installation can be found in the folder `helmchart/
 First we will need to create a temporary self-signed server certificate in this folder:
 
 ```bash
+FQDN=chart-example.local
+
+cat > helmchart/advanced-middleware-api/server.conf <<EOF
+[req]FQDN=chart-example.local
+distinguished_name = req_distinguished_name
+req_extensions = v3_req
+prompt = no
+
+[req_distinguished_name]
+CN = ${FQDN}
+
+[v3_req]
+keyUsage = keyEncipherment, dataEncipherment
+extendedKeyUsage = serverAuth
+subjectAltName = @alt_names
+
+[alt_names]
+DNS.1 = ${FQDN}
+EOF
+
 openssl req -x509 -nodes -days 365 -newkey rsa:2048 \
-  -keyout helmchart/advanced-middleware-api/tls.key \
-  -out helmchart/advanced-middleware-api/tls.crt \
-  -subj "/CN=chart-example.local"
+    -keyout helmchart/advanced-middleware-api/server.key \
+    -out helmchart/advanced-middleware-api/server.crt \
+    -config helmchart/advanced-middleware-api/server.conf \
+    -extensions v3_req
 ```
 
 We also need a CA certificate and a client key/certificate pair for mTLS:
@@ -46,24 +67,91 @@ Now we can execute the installation:
 
 ```bash
 docker build . -t advanced-middleware-api:test
-minikube start
+minikube delete --all --purge   # only if we have trouble starting minikube
+minikube start --driver=docker --cni=calico
 minikube addons enable ingress
 minikube image load advanced-middleware-api:test
-helm install api-test ./helmchart/advanced-middleware-api -f helmchart/advanced-middleware-api/values.yaml
+helm install api-test ./helmchart/advanced-middleware-api -f helmchart/test_deploy/values.yaml
 ```
 
-Note that the file value `helmchart/advanced-middleware-api/values.yaml` references the local docker image `advanced_middleware_api:test`.
+Note that the value file `helmchart/test_deploy/values.yaml` references the local docker image `advanced_middleware_api:test`.
 
 ### Test the api service
 
-Now that the service is hopefully up and running in the dev container, you can test from within the dev container:
+Now that the service is hopefully up and running in the dev container, you can test from within the dev container.
+
+#### Basic liveness check (no client certificate required)
+
+```bash
+curl -k -H "Host: ${FQDN}" https://$(minikube ip)/v1/liveness
+```
+
+#### mTLS authentication test
+
+For endpoints requiring client certificate authentication:
 
 ```bash
 curl -k \
+    --resolve ${FQDN}:443:$(minikube ip) \
     --cert helmchart/advanced-middleware-api/client.crt \
     --key helmchart/advanced-middleware-api/client.key \
-    -H "Host: chart-example.local" \
-    https://$(minikube ip)/v1/liveness
+     https://${FQDN}/v1/whoami
+```
+
+**✅ Use OpenSSL instead** (this works reliably):
+
+```bash
+# Method 2: Using OpenSSL (recommended for mTLS)
+echo -e "GET /v1/whoami HTTP/1.1\r\nHost: ${FQDN}\r\nAccept: application/json\r\nConnection: close\r\n\r\n" | \
+openssl s_client \
+    -connect $(minikube ip):443 \
+    -cert helmchart/advanced-middleware-api/client.crt \
+    -key helmchart/advanced-middleware-api/client.key \
+    -servername ${FQDN} \
+    -ign_eof \
+    2>/dev/null | grep -A 20 "HTTP/1.1"
+```
+
+**Expected successful response:**
+
+```json
+{"client_id":"chart-example-client","message":"Client authenticated successfully"}
+```
+
+#### Troubleshooting mTLS
+
+**Common Error with curl:**
+
+```html
+<html>
+<head><title>400 Bad Request</title></head>
+<body>
+<center><h1>400 Bad Request</h1></center>
+<hr><center>nginx</center>
+</body>
+</html>
+```
+
+This happens because curl fails to send the client certificate during TLS handshake negotiation. This is a known limitation when `ssl_verify_client on` is configured in NGINX Ingress.
+
+**Solution**: Use OpenSSL instead of curl for mTLS testing.
+
+#### mTLS Configuration Details
+
+The Helm chart includes full mTLS (mutual TLS) configuration:
+
+- **NGINX Ingress**: Configured with `ssl_verify_client on` to require and verify client certificates
+- **Client Certificate Validation**: Certificates must be signed by the CA specified in the `ca-secret`
+- **Certificate Forwarding**: Client certificates are URL-encoded and forwarded to the FastAPI backend via the `ssl-client-cert` header
+- **FastAPI Authentication**: The application decodes and parses client certificates to extract the Common Name (CN) for authentication
+
+**Key annotations in values.yaml:**
+
+```yaml
+nginx.ingress.kubernetes.io/auth-tls-secret: default/ca-secret
+nginx.ingress.kubernetes.io/auth-tls-verify-client: "on"
+nginx.ingress.kubernetes.io/auth-tls-verify-depth: "1"
+nginx.ingress.kubernetes.io/auth-tls-pass-certificate-to-upstream: "true"
 ```
 
 Unfortunately I was not able to find a solution how to access the service from the host.

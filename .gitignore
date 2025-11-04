@@ -220,3 +220,4 @@ helmchart/**/*.crt
 helmchart/**/*.key
 helmchart/**/*.csr
 helmchart/**/*.srl
+helmchart/**/server.conf
