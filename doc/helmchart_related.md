@@ -14,7 +14,8 @@ First we will need to create a temporary self-signed server certificate in this 
 FQDN=chart-example.local
 
 cat > helmchart/advanced-middleware-api/server.conf <<EOF
-[req]FQDN=chart-example.local
+[req]
+FQDN=chart-example.local
 distinguished_name = req_distinguished_name
 req_extensions = v3_req
 prompt = no
