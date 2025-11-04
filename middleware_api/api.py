@@ -87,8 +87,8 @@ class Api:
         self._logger.debug("Request headers: %s", dict(headers.items()))
 
         # Try multiple header sources for client certificate
-        client_cert = headers.get("ssl-client-cert") or headers.get("ssl-client-cert")
-        client_verify = headers.get("ssl-client-verify") or headers.get("ssl-client-verify", "NONE")
+        client_cert = headers.get("ssl-client-cert") or headers.get("X-SSL-Client-Cert")
+        client_verify = headers.get("ssl-client-verify") or headers.get("X-SSL-Client-Verify", "NONE")
 
         self._logger.debug("Client cert header present: %s", bool(client_cert))
         self._logger.debug("Client verify status: %s", client_verify)
