@@ -57,7 +57,7 @@ def test_whoami_success(client: TestClient, middleware_api: Api, cert: str) -> N
 
     r = client.get(
         "/v1/whoami",
-        headers={"X-Client-Cert": cert, "accept": "application/json"},
+        headers={"ssl-client-cert": cert, "ssl-client-verify": "SUCCESS", "accept": "application/json"},
     )
     assert r.status_code == 200  # nosec
     body = r.json()
@@ -69,7 +69,7 @@ def test_whoami_invalid_accept(client: TestClient, cert: str) -> None:
     """Test the /v1/whoami endpoint with an invalid accept header."""
     r = client.get(
         "/v1/whoami",
-        headers={"X-Client-Cert": cert, "accept": "application/xml"},
+        headers={"ssl-client-cert": cert, "ssl-client-verify": "SUCCESS", "accept": "application/xml"},
     )
     assert r.status_code == 406  # nosec
 
@@ -87,7 +87,7 @@ def test_whoami_invalid_cert(client: TestClient) -> None:
     """Test the /v1/whoami endpoint with an invalid client certificate."""
     r = client.get(
         "/v1/whoami",
-        headers={"X-Client-Cert": "dumy cert", "accept": "application/json"},
+        headers={"ssl-client-cert": "dumy cert", "ssl-client-verify": "SUCCESS", "accept": "application/json"},
     )
     assert r.status_code == 400  # nosec
 
@@ -124,7 +124,8 @@ def test_create_or_update_arcs_created(client: TestClient, middleware_api: Api, 
     r = client.post(
         "/v1/arcs",
         headers={
-            "X-Client-Cert": cert,
+            "ssl-client-cert": cert,
+            "ssl-client-verify": "SUCCESS",
             "content-type": "application/ro-crate+json",
             "accept": "application/json",
         },
@@ -166,7 +167,8 @@ def test_create_or_update_arcs_updated(client: TestClient, middleware_api: Api, 
     r = client.post(
         "/v1/arcs",
         headers={
-            "X-Client-Cert": cert,
+            "ssl-client-cert": cert,
+            "ssl-client-verify": "SUCCESS",
             "content-type": "application/ro-crate+json",
             "accept": "application/json",
         },
@@ -201,7 +203,8 @@ def test_create_or_update_arcs_invalid_json(
     r = client.post(
         "/v1/arcs",
         headers={
-            "X-Client-Cert": cert,
+            "ssl-client-cert": cert,
+            "ssl-client-verify": "SUCCESS",
             "content-type": "application/ro-crate+json",
             "accept": "application/json",
         },
@@ -215,7 +218,8 @@ def test_create_or_update_arcs_invalid_accept(client: TestClient, cert: str) -> 
     r = client.post(
         "/v1/arcs",
         headers={
-            "X-Client-Cert": cert,
+            "ssl-client-cert": cert,
+            "ssl-client-verify": "SUCCESS",
             "content-type": "application/ro-crate+json",
             "accept": "application/xml",
         },
@@ -242,7 +246,8 @@ def test_create_or_update_arcs_invalid_cert(client: TestClient) -> None:
     r = client.post(
         "/v1/arcs",
         headers={
-            "X-Client-Cert": "dummy cert",
+            "ssl-client-cert": "dummy cert",
+            "ssl-client-verify": "SUCCESS",
             "content-type": "application/ro-crate+json",
             "accept": "application/xml",
         },
