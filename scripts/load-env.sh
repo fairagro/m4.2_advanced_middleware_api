@@ -13,6 +13,7 @@ mydir=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" &> /dev/null && pwd)
 # import all public keyfiles into gpg keyring so sops can find them
 public_key_path="${mydir}/../public_gpg_keys"
 for file in "$public_key_path"/*.asc; do
+    [ -e "$file" ] || continue
     gpg --import "$file"
 done
 
