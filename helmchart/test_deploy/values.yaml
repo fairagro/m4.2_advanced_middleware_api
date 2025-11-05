@@ -4,7 +4,7 @@ tls:
   caCrtFile: ca.crt
 
 image:
-  repository: advanced-middleware-api
+  repository: fairagro-advanced-middleware-api
   tag: test
   imagePullPolicy: Never
 

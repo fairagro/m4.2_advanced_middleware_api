@@ -67,15 +67,15 @@ openssl x509 -req \
 Now we can execute the installation:
 
 ```bash
-docker build . -t advanced-middleware-api:test
+docker build . -t fairagro-advanced-middleware-api:test
 minikube delete --all --purge   # only if we have trouble starting minikube
 minikube start --driver=docker --cni=calico
 minikube addons enable ingress
-minikube image load advanced-middleware-api:test
-helm install api-test ./helmchart/advanced-middleware-api -f helmchart/test_deploy/values.yaml
+minikube image load fairagro-advanced-middleware-api:test
+helm install api-test ./helmchart/fairagro-advanced-middleware-api-chart -f helmchart/test_deploy/values.yaml
 ```
 
-Note that the value file `helmchart/test_deploy/values.yaml` references the local docker image `advanced-middleware-api:test`.
+Note that the value file `helmchart/test_deploy/values.yaml` references the local docker image `fairagro-advanced-middleware-api:test`.
 
 ### Test the api service
 
