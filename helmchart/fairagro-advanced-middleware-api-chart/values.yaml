@@ -7,7 +7,7 @@ config:
   gitlab_api:
     url: https://datahub-dev.ipk-gatersleben.de
     group: FAIRagro-advanced-middleware
-    token: ""
+    token: "" # do not provide a real token here, use a encrypted value file instead
 
 # This will set the replicaset count more information can be found here: https://kubernetes.io/docs/concepts/workloads/controllers/replicaset/
 replicaCount: 1
