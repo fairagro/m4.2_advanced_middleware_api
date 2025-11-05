@@ -191,11 +191,11 @@ class Api:
 if os.environ.get("PRINT_ENV") == "1":
     print(dict(os.environ))
 
-config = None
+app_config = None
 if "pytest" in sys.modules:
     # pytest is executing this file during a test discovery run.
     # No config file is available, so we create a dummy config so that pytest does not fail.
-    config = Config.from_data(
+    app_config = Config.from_data(
         {
             "log_level": "DEBUG",
             "gitlab_api": {
@@ -210,14 +210,18 @@ else:
     # Load configuration in production mode
     config_file = Path(os.environ.get("MIDDLEWARE_API_CONFIG", "/run/secrets/middleware-api-config"))
     if config_file.is_file():
-        config = Config.from_yaml_file(config_file)
+        app_config = Config.from_yaml_file(config_file)
     else:
-        logging.getLogger("middleware_api").error(f"Middleware API configuration file not found at {config_file}. Exiting.")
+        logging.getLogger("middleware_api").error(
+            f"Middleware API configuration file not found at {config_file}. Exiting."
+        )
         sys.exit(1)
 
-logging.basicConfig(level=getattr(logging, config.log_level), format="%(asctime)s %(levelname)s %(name)s: %(message)s")
+logging.basicConfig(
+    level=getattr(logging, app_config.log_level), format="%(asctime)s %(levelname)s %(name)s: %(message)s"
+)
 
-middleware_api = Api(config)
+middleware_api = Api(app_config)
 app = middleware_api.app
 
 
