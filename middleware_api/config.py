@@ -1,5 +1,6 @@
 """FAIRagro Middleware API configuration module."""
 
+import logging
 import os
 from pathlib import Path
 from typing import Annotated, Literal, Self, cast
@@ -48,35 +49,44 @@ class Config(BaseModel):
         return cls.from_config_wrapper(wrapper)
 
     @classmethod
-    def from_yaml_file(cls, path: Path | None = None) -> "Config":
+    def from_yaml_file(cls, path: Path) -> "Config":
         """Create Config from a YAML file.
 
         Args:
-            path (Path | None, optional): Path to the YAML config file. If None, uses
-            "./config.yaml". Defaults to None.
+            path (Path): Path to the YAML config file.
 
         Returns:
             Config: Configuration instance.
 
+        Raises:
+            RuntimeError: If the config file is not found.
+
         """
-        if path is None:
-            path = Path("./config.yaml")
-        wrapper = ConfigWrapper.from_yaml_file(path)
-        return cls.from_config_wrapper(wrapper)
+        if path.is_file():
+            wrapper = ConfigWrapper.from_yaml_file(path)
+            return cls.from_config_wrapper(wrapper)
+        msg = f"Config file {path} not found."
+        logging.error(msg)
+        raise RuntimeError(msg)
 
     @classmethod
-    def from_env_var(cls, env_var: str = "MIDDLEWARE_API_CONFIG") -> "Config":
+    def from_env_var(cls, env_var: str) -> "Config":
         """Create Config from a YAML file specified in an environment variable.
 
         Args:
-            env_var (str, optional): Name of the environment variable containing the
-            path to the config file. Defaults to "MIDDLEWARE_API_CONFIG".
+            env_var (str): Name of the environment variable containing the
+            path to the config file.
 
         Returns:
             Config: Configuration instance.
+
+        Raises:
+            RuntimeError: If the environment variable is not set.
 
         """
         value = os.environ.get(env_var)
         if value is not None:
             return cls.from_yaml_file(Path(value))
-        return cls.from_yaml_file()
+        msg = f"Environment variable {env_var} not set."
+        logging.error(msg)
+        raise RuntimeError(msg)

@@ -10,10 +10,6 @@ fileExistenceTests:
     path: '/middleware_api/middleware_api'
     shouldExist: true
 
-  - name: 'Configuration file exists'
-    path: '/middleware_api/demo_config.yaml'
-    shouldExist: true
-
 # File content tests
 fileContentTests:
   - name: 'Non-root user created'

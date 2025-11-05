@@ -6,6 +6,9 @@ and content type validation.
 """
 
 import logging
+import os
+import sys
+from pathlib import Path
 from typing import Annotated, cast
 from urllib.parse import unquote
 
@@ -185,11 +188,37 @@ class Api:
                 raise HTTPException(status_code=422, detail=str(e)) from e
 
 
-config = Config.from_env_var()
+loaded_config = None
+if "pytest" in sys.modules:
+    # pytest is executing this file during a test discovery run.
+    # No config file is available, so we create a dummy config so that pytest does not fail.
+    loaded_config = Config.from_data(
+        {
+            "log_level": "DEBUG",
+            "gitlab_api": {
+                "url": "https://localhost/",
+                "branch": "dummy",
+                "token": "dummy-token",
+                "group": "dummy-group",
+            },
+        }
+    )
+else:
+    # Load configuration in production mode
+    config_file = Path(os.environ.get("MIDDLEWARE_API_CONFIG", "/run/secrets/middleware-api-config"))
+    if config_file.is_file():
+        loaded_config = Config.from_yaml_file(config_file)
+    else:
+        logging.getLogger("middleware_api").error(
+            "Middleware API configuration file not found at %s. Exiting.", config_file
+        )
+        sys.exit(1)
 
-logging.basicConfig(level=getattr(logging, config.log_level), format="%(asctime)s %(levelname)s %(name)s: %(message)s")
+logging.basicConfig(
+    level=getattr(logging, loaded_config.log_level), format="%(asctime)s %(levelname)s %(name)s: %(message)s"
+)
 
-middleware_api = Api(config)
+middleware_api = Api(loaded_config)
 app = middleware_api.app
 
 

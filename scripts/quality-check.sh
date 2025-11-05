@@ -45,8 +45,12 @@ print_status "pylint code quality"
 echo -e "${YELLOW}🔧 6. Running pytest (Unit Tests only - no secrets needed)...${NC}"
 echo "⚠️ pytest temporarily disabled due to plugin configuration issues"
 echo -e "${YELLOW}   Run manually: uv run pytest tests/unit/ --cov=middleware_api --cov-report=term-missing${NC}"
-# uv run pytest tests/unit/ --cov=middleware_api --cov-report=term-missing
-echo -e "${GREEN}✅ pytest skipped (manual run required)${NC}"
+uv run pytest tests/unit/ --cov=middleware_api --cov-report=term-missing
+
+echo -e "${YELLOW}🔧 7. Building container and Running Container Structure Test...${NC}"
+docker build . -t fairagro-advanced-middleware-api:test
+container-structure-test test --image fairagro-advanced-middleware-api:test --config tests/container-structure-test.yaml
+print_status "container structure test"
 
 echo -e "${GREEN}🎉 All quality checks passed!${NC}"
 echo "================================="
