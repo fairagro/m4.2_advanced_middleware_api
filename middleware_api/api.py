@@ -188,9 +188,6 @@ class Api:
                 raise HTTPException(status_code=422, detail=str(e)) from e
 
 
-if os.environ.get("PRINT_ENV") == "1":
-    print(dict(os.environ))
-
 app_config = None
 if "pytest" in sys.modules:
     # pytest is executing this file during a test discovery run.
