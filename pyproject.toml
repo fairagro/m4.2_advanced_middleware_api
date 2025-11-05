@@ -1,6 +1,6 @@
 [project]
 name = "m4-2-advanced-middleware-api"
-version = "0.1.67"
+version = "1.0.0"
 description = "Add your description here"
 readme = "README.md"
 requires-python = ">=3.12"
