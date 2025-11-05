@@ -1,5 +1,5 @@
 apiVersion: v2
-name: advanced-middleware-api
+name: fairagro-advanced-middleware-api-chart
 description: A Helm chart for the FAIRagro advanced middleware API
 
 # A chart can be either an 'application' or a 'library' chart.
