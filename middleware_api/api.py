@@ -211,10 +211,9 @@ else:
     config_file = Path(os.environ.get("MIDDLEWARE_API_CONFIG", "/run/secrets/middleware-api-config"))
     if config_file.is_file():
         config = Config.from_yaml_file(config_file)
-if config is None:
-    # If we still don't have a config, exit with error
-    logging.getLogger("middleware_api").error("Middleware API configuration could not be loaded. Exiting.")
-    sys.exit(1)
+    else:
+        logging.getLogger("middleware_api").error(f"Middleware API configuration file not found at {config_file}. Exiting.")
+        sys.exit(1)
 
 logging.basicConfig(level=getattr(logging, config.log_level), format="%(asctime)s %(levelname)s %(name)s: %(message)s")
 
