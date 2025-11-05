@@ -56,14 +56,24 @@ spec:
           resources:
             {{- toYaml . | nindent 12 }}
           {{- end }}
-          {{- with .Values.volumeMounts }}
           volumeMounts:
+            - name: config
+              mountPath: /run/secrets/middleware-api-config
+              readOnly: true
+              subPath: middleware-api-config
+            {{- with .Values.volumeMounts }}
             {{- toYaml . | nindent 12 }}
-          {{- end }}
-      {{- with .Values.volumes }}
+            {{- end }}
       volumes:
+        - name: config
+          secret:
+            secretName: {{ include "fairagro-advanced-middleware-api-chart.fullname" . }}-config
+            items:
+              - key: middleware-api-config
+                path: middleware-api-config
+        {{- with .Values.volumes }}
         {{- toYaml . | nindent 8 }}
-      {{- end }}
+        {{- end }}
       {{- with .Values.nodeSelector }}
       nodeSelector:
         {{- toYaml . | nindent 8 }}

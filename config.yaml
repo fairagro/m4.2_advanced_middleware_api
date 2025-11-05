@@ -1,5 +1,0 @@
-log_level: DEBUG
-gitlab_api:
-  url: https://datahub-dev.ipk-gatersleben.de
-  group: FAIRagro-advanced-middleware
-  token: ""

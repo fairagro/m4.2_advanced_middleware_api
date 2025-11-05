@@ -29,10 +29,8 @@ WORKDIR /middleware_api
 
 ENV UVICORN_HOST=0.0.0.0
 ENV UVICORN_PORT=8000
-ENV MIDDLEWARE_API_CONFIG=/middleware_api/demo_config.yaml
 
 COPY --from=builder /middleware_api/dist/middleware_api .
-COPY config.yaml $MIDDLEWARE_API_CONFIG
 
 # Create non-root user and group and fix permissions
 RUN apk add --no-cache curl=8.14.1-r2 \

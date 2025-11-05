@@ -1,10 +1,11 @@
 """FAIRagro Middleware API configuration module."""
 
+import logging
 import os
 from pathlib import Path
 from typing import Annotated, Literal, Self, cast
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, HttpUrl
 
 from middleware_api.arc_store.gitlab_api import GitlabApiConfig
 from middleware_api.utils.config_wrapper import ConfigWrapper
@@ -53,16 +54,20 @@ class Config(BaseModel):
 
         Args:
             path (Path | None, optional): Path to the YAML config file. If None, uses
-            "./config.yaml". Defaults to None.
+            "/run/secrets/middleware_api_config". Defaults to None. If the file does not
+            exist, use a default dummy configuration and issue a warning.
 
         Returns:
             Config: Configuration instance.
 
         """
         if path is None:
-            path = Path("./config.yaml")
-        wrapper = ConfigWrapper.from_yaml_file(path)
-        return cls.from_config_wrapper(wrapper)
+            path = Path("/run/secrets/middleware_api_config")
+        if path.is_file():
+            wrapper = ConfigWrapper.from_yaml_file(path)
+            return cls.from_config_wrapper(wrapper)
+        logging.warning("Config file %s not found. Using default configuration, not suitable for production.", path)
+        return cls.default()
 
     @classmethod
     def from_env_var(cls, env_var: str = "MIDDLEWARE_API_CONFIG") -> "Config":
@@ -70,7 +75,9 @@ class Config(BaseModel):
 
         Args:
             env_var (str, optional): Name of the environment variable containing the
-            path to the config file. Defaults to "MIDDLEWARE_API_CONFIG".
+            path to the config file. Defaults to "MIDDLEWARE_API_CONFIG". If the variable
+            is not set, use "/run/secrets/middleware_api_config" as config file. If the
+            file does not exist, use a default dummy configuration and issue a warning.
 
         Returns:
             Config: Configuration instance.
@@ -80,3 +87,23 @@ class Config(BaseModel):
         if value is not None:
             return cls.from_yaml_file(Path(value))
         return cls.from_yaml_file()
+
+    @classmethod
+    def default(cls) -> "Config":
+        """Create a Config instance with default test values.
+
+        Useful for testing or when you need a minimal configuration.
+
+        Returns:
+            Config: Configuration instance with sensible defaults.
+
+        """
+        return cls(
+            log_level="INFO",
+            gitlab_api=GitlabApiConfig(
+                url=cast(HttpUrl, "https://localhost/"),
+                branch="main",
+                token="test-token",
+                group="test-group",
+            ),
+        )
