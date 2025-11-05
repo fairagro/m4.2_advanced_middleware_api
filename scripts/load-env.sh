@@ -33,8 +33,8 @@ alias kga="kubectl get all,pdb,configmap,secret,pvc,ingress,serviceaccount,endpo
 alias ksn="kubectl config set-context --current --namespace"
 
 # Set bash completion for aliases
-complete -o default -F __start_kubectl k
-complete -o default -F __start_docker d
+declare -F __start_kubectl &>/dev/null && complete -o default -F __start_kubectl k
+declare -F __start_docker &>/dev/null && complete -o default -F __start_docker d
 
 ENCRYPTED_FILE="${mydir}/../.env.integration.enc"
 DECRYPTED_FILE="${mydir}/../.env"
