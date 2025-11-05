@@ -49,12 +49,11 @@ class Config(BaseModel):
         return cls.from_config_wrapper(wrapper)
 
     @classmethod
-    def from_yaml_file(cls, path: Path | None = None) -> "Config":
+    def from_yaml_file(cls, path: Path) -> "Config":
         """Create Config from a YAML file.
 
         Args:
-            path (Path | None, optional): Path to the YAML config file. If None, uses
-            "/run/secrets/middleware-api-config". Defaults to None.
+            path (Path): Path to the YAML config file.
 
         Returns:
             Config: Configuration instance.
@@ -63,8 +62,6 @@ class Config(BaseModel):
             RuntimeError: If the config file is not found.
 
         """
-        if path is None:
-            path = Path("/run/secrets/middleware-api-config")
         if path.is_file():
             wrapper = ConfigWrapper.from_yaml_file(path)
             return cls.from_config_wrapper(wrapper)
@@ -73,12 +70,12 @@ class Config(BaseModel):
         raise RuntimeError(msg)
 
     @classmethod
-    def from_env_var(cls, env_var: str = "MIDDLEWARE_API_CONFIG") -> "Config":
+    def from_env_var(cls, env_var: str) -> "Config":
         """Create Config from a YAML file specified in an environment variable.
 
         Args:
-            env_var (str, optional): Name of the environment variable containing the
-            path to the config file. Defaults to "MIDDLEWARE_API_CONFIG".
+            env_var (str): Name of the environment variable containing the
+            path to the config file.
 
         Returns:
             Config: Configuration instance.
