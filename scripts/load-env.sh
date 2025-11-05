@@ -18,12 +18,12 @@ for file in "$public_key_path"/*.asc; do
 done
 
 # Create Bash autocompletion for installed tools
-. /etc/bash_completion
-. <(kubectl completion bash)
-. <(helm completion bash)
-. <(docker completion bash)
-. <(minikube completion bash)
-. <(sops completion bash)
+[ -f /etc/bash_completion ] && . /etc/bash_completion 2>/dev/null || true
+command -v kubectl &>/dev/null && . <(kubectl completion bash) 2>/dev/null || true
+command -v helm &>/dev/null && . <(helm completion bash) 2>/dev/null || true
+command -v docker &>/dev/null && . <(docker completion bash) 2>/dev/null || true
+command -v minikube &>/dev/null && . <(minikube completion bash) 2>/dev/null || true
+command -v sops &>/dev/null && . <(sops completion bash) 2>/dev/null || true
 
 # Setup aliases
 alias k=kubectl
