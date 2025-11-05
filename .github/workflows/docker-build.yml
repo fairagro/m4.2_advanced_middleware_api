@@ -218,7 +218,7 @@ jobs:
         run: |
           DOCKERHUB_AVAILABLE="${{ secrets.DOCKERHUB_USER != '' && secrets.DOCKERHUB_TOKEN != '' }}"
           PUSH_TO_REGISTRY="${{ inputs.push_to_registry }}"
-          
+
           if [[ "$DOCKERHUB_AVAILABLE" == "true" && "$PUSH_TO_REGISTRY" == "true" ]]; then
             IMAGE_TAG="${{ env.DOCKERHUB_NAMESPACE }}/${{ env.IMAGE_NAME }}:${{ needs.calculate-version.outputs.version }}"
             echo "Using DockerHub image: $IMAGE_TAG"
@@ -226,9 +226,9 @@ jobs:
             IMAGE_TAG="local/${{ env.IMAGE_NAME }}:${{ needs.calculate-version.outputs.version }}"
             echo "Using local image: $IMAGE_TAG"
           fi
-          
+
           echo "image-tag=$IMAGE_TAG" >> $GITHUB_OUTPUT
-          
+
           # Verify image exists
           echo "🔍 Checking if image exists..."
           if docker image inspect "$IMAGE_TAG" > /dev/null 2>&1; then

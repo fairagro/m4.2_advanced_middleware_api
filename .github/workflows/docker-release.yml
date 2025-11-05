@@ -404,10 +404,10 @@ jobs:
           NEW_VERSION: ${{ needs.docker-build-test.outputs.version }}
         run: |
           echo "🔄 Updating pyproject.toml version to: $NEW_VERSION"
-          
+
           # Update version in pyproject.toml using sed
           sed -i "s/^version = \".*\"/version = \"$NEW_VERSION\"/" pyproject.toml
-          
+
           # Verify the change
           echo "✅ Updated version:"
           grep "^version = " pyproject.toml
@@ -424,11 +424,11 @@ jobs:
             Automated version update after release ${{ needs.docker-build-test.outputs.version }}
 
             This PR updates `pyproject.toml` with the new version number.
-            
+
             **Auto-generated after**: Docker Release v${{ needs.docker-build-test.outputs.version }}
             **Release Tag**: ${{ env.RELEASE_TAG }}
             **Version bump type**: ${{ github.event.inputs.version_bump || 'patch' }}
-            
+
             > This PR was automatically created by the Docker Release workflow.
           labels: ${{ github.event.inputs.version_bump || 'patch' }} version
           base: main

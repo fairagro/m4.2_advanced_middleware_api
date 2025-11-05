@@ -129,7 +129,7 @@ class ConfigWrapper:
 
         """
         unwrapped = ConfigWrapper._unwrap(self)
-        if isinstance(unwrapped, (dict, list)):
+        if isinstance(unwrapped, dict | list):
             return unwrapped
         raise TypeError(f"Unwrapped values must be of type list or dict, found '{type(unwrapped)}'")
 
