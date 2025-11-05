@@ -13,16 +13,17 @@ mydir=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" &> /dev/null && pwd)
 # import all public keyfiles into gpg keyring so sops can find them
 public_key_path="${mydir}/../public_gpg_keys"
 for file in "$public_key_path"/*.asc; do
+    [ -e "$file" ] || continue
     gpg --import "$file"
 done
 
 # Create Bash autocompletion for installed tools
-. /etc/bash_completion
-. <(kubectl completion bash)
-. <(helm completion bash)
-. <(docker completion bash)
-. <(minikube completion bash)
-. <(sops completion bash)
+[ -f /etc/bash_completion ] && . /etc/bash_completion || true
+command -v kubectl &>/dev/null && . <(kubectl completion bash) || true
+command -v helm &>/dev/null && . <(helm completion bash) || true
+command -v docker &>/dev/null && . <(docker completion bash) || true
+command -v minikube &>/dev/null && . <(minikube completion bash) || true
+command -v sops &>/dev/null && . <(sops completion bash) || true
 
 # Setup aliases
 alias k=kubectl
