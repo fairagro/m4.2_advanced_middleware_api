@@ -54,7 +54,7 @@ class Config(BaseModel):
 
         Args:
             path (Path | None, optional): Path to the YAML config file. If None, uses
-            "/run/secrets/middleware_api_config". Defaults to None. If the file does not
+            "/run/secrets/middleware-api-config". Defaults to None. If the file does not
             exist, use a default dummy configuration and issue a warning.
 
         Returns:
@@ -62,7 +62,7 @@ class Config(BaseModel):
 
         """
         if path is None:
-            path = Path("/run/secrets/middleware_api_config")
+            path = Path("/run/secrets/middleware-api-config")
         if path.is_file():
             wrapper = ConfigWrapper.from_yaml_file(path)
             return cls.from_config_wrapper(wrapper)
@@ -76,7 +76,7 @@ class Config(BaseModel):
         Args:
             env_var (str, optional): Name of the environment variable containing the
             path to the config file. Defaults to "MIDDLEWARE_API_CONFIG". If the variable
-            is not set, use "/run/secrets/middleware_api_config" as config file. If the
+            is not set, use "/run/secrets/middleware-api-config" as config file. If the
             file does not exist, use a default dummy configuration and issue a warning.
 
         Returns:
