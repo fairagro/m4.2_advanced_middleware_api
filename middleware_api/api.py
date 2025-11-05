@@ -6,6 +6,9 @@ and content type validation.
 """
 
 import logging
+import os
+import sys
+from pathlib import Path
 from typing import Annotated, cast
 from urllib.parse import unquote
 
@@ -185,7 +188,32 @@ class Api:
                 raise HTTPException(status_code=422, detail=str(e)) from e
 
 
-config = Config.from_env_var()
+print(dict(os.environ))
+
+config = None
+if "pytest" in sys.modules:
+    # pytest is executing this file during a test discovery run.
+    # No config file is available, so we create a dummy config so that pytest does not fail.
+    config = Config.from_data(
+        {
+            "log_level": "DEBUG",
+            "gitlab_api": {
+                "url": "https://localhost/",
+                "branch": "dummy",
+                "token": "dummy-token",
+                "group": "dummy-group",
+            },
+        }
+    )
+else:
+    # Load configuration in production mode
+    config_file = Path(os.environ.get("MIDDLEWARE_API_CONFIG", "/run/secrets/middleware-api-config"))
+    if config_file.is_file():
+        config = Config.from_yaml_file(config_file)
+if config is None:
+    # If we still don't have a config, exit with error
+    logging.getLogger("middleware_api").error("Middleware API configuration could not be loaded. Exiting.")
+    sys.exit(1)
 
 logging.basicConfig(level=getattr(logging, config.log_level), format="%(asctime)s %(levelname)s %(name)s: %(message)s")
 

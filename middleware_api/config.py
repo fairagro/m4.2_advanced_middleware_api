@@ -5,7 +5,7 @@ import os
 from pathlib import Path
 from typing import Annotated, Literal, Self, cast
 
-from pydantic import BaseModel, Field, HttpUrl
+from pydantic import BaseModel, Field
 
 from middleware_api.arc_store.gitlab_api import GitlabApiConfig
 from middleware_api.utils.config_wrapper import ConfigWrapper
@@ -54,11 +54,13 @@ class Config(BaseModel):
 
         Args:
             path (Path | None, optional): Path to the YAML config file. If None, uses
-            "/run/secrets/middleware-api-config". Defaults to None. If the file does not
-            exist, use a default dummy configuration and issue a warning.
+            "/run/secrets/middleware-api-config". Defaults to None.
 
         Returns:
             Config: Configuration instance.
+
+        Raises:
+            RuntimeError: If the config file is not found.
 
         """
         if path is None:
@@ -66,8 +68,9 @@ class Config(BaseModel):
         if path.is_file():
             wrapper = ConfigWrapper.from_yaml_file(path)
             return cls.from_config_wrapper(wrapper)
-        logging.warning("Config file %s not found. Using default configuration, not suitable for production.", path)
-        return cls.default()
+        msg = f"Config file {path} not found."
+        logging.error(msg)
+        raise RuntimeError(msg)
 
     @classmethod
     def from_env_var(cls, env_var: str = "MIDDLEWARE_API_CONFIG") -> "Config":
@@ -75,35 +78,18 @@ class Config(BaseModel):
 
         Args:
             env_var (str, optional): Name of the environment variable containing the
-            path to the config file. Defaults to "MIDDLEWARE_API_CONFIG". If the variable
-            is not set, use "/run/secrets/middleware-api-config" as config file. If the
-            file does not exist, use a default dummy configuration and issue a warning.
+            path to the config file. Defaults to "MIDDLEWARE_API_CONFIG".
 
         Returns:
             Config: Configuration instance.
+
+        Raises:
+            RuntimeError: If the environment variable is not set.
 
         """
         value = os.environ.get(env_var)
         if value is not None:
             return cls.from_yaml_file(Path(value))
-        return cls.from_yaml_file()
-
-    @classmethod
-    def default(cls) -> "Config":
-        """Create a Config instance with default test values.
-
-        Useful for testing or when you need a minimal configuration.
-
-        Returns:
-            Config: Configuration instance with sensible defaults.
-
-        """
-        return cls(
-            log_level="INFO",
-            gitlab_api=GitlabApiConfig(
-                url=cast(HttpUrl, "https://localhost/"),
-                branch="dummy",
-                token="dummy-token",
-                group="dummy-group",
-            ),
-        )
+        msg = f"Environment variable {env_var} not set."
+        logging.error(msg)
+        raise RuntimeError(msg)
