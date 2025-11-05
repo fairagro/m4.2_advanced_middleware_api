@@ -2,15 +2,15 @@
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
-  name: {{ include "advanced-middleware-api.fullname" . }}
+  name: {{ include "fairagro-advanced-middleware-api-chart.fullname" . }}
   labels:
-    {{- include "advanced-middleware-api.labels" . | nindent 4 }}
+    {{- include "fairagro-advanced-middleware-api-chart.labels" . | nindent 4 }}
   annotations:
     {{- with .Values.ingress.annotations }}
     {{- toYaml . | nindent 4 }}
     {{- end }}
     {{- if .Values.ingress.mtlsEnabled }}
-    nginx.ingress.kubernetes.io/auth-tls-secret: "{{ .Release.Namespace }}/{{ include "advanced-middleware-api.caTlsSecretName" . }}"
+    nginx.ingress.kubernetes.io/auth-tls-secret: "{{ .Release.Namespace }}/{{ include "fairagro-advanced-middleware-api-chart.caTlsSecretName" . }}"
     nginx.ingress.kubernetes.io/auth-tls-verify-client: "on"
     nginx.ingress.kubernetes.io/auth-tls-verify-depth: "1"
     nginx.ingress.kubernetes.io/auth-tls-pass-certificate-to-upstream: "true"
@@ -28,7 +28,7 @@ spec:
         {{- range .hosts }}
         - {{ . | quote }}
         {{- end }}
-      secretName: {{ include "advanced-middleware-api.fullname" $ }}-{{ .secretName }}
+      secretName: {{ include "fairagro-advanced-middleware-api-chart.fullname" $ }}-{{ .secretName }}
     {{- end }}
   {{- end }}
   rules:
@@ -43,7 +43,7 @@ spec:
             {{- end }}
             backend:
               service:
-                name: {{ include "advanced-middleware-api.fullname" $ }}
+                name: {{ include "fairagro-advanced-middleware-api-chart.fullname" $ }}
                 port:
                   number: {{ $.Values.service.port }}
           {{- end }}

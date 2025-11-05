@@ -147,8 +147,9 @@ jobs:
             **Chart Version**: ${{ env.CHART_VERSION }}
 
             ```bash
-            helm upgrade --install fairagro-middleware ./helmchart/advanced-middleware-api \
-              --set image.repository=${{ env.DOCKERHUB_NAMESPACE }}/${{ env.IMAGE_NAME }}
+            helm upgrade --install fairagro-middleware \
+              oci://registry-1.docker.io/zalf/fairagro-advanced-middleware-api-chart \
+              --version ${{ env.CHART_VERSION }}
             ```
 
             *(App version and image tag are defined in the Helm chart's Chart.yaml and values.yaml)*

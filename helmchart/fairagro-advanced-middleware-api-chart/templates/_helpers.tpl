@@ -1,7 +1,7 @@
 {{/*
 Expand the name of the chart.
 */}}
-{{- define "advanced-middleware-api.name" -}}
+{{- define "fairagro-advanced-middleware-api-chart.name" -}}
 {{- default .Chart.Name .Values.nameOverride | trunc 63 | trimSuffix "-" }}
 {{- end }}
 
@@ -10,7 +10,7 @@ Create a default fully qualified app name.
 We truncate at 63 chars because some Kubernetes name fields are limited to this (by the DNS naming spec).
 If release name contains chart name it will be used as a full name.
 */}}
-{{- define "advanced-middleware-api.fullname" -}}
+{{- define "fairagro-advanced-middleware-api-chart.fullname" -}}
 {{- if .Values.fullnameOverride }}
 {{- .Values.fullnameOverride | trunc 63 | trimSuffix "-" }}
 {{- else }}
@@ -26,16 +26,16 @@ If release name contains chart name it will be used as a full name.
 {{/*
 Create chart name and version as used by the chart label.
 */}}
-{{- define "advanced-middleware-api.chart" -}}
+{{- define "fairagro-advanced-middleware-api-chart.chart" -}}
 {{- printf "%s-%s" .Chart.Name .Chart.Version | replace "+" "_" | trunc 63 | trimSuffix "-" }}
 {{- end }}
 
 {{/*
 Common labels
 */}}
-{{- define "advanced-middleware-api.labels" -}}
-helm.sh/chart: {{ include "advanced-middleware-api.chart" . }}
-{{ include "advanced-middleware-api.selectorLabels" . }}
+{{- define "fairagro-advanced-middleware-api-chart.labels" -}}
+helm.sh/chart: {{ include "fairagro-advanced-middleware-api-chart.chart" . }}
+{{ include "fairagro-advanced-middleware-api-chart.selectorLabels" . }}
 {{- if .Chart.AppVersion }}
 app.kubernetes.io/version: {{ .Chart.AppVersion | quote }}
 {{- end }}
@@ -45,17 +45,17 @@ app.kubernetes.io/managed-by: {{ .Release.Service }}
 {{/*
 Selector labels
 */}}
-{{- define "advanced-middleware-api.selectorLabels" -}}
-app.kubernetes.io/name: {{ include "advanced-middleware-api.name" . }}
+{{- define "fairagro-advanced-middleware-api-chart.selectorLabels" -}}
+app.kubernetes.io/name: {{ include "fairagro-advanced-middleware-api-chart.name" . }}
 app.kubernetes.io/instance: {{ .Release.Name }}
 {{- end }}
 
 {{/*
 Create the name of the service account to use
 */}}
-{{- define "advanced-middleware-api.serviceAccountName" -}}
+{{- define "fairagro-advanced-middleware-api-chart.serviceAccountName" -}}
 {{- if .Values.serviceAccount.create }}
-{{- default (include "advanced-middleware-api.fullname" .) .Values.serviceAccount.name }}
+{{- default (include "fairagro-advanced-middleware-api-chart.fullname" .) .Values.serviceAccount.name }}
 {{- else }}
 {{- default "default" .Values.serviceAccount.name }}
 {{- end }}
@@ -64,10 +64,10 @@ Create the name of the service account to use
 {{/*
 Create the name of the CA TLS secret
 */}}
-{{- define "advanced-middleware-api.caTlsSecretName" -}}
+{{- define "fairagro-advanced-middleware-api-chart.caTlsSecretName" -}}
 {{- if .Values.tls.caTlsSecretName }}
 {{- .Values.tls.caTlsSecretName }}
 {{- else }}
-{{- include "advanced-middleware-api.fullname" . }}-ca-secret
+{{- include "fairagro-advanced-middleware-api-chart.fullname" . }}-ca-secret
 {{- end }}
 {{- end }}
