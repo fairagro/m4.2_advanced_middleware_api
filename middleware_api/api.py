@@ -188,7 +188,8 @@ class Api:
                 raise HTTPException(status_code=422, detail=str(e)) from e
 
 
-print(dict(os.environ))
+if os.environ.get("PRINT_ENV") == "1":
+    print(dict(os.environ))
 
 config = None
 if "pytest" in sys.modules:
