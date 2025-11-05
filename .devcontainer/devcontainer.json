@@ -121,7 +121,7 @@
 		"initialize env": [
 			"bash",
 			"-c",
-			"echo 'source ${containerWorkspaceFolder}/scripts/load-env.sh' >> ~/.bashrc"
+			"echo 'source /workspaces/${WORKSPACE_FOLDER_NAME}/scripts/load-env.sh' >> ~/.bashrc"
 		]
 	},
 	
