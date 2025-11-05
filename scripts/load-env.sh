@@ -1,12 +1,42 @@
-#!/bin/bash
+(return 0 2>/dev/null) && sourced=1 || sourced=0
+if [ $sourced -eq 0 ]; then
+  echo "ERROR, this script is meant to be sourced."
+  exit 1
+fi
 
 # Load Environment Script
 # Decrypts .env.integration.enc and generates .env for tests
 
-# Note: No 'set -e' so container starts even if secrets loading fails
+# figure out some paths
+mydir=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" &> /dev/null && pwd)
 
-ENCRYPTED_FILE=".env.integration.enc"
-DECRYPTED_FILE=".env"
+# import all public keyfiles into gpg keyring so sops can find them
+public_key_path="${mydir}/../public_gpg_keys"
+for file in "$public_key_path"/*.asc; do
+    gpg --import "$file"
+done
+
+# Create Bash autocompletion for installed tools
+. /etc/bash_completion
+. <(kubectl completion bash)
+. <(helm completion bash)
+. <(docker completion bash)
+. <(minikube completion bash)
+. <(sops completion bash)
+
+# Setup aliases
+alias k=kubectl
+alias d=docker
+alias kda="kubectl delete all,pdb,configmap,secret,pvc,ingress,serviceaccount,endpoints --all"
+alias kga="kubectl get all,pdb,configmap,secret,pvc,ingress,serviceaccount,endpoints"
+alias ksn="kubectl config set-context --current --namespace"
+
+# Set bash completion for aliases
+complete -o default -F __start_kubectl k
+complete -o default -F __start_docker d
+
+ENCRYPTED_FILE="${mydir}/../.env.integration.enc"
+DECRYPTED_FILE="${mydir}/../.env"
 
 # Check if .env file already exists and is not empty
 if [ -f "$DECRYPTED_FILE" ] && [ -s "$DECRYPTED_FILE" ]; then
@@ -22,19 +52,19 @@ if [ -f "$DECRYPTED_FILE" ] && [ -s "$DECRYPTED_FILE" ]; then
     else
         echo "✅ Environment variables already loaded"
     fi
-    exit 0
+    return 0
 fi
 
 # Check if SOPS is available
 if ! command -v sops &> /dev/null; then
     echo "⚠️ SOPS not available - skipping secrets loading"
-    exit 0
+    return 0
 fi
 
 # Check if encrypted file exists
 if [ ! -f "$ENCRYPTED_FILE" ]; then
     echo "⚠️ $ENCRYPTED_FILE not found - skipping secrets loading"
-    exit 0
+    return 0
 fi
 
 # Decrypt the encrypted file and write to .env
@@ -55,10 +85,10 @@ if grep -q '"sops"' "$ENCRYPTED_FILE" 2>/dev/null; then
         echo "   - GPG key not available"
         echo "   - SOPS configuration error"
         echo "📝 Tests may fail without valid GITLAB_API_TOKEN"
-        exit 0  # Graceful exit so container starts
+        return 0  # Graceful return so sourcing continues
     fi
 else
     echo "⚠️ $ENCRYPTED_FILE is not encrypted or not in SOPS format"
     echo "📝 Tests may fail without valid GITLAB_API_TOKEN"
-    exit 0  # Graceful exit so container starts
+    return 0  # Graceful return so sourcing continues
 fi
