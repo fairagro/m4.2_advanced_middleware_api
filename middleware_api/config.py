@@ -102,8 +102,8 @@ class Config(BaseModel):
             log_level="INFO",
             gitlab_api=GitlabApiConfig(
                 url=cast(HttpUrl, "https://localhost/"),
-                branch="main",
-                token="test-token",
-                group="test-group",
+                branch="dummy",
+                token="dummy-token",
+                group="dummy-group",
             ),
         )
