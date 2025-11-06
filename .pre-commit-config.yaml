@@ -28,7 +28,7 @@ repos:
         entry: uv run ruff check
         language: system
         types: [python]
-        args: [--fix]
+        args: [--fix, --exit-non-zero-on-fix]
 
       # Ruff - Formatting
       - id: ruff-format
