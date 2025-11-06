@@ -1,9 +1,12 @@
 # Pre-commit configuration
 # See https://pre-commit.com for more information
 # See https://pre-commit.com/hooks.html for more hooks
+#
+# All hooks use 'uv run' to execute tools defined in pyproject.toml
+# This ensures consistency with the quality-check.sh script and uv.lock
 
 repos:
-  # Built-in hooks
+  # Built-in hooks (no dependencies needed)
   - repo: https://github.com/pre-commit/pre-commit-hooks
     rev: v5.0.0
     hooks:
@@ -16,41 +19,58 @@ repos:
       - id: check-toml
       - id: debug-statements
 
-  # Ruff - Fast linting and formatting (replaces black + isort)
-  - repo: https://github.com/astral-sh/ruff-pre-commit
-    rev: v0.8.4
-    hooks:
-      - id: ruff
-        args: [--fix, --exit-non-zero-on-fix]
-      - id: ruff-format
-
-  # mypy - Type checking
-  - repo: https://github.com/pre-commit/mirrors-mypy
-    rev: v1.13.0
-    hooks:
-      - id: mypy
-        additional_dependencies: [types-PyYAML]
-        args: [--ignore-missing-imports]
-        files: ^middleware_api/
-
-  # bandit - Security linting
-  - repo: https://github.com/pycqa/bandit
-    rev: 1.8.6
-    hooks:
-      - id: bandit
-        args: [-r, --skip, B101]
-        files: ^middleware_api/
-        exclude: ^tests/
-
-  # Load environment variables (secrets) for other hooks
-  # pytest - Run only unit tests (integration tests need external services)
+  # All Python quality checks using uv run (local hooks)
   - repo: local
     hooks:
+      # Ruff - Linting
+      - id: ruff
+        name: ruff lint
+        entry: uv run ruff check
+        language: system
+        types: [python]
+        args: [--fix]
+
+      # Ruff - Formatting
+      - id: ruff-format
+        name: ruff format
+        entry: uv run ruff format
+        language: system
+        types: [python]
+
+      # mypy - Type checking
+      - id: mypy
+        name: mypy type check
+        entry: uv run mypy
+        language: system
+        types: [python]
+        files: ^middleware_api/
+        args: [--ignore-missing-imports]
+
+      # bandit - Security linting
+      - id: bandit
+        name: bandit security scan
+        entry: uv run bandit -r
+        language: system
+        types: [python]
+        files: ^middleware_api/
+        exclude: ^tests/
+        args: [--skip, B101, -ll]
+
+      # pylint - Code quality
+      - id: pylint
+        name: pylint
+        entry: uv run pylint
+        language: system
+        types: [python]
+        files: ^middleware_api/
+        args: [--fail-under=8.0, --output-format=colorized, --rcfile=pyproject.toml]
+
+      # pytest - Unit tests only
       - id: pytest-unit
-        name: pytest-unit
+        name: pytest unit tests
         entry: uv run pytest tests/unit/
         language: system
         types: [python]
         pass_filenames: false
         always_run: true
-        args: [--tb=short]
+        args: [--tb=short, --cov=middleware_api, --cov-report=term-missing]
