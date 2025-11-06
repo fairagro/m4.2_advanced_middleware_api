@@ -118,6 +118,11 @@
 
 	// Load encrypted environment variables automatically (with error tolerance)
 	"postCreateCommand": {
+		"install ggshield": [
+			"bash",
+			"-c",
+			"pipx install ggshield"
+		],
 		"initialize env": [
 			"bash",
 			"-c",
