@@ -4,6 +4,16 @@ if [ $sourced -eq 0 ]; then
   exit 1
 fi
 
+# Authenticate ggshield (GitGuardian) if available
+if command -v ggshield &> /dev/null; then
+    echo "🔐 ggshield authentication: You are about to log in to GitGuardian."
+    echo "GitGuardian is used to help prevent accidental commits of secrets (API keys, passwords, tokens, etc.) to your repository."
+    echo "A browser window may open for authentication. Please follow the instructions to complete login."
+    ggshield auth login || echo "⚠️ ggshield authentication failed or was cancelled."
+else
+    echo "⚠️ ggshield not found. Skipping GitGuardian authentication."
+fi
+
 # Load Environment Script
 # Decrypts .env.integration.enc and generates .env for tests
 
@@ -35,6 +45,26 @@ alias ksn="kubectl config set-context --current --namespace"
 # Set bash completion for aliases
 declare -F __start_kubectl &>/dev/null && complete -o default -F __start_kubectl k
 declare -F __start_docker &>/dev/null && complete -o default -F __start_docker d
+
+# Install pre-commit hooks if not already installed
+if command -v pre-commit &> /dev/null; then
+    install_status=0
+    if [ ! -f "${mydir}/../.git/hooks/pre-commit" ]; then
+        echo "🔧 Installing pre-commit hooks..."
+        (cd "${mydir}/.." && pre-commit install --hook-type pre-commit) || install_status=$?
+    fi
+    if [ ! -f "${mydir}/../.git/hooks/pre-push" ]; then
+        echo "🔧 Installing pre-push hooks..."
+        (cd "${mydir}/.." && pre-commit install --hook-type pre-push) || install_status=$?
+    fi
+    if [ $install_status -eq 0 ]; then
+        echo "✅ Pre-commit and pre-push hooks are installed."
+    else
+        echo "⚠️ Failed to install some hooks"
+    fi
+else
+    echo "⚠️ pre-commit not available - skipping hook installation"
+fi
 
 ENCRYPTED_FILE="${mydir}/../.env.integration.enc"
 DECRYPTED_FILE="${mydir}/../.env"

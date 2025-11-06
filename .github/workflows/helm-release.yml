@@ -198,7 +198,7 @@ jobs:
           # Login to Helm registry with credentials
           echo "🔑 Logging in to Docker Hub registry..."
           echo "${{ secrets.DOCKERHUB_TOKEN }}" | helm registry login -u "${{ secrets.DOCKERHUB_USER }}" --password-stdin registry-1.docker.io
-          
+
           # Push Helm chart to OCI registry
           echo "📦 Pushing Helm chart to DockerHub OCI registry..."
           helm push ${{ steps.package_chart.outputs.chart-package }} oci://registry-1.docker.io/${{ env.DOCKERHUB_NAMESPACE }}

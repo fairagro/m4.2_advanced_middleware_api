@@ -118,13 +118,18 @@
 
 	// Load encrypted environment variables automatically (with error tolerance)
 	"postCreateCommand": {
+		"install ggshield": [
+			"bash",
+			"-c",
+			"pipx install ggshield"
+		],
 		"initialize env": [
 			"bash",
 			"-c",
-"grep -qF 'source \"${PWD}/scripts/load-env.sh\"' ~/.bashrc || echo 'source \"${PWD}/scripts/load-env.sh\"' >> ~/.bashrc"
+			"grep -qF 'source \"${PWD}/scripts/load-env.sh\"' ~/.bashrc || echo 'source \"${PWD}/scripts/load-env.sh\"' >> ~/.bashrc"
 		]
 	},
-	
+
 	// Uncomment to connect as root instead. More info: https://aka.ms/dev-containers-non-root.
 	"remoteUser": "vscode"
 }

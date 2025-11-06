@@ -30,6 +30,20 @@ dev = [
 ]
 
 [tool.ruff]
+# Exclude directories from linting and formatting
+exclude = [
+  ".venv",
+  "venv",
+  ".git",
+  "__pycache__",
+  "*.egg-info",
+  ".pytest_cache",
+  ".mypy_cache",
+  ".ruff_cache",
+  "build",
+  "dist",
+]
+
 # Welche Regel-Sets aktiviert sind:
 lint.select = [
   "E",   # pycodestyle errors
@@ -42,12 +56,6 @@ lint.select = [
   "UP",  # pyupgrade
   "B",   # bugbear
   "SIM", # flake8-simplify
-]
-
-# Regeln, die du evtl. nicht willst
-lint.ignore = [
-  "D203", # kein Leerzeile vor Klassen-Docstring
-  "D213", # Docstring-Zeilenanfang
 ]
 
 # Maximale Zeilenlänge wie in pylint (Standard: 100)
@@ -79,8 +87,32 @@ warn_unused_configs = true
 disallow_untyped_defs = true
 disallow_incomplete_defs = true
 
+# Exclude directories from type checking
+exclude = [
+  ".venv",
+  "venv",
+  ".git",
+  "__pycache__",
+  "build",
+  "dist",
+  ".pytest_cache",
+  ".mypy_cache",
+  ".ruff_cache",
+]
+
 [tool.bandit]
-exclude_dirs = ["tests", "venv", ".venv"]
+exclude_dirs = [
+  "tests",
+  "venv",
+  ".venv",
+  "__pycache__",
+  "build",
+  "dist",
+  ".pytest_cache",
+  ".mypy_cache",
+  ".ruff_cache",
+  ".git",
+]
 skips = ["B101"]  # Skip assert_used. Do not skip shell injection (B601) to ensure security.
 
 # Docstring-Regeln aktivieren, damit es wie pylint C0114/15/16 meckert
@@ -90,8 +122,66 @@ convention = "pep257" # oder "numpy", oder "google"
 [tool.pylint.format]
 max-line-length = 120
 
+[tool.pylint.master]
+# Ignore directories
+ignore = [".venv", "venv", ".git", "__pycache__", "build", "dist"]
+ignore-patterns = ["^\\..*", ".*\\.egg-info"]
+
 [tool.pylint.messages_control]
+# Disable checks that are already covered by ruff
 disable = [
-    "C0114",  # missing-module-docstring - bereits durch ruff D100 abgedeckt
-    "too-few-public-methods",  # oft bei Test-Klassen nicht relevant
+    # Docstring checks (covered by ruff pydocstyle D-series)
+    "C0114",  # missing-module-docstring -> ruff D100
+    "C0115",  # missing-class-docstring -> ruff D101
+    "C0116",  # missing-function-docstring -> ruff D103
+
+    # Import checks (covered by ruff pyflakes F, isort I)
+    "C0411",  # wrong-import-order -> ruff I001
+    "C0412",  # ungrouped-imports -> ruff I001
+    "C0413",  # wrong-import-position -> ruff E402
+    "W0611",  # unused-import -> ruff F401
+    "W0614",  # unused-wildcard-import -> ruff F403, F405
+
+    # Code style checks (covered by ruff pycodestyle E/W)
+    "C0303",  # trailing-whitespace -> ruff W291
+    "C0304",  # missing-final-newline -> ruff W292
+    "C0305",  # trailing-newlines -> ruff W391
+    "C0321",  # multiple-statements -> ruff E701, E702
+    "C0325",  # superfluous-parens -> ruff UP034
+    "W0311",  # bad-indentation -> ruff E111, E117
+    "W0301",  # unnecessary-semicolon -> ruff E703
+
+    # Naming checks (covered by ruff pep8-naming N-series)
+    "C0103",  # invalid-name -> ruff N801-N807
+
+    # Complexity checks (covered by ruff mccabe C90)
+    "R0912",  # too-many-branches -> ruff C901
+    "R0915",  # too-many-statements -> ruff C901
+
+    # Bugbear/pyflakes checks (covered by ruff bugbear B, pyflakes F)
+    "W0101",  # unreachable -> ruff F401
+    "W0102",  # dangerous-default-value -> ruff B006
+    "W0107",  # unnecessary-pass -> ruff PIE790
+    "W0125",  # using-constant-test -> ruff B015
+    "W0612",  # unused-variable -> ruff F841
+    "W0613",  # unused-argument -> ruff ARG001-005
+    "W0621",  # redefined-outer-name -> ruff F811
+    "W0622",  # redefined-builtin -> ruff A001-A003
+
+    # Simplification checks (covered by ruff flake8-simplify SIM)
+    "R1705",  # no-else-return -> ruff SIM103
+    "R1714",  # consider-using-in -> ruff SIM118
+    "R1715",  # consider-using-get -> ruff SIM401
+    "R1720",  # no-else-raise -> ruff SIM102
+    "R1724",  # no-else-continue -> ruff SIM114
+    "R1728",  # consider-using-generator -> ruff C417
+
+    # Pyupgrade checks (covered by ruff pyupgrade UP)
+    "R1711",  # useless-return -> ruff UP034
+    "C0206",  # consider-using-dict-items -> ruff UP015
+
+    # Additional opinionated/style checks often handled by formatters
+    "R0903",  # too-few-public-methods (opinionated, often not relevant)
+    "R0913",  # too-many-arguments (opinionated, case-by-case basis)
+    "C0301",  # line-too-long (handled by ruff formatter)
 ]
