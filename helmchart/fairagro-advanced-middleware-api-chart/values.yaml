@@ -113,6 +113,21 @@ autoscaling:
   targetCPUUtilizationPercentage: 80
   # targetMemoryUtilizationPercentage: 80
 
+# TLS configuration for mTLS support
+# You can provide TLS certificates in two ways:
+# 1. Direct values (tls.serverCrt, tls.serverKey, tls.caCrt) - take precedence
+# 2. File references (tls.serverCrtFile, tls.serverKeyFile, tls.caCrtFile) - used if direct values are not provided
+# Note: In practice, specify either the direct value OR the file path, not both for the same certificate
+tls:
+  # Direct certificate values (preferred for secrets management)
+  serverCrt: ""  # Base64-encoded or PEM server certificate
+  serverKey: ""  # Base64-encoded or PEM server private key
+  caCrt: ""      # Base64-encoded or PEM CA certificate
+  # File-based certificate references (used if direct values are not provided)
+  serverCrtFile: ""  # Path to server certificate file (e.g., server.crt)
+  serverKeyFile: ""  # Path to server key file (e.g., server.key)
+  caCrtFile: ""      # Path to CA certificate file (e.g., ca.crt)
+
 # Additional volumes on the output Deployment definition.
 volumes: []
 # - name: foo
