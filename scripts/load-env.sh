@@ -38,16 +38,21 @@ declare -F __start_docker &>/dev/null && complete -o default -F __start_docker d
 
 # Install pre-commit hooks if not already installed
 if command -v pre-commit &> /dev/null; then
+    hooks_installed=true
     if [ ! -f "${mydir}/../.git/hooks/pre-commit" ]; then
         echo "🔧 Installing pre-commit hooks..."
-        (cd "${mydir}/.." && pre-commit install)
-        if [ $? -eq 0 ]; then
-            echo "✅ Pre-commit hooks installed successfully"
-        else
-            echo "⚠️ Failed to install pre-commit hooks"
-        fi
+        (cd "${mydir}/.." && pre-commit install --hook-type pre-commit)
+        hooks_installed=$?
+    fi
+    if [ ! -f "${mydir}/../.git/hooks/pre-push" ]; then
+        echo "🔧 Installing pre-push hooks..."
+        (cd "${mydir}/.." && pre-commit install --hook-type pre-push)
+        hooks_installed=$?
+    fi
+    if [ $hooks_installed -eq 0 ]; then
+        echo "✅ Pre-commit and pre-push hooks installed successfully"
     else
-        echo "✅ Pre-commit hooks already installed"
+        echo "⚠️ Failed to install some hooks"
     fi
 else
     echo "⚠️ pre-commit not available - skipping hook installation"
