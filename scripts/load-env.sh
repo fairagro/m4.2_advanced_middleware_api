@@ -4,6 +4,16 @@ if [ $sourced -eq 0 ]; then
   exit 1
 fi
 
+# Authenticate ggshield (GitGuardian) if available
+if command -v ggshield &> /dev/null; then
+    echo "🔐 ggshield authentication: You are about to log in to GitGuardian."
+    echo "GitGuardian is used to help prevent accidental commits of secrets (API keys, passwords, tokens, etc.) to your repository."
+    echo "A browser window may open for authentication. Please follow the instructions to complete login."
+    ggshield auth login || echo "⚠️ ggshield authentication failed or was cancelled."
+else
+    echo "⚠️ ggshield not found. Skipping GitGuardian authentication."
+fi
+
 # Load Environment Script
 # Decrypts .env.integration.enc and generates .env for tests
 

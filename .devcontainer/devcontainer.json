@@ -126,7 +126,7 @@
 		"initialize env": [
 			"bash",
 			"-c",
-"grep -qF 'source \"${PWD}/scripts/load-env.sh\"' ~/.bashrc || echo 'source \"${PWD}/scripts/load-env.sh\"' >> ~/.bashrc"
+			"grep -qF 'source \"${PWD}/scripts/load-env.sh\"' ~/.bashrc || echo 'source \"${PWD}/scripts/load-env.sh\"' >> ~/.bashrc"
 		]
 	},
 
