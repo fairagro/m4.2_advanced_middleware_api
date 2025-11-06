@@ -75,3 +75,12 @@ repos:
         always_run: true
         stages: [pre-push]
         args: [--tb=short, --cov=middleware_api, --cov-report=term-missing]
+
+      # Container Structure Test (runs on pre-push)
+      - id: container-structure-test
+        name: container structure test
+        entry: bash -c 'docker build . -t fairagro-advanced-middleware-api:test && container-structure-test test --image fairagro-advanced-middleware-api:test --config tests/container-structure-test.yaml'
+        language: system
+        pass_filenames: false
+        always_run: true
+        stages: [pre-push]
