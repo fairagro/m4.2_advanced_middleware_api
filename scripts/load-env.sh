@@ -36,6 +36,23 @@ alias ksn="kubectl config set-context --current --namespace"
 declare -F __start_kubectl &>/dev/null && complete -o default -F __start_kubectl k
 declare -F __start_docker &>/dev/null && complete -o default -F __start_docker d
 
+# Install pre-commit hooks if not already installed
+if command -v pre-commit &> /dev/null; then
+    if [ ! -f "${mydir}/../.git/hooks/pre-commit" ]; then
+        echo "🔧 Installing pre-commit hooks..."
+        (cd "${mydir}/.." && pre-commit install)
+        if [ $? -eq 0 ]; then
+            echo "✅ Pre-commit hooks installed successfully"
+        else
+            echo "⚠️ Failed to install pre-commit hooks"
+        fi
+    else
+        echo "✅ Pre-commit hooks already installed"
+    fi
+else
+    echo "⚠️ pre-commit not available - skipping hook installation"
+fi
+
 ENCRYPTED_FILE="${mydir}/../.env.integration.enc"
 DECRYPTED_FILE="${mydir}/../.env"
 
