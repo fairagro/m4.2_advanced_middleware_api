@@ -79,7 +79,7 @@ repos:
       # Container Structure Test (runs on pre-push)
       - id: container-structure-test
         name: container structure test
-        entry: bash -c 'docker build . -t fairagro-advanced-middleware-api:test && container-structure-test test --image fairagro-advanced-middleware-api:test --config tests/container-structure-test.yaml'
+        entry: bash scripts/run-container-structure-test.sh
         language: system
         pass_filenames: false
         always_run: true
