@@ -25,6 +25,6 @@ print_status() {
 # Run all quality checks defined in pre-commit
 echo -e "${YELLOW}🔍 1. Running all pre-commit checks..."
 pre-commit run --hook-stage push --all-files
-
+print_status 'pre-commit checks'
 echo -e "${GREEN}🎉 All quality checks passed!${NC}"
 echo "================================="
