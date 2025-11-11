@@ -36,15 +36,15 @@ wheels = [
 
 [[package]]
 name = "arctrl"
-version = "3.0.0b3"
+version = "3.0.0b12"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "openpyxl" },
     { name = "requests" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/d8/92/c023ca5d12c32a9e00e59283fa1667e487e566e7e4a9973bc2a99d723325/arctrl-3.0.0b3.tar.gz", hash = "sha256:c16d3443531896c7f480b29a8697025c39ea492f2b180136557d10c288bc65e8", size = 528279, upload-time = "2025-07-29T07:11:43.365Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/0a/9b/b2868a7db198b7e15ec385b02d2d6189a71bbced6d908278457e423219a7/arctrl-3.0.0b12.tar.gz", hash = "sha256:1d171e4fea78f8c9703cc96c2cb1aa5b4c23a02c468db1637290871cc67fc8aa", size = 539845, upload-time = "2025-11-05T08:24:47.101Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/36/72/4b1db4b5eef1a4282bd33fbbef3477bd6ddca614cafed3aaa55a4a1cc8c7/arctrl-3.0.0b3-py3-none-any.whl", hash = "sha256:be505ea5b172513227ac6ec5f730da4d48807017ecfcaae58d75276ba971401d", size = 785793, upload-time = "2025-07-29T07:11:41.456Z" },
+    { url = "https://files.pythonhosted.org/packages/ad/35/290e303920957190342c7c0f908ddfa711314a9387a07606dcc9f3b5d862/arctrl-3.0.0b12-py3-none-any.whl", hash = "sha256:d2b07246a75066ec2724f672942a0756714ab8be57bec700684ac29a7cd364e1", size = 804227, upload-time = "2025-11-05T08:24:45.486Z" },
 ]
 
 [[package]]
