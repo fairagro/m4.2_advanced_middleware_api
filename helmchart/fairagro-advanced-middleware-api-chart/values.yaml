@@ -69,6 +69,7 @@ ingress:
   className: ""
   # Enable mTLS (mutual TLS) authentication on the ingress
   mtlsEnabled: false
+  mtlsVerifyDepth: 1
   annotations: {}
     # kubernetes.io/ingress.class: nginx
     # kubernetes.io/tls-acme: "true"
