@@ -6,7 +6,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from middleware_api.api import Api
-from middleware_api.business_logic import InvalidJsonSemanticError, InvalidJsonSyntaxError
+from middleware_api.business_logic import InvalidJsonSemanticError
 
 
 class DummyArc:  # pylint: disable=too-few-public-methods
@@ -35,7 +35,7 @@ class DummyResponse:  # pylint: disable=too-few-public-methods
 
 def override_service(api: Api, obj: Any) -> None:
     """Helfer zum Überschreiben der get_service-Dependency."""
-    api.app.dependency_overrides[api.get_service] = lambda: obj
+    api.app.dependency_overrides[api.get_business_logic] = lambda: obj
 
 
 # -------------------------------------------------------------------
@@ -103,10 +103,11 @@ def test_create_or_update_arcs_created(client: TestClient, middleware_api: Api, 
     class SvcOK:  # pylint: disable=too-few-public-methods
         """Service that always returns a created ARC."""
 
-        async def create_or_update_arcs(self, _data: str, client_id: str) -> DummyResponse:
+        async def create_or_update_arcs(self, rdi: str, _data: list[Any], client_id: str) -> DummyResponse:
             """Mock create_or_update_arcs method."""
             return DummyResponse(
                 {
+                    "rdi": rdi,
                     "client_id": client_id,
                     "message": "ok",
                     "arcs": [
@@ -129,7 +130,7 @@ def test_create_or_update_arcs_created(client: TestClient, middleware_api: Api, 
             "content-type": "application/ro-crate+json",
             "accept": "application/json",
         },
-        json=[{"dummy": "crate"}],
+        json={"rdi": "rdi-1", "arcs": [{"dummy": "crate"}]},
     )
     assert r.status_code == 201  # nosec
     body = r.json()
@@ -146,7 +147,7 @@ def test_create_or_update_arcs_updated(client: TestClient, middleware_api: Api, 
     class SvcOK:  # pylint: disable=too-few-public-methods
         """Service that always returns an updated ARC."""
 
-        async def create_or_update_arcs(self, _data: Any, client_id: str) -> DummyResponse:
+        async def create_or_update_arcs(self, rdi: str, arcs: list[Any], client_id: str) -> DummyResponse:
             """Mock create_or_update_arcs method."""
             return DummyResponse(
                 {
@@ -172,7 +173,7 @@ def test_create_or_update_arcs_updated(client: TestClient, middleware_api: Api, 
             "content-type": "application/ro-crate+json",
             "accept": "application/json",
         },
-        json=[{"dummy": "crate"}],
+        json={"rdi": "rdi-1", "arcs": [{"dummy": "crate"}]},
     )
     assert r.status_code == 200  # nosec
     body = r.json()
@@ -182,7 +183,6 @@ def test_create_or_update_arcs_updated(client: TestClient, middleware_api: Api, 
 @pytest.mark.parametrize(
     "exc, expected",
     [
-        (InvalidJsonSyntaxError("bad json"), 400),
         (InvalidJsonSemanticError("bad crate"), 422),
     ],
 )
@@ -194,7 +194,7 @@ def test_create_or_update_arcs_invalid_json(
     class SvcFail:  # pylint: disable=too-few-public-methods
         """Service that always raises an exception."""
 
-        async def create_or_update_arcs(self, _data: Any, _client_id: str) -> None:
+        async def create_or_update_arcs(self, _rdi: str, _arcs: list[Any], _client_id: str) -> None:
             """Mock create_or_update_arcs method that raises an exception."""
             raise exc
 

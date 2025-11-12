@@ -34,7 +34,7 @@ async def test_create_arcs(
     }
     arc_json_path = Path(__file__).parent.parent.parent / "ro_crates" / json_info["file_name"]
     with arc_json_path.open("r", encoding="utf-8") as f:
-        body = [json.load(f)]
+        body = {"rdi": "rdi-1", "arcs": [json.load(f)]}
 
     response = client.post("/v1/arcs", headers=headers, json=body)
 

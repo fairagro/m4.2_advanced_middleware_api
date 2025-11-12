@@ -1,6 +1,5 @@
 """Unit tests for the create_or_update_arcs functionality in BusinessLogic."""
 
-import json
 from typing import Any
 from unittest.mock import patch
 
@@ -11,7 +10,6 @@ from middleware_api.business_logic import (
     BusinessLogic,
     CreateOrUpdateArcsResponse,
     InvalidJsonSemanticError,
-    InvalidJsonSyntaxError,
 )
 
 
@@ -90,7 +88,7 @@ def is_valid_sha256(s: str) -> bool:
 )
 async def test_create_arc_success(service: BusinessLogic, rocrate: list[dict[str, Any]]) -> None:
     """Test creating ARCs with valid RO-Crate JSON."""
-    result = await service.create_or_update_arcs(data=json.dumps(rocrate), client_id="TestClient")
+    result = await service.create_or_update_arcs(rdi="TestRDI", arcs=rocrate, client_id="TestClient")
 
     assert isinstance(result, CreateOrUpdateArcsResponse)  # nosec
     assert result.client_id == "TestClient"  # nosec
@@ -126,7 +124,7 @@ async def test_update_arc_success(service: BusinessLogic) -> None:
 
     # pylint: disable=protected-access
     with patch.object(service._store, "exists", return_value=True):
-        result = await service.create_or_update_arcs(data=json.dumps(rocrate), client_id="TestClient")
+        result = await service.create_or_update_arcs(rdi="TestRDI", arcs=rocrate, client_id="TestClient")
 
         assert isinstance(result, CreateOrUpdateArcsResponse)  # nosec
         assert result.client_id == "TestClient"  # nosec
@@ -135,40 +133,6 @@ async def test_update_arc_success(service: BusinessLogic) -> None:
         assert len(result.arcs) == len(rocrate)  # nosec
         assert all(is_valid_sha256(a.id) for a in result.arcs)  # nosec
         assert all(a.status == "updated" for a in result.arcs)  # nosec
-
-
-@pytest.mark.asyncio
-@pytest.mark.parametrize(
-    "rocrate",
-    [
-        "not a valid json",  # Invalid JSON syntax
-        {  # Not a list
-            "@context": "https://w3id.org/ro/crate/1.1/context",
-            "@graph": [
-                {
-                    "@id": "./",
-                    "@type": "Dataset",
-                    "additionalType": "Investigation",
-                    "identifier": "ARC-006",
-                },
-                {
-                    "@id": "ro-crate-metadata.json",
-                    "@type": "CreativeWork",
-                    "conformsTo": {"@id": "https://w3id.org/ro/crate/1.1"},
-                    "about": {"@id": "./"},
-                },
-            ],
-        },
-    ],
-)
-async def test_invalid_json(service: BusinessLogic, rocrate: str | dict[str, Any]) -> None:
-    """Test handling of invalid JSON syntax or structure."""
-    # Send invalid JSON (not a list)
-    with pytest.raises(InvalidJsonSyntaxError):
-        await service.create_or_update_arcs(
-            data=json.dumps(rocrate) if isinstance(rocrate, dict) else rocrate,
-            client_id="TestClient",
-        )
 
 
 @pytest.mark.asyncio
@@ -230,4 +194,4 @@ async def test_invalid_json(service: BusinessLogic, rocrate: str | dict[str, Any
 async def test_element_missing(service: BusinessLogic, rocrate: list[dict[str, Any]]) -> None:
     """Test handling of RO-Crate JSON missing required elements."""
     with pytest.raises(InvalidJsonSemanticError):
-        await service.create_or_update_arcs(data=json.dumps(rocrate), client_id="TestClient")
+        await service.create_or_update_arcs(rdi="TestRDI", arcs=rocrate, client_id="TestClient")
