@@ -6,7 +6,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from middleware_api.api import Api
-from middleware_api.business_logic import InvalidJsonSemanticError, InvalidJsonSyntaxError
+from middleware_api.business_logic import InvalidJsonSemanticError
 
 
 class DummyArc:  # pylint: disable=too-few-public-methods
@@ -152,7 +152,6 @@ def test_create_or_update_arcs_updated(client: TestClient, middleware_api: Api, 
             return DummyResponse(
                 {
                     "client_id": client_id,
-                    "client_auth": client_auth,
                     "message": "ok",
                     "arcs": [
                         {
@@ -184,7 +183,6 @@ def test_create_or_update_arcs_updated(client: TestClient, middleware_api: Api, 
 @pytest.mark.parametrize(
     "exc, expected",
     [
-        (InvalidJsonSyntaxError("bad json"), 422),
         (InvalidJsonSemanticError("bad crate"), 422),
     ],
 )

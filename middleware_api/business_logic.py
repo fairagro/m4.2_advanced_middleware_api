@@ -72,10 +72,6 @@ class BusinessLogicError(Exception):
     """Base exception class for all business logic errors."""
 
 
-class InvalidJsonSyntaxError(BusinessLogicError):
-    """Arises when there are issues parsing the ARC JSON syntax."""
-
-
 class InvalidJsonSemanticError(BusinessLogicError):
     """Arises when the ARC JSON syntax is valid but semantically incorrect.
 
@@ -94,10 +90,6 @@ class BusinessLogic:
 
         """
         self._store = store
-
-    def _validate_rocrate_json(self, arcs: list[Any]) -> None:
-        if not isinstance(arcs, list):
-            raise InvalidJsonSyntaxError("Expected a JSON array of RO-Crates.")
 
     def _create_arc_id(self, identifier: str, client_id: str) -> str:
         input_str = f"{identifier}:{client_id}"
@@ -126,7 +118,6 @@ class BusinessLogic:
         )
 
     async def _process_arcs(self, rdi: str, arcs: list[Any], client_id: str) -> list[ArcResponse]:
-        self._validate_rocrate_json(arcs)
         tasks = [self._create_arc_from_rocrate(rdi, arc, client_id) for arc in arcs]
         return await asyncio.gather(*tasks)
 
@@ -166,7 +157,6 @@ class BusinessLogic:
             client_id: The client identifier.
 
         Raises:
-            InvalidJsonSyntaxError: If the JSON syntax is invalid.
             InvalidJsonSemanticError: If the JSON is semantically incorrect.
             BusinessLogicError: If an error occurs during the operation.
 
