@@ -143,7 +143,7 @@ class Api:
                                 self._logger.warning("DER decoding error: length mismatch in SAN OtherName.")
                         else:
                             self._logger.warning("SAN OtherName is not a DER-encoded UTF8String.")
-                    except Exception as e:
+                    except UnicodeDecodeError as e:
                         self._logger.warning(f"Could not decode SAN OtherName value: {e!r}")
         except x509.ExtensionNotFound:
             self._logger.warning("No SAN extension found in client certificate.")
