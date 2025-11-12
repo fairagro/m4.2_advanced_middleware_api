@@ -90,7 +90,7 @@ def is_valid_sha256(s: str) -> bool:
 )
 async def test_create_arc_success(service: BusinessLogic, rocrate: list[dict[str, Any]]) -> None:
     """Test creating ARCs with valid RO-Crate JSON."""
-    result = await service.create_or_update_arcs(data=json.dumps(rocrate), client_id="TestClient")
+    result = await service.create_or_update_arcs(data=json.dumps(rocrate), client_id="TestClient", client_auth=[])
 
     assert isinstance(result, CreateOrUpdateArcsResponse)  # nosec
     assert result.client_id == "TestClient"  # nosec
@@ -126,7 +126,7 @@ async def test_update_arc_success(service: BusinessLogic) -> None:
 
     # pylint: disable=protected-access
     with patch.object(service._store, "exists", return_value=True):
-        result = await service.create_or_update_arcs(data=json.dumps(rocrate), client_id="TestClient")
+        result = await service.create_or_update_arcs(data=json.dumps(rocrate), client_id="TestClient", client_auth=[])
 
         assert isinstance(result, CreateOrUpdateArcsResponse)  # nosec
         assert result.client_id == "TestClient"  # nosec
@@ -168,6 +168,7 @@ async def test_invalid_json(service: BusinessLogic, rocrate: str | dict[str, Any
         await service.create_or_update_arcs(
             data=json.dumps(rocrate) if isinstance(rocrate, dict) else rocrate,
             client_id="TestClient",
+            client_auth=[],
         )
 
 
@@ -230,4 +231,4 @@ async def test_invalid_json(service: BusinessLogic, rocrate: str | dict[str, Any
 async def test_element_missing(service: BusinessLogic, rocrate: list[dict[str, Any]]) -> None:
     """Test handling of RO-Crate JSON missing required elements."""
     with pytest.raises(InvalidJsonSemanticError):
-        await service.create_or_update_arcs(data=json.dumps(rocrate), client_id="TestClient")
+        await service.create_or_update_arcs(data=json.dumps(rocrate), client_id="TestClient", client_auth=[])

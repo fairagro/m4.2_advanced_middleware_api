@@ -49,9 +49,9 @@ def test_whoami_success(client: TestClient, middleware_api: Api, cert: str) -> N
     class Svc:  # pylint: disable=too-few-public-methods
         """Service that always returns a successful response."""
 
-        async def whoami(self, client_id: str) -> DummyResponse:
+        async def whoami(self, client_id: str, client_auth: list[str]) -> DummyResponse:
             """Mock whoami method."""
-            return DummyResponse({"client_id": client_id, "message": "ok"})
+            return DummyResponse({"client_id": client_id, "client_auth": client_auth, "message": "ok"})
 
     override_service(middleware_api, Svc())
 
@@ -103,11 +103,12 @@ def test_create_or_update_arcs_created(client: TestClient, middleware_api: Api, 
     class SvcOK:  # pylint: disable=too-few-public-methods
         """Service that always returns a created ARC."""
 
-        async def create_or_update_arcs(self, _data: str, client_id: str) -> DummyResponse:
+        async def create_or_update_arcs(self, _data: str, client_id: str, client_auth: list[str]) -> DummyResponse:
             """Mock create_or_update_arcs method."""
             return DummyResponse(
                 {
                     "client_id": client_id,
+                    "client_auth": client_auth,
                     "message": "ok",
                     "arcs": [
                         {
@@ -146,11 +147,12 @@ def test_create_or_update_arcs_updated(client: TestClient, middleware_api: Api, 
     class SvcOK:  # pylint: disable=too-few-public-methods
         """Service that always returns an updated ARC."""
 
-        async def create_or_update_arcs(self, _data: Any, client_id: str) -> DummyResponse:
+        async def create_or_update_arcs(self, _data: Any, client_id: str, client_auth: list[str]) -> DummyResponse:
             """Mock create_or_update_arcs method."""
             return DummyResponse(
                 {
                     "client_id": client_id,
+                    "client_auth": client_auth,
                     "message": "ok",
                     "arcs": [
                         {
@@ -194,7 +196,7 @@ def test_create_or_update_arcs_invalid_json(
     class SvcFail:  # pylint: disable=too-few-public-methods
         """Service that always raises an exception."""
 
-        async def create_or_update_arcs(self, _data: Any, _client_id: str) -> None:
+        async def create_or_update_arcs(self, _data: Any, _client_id: str, _client_auth: list[str]) -> None:
             """Mock create_or_update_arcs method that raises an exception."""
             raise exc
 

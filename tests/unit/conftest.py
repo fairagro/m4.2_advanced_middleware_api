@@ -72,7 +72,7 @@ def mock_service(monkeypatch: pytest.MonkeyPatch) -> object:
 
         async def whoami(self, _request: object, _client_cert: object, _accept_type: object) -> BusinessLogicResponse:
             """Mock whoami method."""
-            return BusinessLogicResponse(client_id="TestClient", message="ok")
+            return BusinessLogicResponse(client_id="TestClient", client_auth=[], message="ok")
 
         async def create_or_update_arcs(
             self,
@@ -84,6 +84,7 @@ def mock_service(monkeypatch: pytest.MonkeyPatch) -> object:
             """Mock create_or_update_arcs method."""
             return CreateOrUpdateArcsResponse(
                 client_id="TestClient",
+                client_auth=[],
                 message="ok",
                 arcs=[
                     ArcResponse(

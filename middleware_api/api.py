@@ -72,15 +72,15 @@ class Api:
         """
         return self._service
 
-    def _get_client_id(self, headers: Headers) -> str:
-        """Get client ID from certificate (mandatory mTLS)."""
-        # Debug log all header fields
+    def _get_client_auth(self, headers: Headers) -> tuple[str, list[str]]:
+        """Get client ID from certificate (mandatory mTLS).
+
+        Also extracts all SAN fields matching the configured OID.
+        """
         self._logger.debug("Request headers: %s", dict(headers.items()))
 
-        # Try multiple header sources for client certificate
         client_cert = headers.get("ssl-client-cert") or headers.get("X-SSL-Client-Cert")
         client_verify = headers.get("ssl-client-verify") or headers.get("X-SSL-Client-Verify", "NONE")
-
         self._logger.debug("Client cert header present: %s", bool(client_cert))
         self._logger.debug("Client verify status: %s", client_verify)
 
@@ -88,8 +88,6 @@ class Api:
             msg = "Client certificate required for access"
             self._logger.warning(msg)
             raise HTTPException(status_code=401, detail=msg)
-
-        # Check if client certificate verification was successful
         if client_verify != "SUCCESS":
             detail_msg = f"Client certificate verification failed: {client_verify}"
             self._logger.warning(detail_msg)
@@ -111,8 +109,25 @@ class Api:
                 raise HTTPException(status_code=400, detail=msg)
 
             cn = cn_attributes[0].value
-            self._logger.info("Client certificate parsed, CN=%s", cn)
-            return cast(str, cn)
+            self._logger.debug("Client certificate parsed, CN=%s", cn)
+
+            # Extract SAN fields with the configured OID
+            allowed_rdis = []
+            try:
+                ext = cert.extensions.get_extension_for_class(x509.SubjectAlternativeName)
+                oid = self._config.client_auth_oid
+                for gn in ext.value:
+                    if isinstance(gn, x509.OtherName) and gn.type_id == oid:
+                        # gn.value is bytes, decode as utf-8 if possible
+                        try:
+                            allowed_rdis.append(gn.value.decode("utf-8"))
+                        except Exception:
+                            allowed_rdis.append(repr(gn.value))
+            except x509.ExtensionNotFound:
+                self._logger.warning("No SAN extension found in client certificate.")
+            self._logger.debug("SAN values for OID %s: %s", self._config.client_auth_oid, allowed_rdis)
+            # Return CN if no SAN values, else return SAN values (comma-separated)
+            return (cast(str, cn), allowed_rdis)
         except ValueError as e:
             error_msg = f"Invalid certificate format: {str(e)}"
             self._logger.error(error_msg)
@@ -155,9 +170,9 @@ class Api:
             request: Request,
             service: Annotated[BusinessLogic, Depends(self.get_service)],
         ) -> JSONResponse:
-            client_id = self._get_client_id(request.headers)
+            client_id, allowed_rdis = self._get_client_auth(request.headers)
             self._validate_accept_type(request.headers)
-            result = await service.whoami(client_id)
+            result = await service.whoami(client_id, allowed_rdis)
             return JSONResponse(content=result.model_dump())
 
         @self._app.get("/v1/liveness")
@@ -170,12 +185,12 @@ class Api:
             request: Request,
             service: Annotated[BusinessLogic, Depends(self.get_service)],
         ) -> JSONResponse:
-            client_id = self._get_client_id(request.headers)
+            client_id, allowed_rdis = self._get_client_auth(request.headers)
             self._validate_accept_type(request.headers)
             self._validate_content_type(request.headers)
             data = (await request.body()).decode("utf-8")
             try:
-                result = await service.create_or_update_arcs(data, client_id)
+                result = await service.create_or_update_arcs(data, client_id, allowed_rdis)
                 location = f"/v1/arcs/{result.arcs[0].id}" if result.arcs else ""
                 return JSONResponse(
                     content=result.model_dump(),

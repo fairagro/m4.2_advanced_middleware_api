@@ -12,8 +12,9 @@ async def test_whoami_returns_middleware_response() -> None:
     """Test that whoami returns a BusinessLogicResponse."""
     service = BusinessLogic(store=MagicMock())
     client_id = "TestClient"
+    client_auth: list[str] = []
 
-    result = await service.whoami(client_id)
+    result = await service.whoami(client_id, client_auth)
 
     assert isinstance(result, BusinessLogicResponse)  # nosec
     assert result.client_id == client_id  # nosec

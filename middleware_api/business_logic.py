@@ -44,6 +44,7 @@ class BusinessLogicResponse(BaseModel):
     """
 
     client_id: str
+    client_auth: list[str]
     message: str
 
 
@@ -135,7 +136,7 @@ class BusinessLogic:
 
     # -------------------------- Whoami --------------------------
 
-    async def whoami(self, client_id: str) -> BusinessLogicResponse:
+    async def whoami(self, client_id: str, client_auth: list[str]) -> BusinessLogicResponse:
         """Whoami operation to identify the client.
 
         Args:
@@ -149,14 +150,18 @@ class BusinessLogic:
 
         """
         try:
-            return BusinessLogicResponse(client_id=client_id, message="Client authenticated successfully")
+            return BusinessLogicResponse(
+                client_id=client_id, client_auth=client_auth, message="Client authenticated successfully"
+            )
         except BusinessLogicError:
             raise
         except Exception as e:
             raise BusinessLogicError(f"unexpected error encountered: {str(e)}") from e
 
     # -------------------------- Create or Update ARCs --------------------------
-    async def create_or_update_arcs(self, data: str, client_id: str) -> CreateOrUpdateArcsResponse:
+    async def create_or_update_arcs(
+        self, data: str, client_id: str, client_auth: list[str]
+    ) -> CreateOrUpdateArcsResponse:
         """Create or update ARCs based on the provided RO-Crate JSON data.
 
         Args:
@@ -177,6 +182,7 @@ class BusinessLogic:
             result = await self._process_arcs(data, client_id)
             return CreateOrUpdateArcsResponse(
                 client_id=client_id,
+                client_auth=client_auth,
                 message="ARCs processed successfully",
                 arcs=result,
             )
