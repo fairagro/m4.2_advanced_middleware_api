@@ -19,7 +19,7 @@ from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 
 from .arc_store.gitlab_api import GitlabApi
-from .business_logic import BusinessLogic
+from .business_logic import BusinessLogic, InvalidJsonSemanticError
 from .config import Config
 
 
@@ -201,20 +201,23 @@ class Api:
             _content_type_validated: Annotated[None, Depends(self._validate_content_type)],
             _accept_validated: Annotated[None, Depends(self._validate_accept_type)],
         ) -> JSONResponse:
-            client_id, allowed_rdis = client_auth
-            rdi = request_body.rdi
-            if rdi in allowed_rdis:
-                result = await business_logic.create_or_update_arcs(rdi, request_body.arcs, client_id)
-                location = f"/v1/arcs/{result.arcs[0].id}" if result.arcs else ""
-                return JSONResponse(
-                    content=result.model_dump(),
-                    status_code=(201 if any(a.status == "created" for a in result.arcs) else 200),
-                    headers={"Location": location},
-                )
-            else:
-                msg = f"RDI '{rdi}' not authorized for client '{client_id}'."
-                self._logger.warning(msg)
-                raise HTTPException(status_code=403, detail=msg)
+            try:
+                client_id, allowed_rdis = client_auth
+                rdi = request_body.rdi
+                if rdi in allowed_rdis:
+                    result = await business_logic.create_or_update_arcs(rdi, request_body.arcs, client_id)
+                    location = f"/v1/arcs/{result.arcs[0].id}" if result.arcs else ""
+                    return JSONResponse(
+                        content=result.model_dump(),
+                        status_code=(201 if any(a.status == "created" for a in result.arcs) else 200),
+                        headers={"Location": location},
+                    )
+                else:
+                    msg = f"RDI '{rdi}' not authorized for client '{client_id}'."
+                    self._logger.warning(msg)
+                    raise HTTPException(status_code=403, detail=msg)
+            except InvalidJsonSemanticError as e:
+                raise HTTPException(status_code=422, detail=str(e)) from e
 
 
 loaded_config = None
