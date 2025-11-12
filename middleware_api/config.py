@@ -42,15 +42,13 @@ class Config(BaseModel):
                 raise ValueError(msg)
         return rdis
 
-    # @field_validator("client_auth_oid")
-    # @classmethod
-    # def validate_client_auth_oid(cls, oid: str) -> str:
-    #     """Validate that client_auth_oid is a valid OID (e.g. 1.2.3.4.55516)."""
-    #     if not re.match(r"^\d+(\.\d+)*$", oid):
-    #         msg = f"Invalid OID format for client_auth_oid: '{oid}'"
-    #         logging.error(msg)
-    #         raise ValueError(msg)
-    #     return oid
+    @field_validator("client_auth_oid", mode="before")
+    @classmethod
+    def parse_client_auth_oid(cls, oid: str | x509.ObjectIdentifier) -> x509.ObjectIdentifier:
+        """Validate that client_auth_oid is a valid OID (e.g. 1.2.3.4.55516)."""
+        if isinstance(oid, str):
+            return x509.ObjectIdentifier(oid)
+        return oid
 
     @classmethod
     def from_config_wrapper(cls, wrapper: ConfigWrapper) -> Self:

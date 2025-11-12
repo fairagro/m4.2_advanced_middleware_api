@@ -7,7 +7,6 @@ This module provides:
 """
 
 import asyncio
-import hashlib
 import json
 from datetime import UTC, datetime
 from enum import Enum
@@ -91,34 +90,30 @@ class BusinessLogic:
         """
         self._store = store
 
-    def _create_arc_id(self, identifier: str, client_id: str) -> str:
-        input_str = f"{identifier}:{client_id}"
-        arc_id = hashlib.sha256(input_str.encode("utf-8")).hexdigest()
-        return arc_id
-
-    async def _create_arc_from_rocrate(self, rdi: str, arc_dict: dict, client_id: str) -> ArcResponse:
+    async def _create_arc_from_rocrate(self, rdi: str, arc_dict: dict) -> ArcResponse:
         try:
             arc_json = json.dumps(arc_dict)
             arc = ARC.from_rocrate_json_string(arc_json)
         except Exception as e:
-            raise InvalidJsonSemanticError(f"Error processing RO-Crate JSON: {str(e)}") from e
+            raise InvalidJsonSemanticError(f"Error processing RO-Crate JSON: {e!r}") from e
 
         identifier = getattr(arc, "Identifier", None)
         if not identifier or identifier == "":
             raise InvalidJsonSemanticError("RO-Crate JSON must contain an 'Identifier' in the ISA object.")
 
-        exists = self._store.exists(identifier)
-        await self._store.create_or_update(identifier, arc)
+        arc_id = self._store.arc_id(identifier, rdi)
+        exists = self._store.exists(arc_id)
+        await self._store.create_or_update(arc_id, arc)
         status = ArcStatus.UPDATED if exists else ArcStatus.CREATED
 
         return ArcResponse(
-            id=self._create_arc_id(identifier, client_id),
+            id=arc_id,
             status=status,
             timestamp=datetime.now(UTC).isoformat() + "Z",
         )
 
-    async def _process_arcs(self, rdi: str, arcs: list[Any], client_id: str) -> list[ArcResponse]:
-        tasks = [self._create_arc_from_rocrate(rdi, arc, client_id) for arc in arcs]
+    async def _process_arcs(self, rdi: str, arcs: list[Any]) -> list[ArcResponse]:
+        tasks = [self._create_arc_from_rocrate(rdi, arc) for arc in arcs]
         return await asyncio.gather(*tasks)
 
     # -------------------------- Whoami --------------------------
@@ -166,7 +161,7 @@ class BusinessLogic:
 
         """
         try:
-            result = await self._process_arcs(rdi, arcs, client_id)
+            result = await self._process_arcs(rdi, arcs)
             return CreateOrUpdateArcsResponse(
                 client_id=client_id,
                 rdi=rdi,

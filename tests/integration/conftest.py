@@ -5,6 +5,7 @@ from collections.abc import Generator
 from typing import Any
 
 import pytest
+from cryptography import x509
 from dotenv import load_dotenv
 from fastapi.testclient import TestClient
 from gitlab import Gitlab, GitlabError
@@ -18,25 +19,21 @@ load_dotenv()
 
 
 @pytest.fixture(scope="session")
-def config() -> "DictType | ListType":
+def config(oid: x509.ObjectIdentifier, known_rdis: list[str]) -> "DictType | ListType":
     """Provide configuration for tests."""
     config_wrapper = ConfigWrapper.from_data(
         {
+            "log_level": "DEBUG",
+            "known_rdis": list(known_rdis),
+            "client_auth_oid": oid.dotted_string,
             "gitlab_api": {
                 "url": "https://datahub-dev.ipk-gatersleben.de",
                 "group": "FAIRagro-advanced-middleware-integration-tests",
                 "token": "",
-            }
+            },
         }
     )
     return config_wrapper.unwrap()
-    # return {
-    #     "gitlab_api": {
-    #         "url": "https://datahub-dev.ipk-gatersleben.de",
-    #         "group": "FAIRagro-advanced-middleware-integration-tests",
-    #         "token": "",
-    #     }
-    # }
 
 
 @pytest.fixture(scope="session")

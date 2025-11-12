@@ -1,5 +1,6 @@
 """Unit tests for the FAIRagro middleware API."""
 
+import hashlib
 from collections.abc import Generator
 from unittest.mock import AsyncMock, MagicMock
 
@@ -59,6 +60,9 @@ def client(
 def service() -> BusinessLogic:
     """Provide a BusinessLogic instance with a mocked ArcStore."""
     store = MagicMock()
+    store.arc_id = MagicMock(
+        side_effect=lambda identifier, rdi: hashlib.sha256(f"{identifier}:{rdi}".encode()).hexdigest()
+    )
     store.exists.return_value = False
     store.create_or_update = AsyncMock()
     return BusinessLogic(store)

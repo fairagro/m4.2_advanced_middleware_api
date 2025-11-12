@@ -67,6 +67,19 @@ class GitlabApi(ArcStore):
         self._config = config
         self._gitlab = gitlab.Gitlab(str(self._config.url), private_token=self._config.token)
 
+    def arc_id(self, identifier: str, rdi: str) -> str:
+        """Generate a unique ARC ID by hashing the identifier and RDI.
+
+        Args:
+            identifier (str): The ARC identifier.
+            rdi (str): The RDI string.
+
+        Returns:
+            str: A SHA-256 hash representing the ARC ID.
+        """
+        input_str = f"{identifier}:{rdi}"
+        return hashlib.sha256(input_str.encode("utf-8")).hexdigest()
+
     # -------------------------- Project Handling --------------------------
     def _get_or_create_project(self, arc_id: str) -> Project:
         projects = self._gitlab.projects.list(search=arc_id)
@@ -233,7 +246,7 @@ class GitlabApi(ArcStore):
         else:
             logger.warning("Project %s not found for deletion.", arc_id)
 
-    # -------------------------- Delete --------------------------
+    # -------------------------- Exists --------------------------
     def _exists(self, arc_id: str) -> bool:
         project = self._find_project(arc_id)
         return bool(project)

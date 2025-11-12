@@ -19,6 +19,11 @@ class ArcStore(ABC):
     """Abstract base class for ARC storage backends."""
 
     @abstractmethod
+    def arc_id(self, identifier: str, rdi: str) -> str:
+        """Generate an ARC ID based on identifier and RDI."""
+        raise NotImplementedError("`ArcStore.arc_id` is not implemented")
+
+    @abstractmethod
     async def _create_or_update(self, arc_id: str, arc: ARC) -> None:
         """Create or updates an ARC."""
         raise NotImplementedError("`ArcStore._create_or_update` is not implemented")
@@ -121,9 +126,6 @@ class ArcStore(ABC):
         except ArcStoreError:
             raise
         except Exception as e:
-            logger.exception(
-                "Caught exception when trying to check if ARC '%s' exists: %s",
-                arc_id,
-                str(e),
-            )
-            raise ArcStoreError(f"General exception caught in `ArcStore.delete`: {str(e)}") from e
+            msg = f"Caught exception when trying to check if ARC '{arc_id}' exists: {e!r}"
+            logger.exception(msg)
+            raise ArcStoreError(msg) from e
