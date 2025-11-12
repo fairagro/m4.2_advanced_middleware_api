@@ -147,7 +147,7 @@ def test_create_or_update_arcs_updated(client: TestClient, middleware_api: Api, 
     class SvcOK:  # pylint: disable=too-few-public-methods
         """Service that always returns an updated ARC."""
 
-        async def create_or_update_arcs(self, _data: Any, client_id: str, client_auth: list[str]) -> DummyResponse:
+        async def create_or_update_arcs(self, rdi: str, arcs: list[Any], client_id: str) -> DummyResponse:
             """Mock create_or_update_arcs method."""
             return DummyResponse(
                 {
