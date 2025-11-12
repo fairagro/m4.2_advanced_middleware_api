@@ -27,6 +27,9 @@ for file in "$public_key_path"/*.asc; do
     gpg --import "$file"
 done
 
+# Login to GitGuardian
+ggshield auth login || echo "⚠️ ggshield authentication failed or was cancelled."
+
 # Create Bash autocompletion for installed tools
 [ -f /etc/bash_completion ] && . /etc/bash_completion || true
 command -v kubectl &>/dev/null && . <(kubectl completion bash) || true
