@@ -204,18 +204,23 @@ class Api:
             try:
                 client_id, allowed_rdis = client_auth
                 rdi = request_body.rdi
-                if rdi in allowed_rdis:
-                    result = await business_logic.create_or_update_arcs(rdi, request_body.arcs, client_id)
-                    location = f"/v1/arcs/{result.arcs[0].id}" if result.arcs else ""
-                    return JSONResponse(
-                        content=result.model_dump(),
-                        status_code=(201 if any(a.status == "created" for a in result.arcs) else 200),
-                        headers={"Location": location},
-                    )
-                else:
+
+                if rdi not in self._config.known_rdis:
+                    msg = f"RDI '{rdi}' is not recognized."
+                    self._logger.warning(msg)
+                    raise HTTPException(status_code=400, detail=msg)
+                if rdi not in allowed_rdis:
                     msg = f"RDI '{rdi}' not authorized for client '{client_id}'."
                     self._logger.warning(msg)
                     raise HTTPException(status_code=403, detail=msg)
+
+                result = await business_logic.create_or_update_arcs(rdi, request_body.arcs, client_id)
+                location = f"/v1/arcs/{result.arcs[0].id}" if result.arcs else ""
+                return JSONResponse(
+                    content=result.model_dump(),
+                    status_code=(201 if any(a.status == "created" for a in result.arcs) else 200),
+                    headers={"Location": location},
+                )
             except InvalidJsonSemanticError as e:
                 raise HTTPException(status_code=422, detail=str(e)) from e
 
