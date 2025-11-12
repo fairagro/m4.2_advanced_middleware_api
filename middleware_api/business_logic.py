@@ -11,6 +11,7 @@ import hashlib
 import json
 from datetime import UTC, datetime
 from enum import Enum
+from typing import Any
 
 from arctrl import ARC  # type: ignore[import-untyped]
 from pydantic import BaseModel
@@ -44,7 +45,7 @@ class BusinessLogicResponse(BaseModel):
     """
 
     client_id: str
-    client_auth: list[str]
+    rdi: str | None = None
     message: str
 
 
@@ -94,24 +95,19 @@ class BusinessLogic:
         """
         self._store = store
 
-    def _parse_rocrate_json(self, data: str) -> list[dict]:
-        try:
-            crates = json.loads(data)
-            if not isinstance(crates, list):
-                raise InvalidJsonSyntaxError("Expected a JSON array of RO-Crates.")
-            return crates
-        except json.JSONDecodeError as e:
-            raise InvalidJsonSyntaxError(f"Invalid RO-Crate JSON: {str(e)}") from e
+    def _validate_rocrate_json(self, arcs: list[Any]) -> None:
+        if not isinstance(arcs, list):
+            raise InvalidJsonSyntaxError("Expected a JSON array of RO-Crates.")
 
     def _create_arc_id(self, identifier: str, client_id: str) -> str:
         input_str = f"{identifier}:{client_id}"
         arc_id = hashlib.sha256(input_str.encode("utf-8")).hexdigest()
         return arc_id
 
-    async def _create_arc_from_rocrate(self, crate: dict, client_id: str) -> ArcResponse:
+    async def _create_arc_from_rocrate(self, rdi: str, arc_dict: dict, client_id: str) -> ArcResponse:
         try:
-            crate_json = json.dumps(crate)
-            arc = ARC.from_rocrate_json_string(crate_json)
+            arc_json = json.dumps(arc_dict)
+            arc = ARC.from_rocrate_json_string(arc_json)
         except Exception as e:
             raise InvalidJsonSemanticError(f"Error processing RO-Crate JSON: {str(e)}") from e
 
@@ -129,14 +125,14 @@ class BusinessLogic:
             timestamp=datetime.now(UTC).isoformat() + "Z",
         )
 
-    async def _process_arcs(self, data: str, client_id: str) -> list[ArcResponse]:
-        crates = self._parse_rocrate_json(data)
-        tasks = [self._create_arc_from_rocrate(crate, client_id) for crate in crates]
+    async def _process_arcs(self, rdi: str, arcs: list[Any], client_id: str) -> list[ArcResponse]:
+        self._validate_rocrate_json(arcs)
+        tasks = [self._create_arc_from_rocrate(rdi, arc, client_id) for arc in arcs]
         return await asyncio.gather(*tasks)
 
     # -------------------------- Whoami --------------------------
 
-    async def whoami(self, client_id: str, client_auth: list[str]) -> BusinessLogicResponse:
+    async def whoami(self, client_id: str) -> BusinessLogicResponse:
         """Whoami operation to identify the client.
 
         Args:
@@ -150,23 +146,24 @@ class BusinessLogic:
 
         """
         try:
-            return BusinessLogicResponse(
-                client_id=client_id, client_auth=client_auth, message="Client authenticated successfully"
-            )
+            return BusinessLogicResponse(client_id=client_id, message="Client authenticated successfully")
         except BusinessLogicError:
             raise
         except Exception as e:
             raise BusinessLogicError(f"unexpected error encountered: {str(e)}") from e
 
     # -------------------------- Create or Update ARCs --------------------------
-    async def create_or_update_arcs(
-        self, data: str, client_id: str, client_auth: list[str]
-    ) -> CreateOrUpdateArcsResponse:
+    # TODO: in the first implementation, we accepted string data for ARC JSON,
+    # now we accept list[Any] that is already validated using Pydantic in the API layer.
+    # The question is: do we need validation on the BusinessLogic layer as well?
+    # Depending on the answer, we need to refactor the current validation approach.
+    async def create_or_update_arcs(self, rdi: str, arcs: list[Any], client_id: str) -> CreateOrUpdateArcsResponse:
         """Create or update ARCs based on the provided RO-Crate JSON data.
 
         Args:
-            data (str): JSON string containing one or more RO-Crates.
-            client_id (str): The client identifier.
+            rdi: Research Data Infrastructure identifier.
+            arcs: List of ARC definitions.
+            client_id: The client identifier.
 
         Raises:
             InvalidJsonSyntaxError: If the JSON syntax is invalid.
@@ -179,10 +176,10 @@ class BusinessLogic:
 
         """
         try:
-            result = await self._process_arcs(data, client_id)
+            result = await self._process_arcs(rdi, arcs, client_id)
             return CreateOrUpdateArcsResponse(
                 client_id=client_id,
-                client_auth=client_auth,
+                rdi=rdi,
                 message="ARCs processed successfully",
                 arcs=result,
             )

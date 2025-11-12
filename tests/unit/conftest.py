@@ -4,6 +4,7 @@ from collections.abc import Generator
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
+from cryptography import x509
 from fastapi.testclient import TestClient
 from pydantic import HttpUrl
 
@@ -18,14 +19,14 @@ from middleware_api.business_logic import (
 )
 from middleware_api.config import Config
 
-from ..shared_fixtures import cert  # noqa: F401, pylint: disable=unused-import
-
 
 @pytest.fixture
-def config() -> Config:
+def config(oid: x509.ObjectIdentifier, known_rdis: list[str]) -> Config:
     """Provide a test Config instance with dummy values."""
     return Config(
         log_level="DEBUG",
+        known_rdis=known_rdis,
+        client_auth_oid=oid,
         gitlab_api=GitlabApiConfig(
             url=HttpUrl("http://localhost:8080"),
             token="test-token",
@@ -72,7 +73,7 @@ def mock_service(monkeypatch: pytest.MonkeyPatch) -> object:
 
         async def whoami(self, _request: object, _client_cert: object, _accept_type: object) -> BusinessLogicResponse:
             """Mock whoami method."""
-            return BusinessLogicResponse(client_id="TestClient", client_auth=[], message="ok")
+            return BusinessLogicResponse(client_id="TestClient", message="ok")
 
         async def create_or_update_arcs(
             self,
@@ -84,7 +85,6 @@ def mock_service(monkeypatch: pytest.MonkeyPatch) -> object:
             """Mock create_or_update_arcs method."""
             return CreateOrUpdateArcsResponse(
                 client_id="TestClient",
-                client_auth=[],
                 message="ok",
                 arcs=[
                     ArcResponse(
