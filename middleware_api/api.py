@@ -9,7 +9,7 @@ import logging
 import os
 import sys
 from pathlib import Path
-from typing import Annotated, Any, cast
+from typing import Annotated, cast
 from urllib.parse import unquote
 
 from cryptography import x509
@@ -27,7 +27,7 @@ class CreateOrUpdateArcsRequest(BaseModel):
     """Request model for creating or updating ARCs."""
 
     rdi: Annotated[str, Field(description="Research Data Infrastructure identifier")]
-    arcs: Annotated[list[Any], Field(description="List of ARC definitions")]
+    arcs: Annotated[list[dict], Field(description="List of ARC definitions in Ro-Crate JSON format")]
 
 
 class Api:
