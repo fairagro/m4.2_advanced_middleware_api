@@ -20,7 +20,7 @@ class Config(BaseModel):
     ] = "INFO"
     known_rdis: Annotated[list[str], Field(description="List of known RDI identifiers")] = []
     client_auth_oid: Annotated[x509.ObjectIdentifier, Field(description="OID for client authentication")] = (
-        x509.ObjectIdentifier("1.3.6.1.4.1.37476.1.1")
+        x509.ObjectIdentifier("1.3.6.1.4.1.64609.1.1")
     )
     gitlab_api: Annotated[GitlabApiConfig, Field(description="Gitlab API config")]
 
