@@ -14,12 +14,12 @@ WORKDIR /middleware_api
 COPY . /middleware_api
 
 # Upgrade pip und installiere Abhängigkeiten
-RUN pip install --no-cache-dir --upgrade pip==25.2 uv==0.9.2 \
-    && uv sync --no-dev \
-    && uv pip install pyinstaller \
-    && . /middleware_api/.venv/bin/activate \
-    && PYTHONPATH=/middleware_api/middleware_api \
-       pyinstaller --onefile middleware_api/main.py --name middleware_api
+RUN pip install --no-cache-dir --upgrade pip==25.2 uv==0.9.2
+RUN uv sync --no-dev
+RUN uv pip install pyinstaller
+RUN . /middleware_api/.venv/bin/activate && \
+        PYTHONPATH=/middleware_api/middleware_api \
+        pyinstaller --onefile middleware_api/main.py --name middleware_api
 
 
 # # ---- Runtime Stage ----
@@ -44,4 +44,4 @@ EXPOSE $UVICORN_PORT
 ENTRYPOINT ["/middleware_api/middleware_api"]
 
 HEALTHCHECK --interval=30s --timeout=5s --start-period=5s --retries=3 \
-  CMD sh -c "curl -f http://${UVICORN_HOST}:${UVICORN_PORT}/v1/liveness || exit 1"
+  CMD ["curl", "-f", "http://${UVICORN_HOST}:${UVICORN_PORT}/v1/liveness"]

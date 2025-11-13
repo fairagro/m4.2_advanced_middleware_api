@@ -4,16 +4,6 @@ if [ $sourced -eq 0 ]; then
   exit 1
 fi
 
-# Authenticate ggshield (GitGuardian) if available
-if command -v ggshield &> /dev/null; then
-    echo "🔐 ggshield authentication: You are about to log in to GitGuardian."
-    echo "GitGuardian is used to help prevent accidental commits of secrets (API keys, passwords, tokens, etc.) to your repository."
-    echo "A browser window may open for authentication. Please follow the instructions to complete login."
-    ggshield auth login || echo "⚠️ ggshield authentication failed or was cancelled."
-else
-    echo "⚠️ ggshield not found. Skipping GitGuardian authentication."
-fi
-
 # Load Environment Script
 # Decrypts .env.integration.enc and generates .env for tests
 
@@ -26,9 +16,6 @@ for file in "$public_key_path"/*.asc; do
     [ -e "$file" ] || continue
     gpg --import "$file"
 done
-
-# Login to GitGuardian
-ggshield auth login || echo "⚠️ ggshield authentication failed or was cancelled."
 
 # Create Bash autocompletion for installed tools
 [ -f /etc/bash_completion ] && . /etc/bash_completion || true
@@ -64,6 +51,31 @@ if command -v pre-commit &> /dev/null; then
         echo "✅ Pre-commit and pre-push hooks are installed."
     else
         echo "⚠️ Failed to install some hooks"
+    fi
+
+    # Check if ggshield is authenticated
+    if command -v ggshield &> /dev/null; then
+        if [ ! -f ~/.config/ggshield/auth_config.yaml ] || ! grep -q "token:" ~/.config/ggshield/auth_config.yaml 2>/dev/null; then
+            echo ""
+            echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+            echo "⚠️  Concerning ggshield Authentication"
+            echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+            echo ""
+            echo "We're about to request a ggshield (aka GitGuardian) authentication token,"
+            echo "that is used to prevent committing secrets (API keys, passwords, tokens, "
+            echo "etc.) into the repository by mistake."
+            echo ""
+            echo "ℹ️  The token is stored locally in ~/.config/ggshield/auth_config.yaml"
+            echo "and is NOT checked into the repository."
+            echo ""
+            echo "💡 GitGuardian allows to create up to 5 personal API tokens per user."
+            echo "If you already have 5 tokens, you need to revoke one of them first, using"
+            echo "the GitGuardian web interface (https://dashboard.gitguardian.com)"
+            echo ""
+            echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+            echo ""
+            ggshield auth login || echo "⚠️ ggshield authentication failed or was cancelled."
+        fi
     fi
 else
     echo "⚠️ pre-commit not available - skipping hook installation"
