@@ -128,7 +128,7 @@
 		"setup bashrc": [
 			"bash",
 			"-c",
-			"echo 'source /workspaces/m4.2_advanced_middleware_api/scripts/load-env.sh' >> /home/vscode/.bashrc"
+"grep -qF 'source /workspaces/m4.2_advanced_middleware_api/scripts/load-env.sh' /home/vscode/.bashrc || echo 'source /workspaces/m4.2_advanced_middleware_api/scripts/load-env.sh' >> /home/vscode/.bashrc"
 		]
 	},
 
