@@ -82,6 +82,26 @@ change this by passing the command line args `--host` and/or `--port`.
 You will be able to access a swagger API browser by appending `/docs` to the
 URL.
 
+### Configuring the middleware API
+
+The middleware API needs a config file that is looked for in
+`/run/secrets/middleware-api-config` by default. This is not a very practical
+path for test runs, though. To override it, please do something like:
+
+```bash
+export MIDDLEWARE_API_CONFIG=example_config.yaml
+```
+
+Having a look at the file `example_config.yaml` you will notice that the gitlab
+API token is missing, as we do not want to commit a secret to git. Nevertheless
+the token is needed, otherwise the middleware API won't start. So you can either
+define the variable `GITLAB_API_TOKEN` manually, or reuse the the token used for
+integration tests that should have already been decrypted by the script `load-env.sh`:
+
+```bash
+source .env
+```
+
 ### Running by executing `main.py`
 
 We can start the middleware api by executing the python main file:
@@ -120,11 +140,27 @@ To run the middleware api via `fastapi` command line tool:
 fastapi run middleware_api/api.py --app app
 ```
 
-### Using the docker image
+### Using a local docker image
 
 We can also build an run the docker image:
 
 ```bash
 docker build . -t middleware_api
-docker run -p 8000:8000 middleware_api
+docker run \
+    -v $(pwd)/example_config.yaml:/run/secrets/middleware-api-config \
+    -e GITLAB_API_TOKEN \
+    -p 8000:8000 \
+    middleware_api
+```
+
+### Using the official docker image
+
+To use an official middleware release:
+
+```bash
+docker run \
+    -v $(pwd)/example_config.yaml:/run/secrets/middleware-api-config \
+    -e GITLAB_API_TOKEN \
+    -p 8000:8000 \
+    zalf/fairagro-advanced-middleware-api:latest
 ```
