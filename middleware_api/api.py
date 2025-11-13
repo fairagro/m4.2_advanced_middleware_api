@@ -8,6 +8,7 @@ and content type validation.
 import logging
 import os
 import sys
+import tomllib
 from pathlib import Path
 from typing import Annotated, cast
 from urllib.parse import unquote
@@ -21,6 +22,15 @@ from pydantic import BaseModel, Field
 from .arc_store.gitlab_api import GitlabApi
 from .business_logic import BusinessLogic, InvalidJsonSemanticError
 from .config import Config
+
+try:
+    pyproject_path = Path(__file__).parent.parent / "pyproject.toml"
+    with pyproject_path.open("rb") as f:
+        data = tomllib.load(f)
+    __version__ = data["project"]["version"]
+except (FileNotFoundError, KeyError):
+    # Fallback, falls die Datei nicht gefunden wird oder die Struktur fehlt
+    __version__ = "0.0.0"
 
 
 class CreateOrUpdateArcsRequest(BaseModel):
@@ -56,6 +66,7 @@ class Api:
         self._app = FastAPI(
             title="FAIR Middleware API",
             description="API for managing ARC (Advanced Research Context) objects",
+            version=__version__,
         )
         self._setup_routes()
         self._setup_exception_handlers()
