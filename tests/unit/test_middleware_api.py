@@ -49,9 +49,9 @@ def test_whoami_success(client: TestClient, middleware_api: Api, cert: str) -> N
     class Svc:  # pylint: disable=too-few-public-methods
         """Service that always returns a successful response."""
 
-        async def whoami(self, client_id: str) -> DummyResponse:
+        async def whoami(self, client_id: str, accessible_rdis: list[str]) -> DummyResponse:
             """Mock whoami method."""
-            return DummyResponse({"client_id": client_id, "message": "ok"})
+            return DummyResponse({"client_id": client_id, "accessible_rdis": accessible_rdis, "message": "ok"})
 
     override_service(middleware_api, Svc())
 
