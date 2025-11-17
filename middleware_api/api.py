@@ -95,7 +95,7 @@ class Api:
     def _get_client_auth(self, request: Request) -> tuple[str, list[str]]:
         """Get client ID from certificate (mandatory mTLS).
 
-        Also extracts all SAN fields matching the configured OID.
+        Also extracts authorized RDIs from the certificate.
         """
         headers = request.headers
         self._logger.debug("Request headers: %s", dict(headers.items()))
@@ -126,7 +126,7 @@ class Api:
             cn = cn_attributes[0].value
             self._logger.debug("Client certificate parsed, CN=%s", cn)
             allowed_rdis = self._extract_allowed_rdis(cert)
-            self._logger.debug("SAN values for OID %s: %s", self._config.client_auth_oid, allowed_rdis)
+            self._logger.debug("Allowed RDIs with OID %s: %s", self._config.client_auth_oid, allowed_rdis)
             return (cast(str, cn), allowed_rdis)
         except ValueError as e:
             error_msg = f"Invalid certificate format: {str(e)}"
@@ -206,7 +206,11 @@ class Api:
             _accept_validated: Annotated[None, Depends(self._validate_accept_type)],
         ) -> JSONResponse:
             client_id, allowed_rdis = client_auth
-            accessible_rdis = list(set(allowed_rdis) & set(self._config.known_rdis))
+            logging.debug("Allowed RDIs: %s", allowed_rdis)
+            known_rdis = self._config.known_rdis
+            logging.debug("Known RDIs: %s", known_rdis)
+            accessible_rdis = list(set(allowed_rdis) & set(known_rdis))
+            logging.debug("Accessible RDIs: %s", accessible_rdis)
             result = await business_logic.whoami(client_id, accessible_rdis)
             return JSONResponse(content=result.model_dump())
 
