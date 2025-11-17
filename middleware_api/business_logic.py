@@ -48,6 +48,12 @@ class BusinessLogicResponse(BaseModel):
     message: str
 
 
+class WhoamiResponse(BusinessLogicResponse):
+    """Response model for whoami operation."""
+
+    accessible_rdis: list[str]
+
+
 class ArcResponse(BaseModel):
     """Response model for individual ARC operations.
 
@@ -118,11 +124,12 @@ class BusinessLogic:
 
     # -------------------------- Whoami --------------------------
 
-    async def whoami(self, client_id: str) -> BusinessLogicResponse:
+    async def whoami(self, client_id: str, accessible_rdis: list[str]) -> BusinessLogicResponse:
         """Whoami operation to identify the client.
 
         Args:
             client_id (str): The client identifier.
+            accessible_rdis (list[str]): List of accessible RDIs for the client.
 
         Raises:
             BusinessLogicError: If an error occurs during the operation.
@@ -132,7 +139,9 @@ class BusinessLogic:
 
         """
         try:
-            return BusinessLogicResponse(client_id=client_id, message="Client authenticated successfully")
+            return WhoamiResponse(
+                client_id=client_id, message="Client authenticated successfully", accessible_rdis=accessible_rdis
+            )
         except BusinessLogicError:
             raise
         except Exception as e:

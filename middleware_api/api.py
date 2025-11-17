@@ -205,8 +205,9 @@ class Api:
             business_logic: Annotated[BusinessLogic, Depends(self.get_business_logic)],
             _accept_validated: Annotated[None, Depends(self._validate_accept_type)],
         ) -> JSONResponse:
-            client_id, _ = client_auth
-            result = await business_logic.whoami(client_id)
+            client_id, allowed_rdis = client_auth
+            accessible_rdis = list(set(allowed_rdis) & set(self._config.known_rdis))
+            result = await business_logic.whoami(client_id, accessible_rdis)
             return JSONResponse(content=result.model_dump())
 
         @self._app.get("/v1/liveness")
