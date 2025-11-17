@@ -206,11 +206,11 @@ class Api:
             _accept_validated: Annotated[None, Depends(self._validate_accept_type)],
         ) -> JSONResponse:
             client_id, allowed_rdis = client_auth
-            logging.debug("Allowed RDIs: %s", allowed_rdis)
+            self._logger.debug("Allowed RDIs: %s", allowed_rdis)
             known_rdis = self._config.known_rdis
-            logging.debug("Known RDIs: %s", known_rdis)
+            self._logger.debug("Known RDIs: %s", known_rdis)
             accessible_rdis = list(set(allowed_rdis) & set(known_rdis))
-            logging.debug("Accessible RDIs: %s", accessible_rdis)
+            self._logger.debug("Accessible RDIs: %s", accessible_rdis)
             result = await business_logic.whoami(client_id, accessible_rdis)
             return JSONResponse(content=result.model_dump())
 
