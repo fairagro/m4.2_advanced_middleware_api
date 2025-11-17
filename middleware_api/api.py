@@ -15,6 +15,7 @@ from urllib.parse import unquote
 
 from asn1crypto.core import Sequence, UTF8String  # type: ignore
 from cryptography import x509
+from cryptography.x509.extensions import ExtensionNotFound
 from cryptography.x509.oid import NameOID
 from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.responses import JSONResponse
@@ -159,10 +160,10 @@ class Api:
                             if isinstance(item, UTF8String):
                                 allowed_rdis.append(item.native)
                         self._logger.debug("Extracted RDIs from extension: %s", allowed_rdis)
-                    except Exception as e:
+                    except (TypeError, ValueError) as e:
                         self._logger.warning("Error parsing custom extension: %s", e)
                     break
-        except Exception as e:
+        except (ExtensionNotFound, TypeError, ValueError) as e:
             self._logger.warning("Error extracting custom extension: %s", e)
 
         if not allowed_rdis:
