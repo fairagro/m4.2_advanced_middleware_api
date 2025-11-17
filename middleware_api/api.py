@@ -13,6 +13,7 @@ from pathlib import Path
 from typing import Annotated, cast
 from urllib.parse import unquote
 
+from asn1crypto.core import Sequence, UTF8String  # type: ignore
 from cryptography import x509
 from cryptography.x509.oid import NameOID
 from fastapi import Depends, FastAPI, HTTPException, Request
@@ -136,28 +137,37 @@ class Api:
             raise HTTPException(status_code=400, detail=error_msg) from e
 
     def _extract_allowed_rdis(self, cert: x509.Certificate) -> list[str]:
-        """Extract allowed RDIs from SAN OtherName fields matching the configured OID."""
+        """Extract allowed RDIs from custom extension with configured OID.
+
+        The extension contains RDI identifiers encoded as ASN.1 SEQUENCE of UTF8Strings.
+        Example: 1.3.6.1.4.1.64609.1.1 = SEQUENCE { UTF8String:"bonares", UTF8String:"edal" }
+        """
         allowed_rdis = []
+        oid = self._config.client_auth_oid
+
         try:
-            ext = cert.extensions.get_extension_for_class(x509.SubjectAlternativeName)
-            oid = self._config.client_auth_oid
-            for gn in ext.value:
-                if isinstance(gn, x509.OtherName) and gn.type_id == oid:
+            # Find extension by OID
+            for ext in cert.extensions:
+                if ext.oid == oid:
                     try:
-                        der_bytes = gn.value
-                        if len(der_bytes) > 2 and der_bytes[0] == 0x0C:
-                            length = der_bytes[1]
-                            value_bytes = der_bytes[2:]
-                            if len(value_bytes) == length:
-                                allowed_rdis.append(value_bytes.decode("utf-8"))
-                            else:
-                                self._logger.warning("DER decoding error: length mismatch in SAN OtherName.")
-                        else:
-                            self._logger.warning("SAN OtherName is not a DER-encoded UTF8String.")
-                    except UnicodeDecodeError as e:
-                        self._logger.warning(f"Could not decode SAN OtherName value: {e!r}")
-        except x509.ExtensionNotFound:
-            self._logger.warning("No SAN extension found in client certificate.")
+                        der_bytes = ext.value.public_bytes()
+                        # Parse DER-encoded SEQUENCE using asn1crypto
+                        seq = Sequence.load(der_bytes)
+                        # Extract UTF8String values - Sequence supports __len__ and __getitem__
+                        for i in range(len(seq)):
+                            item = seq[i]
+                            if isinstance(item, UTF8String):
+                                allowed_rdis.append(item.native)
+                        self._logger.debug("Extracted RDIs from extension: %s", allowed_rdis)
+                    except Exception as e:
+                        self._logger.warning("Error parsing custom extension: %s", e)
+                    break
+        except Exception as e:
+            self._logger.warning("Error extracting custom extension: %s", e)
+
+        if not allowed_rdis:
+            self._logger.warning("No RDIs found in custom extension with OID %s", oid)
+
         return allowed_rdis
 
     def _validate_content_type(self, request: Request) -> None:

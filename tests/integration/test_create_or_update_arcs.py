@@ -1,5 +1,6 @@
 """Integration tests for creating or updating ARCs."""
 
+import hashlib
 import json
 from pathlib import Path
 from typing import Any
@@ -14,7 +15,7 @@ from gitlab import Gitlab
     "json_info",
     [
         {"file_name": "minimal.json", "identifier": "Test"},
-        {"file_name": "sample.json", "identifier": "AthalianaColdStress"},
+        {"file_name": "sample.json", "identifier": "AthalianaColdStressSugar"},
     ],
 )
 async def test_create_arcs(
@@ -45,6 +46,7 @@ async def test_create_arcs(
     # check that we have a project/repo that contains the isa.investigation.xlsx file
     group_name = config["gitlab_api"]["group"].lower()
     group = gitlab_api.groups.get(group_name)
-    project_light = group.projects.list(search=json_info["identifier"])[0]
+    arc_id = hashlib.sha256(f"{json_info['identifier']}:rdi-1".encode()).hexdigest()
+    project_light = group.projects.list(search=arc_id)[0]
     project = gitlab_api.projects.get(project_light.id)
     project.files.get(file_path="isa.investigation.xlsx", ref="main")
