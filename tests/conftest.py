@@ -10,21 +10,17 @@ from cryptography.hazmat.primitives.asymmetric import rsa
 from cryptography.x509.oid import NameOID
 
 
-@pytest.fixture(scope="session")
-def known_rdis() -> list[str]:
-    """Return a list of known RDIs for testing."""
-    return ["rdi-1", "rdi-2"]
+def create_test_cert(oid: x509.ObjectIdentifier, rdis: list[str]) -> str:
+    """Create a test certificate with specified RDIs in custom extension.
 
+    Args:
+        oid: The OID for the custom extension.
+        rdis: List of RDI identifiers to include in the certificate.
 
-@pytest.fixture(scope="session")
-def oid() -> x509.ObjectIdentifier:
-    """Return a test OID."""
-    return x509.ObjectIdentifier("1.3.6.1.4.1.64609.1.1")
+    Returns:
+        PEM-encoded certificate as string.
 
-
-@pytest.fixture(scope="session")
-def cert(oid: x509.ObjectIdentifier, known_rdis: list[str]) -> str:
-    """Create a self-signed client certificate with custom extension for RDIs."""
+    """
     # Generate private key
     private_key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
 
@@ -39,8 +35,7 @@ def cert(oid: x509.ObjectIdentifier, known_rdis: list[str]) -> str:
     )
 
     # Create custom extension with RDIs as SEQUENCE of UTF8Strings
-    # Build SEQUENCE manually by concatenating DER-encoded UTF8Strings
-    utf8_bytes = b"".join(UTF8String(rdi).dump() for rdi in known_rdis)
+    utf8_bytes = b"".join(UTF8String(rdi).dump() for rdi in rdis)
 
     # SEQUENCE tag (0x30) + length + content
     seq_length = len(utf8_bytes)
@@ -71,3 +66,21 @@ def cert(oid: x509.ObjectIdentifier, known_rdis: list[str]) -> str:
 
     # Convert to PEM format
     return the_cert.public_bytes(serialization.Encoding.PEM).decode("utf-8")
+
+
+@pytest.fixture(scope="session")
+def known_rdis() -> list[str]:
+    """Return a list of known RDIs for testing."""
+    return ["rdi-1", "rdi-2"]
+
+
+@pytest.fixture(scope="session")
+def oid() -> x509.ObjectIdentifier:
+    """Return a test OID."""
+    return x509.ObjectIdentifier("1.3.6.1.4.1.64609.1.1")
+
+
+@pytest.fixture(scope="session")
+def cert(oid: x509.ObjectIdentifier, known_rdis: list[str]) -> str:
+    """Create a self-signed client certificate with custom extension for RDIs."""
+    return create_test_cert(oid, known_rdis)

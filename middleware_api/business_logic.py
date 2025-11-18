@@ -124,7 +124,7 @@ class BusinessLogic:
 
     # -------------------------- Whoami --------------------------
 
-    async def whoami(self, client_id: str, accessible_rdis: list[str]) -> BusinessLogicResponse:
+    async def whoami(self, client_id: str, accessible_rdis: list[str]) -> WhoamiResponse:
         """Whoami operation to identify the client.
 
         Args:
@@ -135,7 +135,7 @@ class BusinessLogic:
             BusinessLogicError: If an error occurs during the operation.
 
         Returns:
-            BusinessLogicResponse: Response containing the client ID and message.
+            WhoamiResponse: Response containing the client ID, message, and accessible RDIs.
 
         """
         try:
