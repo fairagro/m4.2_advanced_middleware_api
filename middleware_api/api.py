@@ -63,6 +63,7 @@ class Api:
         """
         self._logger = logging.getLogger("middleware_api")
         self._config = app_config
+        self._logger.debug("API configuration: %s", self._config.model_dump())
         self._store = GitlabApi(self._config.gitlab_api)
         self._service = BusinessLogic(self._store)
         self._app = FastAPI(

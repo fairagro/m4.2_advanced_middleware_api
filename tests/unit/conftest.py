@@ -7,7 +7,7 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 from cryptography import x509
 from fastapi.testclient import TestClient
-from pydantic import HttpUrl
+from pydantic import HttpUrl, SecretStr
 
 from middleware_api.api import Api
 from middleware_api.arc_store.gitlab_api import GitlabApi, GitlabApiConfig
@@ -30,7 +30,7 @@ def config(oid: x509.ObjectIdentifier, known_rdis: list[str]) -> Config:
         client_auth_oid=oid,
         gitlab_api=GitlabApiConfig(
             url=HttpUrl("http://localhost:8080"),
-            token="test-token",
+            token=SecretStr("test-token"),
             group="test-group",
             branch="main",
         ),
@@ -106,7 +106,7 @@ def mock_service(monkeypatch: pytest.MonkeyPatch) -> object:
 @pytest.fixture
 def gitlab_api() -> GitlabApi:
     """Provide a GitlabApi instance with a mocked Gitlab client."""
-    api_config = GitlabApiConfig(url=HttpUrl("http://gitlab"), token="token", group="1", branch="main")  # nosec
+    api_config = GitlabApiConfig(url=HttpUrl("http://gitlab"), token=SecretStr("token"), group="1", branch="main")  # nosec
     api = GitlabApi(api_config)
     api._gitlab = MagicMock()  # pylint: disable=protected-access
     return api

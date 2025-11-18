@@ -12,7 +12,7 @@ import gitlab
 from arctrl import ARC  # type: ignore[import-untyped]
 from gitlab.exceptions import GitlabGetError
 from gitlab.v4.objects import Project, ProjectFile
-from pydantic import BaseModel, Field, HttpUrl, field_validator
+from pydantic import BaseModel, Field, HttpUrl, SecretStr, field_validator
 
 from . import ArcStore
 
@@ -32,7 +32,7 @@ class GitlabApiConfig(BaseModel):
     ]
     branch: Annotated[str, Field(description="The git branch to use for ARC repos", default="main")]
     token: Annotated[
-        str,
+        SecretStr,
         Field(description="A gitlab token with CRUD permissions to the gitlab group"),
     ]
 
@@ -65,7 +65,7 @@ class GitlabApi(ArcStore):
         """
         logger.info("Initializing ARCPersistenceGitlabAPI")
         self._config = config
-        self._gitlab = gitlab.Gitlab(str(self._config.url), private_token=self._config.token)
+        self._gitlab = gitlab.Gitlab(str(self._config.url), private_token=self._config.token.get_secret_value())
 
     def arc_id(self, identifier: str, rdi: str) -> str:
         """Generate a unique ARC ID by hashing the identifier and RDI.
