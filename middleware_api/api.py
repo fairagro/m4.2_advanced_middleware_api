@@ -39,7 +39,7 @@ class CreateOrUpdateArcsRequest(BaseModel):
     """Request model for creating or updating ARCs."""
 
     rdi: Annotated[str, Field(description="Research Data Infrastructure identifier")]
-    arcs: Annotated[list[dict], Field(description="List of ARC definitions in Ro-Crate JSON format")]
+    arcs: Annotated[list[dict], Field(description="List of ARC definitions in RO-Crate JSON format")]
 
 
 class Api:
