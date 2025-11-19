@@ -39,7 +39,7 @@ class CreateOrUpdateArcsRequest(BaseModel):
     """Request model for creating or updating ARCs."""
 
     rdi: Annotated[str, Field(description="Research Data Infrastructure identifier")]
-    arcs: Annotated[list[dict], Field(description="List of ARC definitions in Ro-Crate JSON format")]
+    arcs: Annotated[list[dict], Field(description="List of ARC definitions in RO-Crate JSON format")]
 
 
 class Api:
@@ -51,7 +51,7 @@ class Api:
     """
 
     # Constants
-    SUPPORTED_CONTENT_TYPE = "application/ro-crate+json"
+    SUPPORTED_CONTENT_TYPE = "application/json"
     SUPPORTED_ACCEPT_TYPE = "application/json"
 
     def __init__(self, app_config: Config) -> None:

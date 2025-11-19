@@ -10,10 +10,10 @@ import asyncio
 import json
 from datetime import UTC, datetime
 from enum import Enum
-from typing import Any
+from typing import Annotated, Any
 
 from arctrl import ARC  # type: ignore[import-untyped]
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from .arc_store import ArcStore
 
@@ -43,15 +43,16 @@ class BusinessLogicResponse(BaseModel):
 
     """
 
-    client_id: str
-    rdi: str | None = None
-    message: str
+    client_id: Annotated[str, Field(description="Client identifier which is the CN from the client certificate")]
+    message: Annotated[str, Field(description="Response message")]
 
 
 class WhoamiResponse(BusinessLogicResponse):
     """Response model for whoami operation."""
 
-    accessible_rdis: list[str]
+    accessible_rdis: Annotated[
+        list[str], Field(description="List of Research Data Infrastructures the client is authorized for")
+    ]
 
 
 class ArcResponse(BaseModel):
@@ -62,15 +63,16 @@ class ArcResponse(BaseModel):
 
     """
 
-    id: str
-    status: ArcStatus
-    timestamp: str
+    id: Annotated[str, Field(description="ARC identifier, as hashed value of the original identifier and RDI")]
+    status: Annotated[ArcStatus, Field(description="Status of the ARC operation")]
+    timestamp: Annotated[str, Field(description="Timestamp of the ARC operation in ISO 8601 format")]
 
 
 class CreateOrUpdateArcsResponse(BusinessLogicResponse):
     """Response model for create or update ARC operations."""
 
-    arcs: list[ArcResponse]
+    rdi: Annotated[str, Field(description="Research Data Infrastructure identifier the ARCs belong to")]
+    arcs: Annotated[list[ArcResponse], Field(description="List of ARC responses for the operation")]
 
 
 class BusinessLogicError(Exception):
