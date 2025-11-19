@@ -93,6 +93,26 @@ def test_whoami_invalid_cert(client: TestClient) -> None:
     assert r.status_code == 400  # nosec
 
 
+def test_whoami_cert_verify_failed(client: TestClient, cert: str) -> None:
+    """Test the /v1/whoami endpoint with failed certificate verification."""
+    r = client.get(
+        "/v1/whoami",
+        headers={"ssl-client-cert": cert, "ssl-client-verify": "FAILED", "accept": "application/json"},
+    )
+    assert r.status_code == 401  # nosec
+    assert "verification failed" in r.json()["detail"].lower()  # nosec
+
+
+def test_whoami_cert_verify_none(client: TestClient, cert: str) -> None:
+    """Test the /v1/whoami endpoint with no certificate verification."""
+    r = client.get(
+        "/v1/whoami",
+        headers={"ssl-client-cert": cert, "ssl-client-verify": "NONE", "accept": "application/json"},
+    )
+    assert r.status_code == 401  # nosec
+    assert "verification failed" in r.json()["detail"].lower()  # nosec
+
+
 # -------------------------------------------------------------------
 # CREATE / UPDATE ARCS
 # -------------------------------------------------------------------
@@ -259,6 +279,38 @@ def test_create_or_update_arcs_invalid_cert(client: TestClient) -> None:
         json=[{"dummy": "crate"}],
     )
     assert r.status_code == 400  # nosec
+
+
+def test_create_or_update_arcs_cert_verify_failed(client: TestClient, cert: str) -> None:
+    """Test the /v1/arcs endpoint with failed certificate verification."""
+    r = client.post(
+        "/v1/arcs",
+        headers={
+            "ssl-client-cert": cert,
+            "ssl-client-verify": "FAILED",
+            "content-type": "application/json",
+            "accept": "application/json",
+        },
+        json={"rdi": "rdi-1", "arcs": [{"dummy": "crate"}]},
+    )
+    assert r.status_code == 401  # nosec
+    assert "verification failed" in r.json()["detail"].lower()  # nosec
+
+
+def test_create_or_update_arcs_cert_verify_none(client: TestClient, cert: str) -> None:
+    """Test the /v1/arcs endpoint with no certificate verification."""
+    r = client.post(
+        "/v1/arcs",
+        headers={
+            "ssl-client-cert": cert,
+            "ssl-client-verify": "NONE",
+            "content-type": "application/json",
+            "accept": "application/json",
+        },
+        json={"rdi": "rdi-1", "arcs": [{"dummy": "crate"}]},
+    )
+    assert r.status_code == 401  # nosec
+    assert "verification failed" in r.json()["detail"].lower()  # nosec
 
 
 # -------------------------------------------------------------------
