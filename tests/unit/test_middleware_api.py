@@ -272,29 +272,14 @@ def test_create_or_update_arcs_invalid_cert(client: TestClient) -> None:
     assert r.status_code == 400  # nosec
 
 
-def test_create_or_update_arcs_cert_verify_failed(client: TestClient, cert: str) -> None:
-    """Test the /v1/arcs endpoint with failed certificate verification."""
+@pytest.mark.parametrize("verify_status", ["FAILED", "NONE"])
+def test_create_or_update_arcs_cert_verify_not_success(client: TestClient, cert: str, verify_status: str) -> None:
+    """Test the /v1/arcs endpoint with failed or no certificate verification."""
     r = client.post(
         "/v1/arcs",
         headers={
             "ssl-client-cert": cert,
-            "ssl-client-verify": "FAILED",
-            "content-type": "application/json",
-            "accept": "application/json",
-        },
-        json={"rdi": "rdi-1", "arcs": [{"dummy": "crate"}]},
-    )
-    assert r.status_code == 401  # nosec
-    assert "verification failed" in r.json()["detail"].lower()  # nosec
-
-
-def test_create_or_update_arcs_cert_verify_none(client: TestClient, cert: str) -> None:
-    """Test the /v1/arcs endpoint with no certificate verification."""
-    r = client.post(
-        "/v1/arcs",
-        headers={
-            "ssl-client-cert": cert,
-            "ssl-client-verify": "NONE",
+            "ssl-client-verify": verify_status,
             "content-type": "application/json",
             "accept": "application/json",
         },
