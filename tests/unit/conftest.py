@@ -12,11 +12,7 @@ from pydantic import HttpUrl, SecretStr
 from middleware_api.api import Api
 from middleware_api.arc_store.gitlab_api import GitlabApi, GitlabApiConfig
 from middleware_api.business_logic import (
-    ArcResponse,
-    ArcStatus,
     BusinessLogic,
-    BusinessLogicResponse,
-    CreateOrUpdateArcsResponse,
 )
 from middleware_api.config import Config
 
@@ -66,41 +62,6 @@ def service() -> BusinessLogic:
     store.exists.return_value = False
     store.create_or_update = AsyncMock()
     return BusinessLogic(store)
-
-
-@pytest.fixture
-def mock_service(monkeypatch: pytest.MonkeyPatch) -> object:
-    """Provide a mocked BusinessLogic service."""
-
-    class DummyService:
-        """Dummy service with mocked methods."""
-
-        async def whoami(self, _request: object, _client_cert: object, _accept_type: object) -> BusinessLogicResponse:
-            """Mock whoami method."""
-            return BusinessLogicResponse(client_id="TestClient", message="ok")
-
-        async def create_or_update_arcs(
-            self,
-            _data: object,
-            _client_cert: object,
-            _content_type: object,
-            _accept_type: object,
-        ) -> CreateOrUpdateArcsResponse:
-            """Mock create_or_update_arcs method."""
-            return CreateOrUpdateArcsResponse(
-                client_id="TestClient",
-                message="ok",
-                arcs=[
-                    ArcResponse(
-                        id="abc123",
-                        status=ArcStatus.CREATED,
-                        timestamp="2025-01-01T00:00:00Z",
-                    )
-                ],
-            )
-
-    monkeypatch.setattr("app.middleware_api.get_service", DummyService)
-    return DummyService()
 
 
 @pytest.fixture

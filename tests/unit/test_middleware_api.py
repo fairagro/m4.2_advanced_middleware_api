@@ -93,6 +93,17 @@ def test_whoami_invalid_cert(client: TestClient) -> None:
     assert r.status_code == 400  # nosec
 
 
+@pytest.mark.parametrize("verify_status", ["FAILED", "NONE"])
+def test_whoami_cert_verify_not_success(client: TestClient, cert: str, verify_status: str) -> None:
+    """Test the /v1/whoami endpoint with failed or no certificate verification."""
+    r = client.get(
+        "/v1/whoami",
+        headers={"ssl-client-cert": cert, "ssl-client-verify": verify_status, "accept": "application/json"},
+    )
+    assert r.status_code == 401  # nosec
+    assert "verification failed" in r.json()["detail"].lower()  # nosec
+
+
 # -------------------------------------------------------------------
 # CREATE / UPDATE ARCS
 # -------------------------------------------------------------------
@@ -259,6 +270,23 @@ def test_create_or_update_arcs_invalid_cert(client: TestClient) -> None:
         json=[{"dummy": "crate"}],
     )
     assert r.status_code == 400  # nosec
+
+
+@pytest.mark.parametrize("verify_status", ["FAILED", "NONE"])
+def test_create_or_update_arcs_cert_verify_not_success(client: TestClient, cert: str, verify_status: str) -> None:
+    """Test the /v1/arcs endpoint with failed or no certificate verification."""
+    r = client.post(
+        "/v1/arcs",
+        headers={
+            "ssl-client-cert": cert,
+            "ssl-client-verify": verify_status,
+            "content-type": "application/json",
+            "accept": "application/json",
+        },
+        json={"rdi": "rdi-1", "arcs": [{"dummy": "crate"}]},
+    )
+    assert r.status_code == 401  # nosec
+    assert "verification failed" in r.json()["detail"].lower()  # nosec
 
 
 # -------------------------------------------------------------------
