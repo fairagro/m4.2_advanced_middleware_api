@@ -128,7 +128,7 @@ def test_create_or_update_arcs_created(client: TestClient, middleware_api: Api, 
         headers={
             "ssl-client-cert": cert,
             "ssl-client-verify": "SUCCESS",
-            "content-type": "application/ro-crate+json",
+            "content-type": "application/json",
             "accept": "application/json",
         },
         json={"rdi": "rdi-1", "arcs": [{"dummy": "crate"}]},
@@ -171,7 +171,7 @@ def test_create_or_update_arcs_updated(client: TestClient, middleware_api: Api, 
         headers={
             "ssl-client-cert": cert,
             "ssl-client-verify": "SUCCESS",
-            "content-type": "application/ro-crate+json",
+            "content-type": "application/json",
             "accept": "application/json",
         },
         json={"rdi": "rdi-1", "arcs": [{"dummy": "crate"}]},
@@ -206,7 +206,7 @@ def test_create_or_update_arcs_invalid_json(
         headers={
             "ssl-client-cert": cert,
             "ssl-client-verify": "SUCCESS",
-            "content-type": "application/ro-crate+json",
+            "content-type": "application/json",
             "accept": "application/json",
         },
         json=[{"dummy": "crate"}],
@@ -221,7 +221,7 @@ def test_create_or_update_arcs_invalid_accept(client: TestClient, cert: str) -> 
         headers={
             "ssl-client-cert": cert,
             "ssl-client-verify": "SUCCESS",
-            "content-type": "application/ro-crate+json",
+            "content-type": "application/json",
             "accept": "application/xml",
         },
         json=[{"dummy": "crate"}],
@@ -234,7 +234,7 @@ def test_create_or_update_arcs_no_cert(client: TestClient) -> None:
     r = client.post(
         "/v1/arcs",
         headers={
-            "content-type": "application/ro-crate+json",
+            "content-type": "application/json",
             "accept": "application/json",
         },
         json=[{"dummy": "crate"}],
@@ -249,7 +249,7 @@ def test_create_or_update_arcs_invalid_cert(client: TestClient) -> None:
         headers={
             "ssl-client-cert": "dummy cert",
             "ssl-client-verify": "SUCCESS",
-            "content-type": "application/ro-crate+json",
+            "content-type": "application/json",
             "accept": "application/xml",
         },
         json=[{"dummy": "crate"}],
@@ -282,7 +282,7 @@ def test_create_or_update_arcs_rdi_not_known(client: TestClient, middleware_api:
         headers={
             "ssl-client-cert": cert_with_unknown_rdi,
             "ssl-client-verify": "SUCCESS",
-            "content-type": "application/ro-crate+json",
+            "content-type": "application/json",
             "accept": "application/json",
         },
         json={"rdi": "rdi-unknown", "arcs": [{"dummy": "crate"}]},
@@ -311,7 +311,7 @@ def test_create_or_update_arcs_rdi_not_allowed(client: TestClient, middleware_ap
         headers={
             "ssl-client-cert": cert_with_rdi1_only,
             "ssl-client-verify": "SUCCESS",
-            "content-type": "application/ro-crate+json",
+            "content-type": "application/json",
             "accept": "application/json",
         },
         json={"rdi": "rdi-2", "arcs": [{"dummy": "crate"}]},
@@ -353,7 +353,7 @@ def test_create_or_update_arcs_rdi_authorized(client: TestClient, middleware_api
         headers={
             "ssl-client-cert": cert_with_both_rdis,
             "ssl-client-verify": "SUCCESS",
-            "content-type": "application/ro-crate+json",
+            "content-type": "application/json",
             "accept": "application/json",
         },
         json={"rdi": "rdi-1", "arcs": [{"dummy": "crate"}]},
@@ -397,7 +397,7 @@ def test_create_or_update_arcs_rdi_edge_case_cert_has_extra(client: TestClient, 
         headers={
             "ssl-client-cert": cert_with_extra,
             "ssl-client-verify": "SUCCESS",
-            "content-type": "application/ro-crate+json",
+            "content-type": "application/json",
             "accept": "application/json",
         },
         json={"rdi": "rdi-1", "arcs": [{"dummy": "crate"}]},

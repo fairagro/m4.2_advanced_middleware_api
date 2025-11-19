@@ -31,7 +31,7 @@ async def test_create_arcs(
     headers = {
         "ssl-client-cert": cert_with_linebreaks,
         "ssl-client-verify": "SUCCESS",
-        "content-type": "application/ro-crate+json",
+        "content-type": "application/json",
     }
     arc_json_path = Path(__file__).parent.parent.parent / "ro_crates" / json_info["file_name"]
     with arc_json_path.open("r", encoding="utf-8") as f:

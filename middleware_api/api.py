@@ -51,7 +51,7 @@ class Api:
     """
 
     # Constants
-    SUPPORTED_CONTENT_TYPE = "application/ro-crate+json"
+    SUPPORTED_CONTENT_TYPE = "application/json"
     SUPPORTED_ACCEPT_TYPE = "application/json"
 
     def __init__(self, app_config: Config) -> None:
