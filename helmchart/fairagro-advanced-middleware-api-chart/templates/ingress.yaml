@@ -11,7 +11,7 @@ metadata:
     {{- end }}
     {{- if .Values.ingress.mtlsEnabled }}
     nginx.ingress.kubernetes.io/auth-tls-secret: "{{ .Release.Namespace }}/{{ include "fairagro-advanced-middleware-api-chart.caTlsSecretName" . }}"
-    nginx.ingress.kubernetes.io/auth-tls-verify-client: "on"
+    nginx.ingress.kubernetes.io/auth-tls-verify-client: "optional"
     nginx.ingress.kubernetes.io/auth-tls-verify-depth: "{{ .Values.ingress.mtlsVerifyDepth }}"
     nginx.ingress.kubernetes.io/auth-tls-pass-certificate-to-upstream: "true"
     {{- end }}
