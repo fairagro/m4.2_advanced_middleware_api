@@ -110,6 +110,7 @@ jobs:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           custom_tag: ${{ env.RELEASE_TAG }}
           tag_prefix: ""
+          create_annotated_tag: true
 
       - name: Package Helm chart
         id: package_chart
