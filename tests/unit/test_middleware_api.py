@@ -93,21 +93,12 @@ def test_whoami_invalid_cert(client: TestClient) -> None:
     assert r.status_code == 400  # nosec
 
 
-def test_whoami_cert_verify_failed(client: TestClient, cert: str) -> None:
-    """Test the /v1/whoami endpoint with failed certificate verification."""
+@pytest.mark.parametrize("verify_status", ["FAILED", "NONE"])
+def test_whoami_cert_verify_not_success(client: TestClient, cert: str, verify_status: str) -> None:
+    """Test the /v1/whoami endpoint with failed or no certificate verification."""
     r = client.get(
         "/v1/whoami",
-        headers={"ssl-client-cert": cert, "ssl-client-verify": "FAILED", "accept": "application/json"},
-    )
-    assert r.status_code == 401  # nosec
-    assert "verification failed" in r.json()["detail"].lower()  # nosec
-
-
-def test_whoami_cert_verify_none(client: TestClient, cert: str) -> None:
-    """Test the /v1/whoami endpoint with no certificate verification."""
-    r = client.get(
-        "/v1/whoami",
-        headers={"ssl-client-cert": cert, "ssl-client-verify": "NONE", "accept": "application/json"},
+        headers={"ssl-client-cert": cert, "ssl-client-verify": verify_status, "accept": "application/json"},
     )
     assert r.status_code == 401  # nosec
     assert "verification failed" in r.json()["detail"].lower()  # nosec
