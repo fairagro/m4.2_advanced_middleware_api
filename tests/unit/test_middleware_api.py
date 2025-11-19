@@ -148,12 +148,13 @@ def test_create_or_update_arcs_updated(client: TestClient, middleware_api: Api, 
     class SvcOK:  # pylint: disable=too-few-public-methods
         """Service that always returns an updated ARC."""
 
-        async def create_or_update_arcs(self, rdi: str, arcs: list[Any], client_id: str) -> DummyResponse:
+        async def create_or_update_arcs(self, rdi: str, _arcs: list[Any], client_id: str) -> DummyResponse:
             """Mock create_or_update_arcs method."""
             return DummyResponse(
                 {
                     "client_id": client_id,
                     "message": "ok",
+                    "rdi": rdi,
                     "arcs": [
                         {
                             "id": "abc123",
@@ -178,6 +179,9 @@ def test_create_or_update_arcs_updated(client: TestClient, middleware_api: Api, 
     )
     assert r.status_code == 200  # nosec
     body = r.json()
+    assert body["client_id"] == "TestClient"  # nosec
+    assert isinstance(body["arcs"], list)  # nosec
+    assert body["rdi"] == "rdi-1"  # nosec
     assert body["arcs"][0]["status"] == "updated"  # nosec
 
 
