@@ -17,12 +17,12 @@ from asn1crypto.core import Sequence, UTF8String  # type: ignore
 from cryptography import x509
 from cryptography.x509.extensions import ExtensionNotFound
 from cryptography.x509.oid import NameOID
-from fastapi import Depends, FastAPI, HTTPException, Request
+from fastapi import Depends, FastAPI, HTTPException, Request, Response
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 
 from .arc_store.gitlab_api import GitlabApi
-from .business_logic import BusinessLogic, InvalidJsonSemanticError
+from .business_logic import BusinessLogic, CreateOrUpdateArcsResponse, InvalidJsonSemanticError, WhoamiResponse
 from .config import Config
 
 try:
@@ -33,6 +33,12 @@ try:
 except (FileNotFoundError, KeyError):
     # Fallback, falls die Datei nicht gefunden wird oder die Struktur fehlt
     __version__ = "0.0.0"
+
+
+class LivenessResponse(BaseModel):
+    """Response model for liveness check."""
+
+    message: Annotated[str, Field(description="Liveness message")] = "ok"
 
 
 class CreateOrUpdateArcsRequest(BaseModel):
@@ -127,7 +133,6 @@ class Api:
             cn = cn_attributes[0].value
             self._logger.debug("Client certificate parsed, CN=%s", cn)
             allowed_rdis = self._extract_allowed_rdis(cert)
-            self._logger.debug("Allowed RDIs with OID %s: %s", self._config.client_auth_oid, allowed_rdis)
             return (cast(str, cn), allowed_rdis)
         except ValueError as e:
             error_msg = f"Invalid certificate format: {str(e)}"
@@ -200,12 +205,12 @@ class Api:
             )
 
     def _setup_routes(self) -> None:
-        @self._app.get("/v1/whoami")
+        @self._app.get("/v1/whoami", response_model=WhoamiResponse)
         async def whoami(
             client_auth: Annotated[tuple[str, list[str]], Depends(self._get_client_auth)],
             business_logic: Annotated[BusinessLogic, Depends(self.get_business_logic)],
             _accept_validated: Annotated[None, Depends(self._validate_accept_type)],
-        ) -> JSONResponse:
+        ) -> WhoamiResponse:
             client_id, allowed_rdis = client_auth
             self._logger.debug("Allowed RDIs: %s", allowed_rdis)
             known_rdis = self._config.known_rdis
@@ -213,22 +218,24 @@ class Api:
             accessible_rdis = list(set(allowed_rdis) & set(known_rdis))
             self._logger.debug("Accessible RDIs: %s", accessible_rdis)
             result = await business_logic.whoami(client_id, accessible_rdis)
-            return JSONResponse(content=result.model_dump())
 
-        @self._app.get("/v1/liveness")
+            return result
+
+        @self._app.get("/v1/liveness", response_model=LivenessResponse)
         async def liveness(
             _accept_validated: Annotated[None, Depends(self._validate_accept_type)],
-        ) -> JSONResponse:
-            return JSONResponse(content={"message": "living"})
+        ) -> LivenessResponse:
+            return LivenessResponse()
 
-        @self._app.post("/v1/arcs")
+        @self._app.post("/v1/arcs", response_model=CreateOrUpdateArcsResponse)
         async def create_or_update_arcs(
             request_body: CreateOrUpdateArcsRequest,
             client_auth: Annotated[tuple[str, list[str]], Depends(self._get_client_auth)],
             business_logic: Annotated[BusinessLogic, Depends(self.get_business_logic)],
             _content_type_validated: Annotated[None, Depends(self._validate_content_type)],
             _accept_validated: Annotated[None, Depends(self._validate_accept_type)],
-        ) -> JSONResponse:
+            response: Response,
+        ) -> CreateOrUpdateArcsResponse:
             try:
                 client_id, allowed_rdis = client_auth
                 rdi = request_body.rdi
@@ -244,11 +251,10 @@ class Api:
 
                 result = await business_logic.create_or_update_arcs(rdi, request_body.arcs, client_id)
                 location = f"/v1/arcs/{result.arcs[0].id}" if result.arcs else ""
-                return JSONResponse(
-                    content=result.model_dump(),
-                    status_code=(201 if any(a.status == "created" for a in result.arcs) else 200),
-                    headers={"Location": location},
-                )
+
+                response.headers["Location"] = location
+                response.status_code = 201 if any(a.status == "created" for a in result.arcs) else 200
+                return result
             except InvalidJsonSemanticError as e:
                 raise HTTPException(status_code=422, detail=str(e)) from e
 

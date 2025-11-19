@@ -6,7 +6,13 @@ import pytest
 from fastapi.testclient import TestClient
 
 from middleware_api.api import Api
-from middleware_api.business_logic import InvalidJsonSemanticError
+from middleware_api.business_logic import (
+    ArcResponse,
+    ArcStatus,
+    CreateOrUpdateArcsResponse,
+    InvalidJsonSemanticError,
+    WhoamiResponse,
+)
 from tests.conftest import create_test_cert
 
 
@@ -50,9 +56,9 @@ def test_whoami_success(client: TestClient, middleware_api: Api, cert: str) -> N
     class Svc:  # pylint: disable=too-few-public-methods
         """Service that always returns a successful response."""
 
-        async def whoami(self, client_id: str, accessible_rdis: list[str]) -> DummyResponse:
+        async def whoami(self, client_id: str, accessible_rdis: list[str]) -> WhoamiResponse:
             """Mock whoami method."""
-            return DummyResponse({"client_id": client_id, "accessible_rdis": accessible_rdis, "message": "ok"})
+            return WhoamiResponse(client_id=client_id, accessible_rdis=accessible_rdis, message="ok")
 
     override_service(middleware_api, Svc())
 
@@ -124,21 +130,19 @@ def test_create_or_update_arcs_created(client: TestClient, middleware_api: Api, 
     class SvcOK:  # pylint: disable=too-few-public-methods
         """Service that always returns a created ARC."""
 
-        async def create_or_update_arcs(self, rdi: str, _data: list[Any], client_id: str) -> DummyResponse:
+        async def create_or_update_arcs(self, rdi: str, _data: list[Any], client_id: str) -> CreateOrUpdateArcsResponse:
             """Mock create_or_update_arcs method."""
-            return DummyResponse(
-                {
-                    "rdi": rdi,
-                    "client_id": client_id,
-                    "message": "ok",
-                    "arcs": [
-                        {
-                            "id": "abc123",
-                            "status": "created",
-                            "timestamp": "2025-01-01T00:00:00Z",
-                        }
-                    ],
-                }
+            return CreateOrUpdateArcsResponse(
+                rdi=rdi,
+                client_id=client_id,
+                message="ok",
+                arcs=[
+                    ArcResponse(
+                        id="abc123",
+                        status=ArcStatus.CREATED,
+                        timestamp="2025-01-01T00:00:00Z",
+                    )
+                ],
             )
 
     override_service(middleware_api, SvcOK())
@@ -168,21 +172,19 @@ def test_create_or_update_arcs_updated(client: TestClient, middleware_api: Api, 
     class SvcOK:  # pylint: disable=too-few-public-methods
         """Service that always returns an updated ARC."""
 
-        async def create_or_update_arcs(self, rdi: str, _arcs: list[Any], client_id: str) -> DummyResponse:
+        async def create_or_update_arcs(self, rdi: str, _arcs: list[Any], client_id: str) -> CreateOrUpdateArcsResponse:
             """Mock create_or_update_arcs method."""
-            return DummyResponse(
-                {
-                    "client_id": client_id,
-                    "message": "ok",
-                    "rdi": rdi,
-                    "arcs": [
-                        {
-                            "id": "abc123",
-                            "status": "updated",
-                            "timestamp": "2025-01-01T00:00:00Z",
-                        }
-                    ],
-                }
+            return CreateOrUpdateArcsResponse(
+                client_id=client_id,
+                message="ok",
+                rdi=rdi,
+                arcs=[
+                    ArcResponse(
+                        id="abc123",
+                        status=ArcStatus.UPDATED,
+                        timestamp="2025-01-01T00:00:00Z",
+                    )
+                ],
             )
 
     override_service(middleware_api, SvcOK())
@@ -384,21 +386,19 @@ def test_create_or_update_arcs_rdi_authorized(client: TestClient, middleware_api
     class Svc:  # pylint: disable=too-few-public-methods
         """Mock service that verifies the RDI was passed correctly."""
 
-        async def create_or_update_arcs(self, rdi: str, arcs: list[Any], client_id: str) -> DummyResponse:
+        async def create_or_update_arcs(self, rdi: str, arcs: list[Any], client_id: str) -> CreateOrUpdateArcsResponse:
             """Mock create_or_update_arcs that captures the RDI."""
-            return DummyResponse(
-                {
-                    "client_id": client_id,
-                    "rdi": rdi,
-                    "message": "ok",
-                    "arcs": [
-                        {
-                            "id": "test-arc-id",
-                            "status": "created",
-                            "timestamp": "2025-01-01T00:00:00Z",
-                        }
-                    ],
-                }
+            return CreateOrUpdateArcsResponse(
+                client_id=client_id,
+                rdi=rdi,
+                message="ok",
+                arcs=[
+                    ArcResponse(
+                        id="test-arc-id",
+                        status=ArcStatus.CREATED,
+                        timestamp="2025-01-01T00:00:00Z",
+                    )
+                ],
             )
 
     service = Svc()
@@ -428,21 +428,19 @@ def test_create_or_update_arcs_rdi_edge_case_cert_has_extra(client: TestClient, 
     class Svc:  # pylint: disable=too-few-public-methods
         """Mock service that verifies the RDI was passed correctly."""
 
-        async def create_or_update_arcs(self, rdi: str, arcs: list[Any], client_id: str) -> DummyResponse:
+        async def create_or_update_arcs(self, rdi: str, arcs: list[Any], client_id: str) -> CreateOrUpdateArcsResponse:
             """Mock create_or_update_arcs that captures the RDI."""
-            return DummyResponse(
-                {
-                    "client_id": client_id,
-                    "rdi": rdi,
-                    "message": "ok",
-                    "arcs": [
-                        {
-                            "id": "test-arc-id",
-                            "status": "updated",
-                            "timestamp": "2025-01-01T00:00:00Z",
-                        }
-                    ],
-                }
+            return CreateOrUpdateArcsResponse(
+                client_id=client_id,
+                rdi=rdi,
+                message="ok",
+                arcs=[
+                    ArcResponse(
+                        id="test-arc-id",
+                        status=ArcStatus.UPDATED,
+                        timestamp="2025-01-01T00:00:00Z",
+                    )
+                ],
             )
 
     service = Svc()
@@ -477,9 +475,9 @@ def test_whoami_accessible_rdis_intersection(client: TestClient, middleware_api:
     class Svc:  # pylint: disable=too-few-public-methods
         """Service that captures the accessible_rdis passed to it."""
 
-        async def whoami(self, client_id: str, accessible_rdis: list[str]) -> DummyResponse:
+        async def whoami(self, client_id: str, accessible_rdis: list[str]) -> WhoamiResponse:
             """Mock whoami method that captures accessible_rdis."""
-            return DummyResponse({"client_id": client_id, "accessible_rdis": accessible_rdis, "message": "ok"})
+            return WhoamiResponse(client_id=client_id, accessible_rdis=accessible_rdis, message="ok")
 
     service = Svc()
     override_service(middleware_api, service)
@@ -506,9 +504,9 @@ def test_whoami_accessible_rdis_no_overlap(client: TestClient, middleware_api: A
     class Svc:  # pylint: disable=too-few-public-methods
         """Service that captures the accessible_rdis passed to it."""
 
-        async def whoami(self, client_id: str, accessible_rdis: list[str]) -> DummyResponse:
+        async def whoami(self, client_id: str, accessible_rdis: list[str]) -> WhoamiResponse:
             """Mock whoami method that captures accessible_rdis."""
-            return DummyResponse({"client_id": client_id, "accessible_rdis": accessible_rdis, "message": "ok"})
+            return WhoamiResponse(client_id=client_id, accessible_rdis=accessible_rdis, message="ok")
 
     service = Svc()
     override_service(middleware_api, service)
@@ -530,9 +528,9 @@ def test_whoami_accessible_rdis_complete_overlap(client: TestClient, middleware_
     class Svc:  # pylint: disable=too-few-public-methods
         """Service that captures the accessible_rdis passed to it."""
 
-        async def whoami(self, client_id: str, accessible_rdis: list[str]) -> DummyResponse:
+        async def whoami(self, client_id: str, accessible_rdis: list[str]) -> WhoamiResponse:
             """Mock whoami method that captures accessible_rdis."""
-            return DummyResponse({"client_id": client_id, "accessible_rdis": accessible_rdis, "message": "ok"})
+            return WhoamiResponse(client_id=client_id, accessible_rdis=accessible_rdis, message="ok")
 
     service = Svc()
     override_service(middleware_api, service)
@@ -558,10 +556,10 @@ def test_whoami_accessible_rdis_superset_in_cert(client: TestClient, middleware_
 
         captured_accessible_rdis: list[str] = []
 
-        async def whoami(self, client_id: str, accessible_rdis: list[str]) -> DummyResponse:
+        async def whoami(self, client_id: str, accessible_rdis: list[str]) -> WhoamiResponse:
             """Mock whoami method that captures accessible_rdis."""
             Svc.captured_accessible_rdis = accessible_rdis
-            return DummyResponse({"client_id": client_id, "accessible_rdis": accessible_rdis, "message": "ok"})
+            return WhoamiResponse(client_id=client_id, accessible_rdis=accessible_rdis, message="ok")
 
     service = Svc()
     override_service(middleware_api, service)
