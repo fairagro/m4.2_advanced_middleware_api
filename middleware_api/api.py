@@ -179,7 +179,7 @@ class Api:
         """Extract client ID from certificate Common Name (CN) attribute.
 
         Args:
-            cert (x509.Certificate): Parsed client certificate.
+            request (Request): FastAPI request object.
 
         Returns:
             str: Client identifier extracted from the certificate.
@@ -312,10 +312,10 @@ class Api:
             try:
                 result = await business_logic.create_or_update_arcs(rdi, request_body.arcs, client_id)
 
-                is_created = any(a.status == "created" for a in result.arcs)
-                response.status_code = 201 if is_created else 200
-                if is_created:
-                    response.headers["Location"] = f"/v1/arcs/{result.arcs[0].id}"
+                created_arcs = [arc for arc in result.arcs if arc.status == "created"]
+                response.status_code = 201 if created_arcs else 200
+                if created_arcs:
+                    response.headers["Location"] = f"/v1/arcs/{created_arcs[0].id}"
                 return result
             except InvalidJsonSemanticError as e:
                 raise HTTPException(status_code=422, detail=str(e)) from e
