@@ -179,7 +179,7 @@ class Api:
         """Extract client ID from certificate Common Name (CN) attribute.
 
         Args:
-            cert (x509.Certificate): Parsed client certificate.
+            request (Request): FastAPI request object.
 
         Returns:
             str: Client identifier extracted from the certificate.
