@@ -5,7 +5,7 @@ from unittest.mock import patch
 
 import pytest
 
-from middleware_api.business_logic import (
+from middleware.api.business_logic import (
     ArcResponse,
     BusinessLogic,
     CreateOrUpdateArcsResponse,

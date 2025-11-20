@@ -1,18 +1,10 @@
 [project]
-name = "m4-2-advanced-middleware-api"
+name = "m4-2-advanced-middleware"
 version = "2.0.0"
-description = "Add your description here"
+description = "The FAIRagro advanced middleware"
 readme = "README.md"
 requires-python = ">=3.12"
-dependencies = [
-  "arctrl>=3.0.0b3",
-  "asn1crypto>=1.5.1",
-  "cryptography>=45.0.6",
-  "fastapi>=0.116.1",
-  "python-gitlab>=6.2.0",
-  "pyyaml>=6.0.2",
-  "uvicorn>=0.35.0",
-]
+dependencies = ["api"]
 
 [dependency-groups]
 dev = [
@@ -28,6 +20,14 @@ dev = [
   "types-pyyaml>=6.0.12.20250915",
   "pre-commit>=4.0.0",
   "pytest-env>=1.2.0",
+]
+
+[tool.uv.sources]
+api = { workspace = true }
+
+[tool.uv.workspace]
+members = [
+    "middleware/api",
 ]
 
 [tool.ruff]
@@ -75,7 +75,7 @@ max-complexity = 10
 
 # Import sorting (replaces isort)
 [tool.ruff.lint.isort]
-known-first-party = ["middleware_api"]
+known-first-party = ["middleware"]
 force-single-line = false
 combine-as-imports = true
 

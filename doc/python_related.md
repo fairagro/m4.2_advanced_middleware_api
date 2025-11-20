@@ -107,7 +107,7 @@ source .env
 We can start the middleware api by executing the python main file:
 
 ```bash
-PYTHONPATH=. python middleware_api/main.py
+PYTHONPATH=. python middleware/api/main.py
 ```
 
 The `PYTHONPATH` needs to be set, so `main.py` can find the `middleware_api`
@@ -118,7 +118,7 @@ module.
 We can also execute the `middleware_api.main` module:
 
 ```bash
-python -m middleware_api.main
+python -m middleware.api.main
 ```
 
 If you do this in the project directory, there is no need to set the
@@ -129,7 +129,7 @@ If you do this in the project directory, there is no need to set the
 To run the middleware api via `uvicorn` command line tool:
 
 ```bash
-uvicorn middleware_api.api:app
+uvicorn middleware.api.api:app
 ```
 
 ### Running via `fastapi`
@@ -137,7 +137,7 @@ uvicorn middleware_api.api:app
 To run the middleware api via `fastapi` command line tool:
 
 ```bash
-fastapi run middleware_api/api.py --app app
+fastapi run middleware/api/api.py --app app
 ```
 
 ### Using a local docker image
@@ -145,12 +145,12 @@ fastapi run middleware_api/api.py --app app
 We can also build an run the docker image:
 
 ```bash
-docker build . -t middleware_api
+docker build -f docker/Dockerfile.api . -t middleware-api
 docker run \
     -v $(pwd)/example_config.yaml:/run/secrets/middleware-api-config \
     -e GITLAB_API_TOKEN \
     -p 8000:8000 \
-    middleware_api
+    middleware-api
 ```
 
 ### Using the official docker image

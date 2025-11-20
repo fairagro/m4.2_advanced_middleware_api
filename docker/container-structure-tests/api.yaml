@@ -7,7 +7,7 @@ schemaVersion: 2.0.0
 # File existence tests
 fileExistenceTests:
   - name: 'Middleware API executable'
-    path: '/middleware_api/middleware_api'
+    path: '/api/middleware-api'
     shouldExist: true
 
 # File content tests
@@ -36,4 +36,4 @@ commandTests:
 metadataTest:
   exposedPorts: ['8000']
   user: 'middleware'
-  workdir: '/middleware_api'
+  workdir: '/api'
