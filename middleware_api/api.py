@@ -17,12 +17,12 @@ from asn1crypto.core import Sequence, UTF8String  # type: ignore
 from cryptography import x509
 from cryptography.x509.extensions import ExtensionNotFound
 from cryptography.x509.oid import NameOID
-from fastapi import Depends, FastAPI, HTTPException, Request
+from fastapi import Depends, FastAPI, HTTPException, Request, Response
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 
 from .arc_store.gitlab_api import GitlabApi
-from .business_logic import BusinessLogic, InvalidJsonSemanticError
+from .business_logic import BusinessLogic, CreateOrUpdateArcsResponse, InvalidJsonSemanticError, WhoamiResponse
 from .config import Config
 
 try:
@@ -33,224 +33,6 @@ try:
 except (FileNotFoundError, KeyError):
     # Fallback, falls die Datei nicht gefunden wird oder die Struktur fehlt
     __version__ = "0.0.0"
-
-
-class CreateOrUpdateArcsRequest(BaseModel):
-    """Request model for creating or updating ARCs."""
-
-    rdi: Annotated[str, Field(description="Research Data Infrastructure identifier")]
-    arcs: Annotated[list[dict], Field(description="List of ARC definitions in RO-Crate JSON format")]
-
-
-class Api:
-    """FastAPI middleware for managing ARC (Advanced Research Context) objects.
-
-    This class provides methods and routes for handling HTTP requests related to ARC
-    objects, including authentication, content validation, and CRUD operations through
-    FastAPI endpoints.
-    """
-
-    # Constants
-    SUPPORTED_CONTENT_TYPE = "application/json"
-    SUPPORTED_ACCEPT_TYPE = "application/json"
-
-    def __init__(self, app_config: Config) -> None:
-        """Initialize the API with optional configuration.
-
-        Args:
-            app_config (Config): Configuration object.
-
-        """
-        self._logger = logging.getLogger("middleware_api")
-        self._config = app_config
-        self._logger.debug("API configuration: %s", self._config.model_dump())
-        self._store = GitlabApi(self._config.gitlab_api)
-        self._service = BusinessLogic(self._store)
-        self._app = FastAPI(
-            title="FAIR Middleware API",
-            description="API for managing ARC (Advanced Research Context) objects",
-            version=__version__,
-        )
-        self._setup_routes()
-        self._setup_exception_handlers()
-
-    @property
-    def app(self) -> FastAPI:
-        """Get the FastAPI application instance.
-
-        Returns:
-            FastAPI: The configured FastAPI application.
-
-        """
-        return self._app
-
-    def get_business_logic(self) -> BusinessLogic:
-        """Get the business logic service instance.
-
-        Returns:
-            BusinessLogic: The configured business logic service.
-
-        """
-        return self._service
-
-    def _get_client_auth(self, request: Request) -> tuple[str, list[str]]:
-        """Get client ID from certificate (mandatory mTLS).
-
-        Also extracts authorized RDIs from the certificate.
-        """
-        headers = request.headers
-        self._logger.debug("Request headers: %s", dict(headers.items()))
-
-        client_cert = headers.get("ssl-client-cert") or headers.get("X-SSL-Client-Cert")
-        client_verify = headers.get("ssl-client-verify") or headers.get("X-SSL-Client-Verify", "NONE")
-        self._logger.debug("Client cert header present: %s", bool(client_cert))
-        self._logger.debug("Client verify status: %s", client_verify)
-
-        if not client_cert:
-            msg = "Client certificate required for access"
-            self._logger.warning(msg)
-            raise HTTPException(status_code=401, detail=msg)
-        if client_verify != "SUCCESS":
-            detail_msg = f"Client certificate verification failed: {client_verify}"
-            self._logger.warning(detail_msg)
-            raise HTTPException(status_code=401, detail=detail_msg)
-
-        try:
-            cert_pem = unquote(client_cert)
-            self._logger.debug("URL decoded certificate: %s...", cert_pem[:100])
-            cert = x509.load_pem_x509_certificate(cert_pem.encode("utf-8"))
-            cn_attributes = cert.subject.get_attributes_for_oid(NameOID.COMMON_NAME)
-            if not cn_attributes:
-                msg = "Certificate subject does not contain Common Name (CN) attribute"
-                self._logger.warning(msg)
-                raise HTTPException(status_code=400, detail=msg)
-            cn = cn_attributes[0].value
-            self._logger.debug("Client certificate parsed, CN=%s", cn)
-            allowed_rdis = self._extract_allowed_rdis(cert)
-            self._logger.debug("Allowed RDIs with OID %s: %s", self._config.client_auth_oid, allowed_rdis)
-            return (cast(str, cn), allowed_rdis)
-        except ValueError as e:
-            error_msg = f"Invalid certificate format: {str(e)}"
-            self._logger.error(error_msg)
-            raise HTTPException(status_code=400, detail=error_msg) from e
-        except Exception as e:
-            error_msg = f"Certificate parsing error: {str(e)}"
-            self._logger.error(error_msg)
-            raise HTTPException(status_code=400, detail=error_msg) from e
-
-    def _extract_allowed_rdis(self, cert: x509.Certificate) -> list[str]:
-        """Extract allowed RDIs from custom extension with configured OID.
-
-        The extension contains RDI identifiers encoded as ASN.1 SEQUENCE of UTF8Strings.
-        Example: 1.3.6.1.4.1.64609.1.1 = SEQUENCE { UTF8String:"bonares", UTF8String:"edal" }
-        """
-        allowed_rdis = []
-        oid = self._config.client_auth_oid
-
-        try:
-            # Find extension by OID
-            for ext in cert.extensions:
-                if ext.oid == oid:
-                    try:
-                        der_bytes = ext.value.public_bytes()
-                        # Parse DER-encoded SEQUENCE using asn1crypto
-                        seq = Sequence.load(der_bytes)
-                        # Extract UTF8String values - Sequence supports __len__ and __getitem__
-                        for i in range(len(seq)):
-                            item = seq[i]
-                            if isinstance(item, UTF8String):
-                                allowed_rdis.append(item.native)
-                        self._logger.debug("Extracted RDIs from extension: %s", allowed_rdis)
-                    except (TypeError, ValueError) as e:
-                        self._logger.warning("Error parsing custom extension: %s", e)
-                    break
-        except (ExtensionNotFound, TypeError, ValueError) as e:
-            self._logger.warning("Error extracting custom extension: %s", e)
-
-        if not allowed_rdis:
-            self._logger.warning("No RDIs found in custom extension with OID %s", oid)
-
-        return allowed_rdis
-
-    def _validate_content_type(self, request: Request) -> None:
-        content_type = request.headers.get("content-type")
-        if not content_type:
-            msg = f"Content-Type header is missing. Expected '{self.SUPPORTED_CONTENT_TYPE}'."
-            self._logger.warning(msg)
-            raise HTTPException(status_code=415, detail=msg)
-        if content_type != self.SUPPORTED_CONTENT_TYPE:
-            msg = f"Unsupported Media Type. Supported types: '{self.SUPPORTED_CONTENT_TYPE}'."
-            self._logger.warning(msg)
-            raise HTTPException(status_code=415, detail=msg)
-
-    def _validate_accept_type(self, request: Request) -> None:
-        accept = request.headers.get("accept")
-        if accept not in [self.SUPPORTED_ACCEPT_TYPE, "*/*"]:
-            msg = f"Unsupported Response Type. Supported types: '{self.SUPPORTED_ACCEPT_TYPE}'."
-            self._logger.warning(msg)
-            raise HTTPException(status_code=406, detail=msg)
-
-    def _setup_exception_handlers(self) -> None:
-        @self._app.exception_handler(Exception)
-        async def unhandled_exception_handler(_request: Request, _exc: Exception) -> JSONResponse:
-            self._logger.error("Unhandled exception: %s", _exc)
-            return JSONResponse(
-                status_code=500,
-                content={"detail": "Internal Server Error. Please contact support if the problem persists."},
-            )
-
-    def _setup_routes(self) -> None:
-        @self._app.get("/v1/whoami")
-        async def whoami(
-            client_auth: Annotated[tuple[str, list[str]], Depends(self._get_client_auth)],
-            business_logic: Annotated[BusinessLogic, Depends(self.get_business_logic)],
-            _accept_validated: Annotated[None, Depends(self._validate_accept_type)],
-        ) -> JSONResponse:
-            client_id, allowed_rdis = client_auth
-            self._logger.debug("Allowed RDIs: %s", allowed_rdis)
-            known_rdis = self._config.known_rdis
-            self._logger.debug("Known RDIs: %s", known_rdis)
-            accessible_rdis = list(set(allowed_rdis) & set(known_rdis))
-            self._logger.debug("Accessible RDIs: %s", accessible_rdis)
-            result = await business_logic.whoami(client_id, accessible_rdis)
-            return JSONResponse(content=result.model_dump())
-
-        @self._app.get("/v1/liveness")
-        async def liveness(
-            _accept_validated: Annotated[None, Depends(self._validate_accept_type)],
-        ) -> JSONResponse:
-            return JSONResponse(content={"message": "living"})
-
-        @self._app.post("/v1/arcs")
-        async def create_or_update_arcs(
-            request_body: CreateOrUpdateArcsRequest,
-            client_auth: Annotated[tuple[str, list[str]], Depends(self._get_client_auth)],
-            business_logic: Annotated[BusinessLogic, Depends(self.get_business_logic)],
-            _content_type_validated: Annotated[None, Depends(self._validate_content_type)],
-            _accept_validated: Annotated[None, Depends(self._validate_accept_type)],
-        ) -> JSONResponse:
-            try:
-                client_id, allowed_rdis = client_auth
-                rdi = request_body.rdi
-
-                if rdi not in self._config.known_rdis:
-                    msg = f"RDI '{rdi}' is not recognized."
-                    self._logger.warning(msg)
-                    raise HTTPException(status_code=400, detail=msg)
-                if rdi not in allowed_rdis:
-                    msg = f"RDI '{rdi}' not authorized for client '{client_id}'."
-                    self._logger.warning(msg)
-                    raise HTTPException(status_code=403, detail=msg)
-
-                result = await business_logic.create_or_update_arcs(rdi, request_body.arcs, client_id)
-                location = f"/v1/arcs/{result.arcs[0].id}" if result.arcs else ""
-                return JSONResponse(
-                    content=result.model_dump(),
-                    status_code=(201 if any(a.status == "created" for a in result.arcs) else 200),
-                    headers={"Location": location},
-                )
-            except InvalidJsonSemanticError as e:
-                raise HTTPException(status_code=422, detail=str(e)) from e
 
 
 loaded_config = None
@@ -282,6 +64,262 @@ else:
 logging.basicConfig(
     level=getattr(logging, loaded_config.log_level), format="%(asctime)s %(levelname)s %(name)s: %(message)s"
 )
+
+logger = logging.getLogger("middleware_api")
+
+
+class LivenessResponse(BaseModel):
+    """Response model for liveness check."""
+
+    message: Annotated[str, Field(description="Liveness message")] = "ok"
+
+
+class CreateOrUpdateArcsRequest(BaseModel):
+    """Request model for creating or updating ARCs."""
+
+    rdi: Annotated[str, Field(description="Research Data Infrastructure identifier")]
+    arcs: Annotated[list[dict], Field(description="List of ARC definitions in RO-Crate JSON format")]
+
+
+class Api:
+    """FastAPI middleware for managing ARC (Advanced Research Context) objects.
+
+    This class provides methods and routes for handling HTTP requests related to ARC
+    objects, including authentication, content validation, and CRUD operations through
+    FastAPI endpoints.
+    """
+
+    # Constants
+    SUPPORTED_CONTENT_TYPE = "application/json"
+    SUPPORTED_ACCEPT_TYPE = "application/json"
+
+    def __init__(self, app_config: Config) -> None:
+        """Initialize the API with optional configuration.
+
+        Args:
+            app_config (Config): Configuration object.
+
+        """
+        self._config = app_config
+        logger.debug("API configuration: %s", self._config.model_dump())
+        self._store = GitlabApi(self._config.gitlab_api)
+        self._service = BusinessLogic(self._store)
+        self._app = FastAPI(
+            title="FAIR Middleware API",
+            description="API for managing ARC (Advanced Research Context) objects",
+            version=__version__,
+        )
+        self._setup_routes()
+        self._setup_exception_handlers()
+
+    @property
+    def app(self) -> FastAPI:
+        """Get the FastAPI application instance.
+
+        Returns:
+            FastAPI: The configured FastAPI application.
+
+        """
+        return self._app
+
+    def _get_business_logic(self) -> BusinessLogic:
+        """Get the business logic service instance.
+
+        Returns:
+            BusinessLogic: The configured business logic service.
+
+        """
+        return self._service
+
+    @staticmethod
+    def _validate_client_cert(request: Request) -> x509.Certificate:
+        """Extract and parse client certificate from request headers.
+
+        Args:
+            request (Request): FastAPI request object.
+
+        Returns:
+            x509.Certificate: Parsed client certificate.
+        """
+        # check, if we've already cached the cert in the request state
+        if hasattr(request.state, "cert") and isinstance(request.state.cert, x509.Certificate):
+            return request.state.cert
+
+        headers = request.headers
+        logger.debug("Request headers: %s", dict(headers.items()))
+
+        client_cert = headers.get("ssl-client-cert") or headers.get("X-SSL-Client-Cert")
+        client_verify = headers.get("ssl-client-verify") or headers.get("X-SSL-Client-Verify", "NONE")
+        logger.debug("Client cert header present: %s", bool(client_cert))
+        logger.debug("Client verify status: %s", client_verify)
+
+        if not client_cert:
+            msg = "Client certificate required for access"
+            logger.warning(msg)
+            raise HTTPException(status_code=401, detail=msg)
+        if client_verify != "SUCCESS":
+            detail_msg = f"Client certificate verification failed: {client_verify}"
+            logger.warning(detail_msg)
+            raise HTTPException(status_code=401, detail=detail_msg)
+
+        try:
+            cert_pem = unquote(client_cert)
+            logger.debug("URL decoded certificate: %s...", cert_pem[:100])
+            cert = x509.load_pem_x509_certificate(cert_pem.encode("utf-8"))
+        except (ValueError, TypeError) as e:
+            error_msg = f"Certificate parsing error: {str(e)}"
+            logger.error(error_msg)
+            raise HTTPException(status_code=400, detail=error_msg) from e
+
+        request.state.cert = cert
+        return cert
+
+    @classmethod
+    def _validate_client_id(cls, request: Request) -> str:
+        """Extract client ID from certificate Common Name (CN) attribute.
+
+        Args:
+            request (Request): FastAPI request object.
+
+        Returns:
+            str: Client identifier extracted from the certificate.
+        """
+        cert = cls._validate_client_cert(request)
+        cn_attributes = cert.subject.get_attributes_for_oid(NameOID.COMMON_NAME)
+        if not cn_attributes:
+            msg = "Certificate subject does not contain Common Name (CN) attribute"
+            logger.warning(msg)
+            raise HTTPException(status_code=400, detail=msg)
+        cn = cn_attributes[0].value
+        logger.debug("Client certificate parsed, CN=%s", cn)
+
+        return cast(str, cn)
+
+    def _get_authorized_rdis(self, request: Request) -> list[str]:
+        """Extract allowed RDIs from custom extension with configured OID.
+
+        The extension contains RDI identifiers encoded as ASN.1 SEQUENCE of UTF8Strings.
+        Example: 1.3.6.1.4.1.64609.1.1 = SEQUENCE { UTF8String:"bonares", UTF8String:"edal" }
+        """
+        cert = self._validate_client_cert(request)
+        allowed_rdis = []
+        oid = self._config.client_auth_oid
+
+        try:
+            # Find extension by OID
+            for ext in cert.extensions:
+                if ext.oid == oid:
+                    try:
+                        der_bytes = ext.value.public_bytes()
+                        # Parse DER-encoded SEQUENCE using asn1crypto
+                        seq = Sequence.load(der_bytes)
+                        # Extract UTF8String values - Sequence supports __len__ and __getitem__
+                        for i in range(len(seq)):
+                            item = seq[i]
+                            if isinstance(item, UTF8String):
+                                allowed_rdis.append(item.native)
+                        logger.debug("Extracted RDIs from extension: %s", allowed_rdis)
+                    except (TypeError, ValueError) as e:
+                        logger.warning("Error parsing custom extension: %s", e)
+                    break
+        except (ExtensionNotFound, TypeError, ValueError) as e:
+            logger.warning("Error extracting custom extension: %s", e)
+
+        if not allowed_rdis:
+            logger.warning("No RDIs found in custom extension with OID %s", oid)
+
+        return allowed_rdis
+
+    @staticmethod
+    def _validate_content_type(request: Request) -> None:
+        content_type = request.headers.get("content-type")
+        if not content_type:
+            msg = f"Content-Type header is missing. Expected '{Api.SUPPORTED_CONTENT_TYPE}'."
+            logger.warning(msg)
+            raise HTTPException(status_code=415, detail=msg)
+        if content_type != Api.SUPPORTED_CONTENT_TYPE:
+            msg = f"Unsupported Media Type. Supported types: '{Api.SUPPORTED_CONTENT_TYPE}'."
+            logger.warning(msg)
+            raise HTTPException(status_code=415, detail=msg)
+
+    @staticmethod
+    def _validate_accept_type(request: Request) -> None:
+        accept = request.headers.get("accept")
+        if accept not in [Api.SUPPORTED_ACCEPT_TYPE, "*/*"]:
+            msg = f"Unsupported Response Type. Supported types: '{Api.SUPPORTED_ACCEPT_TYPE}'."
+            logger.warning(msg)
+            raise HTTPException(status_code=406, detail=msg)
+
+    def _get_known_rdis(self) -> list[str]:
+        return self._config.known_rdis
+
+    def _validate_rdi_known(self, request_body: CreateOrUpdateArcsRequest) -> str:
+        known_rdis = self._get_known_rdis()
+        rdi = request_body.rdi
+        if rdi not in known_rdis:
+            raise HTTPException(status_code=400, detail=f"RDI '{rdi}' is not recognized.")
+        return cast(str, rdi)
+
+    def _validate_rdi_authorized(self, request: Request, request_body: CreateOrUpdateArcsRequest) -> str:
+        authorized_rdis = self._get_authorized_rdis(request)
+        rdi = self._validate_rdi_known(request_body)
+        if rdi not in authorized_rdis:
+            raise HTTPException(status_code=403, detail=f"RDI '{rdi}' not authorized.")
+        return cast(str, rdi)
+
+    def _setup_exception_handlers(self) -> None:
+        @self._app.exception_handler(Exception)
+        async def unhandled_exception_handler(_request: Request, _exc: Exception) -> JSONResponse:
+            logger.error("Unhandled exception: %s", _exc)
+            return JSONResponse(
+                status_code=500,
+                content={"detail": "Internal Server Error. Please contact support if the problem persists."},
+            )
+
+    def _setup_routes(self) -> None:
+        @self._app.get("/v1/whoami", response_model=WhoamiResponse)
+        async def whoami(
+            known_rdis: Annotated[list[str], Depends(self._get_known_rdis)],
+            authorized_rdis: Annotated[list[str], Depends(self._get_authorized_rdis)],
+            client_id: Annotated[str, Depends(self._validate_client_id)],
+            business_logic: Annotated[BusinessLogic, Depends(self._get_business_logic)],
+            _accept_validated: Annotated[None, Depends(self._validate_accept_type)],
+        ) -> WhoamiResponse:
+            logger.debug("Authorized RDIs: %s", authorized_rdis)
+            logger.debug("Known RDIs: %s", known_rdis)
+            accessible_rdis = list(set(authorized_rdis) & set(known_rdis))
+            logger.debug("Accessible RDIs: %s", accessible_rdis)
+            result = await business_logic.whoami(client_id, accessible_rdis)
+
+            return result
+
+        @self._app.get("/v1/liveness", response_model=LivenessResponse)
+        async def liveness(
+            _accept_validated: Annotated[None, Depends(self._validate_accept_type)],
+        ) -> LivenessResponse:
+            return LivenessResponse()
+
+        @self._app.post("/v1/arcs", response_model=CreateOrUpdateArcsResponse)
+        async def create_or_update_arcs(
+            request_body: CreateOrUpdateArcsRequest,
+            client_id: Annotated[str, Depends(self._validate_client_id)],
+            business_logic: Annotated[BusinessLogic, Depends(self._get_business_logic)],
+            _content_type_validated: Annotated[None, Depends(self._validate_content_type)],
+            _accept_validated: Annotated[None, Depends(self._validate_accept_type)],
+            rdi: Annotated[str, Depends(self._validate_rdi_authorized)],
+            response: Response,
+        ) -> CreateOrUpdateArcsResponse:
+            try:
+                result = await business_logic.create_or_update_arcs(rdi, request_body.arcs, client_id)
+
+                created_arcs = [arc for arc in result.arcs if arc.status == "created"]
+                response.status_code = 201 if created_arcs else 200
+                if created_arcs:
+                    response.headers["Location"] = f"/v1/arcs/{created_arcs[0].id}"
+                return result
+            except InvalidJsonSemanticError as e:
+                raise HTTPException(status_code=422, detail=str(e)) from e
+
 
 middleware_api = Api(loaded_config)
 app = middleware_api.app
