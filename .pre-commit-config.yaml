@@ -73,7 +73,7 @@ repos:
       # pytest - Unit tests only (runs on pre-push to keep commits fast)
       - id: pytest-unit
         name: pytest unit tests
-        entry: uv run pytest middleware/tests/unit/
+        entry: uv run pytest middleware/tests/app/unit/
         language: system
         types: [python]
         pass_filenames: false
