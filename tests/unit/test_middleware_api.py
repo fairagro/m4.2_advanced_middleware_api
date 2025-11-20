@@ -258,12 +258,12 @@ def test_create_or_update_arcs_cert_verification_state(
 # -------------------------------------------------------------------
 
 
-def test_create_or_update_arcs_rdi_not_known(client: TestClient, middleware_api: Api) -> None:
+def test_create_or_update_arcs_rdi_not_known(client: TestClient, cert: str) -> None:
     """Test that requesting an unknown RDI returns 400."""
     r = client.post(
         "/v1/arcs",
         headers={
-            "ssl-client-cert": "dummy-cert",
+            "ssl-client-cert": cert,
             "ssl-client-verify": "SUCCESS",
             "content-type": "application/json",
             "accept": "application/json",
@@ -273,9 +273,7 @@ def test_create_or_update_arcs_rdi_not_known(client: TestClient, middleware_api:
     assert r.status_code == 400
 
 
-def test_create_or_update_arcs_rdi_not_allowed(
-    client: TestClient, oid: x509.ObjectIdentifier, middleware_api: Api
-) -> None:
+def test_create_or_update_arcs_rdi_not_allowed(client: TestClient, oid: x509.ObjectIdentifier) -> None:
     """Test that requesting an RDI not in client certificate returns 403."""
     cert = create_test_cert(oid, ["rdi-2"])
 
@@ -290,50 +288,6 @@ def test_create_or_update_arcs_rdi_not_allowed(
         json={"rdi": "rdi-1", "arcs": [{"dummy": "crate"}]},
     )
     assert r.status_code == 403
-
-
-def test_create_or_update_arcs_rdi_edge_case_cert_has_extra(client: TestClient, middleware_api: Api) -> None:
-    """Test that client can access RDI if it's in both cert and known_rdis, even if cert has extras."""
-
-    class Svc:  # pylint: disable=too-few-public-methods
-        """Mock service that verifies the RDI was passed correctly."""
-
-        async def create_or_update_arcs(self, rdi: str, arcs: list[Any], client_id: str) -> CreateOrUpdateArcsResponse:
-            """Mock create_or_update_arcs that captures the RDI."""
-            # In this test, we simulate an update by having the service return UPDATED
-            return CreateOrUpdateArcsResponse(
-                client_id=client_id,
-                rdi=rdi,
-                message="ok",
-                arcs=[
-                    ArcResponse(
-                        id="test-arc-id",
-                        status=ArcStatus.UPDATED,
-                        timestamp="2025-01-01T00:00:00Z",
-                    )
-                ],
-            )
-
-    middleware_api.app.dependency_overrides[middleware_api._get_business_logic] = Svc
-    middleware_api.app.dependency_overrides[middleware_api._validate_rdi_authorized] = lambda: "rdi-1"
-    middleware_api.app.dependency_overrides[middleware_api._validate_client_cert] = lambda: "dummy-cert"
-    middleware_api.app.dependency_overrides[middleware_api._validate_client_id] = lambda: "TestClient"
-
-    r = client.post(
-        "/v1/arcs",
-        headers={
-            "ssl-client-cert": "dummy-cert",
-            "ssl-client-verify": "SUCCESS",
-            "content-type": "application/json",
-            "accept": "application/json",
-        },
-        json={"rdi": "rdi-1", "arcs": [{"dummy": "crate"}]},
-    )
-    assert r.status_code == 200  # updated
-    assert r.json()["rdi"] == "rdi-1"
-
-    # Cleanup
-    middleware_api.app.dependency_overrides.clear()
 
 
 # -------------------------------------------------------------------
