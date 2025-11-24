@@ -46,7 +46,7 @@ jobs:
     needs: docker-build-test
     strategy:
       matrix:
-        component: ${{ fromJson(needs.docker-build-test.inputs.components) }}
+        component: ${{ fromJson(needs.docker-build-test.outputs.components) }}
     runs-on: ubuntu-latest
     if: needs.docker-build-test.result == 'success'
 

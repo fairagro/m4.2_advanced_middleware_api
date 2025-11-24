@@ -38,6 +38,9 @@ on:
       dockerhub-pushed:
         description: 'Whether image was pushed to DockerHub'
         value: ${{ jobs.build-docker-image.outputs.dockerhub-pushed }}
+      components:
+        description: 'A JSON string array of components that were built'
+        value: ${{ jobs.calculate-version.outputs.components }}
 
 env:
   GIT_USER_NAME: ${{ vars.GIT_USER_NAME || 'GitHub Pipeline' }}
@@ -59,6 +62,7 @@ jobs:
       SemVer: ${{ steps.gitversion.outputs.semVer }}
       Major: ${{ steps.gitversion.outputs.major }}
       Minor: ${{ steps.gitversion.outputs.minor }}
+      components: ${{ inputs.components }}
     env:
       IS_FEATURE_BRANCH: ${{ startsWith(github.ref_name, 'feature/') }}
 
