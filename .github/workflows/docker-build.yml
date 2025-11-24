@@ -219,7 +219,7 @@ jobs:
       - name: Load Docker image
         run: |
           echo "📦 Loading Docker image from artifact..."
-          docker load < docker-image.tar.gz
+          docker load < docker-image-${{ matrix.component }}.tar.gz
 
           # List loaded images for verification
           echo "🔍 Loaded images:"
