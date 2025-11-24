@@ -152,6 +152,7 @@ jobs:
         uses: docker/build-push-action@v6
         with:
           context: .
+          file: docker/Dockerfile.api
           platforms: linux/amd64
           push: ${{ env.DOCKERHUB_AVAILABLE == 'true' && inputs.push_to_registry }}
           load: true
@@ -244,7 +245,7 @@ jobs:
         uses: plexsystems/container-structure-test-action@v0.3.0
         with:
           image: ${{ steps.image-tag.outputs.image-tag }}
-          config: tests/container-structure-test.yaml
+          config: docker/container-structure-tests/api.yaml
 
       - name: Summary
         if: always()
