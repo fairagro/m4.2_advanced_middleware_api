@@ -9,12 +9,12 @@ from cryptography import x509
 from fastapi.testclient import TestClient
 from pydantic import HttpUrl, SecretStr
 
-from middleware_api.api import Api
-from middleware_api.arc_store.gitlab_api import GitlabApi, GitlabApiConfig
-from middleware_api.business_logic import (
+from middleware.api.api import Api
+from middleware.api.arc_store.gitlab_api import GitlabApi, GitlabApiConfig
+from middleware.api.business_logic import (
     BusinessLogic,
 )
-from middleware_api.config import Config
+from middleware.api.config import Config
 
 
 @pytest.fixture

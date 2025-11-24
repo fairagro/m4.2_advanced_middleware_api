@@ -14,6 +14,11 @@ on:
         required: false
         type: string
         default: 'patch'
+      components:
+        description: 'A JSON string array of components to build'
+        required: false
+        type: string
+        default: '["api"]'
     outputs:
       version:
         description: 'Calculated version'
@@ -33,12 +38,15 @@ on:
       dockerhub-pushed:
         description: 'Whether image was pushed to DockerHub'
         value: ${{ jobs.build-docker-image.outputs.dockerhub-pushed }}
+      components:
+        description: 'A JSON string array of components that were built'
+        value: ${{ jobs.calculate-version.outputs.components }}
 
 env:
   GIT_USER_NAME: ${{ vars.GIT_USER_NAME || 'GitHub Pipeline' }}
   GIT_USER_EMAIL: ${{ vars.GIT_USER_EMAIL || 'github_pipeline@fairagro.net' }}
-  IMAGE_NAME: ${{ vars.IMAGE_NAME || 'fairagro-advanced-middleware-api' }}
   DOCKERHUB_NAMESPACE: ${{ vars.DOCKERHUB_NAMESPACE || 'zalf' }}
+  IMAGE_BASE_NAME: ${{ vars.IMAGE_BASE_NAME || 'fairagro-advanced-middleware' }}
   IMAGE_TITLE: ${{ vars.IMAGE_TITLE || 'FairAgro Advanced Middleware API' }}
   IMAGE_DESCRIPTION: ${{ vars.IMAGE_DESCRIPTION || 'Advanced middleware API for FairAgro platform' }}
   GITVERSION_TAG_PREFIX: ${{ vars.GITVERSION_TAG_PREFIX || '.*-docker-v' }}
@@ -54,6 +62,7 @@ jobs:
       SemVer: ${{ steps.gitversion.outputs.semVer }}
       Major: ${{ steps.gitversion.outputs.major }}
       Minor: ${{ steps.gitversion.outputs.minor }}
+      components: ${{ inputs.components }}
     env:
       IS_FEATURE_BRANCH: ${{ startsWith(github.ref_name, 'feature/') }}
 
@@ -103,6 +112,9 @@ jobs:
 
   build-docker-image:
     needs: calculate-version
+    strategy:
+      matrix:
+        component: ${{ fromJson(inputs.components) }}
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -132,7 +144,7 @@ jobs:
         uses: docker/metadata-action@v5
         with:
           images: |
-            ${{ env.DOCKERHUB_AVAILABLE == 'true' && inputs.push_to_registry && format('{0}/{1}', env.DOCKERHUB_NAMESPACE, env.IMAGE_NAME) || '' }}
+            ${{ env.DOCKERHUB_AVAILABLE == 'true' && inputs.push_to_registry && format('{0}/{1}-{2}', env.DOCKERHUB_NAMESPACE, env.IMAGE_BASE_NAME, matrix.component) || '' }}
           tags: |
             type=semver,pattern={{version}},value=${{ needs.calculate-version.outputs.SemVer }}
             type=raw,value=${{ needs.calculate-version.outputs.Major }}.${{ needs.calculate-version.outputs.Minor }},enable=${{ !contains(github.ref_name, 'feature/') }}
@@ -152,10 +164,11 @@ jobs:
         uses: docker/build-push-action@v6
         with:
           context: .
+          file: docker/Dockerfile.${{ matrix.component }}
           platforms: linux/amd64
           push: ${{ env.DOCKERHUB_AVAILABLE == 'true' && inputs.push_to_registry }}
           load: true
-          tags: ${{ env.DOCKERHUB_AVAILABLE == 'true' && inputs.push_to_registry && steps.meta.outputs.tags || format('local/{0}:{1}', env.IMAGE_NAME, needs.calculate-version.outputs.version) }}
+          tags: ${{ env.DOCKERHUB_AVAILABLE == 'true' && inputs.push_to_registry && steps.meta.outputs.tags || format('local/{0}-{1}:{2}', env.IMAGE_BASE_NAME, matrix.component, needs.calculate-version.outputs.version) }}
           labels: ${{ steps.meta.outputs.labels }}
           build-args: |
             APP_VERSION=v${{ needs.calculate-version.outputs.version }}
@@ -166,18 +179,18 @@ jobs:
         run: |
           # Use the DockerHub tag if pushed, otherwise local tag
           if [[ "${{ env.DOCKERHUB_AVAILABLE }}" == "true" && "${{ inputs.push_to_registry }}" == "true" ]]; then
-            IMAGE_TAG="${{ env.DOCKERHUB_NAMESPACE }}/${{ env.IMAGE_NAME }}:${{ needs.calculate-version.outputs.version }}"
+            IMAGE_TAG="${{ env.DOCKERHUB_NAMESPACE }}/${{ env.IMAGE_BASE_NAME }}-${{ matrix.component }}:${{ needs.calculate-version.outputs.version }}"
           else
-            IMAGE_TAG="local/${{ env.IMAGE_NAME }}:${{ needs.calculate-version.outputs.version }}"
+            IMAGE_TAG="local/${{ env.IMAGE_BASE_NAME }}-${{ matrix.component }}:${{ needs.calculate-version.outputs.version }}"
           fi
           echo "Saving image: $IMAGE_TAG"
-          docker save "$IMAGE_TAG" | gzip > docker-image.tar.gz
+          docker save "$IMAGE_TAG" | gzip > docker-image-${{ matrix.component }}.tar.gz
 
       - name: Upload Docker image artifact
         uses: actions/upload-artifact@v4
         with:
-          name: docker-image-${{ needs.calculate-version.outputs.version }}
-          path: docker-image.tar.gz
+          name: docker-image-${{ matrix.component }}-${{ needs.calculate-version.outputs.version }}
+          path: docker-image-${{ matrix.component }}.tar.gz
           retention-days: 1
 
       - name: Log push status
@@ -190,6 +203,9 @@ jobs:
 
   container-structure-test:
     needs: [calculate-version, build-docker-image]
+    strategy:
+      matrix:
+        component: ${{ fromJson(inputs.components) }}
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -202,12 +218,12 @@ jobs:
       - name: Download Docker image artifact
         uses: actions/download-artifact@v4
         with:
-          name: docker-image-${{ needs.calculate-version.outputs.version }}
+          name: docker-image-${{ matrix.component }}-${{ needs.calculate-version.outputs.version }}
 
       - name: Load Docker image
         run: |
           echo "📦 Loading Docker image from artifact..."
-          docker load < docker-image.tar.gz
+          docker load < docker-image-${{ matrix.component }}.tar.gz
 
           # List loaded images for verification
           echo "🔍 Loaded images:"
@@ -220,10 +236,10 @@ jobs:
           PUSH_TO_REGISTRY="${{ inputs.push_to_registry }}"
 
           if [[ "$DOCKERHUB_AVAILABLE" == "true" && "$PUSH_TO_REGISTRY" == "true" ]]; then
-            IMAGE_TAG="${{ env.DOCKERHUB_NAMESPACE }}/${{ env.IMAGE_NAME }}:${{ needs.calculate-version.outputs.version }}"
+            IMAGE_TAG="${{ env.DOCKERHUB_NAMESPACE }}/${{ env.IMAGE_BASE_NAME }}-${{ matrix.component }}:${{ needs.calculate-version.outputs.version }}"
             echo "Using DockerHub image: $IMAGE_TAG"
           else
-            IMAGE_TAG="local/${{ env.IMAGE_NAME }}:${{ needs.calculate-version.outputs.version }}"
+            IMAGE_TAG="local/${{ env.IMAGE_BASE_NAME }}-${{ matrix.component }}:${{ needs.calculate-version.outputs.version }}"
             echo "Using local image: $IMAGE_TAG"
           fi
 
@@ -244,14 +260,15 @@ jobs:
         uses: plexsystems/container-structure-test-action@v0.3.0
         with:
           image: ${{ steps.image-tag.outputs.image-tag }}
-          config: tests/container-structure-test.yaml
+          config: docker/container-structure-tests/${{ matrix.component }}.yaml
 
       - name: Summary
         if: always()
         run: |
           echo "## 🐳 Container Structure Test Summary" >> $GITHUB_STEP_SUMMARY
+          echo "**Component**: ${{ matrix.component }}" >> $GITHUB_STEP_SUMMARY
           echo "**Version**: v${{ needs.calculate-version.outputs.version }}" >> $GITHUB_STEP_SUMMARY
-          echo "**Config**: tests/container-structure-test.yaml" >> $GITHUB_STEP_SUMMARY
+          echo "**Config**: docker/container-structure-tests/${{ matrix.component }}.yaml" >> $GITHUB_STEP_SUMMARY
           echo "**Status**: ${{ job.status }}" >> $GITHUB_STEP_SUMMARY
           if [[ "${{ job.status }}" == "success" ]]; then
             echo "✅ **All container structure tests passed!**" >> $GITHUB_STEP_SUMMARY

@@ -6,15 +6,15 @@ import pytest
 from cryptography import x509
 from fastapi.testclient import TestClient
 
-from middleware_api.api import Api
-from middleware_api.business_logic import (
+from middleware.api.api import Api
+from middleware.api.business_logic import (
     ArcResponse,
     ArcStatus,
     CreateOrUpdateArcsResponse,
     InvalidJsonSemanticError,
     WhoamiResponse,
 )
-from tests.conftest import create_test_cert
+from middleware.tests.api.conftest import create_test_cert
 
 
 class SimpleBusinessLogicMock:

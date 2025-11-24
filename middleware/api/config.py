@@ -8,8 +8,8 @@ from typing import Annotated, ClassVar, Literal, Self, cast
 from cryptography import x509
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
-from middleware_api.arc_store.gitlab_api import GitlabApiConfig
-from middleware_api.utils.config_wrapper import ConfigWrapper
+from middleware.api.arc_store.gitlab_api import GitlabApiConfig
+from middleware.api.utils.config_wrapper import ConfigWrapper
 
 
 class Config(BaseModel):

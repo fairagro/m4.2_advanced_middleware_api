@@ -33,7 +33,7 @@ async def test_create_arcs(
         "ssl-client-verify": "SUCCESS",
         "content-type": "application/json",
     }
-    arc_json_path = Path(__file__).parent.parent.parent / "ro_crates" / json_info["file_name"]
+    arc_json_path = Path(__file__).parent.parent.parent.parent.parent / "ro_crates" / json_info["file_name"]
     with arc_json_path.open("r", encoding="utf-8") as f:
         body = {"rdi": "rdi-1", "arcs": [json.load(f)]}
 

@@ -4,7 +4,7 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from middleware_api.business_logic import BusinessLogic, WhoamiResponse
+from middleware.api.business_logic import BusinessLogic, WhoamiResponse
 
 
 @pytest.mark.asyncio

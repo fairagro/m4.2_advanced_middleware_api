@@ -33,29 +33,77 @@ jobs:
     - name: Code formatting and linting check with Ruff
       run: |
         # Check formatting (do not auto-format), then check linting
-        uv run ruff format --check --diff middleware_api/ tests/
-        uv run ruff check middleware_api/ tests/
+        uv run ruff format --check --diff middleware/
+        uv run ruff check middleware/
       continue-on-error: false
 
     - name: Linting with pylint
       run: |
-        uv run pylint middleware_api/ tests/ --fail-under=8.0 --output-format=colorized
+        uv run pylint middleware/ --fail-under=8.0 --output-format=colorized
       continue-on-error: false
 
     - name: Type checking with mypy
       run: |
-        uv run mypy middleware_api/ --ignore-missing-imports --strict-optional
+        uv run mypy middleware/ --ignore-missing-imports --strict-optional
       continue-on-error: false
 
     - name: Security check with bandit
+      id: bandit
       run: |
-        uv run bandit -r middleware_api/ -f json -o bandit-report.json
-        uv run bandit -r middleware_api/ -ll
+        # Run bandit, but don't fail the job immediately.
+        # We will check the output in the next step.
+        # We exclude tests and skip B101 (assert_used) to align with pre-commit.
+        uv run bandit -r middleware/ --exclude middleware/tests/ --skip B101 -f json -o bandit-report.json || true
       continue-on-error: false
+
+    - name: Review bandit results
+      if: always() && steps.bandit.outcome == 'success'
+      id: bandit-review
+      shell: bash
+      run: |
+        echo "## 🛡️ Bandit Security Scan Results" >> $GITHUB_STEP_SUMMARY
+
+        if [ ! -f bandit-report.json ]; then
+          echo "✅ No bandit report file found. Nothing to review." >> $GITHUB_STEP_SUMMARY
+          exit 0
+        fi
+
+        # Count issues by severity
+        HIGH_ISSUES=$(jq '[.results[] | select(.issue_severity == "HIGH")] | length' bandit-report.json)
+        MEDIUM_ISSUES=$(jq '[.results[] | select(.issue_severity == "MEDIUM")] | length' bandit-report.json)
+        LOW_ISSUES=$(jq '[.results[] | select(.issue_severity == "LOW")] | length' bandit-report.json)
+        TOTAL_ISSUES=$((HIGH_ISSUES + MEDIUM_ISSUES + LOW_ISSUES))
+
+        echo "| Severity | Count |" >> $GITHUB_STEP_SUMMARY
+        echo "|----------|-------|" >> $GITHUB_STEP_SUMMARY
+        echo "| High     | $HIGH_ISSUES   |" >> $GITHUB_STEP_SUMMARY
+        echo "| Medium   | $MEDIUM_ISSUES |" >> $GITHUB_STEP_SUMMARY
+        echo "| Low      | $LOW_ISSUES    |" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+
+        if [ $TOTAL_ISSUES -gt 0 ]; then
+          echo "### Findings:" >> $GITHUB_STEP_SUMMARY
+          jq -r '.results[] | " - **\(.issue_severity)/\(.issue_confidence)**: `\(.test_id)` - \(.issue_text) in `\(.filename):\(.line_number)`"' bandit-report.json >> $GITHUB_STEP_SUMMARY
+        else
+          echo "✅ No security issues found by bandit." >> $GITHUB_STEP_SUMMARY
+        fi
+
+        # Decide if the job should fail
+        if [ $HIGH_ISSUES -gt 0 ] || [ $MEDIUM_ISSUES -gt 0 ]; then
+          echo "FAIL_JOB=true" >> $GITHUB_OUTPUT
+        else
+          echo "FAIL_JOB=false" >> $GITHUB_OUTPUT
+        fi
+
+    - name: Fail job on critical findings
+      if: steps.bandit-review.outputs.FAIL_JOB == 'true'
+      run: |
+        echo "❌ Failing workflow due to HIGH or MEDIUM severity security issues found by bandit."
+        exit 1
 
     - name: Run unit tests with coverage
       run: |
-        uv run pytest tests/unit/ --cov=middleware_api --cov-report=xml --cov-report=html --cov-report=term-missing --junitxml=pytest-report.xml
+        uv run pytest middleware/tests/*/unit/ --cov=middleware --cov-report=xml --cov-report=html --cov-report=term-missing --junitxml=pytest-report.xml
 
     - name: Upload coverage to Codecov
       uses: codecov/codecov-action@v4

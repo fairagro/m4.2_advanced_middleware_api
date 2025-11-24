@@ -1,0 +1,15 @@
+[project]
+name = "api"
+version = "0.0.0" # currently we disrehgard the version of this subpackage
+description = "The FAIRagro advanced middleware API"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+  "arctrl>=3.0.0b3",
+  "asn1crypto>=1.5.1",
+  "cryptography>=45.0.6",
+  "fastapi>=0.116.1",
+  "python-gitlab>=6.2.0",
+  "pyyaml>=6.0.2",
+  "uvicorn>=0.35.0",
+]
