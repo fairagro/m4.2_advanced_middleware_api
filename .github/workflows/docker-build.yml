@@ -14,6 +14,11 @@ on:
         required: false
         type: string
         default: 'patch'
+      components:
+        description: 'A JSON string array of components to build'
+        required: false
+        type: string
+        default: '["api"]'
     outputs:
       version:
         description: 'Calculated version'
@@ -45,19 +50,6 @@ env:
   DOCKER_PLATFORMS: ${{ vars.DOCKER_PLATFORMS || 'linux/amd64' }}
 
 jobs:
-  list-components:
-    runs-on: ubuntu-latest
-    outputs:
-      components: ${{ steps.list.outputs.components }}
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-      - id: list
-        name: List components
-        run: |
-          components=$(ls -1 docker/Dockerfile.* | sed -e 's|docker/Dockerfile.||' | jq -R . | jq -s .)
-          echo "components=${components}" >> $GITHUB_OUTPUT
-
   calculate-version:
     runs-on: ubuntu-latest
     permissions:
@@ -115,10 +107,10 @@ jobs:
           echo "  - Final version: ${{ env.IS_FEATURE_BRANCH == 'true' && steps.gitversion.outputs.semVer || steps.gitversion.outputs.majorMinorPatch }}"
 
   build-docker-image:
-    needs: [calculate-version, list-components]
+    needs: calculate-version
     strategy:
       matrix:
-        component: ${{ fromJson(needs.list-components.outputs.components) }}
+        component: ${{ fromJson(inputs.components) }}
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -206,10 +198,10 @@ jobs:
           fi
 
   container-structure-test:
-    needs: [calculate-version, build-docker-image, list-components]
+    needs: [calculate-version, build-docker-image]
     strategy:
       matrix:
-        component: ${{ fromJson(needs.list-components.outputs.components) }}
+        component: ${{ fromJson(inputs.components) }}
     runs-on: ubuntu-latest
     permissions:
       contents: read

@@ -39,13 +39,14 @@ jobs:
     with:
       push_to_registry: true
       version_bump: ${{ startsWith(github.ref_name, 'feature/') && 'patch' || (github.event.inputs.version_bump || 'patch') }}
+      components: '["api"]' # Add other components here in the future, e.g., '["api", "worker"]'
     secrets: inherit
 
   security-scan-release:
     needs: docker-build-test
     strategy:
       matrix:
-        component: ${{ fromJson(needs.docker-build-test.outputs.components) }}
+        component: ${{ fromJson(needs.docker-build-test.inputs.components) }}
     runs-on: ubuntu-latest
     if: needs.docker-build-test.result == 'success'
 
