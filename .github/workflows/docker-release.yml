@@ -79,6 +79,9 @@ jobs:
           # Export for next steps
           echo "SBOM_IMAGE_TAG=$IMAGE_TAG" >> $GITHUB_ENV
 
+      - name: Create SBOM directory
+        run: mkdir -p sboms
+
       - name: Generate SBOM
         uses: anchore/sbom-action@v0
         with:
