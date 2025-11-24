@@ -139,14 +139,14 @@ jobs:
           ignore-unfixed: true  # Focus on fixable vulnerabilities
 
       - name: Upload Trivy Image SARIF results
-        uses: github/codeql-action/upload-sarif@v3
+        uses: github/codeql-action/upload-sarif@v4
         if: always()
         with:
           sarif_file: trivy-image-results-${{ matrix.component }}.sarif
           category: trivy-image-scan-${{ matrix.component }}
 
       - name: Upload Trivy SBOM SARIF results
-        uses: github/codeql-action/upload-sarif@v3
+        uses: github/codeql-action/upload-sarif@v4
         with:
           sarif_file: trivy-sbom-results-${{ matrix.component }}.sarif
           category: trivy-sbom-scan-${{ matrix.component }}
