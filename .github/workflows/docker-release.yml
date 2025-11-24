@@ -16,7 +16,7 @@ on:
 env:
   GIT_USER_NAME: ${{ vars.GIT_USER_NAME || 'GitHub Pipeline' }}
   GIT_USER_EMAIL: ${{ vars.GIT_USER_EMAIL || 'github_pipeline@fairagro.net' }}
-  IMAGE_NAME: ${{ vars.IMAGE_NAME || 'fairagro-advanced-middleware-api' }}
+  IMAGE_BASE_NAME: ${{ vars.IMAGE_BASE_NAME || 'fairagro-advanced-middleware' }}
   DOCKERHUB_NAMESPACE: ${{ vars.DOCKERHUB_NAMESPACE || 'zalf' }}
   IMAGE_TITLE: ${{ vars.IMAGE_TITLE || 'FairAgro Advanced Middleware API' }}
   IMAGE_DESCRIPTION: ${{ vars.IMAGE_DESCRIPTION || 'Advanced middleware API for FairAgro platform' }}
@@ -43,6 +43,9 @@ jobs:
 
   security-scan-release:
     needs: docker-build-test
+    strategy:
+      matrix:
+        component: ${{ fromJson(needs.docker-build-test.outputs.components) }}
     runs-on: ubuntu-latest
     if: needs.docker-build-test.result == 'success'
 
@@ -57,18 +60,18 @@ jobs:
       - name: Download Docker image artifact
         uses: actions/download-artifact@v4
         with:
-          name: docker-image-${{ needs.docker-build-test.outputs.version }}
+          name: docker-image-${{ matrix.component }}-${{ needs.docker-build-test.outputs.version }}
 
       - name: Load Docker image
         run: |
-          docker load < docker-image.tar.gz
+          docker load < docker-image-${{ matrix.component }}.tar.gz
 
           # Determine the correct image tag that was saved
           if [[ "${{ needs.docker-build-test.outputs.dockerhub-pushed }}" == "true" ]]; then
-            IMAGE_TAG="${{ env.DOCKERHUB_NAMESPACE }}/${{ env.IMAGE_NAME }}:${{ needs.docker-build-test.outputs.version }}"
+            IMAGE_TAG="${{ env.DOCKERHUB_NAMESPACE }}/${{ env.IMAGE_BASE_NAME }}-${{ matrix.component }}:${{ needs.docker-build-test.outputs.version }}"
             echo "✅ Docker image loaded from DockerHub: $IMAGE_TAG"
           else
-            IMAGE_TAG="local/${{ env.IMAGE_NAME }}:${{ needs.docker-build-test.outputs.version }}"
+            IMAGE_TAG="local/${{ env.IMAGE_BASE_NAME }}-${{ matrix.component }}:${{ needs.docker-build-test.outputs.version }}"
             echo "✅ Docker image loaded locally: $IMAGE_TAG"
           fi
 
@@ -79,9 +82,9 @@ jobs:
         uses: anchore/sbom-action@v0
         with:
           image: ${{ env.SBOM_IMAGE_TAG }}
-          output-file: sbom-v${{ needs.docker-build-test.outputs.version }}.spdx.json
+          output-file: sbom-${{ matrix.component }}-v${{ needs.docker-build-test.outputs.version }}.spdx.json
           format: spdx-json
-          artifact-name: sbom-v${{ needs.docker-build-test.outputs.version }}.spdx.json
+          artifact-name: sbom-${{ matrix.component }}-v${{ needs.docker-build-test.outputs.version }}.spdx.json
 
       - name: Analyze SBOM completeness
         run: |
@@ -89,7 +92,7 @@ jobs:
           echo "" >> $GITHUB_STEP_SUMMARY
 
           # Count packages in SBOM
-          SBOM_FILE="sbom-v${{ needs.docker-build-test.outputs.version }}.spdx.json"
+          SBOM_FILE="sbom-${{ matrix.component }}-v${{ needs.docker-build-test.outputs.version }}.spdx.json"
           SPDX_PACKAGES=$(jq '.packages | length' "$SBOM_FILE" 2>/dev/null || echo "0")
 
           echo "### 📊 Package Count" >> $GITHUB_STEP_SUMMARY
@@ -117,7 +120,7 @@ jobs:
         with:
           image-ref: ${{ env.SBOM_IMAGE_TAG }}
           format: sarif
-          output: trivy-image-results.sarif
+          output: trivy-image-results-${{ matrix.component }}.sarif
           severity: 'CRITICAL,HIGH,MEDIUM'  # Skip LOW severity to reduce noise
           ignore-unfixed: true  # Focus on fixable vulnerabilities
 
@@ -125,10 +128,10 @@ jobs:
         uses: aquasecurity/trivy-action@master
         with:
           scan-type: sbom
-          input: sbom-v${{ needs.docker-build-test.outputs.version }}.spdx.json
+          input: sbom-${{ matrix.component }}-v${{ needs.docker-build-test.outputs.version }}.spdx.json
           format: sarif
-          output: trivy-sbom-results.sarif
-          scan-ref: sbom-v${{ needs.docker-build-test.outputs.version }}.spdx.json
+          output: trivy-sbom-results-${{ matrix.component }}.sarif
+          scan-ref: sbom-${{ matrix.component }}-v${{ needs.docker-build-test.outputs.version }}.spdx.json
           severity: 'CRITICAL,HIGH,MEDIUM'  # Skip LOW severity to reduce noise
           ignore-unfixed: true  # Focus on fixable vulnerabilities
 
@@ -136,14 +139,14 @@ jobs:
         uses: github/codeql-action/upload-sarif@v3
         if: always()
         with:
-          sarif_file: trivy-image-results.sarif
-          category: trivy-image-scan
+          sarif_file: trivy-image-results-${{ matrix.component }}.sarif
+          category: trivy-image-scan-${{ matrix.component }}
 
       - name: Upload Trivy SBOM SARIF results
         uses: github/codeql-action/upload-sarif@v3
         with:
-          sarif_file: trivy-sbom-results.sarif
-          category: trivy-sbom-scan
+          sarif_file: trivy-sbom-results-${{ matrix.component }}.sarif
+          category: trivy-sbom-scan-${{ matrix.component }}
         continue-on-error: true
 
       - name: License Compliance Summary
@@ -157,12 +160,12 @@ jobs:
           # Quick license summary from SBOM
           echo "### 📊 Detected Licenses in Dependencies" >> $GITHUB_STEP_SUMMARY
           echo '```' >> $GITHUB_STEP_SUMMARY
-          jq -r '.packages[] | select(.licenseConcluded != null and .licenseConcluded != "NOASSERTION" and .licenseConcluded != "") | .licenseConcluded' "sbom-v${{ needs.docker-build-test.outputs.version }}.spdx.json" | sort | uniq -c | sort -nr >> $GITHUB_STEP_SUMMARY
+          jq -r '.packages[] | select(.licenseConcluded != null and .licenseConcluded != "NOASSERTION" and .licenseConcluded != "") | .licenseConcluded' "sbom-${{ matrix.component }}-v${{ needs.docker-build-test.outputs.version }}.spdx.json" | sort | uniq -c | sort -nr >> $GITHUB_STEP_SUMMARY
           echo '```' >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
 
           # Check for copyleft licenses that might require attention
-          COPYLEFT=$(jq -r '.packages[] | select(.licenseConcluded != null and (.licenseConcluded | test("GPL|LGPL|AGPL|CDDL|EPL|MPL"; "i"))) | "\(.name): \(.licenseConcluded)"' "sbom-v${{ needs.docker-build-test.outputs.version }}.spdx.json")
+          COPYLEFT=$(jq -r '.packages[] | select(.licenseConcluded != null and (.licenseConcluded | test("GPL|LGPL|AGPL|CDDL|EPL|MPL"; "i"))) | "\(.name): \(.licenseConcluded)"' "sbom-${{ matrix.component }}-v${{ needs.docker-build-test.outputs.version }}.spdx.json")
 
           if [[ -n "$COPYLEFT" && "$COPYLEFT" != "" ]]; then
             echo "⚠️ **Copyleft Licenses Detected** (review recommended):" >> $GITHUB_STEP_SUMMARY
@@ -175,7 +178,7 @@ jobs:
           fi
 
           # Count non-standard licenses (LicenseRef-*)
-          LICENSEREF_COUNT=$(jq -r '.packages[] | select(.licenseConcluded != null and (.licenseConcluded | startswith("LicenseRef-"))) | .licenseConcluded' "sbom-v${{ needs.docker-build-test.outputs.version }}.spdx.json" | wc -l)
+          LICENSEREF_COUNT=$(jq -r '.packages[] | select(.licenseConcluded != null and (.licenseConcluded | startswith("LicenseRef-"))) | .licenseConcluded' "sbom-${{ matrix.component }}-v${{ needs.docker-build-test.outputs.version }}.spdx.json" | wc -l)
           if [[ "$LICENSEREF_COUNT" -gt 0 ]]; then
             echo "" >> $GITHUB_STEP_SUMMARY
             echo "📄 **Non-standard licenses**: $LICENSEREF_COUNT (typically system libraries - usually safe)" >> $GITHUB_STEP_SUMMARY
@@ -200,9 +203,9 @@ jobs:
 
           # Parse Trivy Image results (Image-based)
           echo "### 🐳 Trivy Image Scan" >> $GITHUB_STEP_SUMMARY
-          if [[ -f "trivy-image-results.sarif" ]]; then
-            TRIVY_IMAGE_RESULTS=$(jq '.runs[0].results | length' trivy-image-results.sarif 2>/dev/null || echo "0")
-            TRIVY_IMAGE_CRITICAL=$(jq '.runs[0].results[] | select(.level == "error") | length' trivy-image-results.sarif 2>/dev/null || echo "0")
+          if [[ -f "trivy-image-results-${{ matrix.component }}.sarif" ]]; then
+            TRIVY_IMAGE_RESULTS=$(jq '.runs[0].results | length' trivy-image-results-${{ matrix.component }}.sarif 2>/dev/null || echo "0")
+            TRIVY_IMAGE_CRITICAL=$(jq '.runs[0].results[] | select(.level == "error") | length' trivy-image-results-${{ matrix.component }}.sarif 2>/dev/null || echo "0")
             echo "- **Total findings**: $TRIVY_IMAGE_RESULTS" >> $GITHUB_STEP_SUMMARY
             echo "- **Critical/High**: $TRIVY_IMAGE_CRITICAL" >> $GITHUB_STEP_SUMMARY
             echo "- **Coverage**: Direct image layer analysis, OS packages, secrets, misconfigurations" >> $GITHUB_STEP_SUMMARY
@@ -213,9 +216,9 @@ jobs:
 
           # Parse Trivy SBOM results (SBOM-based)
           echo "### 📋 Trivy SBOM Scan" >> $GITHUB_STEP_SUMMARY
-          if [[ -f "trivy-sbom-results.sarif" ]]; then
-            TRIVY_SBOM_RESULTS=$(jq '.runs[0].results | length' trivy-sbom-results.sarif 2>/dev/null || echo "0")
-            TRIVY_SBOM_CRITICAL=$(jq '.runs[0].results[] | select(.level == "error") | length' trivy-sbom-results.sarif 2>/dev/null || echo "0")
+          if [[ -f "trivy-sbom-results-${{ matrix.component }}.sarif" ]]; then
+            TRIVY_SBOM_RESULTS=$(jq '.runs[0].results | length' trivy-sbom-results-${{ matrix.component }}.sarif 2>/dev/null || echo "0")
+            TRIVY_SBOM_CRITICAL=$(jq '.runs[0].results[] | select(.level == "error") | length' trivy-sbom-results-${{ matrix.component }}.sarif 2>/dev/null || echo "0")
             echo "- **Total findings**: $TRIVY_SBOM_RESULTS" >> $GITHUB_STEP_SUMMARY
             echo "- **Critical/High**: $TRIVY_SBOM_CRITICAL" >> $GITHUB_STEP_SUMMARY
             echo "- **Coverage**: SBOM-based vulnerability detection with Trivy's curated database" >> $GITHUB_STEP_SUMMARY
@@ -225,9 +228,9 @@ jobs:
           echo "" >> $GITHUB_STEP_SUMMARY
 
           echo "### 🔍 Trivy Scan Comparison" >> $GITHUB_STEP_SUMMARY
-          if [[ -f "trivy-image-results.sarif" && -f "trivy-sbom-results.sarif" ]]; then
-            IMAGE_FINDINGS=$(jq '.runs[0].results | length' trivy-image-results.sarif 2>/dev/null || echo "0")
-            SBOM_FINDINGS=$(jq '.runs[0].results | length' trivy-sbom-results.sarif 2>/dev/null || echo "0")
+          if [[ -f "trivy-image-results-${{ matrix.component }}.sarif" && -f "trivy-sbom-results-${{ matrix.component }}.sarif" ]]; then
+            IMAGE_FINDINGS=$(jq '.runs[0].results | length' trivy-image-results-${{ matrix.component }}.sarif 2>/dev/null || echo "0")
+            SBOM_FINDINGS=$(jq '.runs[0].results | length' trivy-sbom-results-${{ matrix.component }}.sarif 2>/dev/null || echo "0")
 
             echo "- **Image Scan**: $IMAGE_FINDINGS findings" >> $GITHUB_STEP_SUMMARY
             echo "- **SBOM Scan**: $SBOM_FINDINGS findings" >> $GITHUB_STEP_SUMMARY
@@ -274,7 +277,7 @@ jobs:
       - name: Download SBOM artifact (final releases only)
         uses: actions/download-artifact@v4
         with:
-          name: sbom-v${{ needs.docker-build-test.outputs.version }}.spdx.json
+          name: sbom-*-v${{ needs.docker-build-test.outputs.version }}.spdx.json
 
       # Note: SPDX SBOM is generated in security-scan-release job
       # and downloaded as part of the SBOM artifact above
@@ -311,11 +314,12 @@ jobs:
           body: |
             ## Docker Release v${{ needs.docker-build-test.outputs.version }}
 
-            **Docker Image**: ${{ needs.docker-build-test.outputs.dockerhub-pushed == 'true' && format('{0}/{1}:{2}', env.DOCKERHUB_NAMESPACE, env.IMAGE_NAME, needs.docker-build-test.outputs.version) || '⚠️ Not pushed to DockerHub (missing credentials)' }}
+            **Docker Images**:
+            - `${{ env.DOCKERHUB_NAMESPACE }}/${{ env.IMAGE_BASE_NAME }}-api:${{ needs.docker-build-test.outputs.version }}`
             **Image Digest**: `${{ needs.docker-build-test.outputs.image-digest }}`
 
             - ✅ Security scan completed (see Security tab)
-            - ✅ SBOM attached (sbom-v${{ needs.docker-build-test.outputs.version }}.spdx.json)
+            - ✅ SBOMs attached
             - 🐳 Platform: linux/amd64
 
             ### Installation
@@ -328,13 +332,13 @@ jobs:
 
             ```bash
             # Build the image locally
-            git clone https://github.com/' }}${{ needs.docker-build-test.outputs.dockerhub-pushed == 'true' && format('{0}/{1}:{2}', env.DOCKERHUB_NAMESPACE, env.IMAGE_NAME, needs.docker-build-test.outputs.version) || format('{0}
+            git clone https://github.com/' }}${{ needs.docker-build-test.outputs.dockerhub-pushed == 'true' && format('{0}/{1}-api:{2}', env.DOCKERHUB_NAMESPACE, env.IMAGE_BASE_NAME, needs.docker-build-test.outputs.version) || format('{0}
             cd {1}
             git checkout {2}
-            docker build -t local/{3}:{4} .', github.repository, github.repository, github.sha, env.IMAGE_NAME, needs.docker-build-test.outputs.version) }}
+            docker build -t local/{3}-api:{4} -f docker/Dockerfile.api .', github.repository, github.repository, github.sha, env.IMAGE_BASE_NAME, needs.docker-build-test.outputs.version) }}
             ```
           files: |
-            sbom-v${{ needs.docker-build-test.outputs.version }}.spdx.json
+            sbom-*-v${{ needs.docker-build-test.outputs.version }}.spdx.json
           draft: true
           make_latest: true
           generate_release_notes: true
