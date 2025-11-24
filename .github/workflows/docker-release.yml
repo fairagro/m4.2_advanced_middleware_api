@@ -83,9 +83,8 @@ jobs:
         uses: anchore/sbom-action@v0
         with:
           image: ${{ env.SBOM_IMAGE_TAG }}
-          output-file: sbom-${{ matrix.component }}-v${{ needs.docker-build-test.outputs.version }}.spdx.json
+          output-file: sboms/sbom-${{ matrix.component }}.spdx.json
           format: spdx-json
-          artifact-name: sbom-${{ matrix.component }}-v${{ needs.docker-build-test.outputs.version }}.spdx.json
 
       - name: Analyze SBOM completeness
         run: |
@@ -93,7 +92,7 @@ jobs:
           echo "" >> $GITHUB_STEP_SUMMARY
 
           # Count packages in SBOM
-          SBOM_FILE="sbom-${{ matrix.component }}-v${{ needs.docker-build-test.outputs.version }}.spdx.json"
+          SBOM_FILE="sboms/sbom-${{ matrix.component }}.spdx.json"
           SPDX_PACKAGES=$(jq '.packages | length' "$SBOM_FILE" 2>/dev/null || echo "0")
 
           echo "### 📊 Package Count" >> $GITHUB_STEP_SUMMARY
@@ -129,10 +128,10 @@ jobs:
         uses: aquasecurity/trivy-action@master
         with:
           scan-type: sbom
-          input: sbom-${{ matrix.component }}-v${{ needs.docker-build-test.outputs.version }}.spdx.json
+          input: sboms/sbom-${{ matrix.component }}.spdx.json
           format: sarif
           output: trivy-sbom-results-${{ matrix.component }}.sarif
-          scan-ref: sbom-${{ matrix.component }}-v${{ needs.docker-build-test.outputs.version }}.spdx.json
+          scan-ref: sboms/sbom-${{ matrix.component }}.spdx.json
           severity: 'CRITICAL,HIGH,MEDIUM'  # Skip LOW severity to reduce noise
           ignore-unfixed: true  # Focus on fixable vulnerabilities
 
@@ -161,12 +160,12 @@ jobs:
           # Quick license summary from SBOM
           echo "### 📊 Detected Licenses in Dependencies" >> $GITHUB_STEP_SUMMARY
           echo '```' >> $GITHUB_STEP_SUMMARY
-          jq -r '.packages[] | select(.licenseConcluded != null and .licenseConcluded != "NOASSERTION" and .licenseConcluded != "") | .licenseConcluded' "sbom-${{ matrix.component }}-v${{ needs.docker-build-test.outputs.version }}.spdx.json" | sort | uniq -c | sort -nr >> $GITHUB_STEP_SUMMARY
+          jq -r '.packages[] | select(.licenseConcluded != null and .licenseConcluded != "NOASSERTION" and .licenseConcluded != "") | .licenseConcluded' "sboms/sbom-${{ matrix.component }}.spdx.json" | sort | uniq -c | sort -nr >> $GITHUB_STEP_SUMMARY
           echo '```' >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
 
           # Check for copyleft licenses that might require attention
-          COPYLEFT=$(jq -r '.packages[] | select(.licenseConcluded != null and (.licenseConcluded | test("GPL|LGPL|AGPL|CDDL|EPL|MPL"; "i"))) | "\(.name): \(.licenseConcluded)"' "sbom-${{ matrix.component }}-v${{ needs.docker-build-test.outputs.version }}.spdx.json")
+          COPYLEFT=$(jq -r '.packages[] | select(.licenseConcluded != null and (.licenseConcluded | test("GPL|LGPL|AGPL|CDDL|EPL|MPL"; "i"))) | "\(.name): \(.licenseConcluded)"' "sboms/sbom-${{ matrix.component }}.spdx.json")
 
           if [[ -n "$COPYLEFT" && "$COPYLEFT" != "" ]]; then
             echo "⚠️ **Copyleft Licenses Detected** (review recommended):" >> $GITHUB_STEP_SUMMARY
@@ -179,7 +178,7 @@ jobs:
           fi
 
           # Count non-standard licenses (LicenseRef-*)
-          LICENSEREF_COUNT=$(jq -r '.packages[] | select(.licenseConcluded != null and (.licenseConcluded | startswith("LicenseRef-"))) | .licenseConcluded' "sbom-${{ matrix.component }}-v${{ needs.docker-build-test.outputs.version }}.spdx.json" | wc -l)
+          LICENSEREF_COUNT=$(jq -r '.packages[] | select(.licenseConcluded != null and (.licenseConcluded | startswith("LicenseRef-"))) | .licenseConcluded' "sboms/sbom-${{ matrix.component }}.spdx.json" | wc -l)
           if [[ "$LICENSEREF_COUNT" -gt 0 ]]; then
             echo "" >> $GITHUB_STEP_SUMMARY
             echo "📄 **Non-standard licenses**: $LICENSEREF_COUNT (typically system libraries - usually safe)" >> $GITHUB_STEP_SUMMARY
@@ -258,6 +257,12 @@ jobs:
           echo "- **GitHub Security Tab**: SARIF results for both scan types" >> $GITHUB_STEP_SUMMARY
           echo "- **Artifacts**: Full SARIF reports attached to workflow run" >> $GITHUB_STEP_SUMMARY
 
+      - name: Upload SBOMs as a single artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: sboms
+          path: sboms/
+
   create-release:
     needs: [docker-build-test, security-scan-release]
     runs-on: ubuntu-latest
@@ -276,9 +281,11 @@ jobs:
           fetch-depth: 0
 
       - name: Download SBOM artifact (final releases only)
+        if: env.RELEASE_TYPE == 'final'
         uses: actions/download-artifact@v4
         with:
-          name: sbom-*-v${{ needs.docker-build-test.outputs.version }}.spdx.json
+          name: sboms
+          path: sboms/
 
       # Note: SPDX SBOM is generated in security-scan-release job
       # and downloaded as part of the SBOM artifact above
@@ -339,7 +346,7 @@ jobs:
             docker build -t local/{3}-api:{4} -f docker/Dockerfile.api .', github.repository, github.repository, github.sha, env.IMAGE_BASE_NAME, needs.docker-build-test.outputs.version) }}
             ```
           files: |
-            sbom-*-v${{ needs.docker-build-test.outputs.version }}.spdx.json
+            sboms/*
           draft: true
           make_latest: true
           generate_release_notes: true
