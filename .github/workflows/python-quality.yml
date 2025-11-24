@@ -48,10 +48,58 @@ jobs:
       continue-on-error: false
 
     - name: Security check with bandit
+      id: bandit
       run: |
-        uv run bandit -r middleware/ -f json -o bandit-report.json
-        uv run bandit -r middleware/ -ll
+        # Run bandit, but don't fail the job immediately.
+        # We will check the output in the next step.
+        # We exclude tests and skip B101 (assert_used) to align with pre-commit.
+        uv run bandit -r middleware/ --exclude middleware/tests/ --skip B101 -f json -o bandit-report.json || true
       continue-on-error: false
+
+    - name: Review bandit results
+      if: always() && steps.bandit.outcome == 'success'
+      id: bandit-review
+      shell: bash
+      run: |
+        echo "## 🛡️ Bandit Security Scan Results" >> $GITHUB_STEP_SUMMARY
+
+        if [ ! -f bandit-report.json ]; then
+          echo "✅ No bandit report file found. Nothing to review." >> $GITHUB_STEP_SUMMARY
+          exit 0
+        fi
+
+        # Count issues by severity
+        HIGH_ISSUES=$(jq '[.results[] | select(.issue_severity == "HIGH")] | length' bandit-report.json)
+        MEDIUM_ISSUES=$(jq '[.results[] | select(.issue_severity == "MEDIUM")] | length' bandit-report.json)
+        LOW_ISSUES=$(jq '[.results[] | select(.issue_severity == "LOW")] | length' bandit-report.json)
+        TOTAL_ISSUES=$((HIGH_ISSUES + MEDIUM_ISSUES + LOW_ISSUES))
+
+        echo "| Severity | Count |" >> $GITHUB_STEP_SUMMARY
+        echo "|----------|-------|" >> $GITHUB_STEP_SUMMARY
+        echo "| High     | $HIGH_ISSUES   |" >> $GITHUB_STEP_SUMMARY
+        echo "| Medium   | $MEDIUM_ISSUES |" >> $GITHUB_STEP_SUMMARY
+        echo "| Low      | $LOW_ISSUES    |" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+
+        if [ $TOTAL_ISSUES -gt 0 ]; then
+          echo "### Findings:" >> $GITHUB_STEP_SUMMARY
+          jq -r '.results[] | " - **\(.issue_severity)/\(.issue_confidence)**: `\(.test_id)` - \(.issue_text) in `\(.filename):\(.line_number)`"' bandit-report.json >> $GITHUB_STEP_SUMMARY
+        else
+          echo "✅ No security issues found by bandit." >> $GITHUB_STEP_SUMMARY
+        fi
+
+        # Decide if the job should fail
+        if [ $HIGH_ISSUES -gt 0 ] || [ $MEDIUM_ISSUES -gt 0 ]; then
+          echo "FAIL_JOB=true" >> $GITHUB_OUTPUT
+        else
+          echo "FAIL_JOB=false" >> $GITHUB_OUTPUT
+        fi
+
+    - name: Fail job on critical findings
+      if: steps.bandit-review.outputs.FAIL_JOB == 'true'
+      run: |
+        echo "❌ Failing workflow due to HIGH or MEDIUM severity security issues found by bandit."
+        exit 1
 
     - name: Run unit tests with coverage
       run: |

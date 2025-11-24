@@ -58,7 +58,7 @@ repos:
         language: system
         types: [python]
         files: ^middleware/
-        exclude: ^tests/
+        exclude: ^middleware/tests/
         args: [--skip, B101, -ll]
 
       # pylint - Code quality
