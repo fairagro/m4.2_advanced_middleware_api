@@ -1,5 +1,5 @@
 {
-  "python.testing.pytestArgs": ["middleware/tests"],
+  "python.testing.pytestArgs": [ "middleware" ],
   "python.testing.unittestEnabled": false,
   "python.testing.pytestEnabled": true,
   "python.testing.autoTestDiscoverOnSaveEnabled": true,
@@ -8,6 +8,7 @@
   "python-envs.pythonProjects": [],
   "python.analysis.extraPaths": [
     "middleware/api/src",
+    "middleware/api_client/src",
     "middleware/sql_to_arc/src",
     "middleware/shared/src"
   ],

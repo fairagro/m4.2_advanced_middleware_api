@@ -1,5 +1,6 @@
 """Unit tests for the FastAPI middleware API endpoints."""
 
+from collections.abc import Callable
 from typing import Any
 
 import pytest
@@ -15,7 +16,7 @@ from middleware.api.business_logic import (
     WhoamiResponse,
 )
 
-from ..conftest import create_test_cert
+# from ..conftest import create_test_cert
 
 
 class SimpleBusinessLogicMock:
@@ -274,7 +275,11 @@ def test_create_or_update_arcs_rdi_not_known(client: TestClient, cert: str) -> N
     assert r.status_code == 400
 
 
-def test_create_or_update_arcs_rdi_not_allowed(client: TestClient, oid: x509.ObjectIdentifier) -> None:
+def test_create_or_update_arcs_rdi_not_allowed(
+    client: TestClient,
+    oid: x509.ObjectIdentifier,
+    create_test_cert: Callable[[x509.ObjectIdentifier, list[str]], str],
+) -> None:
     """Test that requesting an RDI not in client certificate returns 403."""
     cert = create_test_cert(oid, ["rdi-2"])
 

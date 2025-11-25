@@ -1,6 +1,7 @@
 """Shared fixtures for tests."""
 
 import datetime
+from collections.abc import Callable
 
 import pytest
 from asn1crypto.core import UTF8String  # type: ignore
@@ -10,7 +11,7 @@ from cryptography.hazmat.primitives.asymmetric import rsa
 from cryptography.x509.oid import NameOID
 
 
-def create_test_cert(oid: x509.ObjectIdentifier, rdis: list[str]) -> str:
+def _create_test_cert(oid: x509.ObjectIdentifier, rdis: list[str]) -> str:
     """Create a test certificate with specified RDIs in custom extension.
 
     Args:
@@ -69,6 +70,12 @@ def create_test_cert(oid: x509.ObjectIdentifier, rdis: list[str]) -> str:
 
 
 @pytest.fixture(scope="session")
+def create_test_cert() -> Callable[[x509.ObjectIdentifier, list[str]], str]:
+    """Return the `_create_test_cert` function as a fixture."""
+    return _create_test_cert
+
+
+@pytest.fixture(scope="session")
 def known_rdis() -> list[str]:
     """Return a list of known RDIs for testing."""
     return ["rdi-1", "rdi-2"]
@@ -81,6 +88,10 @@ def oid() -> x509.ObjectIdentifier:
 
 
 @pytest.fixture(scope="session")
-def cert(oid: x509.ObjectIdentifier, known_rdis: list[str]) -> str:
+def cert(
+    create_test_cert: Callable[[x509.ObjectIdentifier, list[str]], str],
+    oid: x509.ObjectIdentifier,
+    known_rdis: list[str],
+) -> str:
     """Create a self-signed client certificate with custom extension for RDIs."""
     return create_test_cert(oid, known_rdis)
