@@ -1,0 +1,9 @@
+[project]
+name = "shared"
+version = "0.0.0" # currently we disregard the version of this subpackage
+description = "The FAIRagro advanced middleware shared components"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "pydantic>=2.12.4",
+]

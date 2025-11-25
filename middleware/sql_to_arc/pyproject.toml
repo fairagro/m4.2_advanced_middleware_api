@@ -8,4 +8,8 @@ dependencies = [
     "arctrl>=3.0.0b12",
     "psycopg[binary]>=3.2.13",
     "pydantic>=2.12.4",
+    "shared",
 ]
+
+[tool.uv.sources]
+shared = { workspace = true }

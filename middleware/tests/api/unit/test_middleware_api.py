@@ -14,7 +14,8 @@ from middleware.api.business_logic import (
     InvalidJsonSemanticError,
     WhoamiResponse,
 )
-from middleware.tests.api.conftest import create_test_cert
+
+from ..conftest import create_test_cert
 
 
 class SimpleBusinessLogicMock:

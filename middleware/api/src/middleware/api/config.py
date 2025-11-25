@@ -7,8 +7,9 @@ from typing import Annotated, ClassVar
 from cryptography import x509
 from pydantic import ConfigDict, Field, field_validator
 
-from middleware.api.arc_store.gitlab_api import GitlabApiConfig
 from middleware.shared.config_base import ConfigBase
+
+from .arc_store.gitlab_api import GitlabApiConfig
 
 
 class Config(ConfigBase):

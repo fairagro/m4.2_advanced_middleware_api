@@ -3,9 +3,10 @@
 import asyncio
 
 import psycopg
+from arctrl import ArcInvestigation
 from psycopg.rows import dict_row
 
-from middleware.sql_to_arc.src.sql_to_arc.config import Config
+from .config import Config
 
 config = Config.from_data(
     {
@@ -33,15 +34,12 @@ async def main() -> None:
             'SELECT id, investigation_id, title, description, submission_time, release_time FROM "ARC_Study"',
         )
         async for row in cur:
-            id = row["id"]
-            investigation_id = row["investigation_id"]
-            title = row["title"]
-            description = row["description"]
-            submission_time = row["submission_time"]
-            release_time = row["release_time"]
-            print(
-                f"ID: {id}, Investigation ID: {investigation_id}, Title: {title}, "
-                f"Description: {description}, Submission Time: {submission_time}, Release Time: {release_time}"
+            _arc = ArcInvestigation.create(
+                identifier=row["investigation_id"],
+                title=row["title"],
+                description=row["description"],
+                submission_date=row["submission_time"],
+                public_release_date=row["release_time"],
             )
 
 

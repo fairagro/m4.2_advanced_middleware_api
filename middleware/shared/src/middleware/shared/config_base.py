@@ -6,7 +6,7 @@ from typing import Annotated, Literal, Self, cast
 
 from pydantic import BaseModel, Field
 
-from middleware.shared.config_wrapper import ConfigWrapper
+from .config_wrapper import ConfigWrapper
 
 
 class ConfigBase(BaseModel):
