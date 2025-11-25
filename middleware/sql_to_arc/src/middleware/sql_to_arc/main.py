@@ -24,7 +24,7 @@ async def main() -> None:
         await psycopg.AsyncConnection.connect(
             dbname=config.db_name,
             user=config.db_user,
-            password=config.db_password,
+            password=config.db_password.get_secret_value(),
             host=config.db_host,
             port=config.db_port,
         ) as conn,
