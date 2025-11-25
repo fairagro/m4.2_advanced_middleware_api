@@ -5,7 +5,7 @@ description = "The FAIRagro advanced middleware API"
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
-  "arctrl>=3.0.0b3",
+  "arctrl>=3.0.0b12",
   "asn1crypto>=1.5.1",
   "cryptography>=45.0.6",
   "fastapi>=0.116.1",

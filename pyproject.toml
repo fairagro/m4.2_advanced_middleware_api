@@ -4,7 +4,7 @@ version = "6.0.0"
 description = "The FAIRagro advanced middleware"
 readme = "README.md"
 requires-python = ">=3.12"
-dependencies = ["api"]
+dependencies = ["api", "sql_to_arc"]
 
 [dependency-groups]
 dev = [
@@ -24,10 +24,12 @@ dev = [
 
 [tool.uv.sources]
 api = { workspace = true }
+sql_to_arc = { workspace = true }
 
 [tool.uv.workspace]
 members = [
     "middleware/api",
+    "middleware/sql_to_arc",
 ]
 
 [tool.ruff]
