@@ -73,13 +73,13 @@ repos:
       # pytest - Unit tests only (runs on pre-push to keep commits fast)
       - id: pytest-unit
         name: pytest unit tests
-        entry: uv run pytest middleware/tests/api/unit/
+        entry: bash -c "uv run pytest middleware/*/tests/unit/"
         language: system
         types: [python]
         pass_filenames: false
         always_run: true
         stages: [pre-push]
-        args: [--tb=short, --cov=middleware_api, --cov-report=term-missing]
+        args: [--tb=short, --cov=api, --cov=api_client,--cov=shared, --cov=sql_to_arc, --cov-report=term-missing]
 
       # Container Structure Test (runs on pre-push)
       - id: container-structure-test

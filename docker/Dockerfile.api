@@ -19,7 +19,7 @@ RUN uv sync --package api
 RUN uv pip install pyinstaller
 RUN . .venv/bin/activate && \
         PYTHONPATH=. \
-        pyinstaller --onefile middleware/api/main.py --name middleware-api
+        pyinstaller --onefile middleware/api/src/middleware/api/main.py --name middleware-api
 
 
 # # ---- Runtime Stage ----

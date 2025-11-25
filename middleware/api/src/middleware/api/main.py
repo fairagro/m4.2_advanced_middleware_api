@@ -4,7 +4,7 @@ import sys
 
 import uvicorn
 
-from .api import middleware_api
+from middleware.api.api import middleware_api
 
 
 def main() -> None:
