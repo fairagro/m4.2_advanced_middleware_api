@@ -19,10 +19,16 @@ from cryptography.x509.extensions import ExtensionNotFound
 from cryptography.x509.oid import NameOID
 from fastapi import Depends, FastAPI, HTTPException, Request, Response
 from fastapi.responses import JSONResponse
-from pydantic import BaseModel, Field
+
+from middleware.shared.api_models.models import (
+    CreateOrUpdateArcsRequest,
+    CreateOrUpdateArcsResponse,
+    LivenessResponse,
+    WhoamiResponse,
+)
 
 from .arc_store.gitlab_api import GitlabApi
-from .business_logic import BusinessLogic, CreateOrUpdateArcsResponse, InvalidJsonSemanticError, WhoamiResponse
+from .business_logic import BusinessLogic, InvalidJsonSemanticError
 from .config import Config
 
 try:
@@ -66,19 +72,6 @@ logging.basicConfig(
 )
 
 logger = logging.getLogger("middleware_api")
-
-
-class LivenessResponse(BaseModel):
-    """Response model for liveness check."""
-
-    message: Annotated[str, Field(description="Liveness message")] = "ok"
-
-
-class CreateOrUpdateArcsRequest(BaseModel):
-    """Request model for creating or updating ARCs."""
-
-    rdi: Annotated[str, Field(description="Research Data Infrastructure identifier")]
-    arcs: Annotated[list[dict], Field(description="List of ARC definitions in RO-Crate JSON format")]
 
 
 class Api:
@@ -289,9 +282,9 @@ class Api:
             logger.debug("Known RDIs: %s", known_rdis)
             accessible_rdis = list(set(authorized_rdis) & set(known_rdis))
             logger.debug("Accessible RDIs: %s", accessible_rdis)
-            result = await business_logic.whoami(client_id, accessible_rdis)
-
-            return result
+            return WhoamiResponse(
+                client_id=client_id, message="Client authenticated successfully", accessible_rdis=accessible_rdis
+            )
 
         @self._app.get("/v1/liveness", response_model=LivenessResponse)
         async def liveness(

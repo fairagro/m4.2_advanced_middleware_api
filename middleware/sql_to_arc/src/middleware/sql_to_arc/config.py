@@ -4,7 +4,7 @@ from typing import Annotated
 
 from pydantic import Field, SecretStr
 
-from middleware.shared.config_base import ConfigBase
+from middleware.shared.config.config_base import ConfigBase
 
 
 class Config(ConfigBase):

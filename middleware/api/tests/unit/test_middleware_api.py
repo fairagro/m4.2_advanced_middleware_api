@@ -8,23 +8,12 @@ from cryptography import x509
 from fastapi.testclient import TestClient
 
 from middleware.api.api import Api
-from middleware.api.business_logic import (
-    ArcResponse,
-    ArcStatus,
-    CreateOrUpdateArcsResponse,
-    InvalidJsonSemanticError,
-    WhoamiResponse,
-)
-
-# from ..conftest import create_test_cert
+from middleware.api.business_logic import InvalidJsonSemanticError
+from middleware.shared.api_models.models import ArcResponse, ArcStatus, CreateOrUpdateArcsResponse
 
 
 class SimpleBusinessLogicMock:
     """Straight forward mock of BusinessLogic for testing purposes."""
-
-    async def whoami(self, client_id: str, accessible_rdis: list[str]) -> WhoamiResponse:
-        """Mock whoami method."""
-        return WhoamiResponse(client_id=client_id, accessible_rdis=accessible_rdis, message="ok")
 
     async def create_or_update_arcs(self, rdi: str, _arcs: list[Any], client_id: str) -> CreateOrUpdateArcsResponse:
         """Mock create_or_update_arcs that captures the RDI."""
@@ -53,7 +42,6 @@ def test_whoami_success(client: TestClient, middleware_api: Api, cert: str) -> N
     assert r.status_code == 200
     body = r.json()
     assert body["client_id"] == "TestClient"
-    assert body["message"] == "ok"
 
     middleware_api.app.dependency_overrides.clear()
 

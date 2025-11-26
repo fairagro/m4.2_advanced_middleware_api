@@ -5,7 +5,7 @@ from typing import Any
 
 import pytest
 
-from middleware.shared.config_wrapper import ConfigWrapper, ConfigWrapperDict, ConfigWrapperList, ListType
+from middleware.shared.config.config_wrapper import ConfigWrapper, ConfigWrapperDict, ConfigWrapperList, ListType
 
 
 @pytest.fixture

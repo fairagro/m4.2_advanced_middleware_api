@@ -9,70 +9,17 @@ This module provides:
 import asyncio
 import json
 from datetime import UTC, datetime
-from enum import Enum
-from typing import Annotated, Any
+from typing import Any
 
-from arctrl import ARC  # type: ignore[import-untyped]
-from pydantic import BaseModel, Field
+from arctrl import ARC
+
+from middleware.shared.api_models.models import (
+    ArcResponse,
+    ArcStatus,
+    CreateOrUpdateArcsResponse,
+)
 
 from .arc_store import ArcStore
-
-
-class ArcStatus(str, Enum):
-    """Enumeration of possible ARC status values.
-
-    Values:
-        created: ARC was newly created
-        updated: ARC was updated
-        deleted: ARC was deleted
-        requested: ARC was requested
-
-    """
-
-    CREATED = "created"
-    UPDATED = "updated"
-    DELETED = "deleted"
-    REQUESTED = "requested"
-
-
-class BusinessLogicResponse(BaseModel):
-    """Base response model for business logic operations.
-
-    Args:
-        BaseModel (_type_): Pydantic BaseModel for data validation and serialization.
-
-    """
-
-    client_id: Annotated[str, Field(description="Client identifier which is the CN from the client certificate")]
-    message: Annotated[str, Field(description="Response message")]
-
-
-class WhoamiResponse(BusinessLogicResponse):
-    """Response model for whoami operation."""
-
-    accessible_rdis: Annotated[
-        list[str], Field(description="List of Research Data Infrastructures the client is authorized for")
-    ]
-
-
-class ArcResponse(BaseModel):
-    """Response model for individual ARC operations.
-
-    Args:
-        BaseModel (_type_): Pydantic BaseModel for data validation and serialization.
-
-    """
-
-    id: Annotated[str, Field(description="ARC identifier, as hashed value of the original identifier and RDI")]
-    status: Annotated[ArcStatus, Field(description="Status of the ARC operation")]
-    timestamp: Annotated[str, Field(description="Timestamp of the ARC operation in ISO 8601 format")]
-
-
-class CreateOrUpdateArcsResponse(BusinessLogicResponse):
-    """Response model for create or update ARC operations."""
-
-    rdi: Annotated[str, Field(description="Research Data Infrastructure identifier the ARCs belong to")]
-    arcs: Annotated[list[ArcResponse], Field(description="List of ARC responses for the operation")]
 
 
 class BusinessLogicError(Exception):
@@ -123,31 +70,6 @@ class BusinessLogic:
     async def _process_arcs(self, rdi: str, arcs: list[Any]) -> list[ArcResponse]:
         tasks = [self._create_arc_from_rocrate(rdi, arc) for arc in arcs]
         return await asyncio.gather(*tasks)
-
-    # -------------------------- Whoami --------------------------
-
-    async def whoami(self, client_id: str, accessible_rdis: list[str]) -> WhoamiResponse:
-        """Whoami operation to identify the client.
-
-        Args:
-            client_id (str): The client identifier.
-            accessible_rdis (list[str]): List of accessible RDIs for the client.
-
-        Raises:
-            BusinessLogicError: If an error occurs during the operation.
-
-        Returns:
-            WhoamiResponse: Response containing the client ID, message, and accessible RDIs.
-
-        """
-        try:
-            return WhoamiResponse(
-                client_id=client_id, message="Client authenticated successfully", accessible_rdis=accessible_rdis
-            )
-        except BusinessLogicError:
-            raise
-        except Exception as e:
-            raise BusinessLogicError(f"unexpected error encountered: {str(e)}") from e
 
     # -------------------------- Create or Update ARCs --------------------------
     # TODO: in the first implementation, we accepted string data for ARC JSON,

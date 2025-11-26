@@ -33,4 +33,5 @@
   "ruff.configuration": "./pyproject.toml",
   "ruff.path": ["uv", "run", "ruff"],
   "ruff.importStrategy": "fromEnvironment",
+  "python-envs.defaultEnvManager": "ms-python.python:system",
 }
