@@ -98,7 +98,7 @@ warn_return_any = true
 warn_unused_configs = true
 disallow_untyped_defs = true
 disallow_incomplete_defs = true
-mypy_path = "middleware/api/src:middleware/api_client/src:middleware/shared/src:middleware/sql_to_arc/src"
+mypy_path = "middleware"
 explicit_package_bases = true
 namespace_packages = true
 
