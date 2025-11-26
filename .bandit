@@ -1,0 +1,16 @@
+[bandit]
+# Exclude test directories from security checks
+exclude_dirs = [
+    tests,
+    venv,
+    .venv,
+    __pycache__,
+    build,
+    dist,
+    .pytest_cache,
+    .mypy_cache,
+    .ruff_cache,
+    .git,
+]
+# Skip B101 (assert_used) - assertions are appropriate in tests
+skips = B101

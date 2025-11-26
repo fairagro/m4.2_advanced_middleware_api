@@ -57,7 +57,7 @@ repos:
         language: system
         types: [python]
         files: ^middleware/
-        exclude: ^middleware/tests/
+        args: [--configfile, .bandit]
 
       # pylint - Code quality
       - id: pylint
