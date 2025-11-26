@@ -165,6 +165,7 @@ disable = [
     "W0102",  # dangerous-default-value -> ruff B006
     "W0107",  # unnecessary-pass -> ruff PIE790
     "W0125",  # using-constant-test -> ruff B015
+    "W0511",  # TODO comment found
     "W0612",  # unused-variable -> ruff F841
     "W0613",  # unused-argument -> ruff ARG001-005
     "W0621",  # redefined-outer-name -> ruff F811

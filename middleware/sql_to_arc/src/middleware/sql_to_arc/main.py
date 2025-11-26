@@ -3,7 +3,7 @@
 import asyncio
 
 import psycopg
-from arctrl import ArcInvestigation
+from arctrl import ArcInvestigation  # type: ignore[import-untyped]
 from psycopg.rows import dict_row
 
 from .config import Config

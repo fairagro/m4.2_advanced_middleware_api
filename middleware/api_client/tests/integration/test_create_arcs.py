@@ -6,7 +6,6 @@ a real HTTP server.
 """
 
 import json
-from pathlib import Path
 
 import httpx
 import pytest
@@ -18,10 +17,7 @@ from middleware.shared.api_models.models import CreateOrUpdateArcsRequest
 
 @pytest.mark.asyncio
 @respx.mock
-async def test_create_arcs_integration_mock_server(
-    client_config: Config,
-    test_cert_pem: tuple[Path, Path],
-) -> None:
+async def test_create_arcs_integration_mock_server(client_config: Config) -> None:
     """Test create_or_update_arcs with mocked server responses.
 
     This test uses respx to mock the HTTP responses, allowing us to verify

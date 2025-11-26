@@ -11,7 +11,7 @@ import json
 from datetime import UTC, datetime
 from typing import Any
 
-from arctrl import ARC
+from arctrl import ARC  # type: ignore[import-untyped]
 
 from middleware.shared.api_models.models import (
     ArcResponse,

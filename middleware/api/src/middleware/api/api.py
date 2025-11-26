@@ -195,33 +195,43 @@ class Api:
         Example: 1.3.6.1.4.1.64609.1.1 = SEQUENCE { UTF8String:"bonares", UTF8String:"edal" }
         """
         cert = self._validate_client_cert(request)
-        allowed_rdis = []
         oid = self._config.client_auth_oid
-
-        try:
-            # Find extension by OID
-            for ext in cert.extensions:
-                if ext.oid == oid:
-                    try:
-                        der_bytes = ext.value.public_bytes()
-                        # Parse DER-encoded SEQUENCE using asn1crypto
-                        seq = Sequence.load(der_bytes)
-                        # Extract UTF8String values - Sequence supports __len__ and __getitem__
-                        for i in range(len(seq)):
-                            item = seq[i]
-                            if isinstance(item, UTF8String):
-                                allowed_rdis.append(item.native)
-                        logger.debug("Extracted RDIs from extension: %s", allowed_rdis)
-                    except (TypeError, ValueError) as e:
-                        logger.warning("Error parsing custom extension: %s", e)
-                    break
-        except (ExtensionNotFound, TypeError, ValueError) as e:
-            logger.warning("Error extracting custom extension: %s", e)
+        allowed_rdis = self._extract_rdis_from_extension(cert, oid)
 
         if not allowed_rdis:
             logger.warning("No RDIs found in custom extension with OID %s", oid)
 
         return allowed_rdis
+
+    @staticmethod
+    def _extract_rdis_from_extension(cert: x509.Certificate, oid: x509.ObjectIdentifier) -> list[str]:
+        """Extract RDI strings from certificate extension."""
+        allowed_rdis = []
+        try:
+            for ext in cert.extensions:
+                if ext.oid == oid:
+                    allowed_rdis = Api._parse_rdi_sequence(ext)
+                    break
+        except (ExtensionNotFound, TypeError, ValueError) as e:
+            logger.warning("Error extracting custom extension: %s", e)
+        return allowed_rdis
+
+    @staticmethod
+    def _parse_rdi_sequence(ext: x509.Extension) -> list[str]:
+        """Parse DER-encoded SEQUENCE of UTF8String RDI values."""
+        rdis = []
+        try:
+            der_bytes = ext.value.public_bytes()
+            seq = Sequence.load(der_bytes)
+            # pylint: disable=consider-using-enumerate
+            for i in range(len(seq)):
+                item = seq[i]
+                if isinstance(item, UTF8String):
+                    rdis.append(item.native)
+            logger.debug("Extracted RDIs from extension: %s", rdis)
+        except (TypeError, ValueError) as e:
+            logger.warning("Error parsing custom extension: %s", e)
+        return rdis
 
     @staticmethod
     def _validate_content_type(request: Request) -> None:
@@ -275,7 +285,6 @@ class Api:
             known_rdis: Annotated[list[str], Depends(self._get_known_rdis)],
             authorized_rdis: Annotated[list[str], Depends(self._get_authorized_rdis)],
             client_id: Annotated[str, Depends(self._validate_client_id)],
-            business_logic: Annotated[BusinessLogic, Depends(self._get_business_logic)],
             _accept_validated: Annotated[None, Depends(self._validate_accept_type)],
         ) -> WhoamiResponse:
             logger.debug("Authorized RDIs: %s", authorized_rdis)

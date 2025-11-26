@@ -1,10 +1,12 @@
 """Shared test fixtures for API client tests."""
 
+import datetime
 import tempfile
 from collections.abc import Generator
 from pathlib import Path
 
 import pytest
+import yaml
 from cryptography import x509
 from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.asymmetric import rsa
@@ -40,8 +42,6 @@ def test_cert_pem(temp_dir: Path) -> tuple[Path, Path]:
             x509.NameAttribute(NameOID.COMMON_NAME, "TestClient"),
         ]
     )
-
-    import datetime
 
     cert = (
         x509.CertificateBuilder()
@@ -103,8 +103,6 @@ def test_config_yaml(temp_dir: Path, test_config_dict: dict) -> Path:
     Returns:
         Path to the YAML configuration file
     """
-    import yaml
-
     config_path = temp_dir / "test_config.yaml"
     with config_path.open("w") as f:
         yaml.dump(test_config_dict, f)

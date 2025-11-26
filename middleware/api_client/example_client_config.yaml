@@ -17,7 +17,7 @@ client_key_path: /path/to/client-key.pem
 ca_cert_path: /path/to/ca-cert.pem
 
 # Request timeout in seconds
-timeout: 30.0
+timeout: "30.0"
 
 # Enable SSL certificate verification
 verify_ssl: true

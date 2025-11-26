@@ -24,8 +24,8 @@ def client_config(test_config_dict: dict) -> Config:
 async def test_client_initialization_success(client_config: Config) -> None:
     """Test successful client initialization with valid config."""
     client = MiddlewareClient(client_config)
-    assert client._config == client_config
-    assert client._client is None  # Not created until needed
+    assert client._config == client_config  # pylint: disable=protected-access
+    assert client._client is None  # pylint: disable=protected-access
 
 
 @pytest.mark.asyncio
@@ -152,14 +152,14 @@ async def test_manual_close(client_config: Config) -> None:
     client = MiddlewareClient(client_config)
 
     # Create the HTTP client by calling _get_client
-    http_client = client._get_client()
+    http_client = client._get_client()  # pylint: disable=protected-access
     assert http_client is not None
 
     # Close manually
     await client.aclose()
 
     # Client should be None after close
-    assert client._client is None
+    assert client._client is None  # pylint: disable=protected-access
 
 
 @pytest.mark.asyncio
@@ -179,7 +179,7 @@ async def test_client_uses_certificates(test_config_dict: dict, test_cert_pem: t
         mock_client_class.return_value = mock_instance
 
         client = MiddlewareClient(config)
-        client._get_client()
+        client._get_client()  # pylint: disable=protected-access
 
         # Verify AsyncClient was called with the correct cert parameter
         mock_client_class.assert_called_once()

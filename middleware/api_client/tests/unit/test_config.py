@@ -4,6 +4,7 @@ import tempfile
 from pathlib import Path
 
 import pytest
+from pydantic import ValidationError
 
 from middleware.api_client.config import Config
 
@@ -100,23 +101,19 @@ def test_config_invalid_timeout() -> None:
         cert_path.write_text("fake cert")
         key_path.write_text("fake key")
 
-        from pydantic import ValidationError
-
         with pytest.raises(ValidationError):  # Pydantic ValidationError
             Config.from_data(
                 {
                     "api_url": "https://api.example.com",
                     "client_cert_path": str(cert_path),
                     "client_key_path": str(key_path),
-                    "timeout": -1.0,  # Invalid: must be > 0
+                    "timeout": "-1.0",  # Invalid: must be > 0
                 }
             )
 
 
 def test_config_missing_required_fields() -> None:
     """Test configuration with missing required fields."""
-    from pydantic import ValidationError
-
     with pytest.raises(ValidationError):  # Pydantic ValidationError
         Config.from_data(
             {

@@ -33,6 +33,7 @@ class SimpleBusinessLogicMock:
 
 def test_whoami_success(client: TestClient, middleware_api: Api, cert: str) -> None:
     """Test the /v1/whoami endpoint with a valid certificate and accept header."""
+    # pylint: disable=protected-access
     middleware_api.app.dependency_overrides[middleware_api._get_business_logic] = SimpleBusinessLogicMock
 
     r = client.get(
@@ -46,7 +47,7 @@ def test_whoami_success(client: TestClient, middleware_api: Api, cert: str) -> N
     middleware_api.app.dependency_overrides.clear()
 
 
-def test_whoami_invalid_accept(client: TestClient, cert: str, middleware_api: Api) -> None:
+def test_whoami_invalid_accept(client: TestClient, cert: str) -> None:
     """Test the /v1/whoami endpoint with an invalid accept header."""
     r = client.get(
         "/v1/whoami",
@@ -55,7 +56,7 @@ def test_whoami_invalid_accept(client: TestClient, cert: str, middleware_api: Ap
     assert r.status_code == 406
 
 
-def test_whoami_no_cert(client: TestClient, middleware_api: Api) -> None:
+def test_whoami_no_cert(client: TestClient) -> None:
     """Test the /v1/whoami endpoint without a client certificate."""
     r = client.get(
         "/v1/whoami",
@@ -66,6 +67,7 @@ def test_whoami_no_cert(client: TestClient, middleware_api: Api) -> None:
 
 def test_whoami_invalid_cert(client: TestClient, middleware_api: Api) -> None:
     """Test the /v1/whoami endpoint with an invalid client certificate."""
+    # pylint: disable=protected-access
     middleware_api.app.dependency_overrides[middleware_api._get_business_logic] = SimpleBusinessLogicMock
 
     r = client.get(
@@ -78,7 +80,7 @@ def test_whoami_invalid_cert(client: TestClient, middleware_api: Api) -> None:
 
 
 @pytest.mark.parametrize("verify_status", ["FAILED", "NONE"])
-def test_whoami_cert_verify_not_success(client: TestClient, cert: str, verify_status: str, middleware_api: Api) -> None:
+def test_whoami_cert_verify_not_success(client: TestClient, cert: str, verify_status: str) -> None:
     """Test the /v1/whoami endpoint with failed or no certificate verification."""
     r = client.get(
         "/v1/whoami",
@@ -122,6 +124,7 @@ def test_create_or_update_arcs_success(
                 ],
             )
 
+    # pylint: disable=protected-access
     middleware_api.app.dependency_overrides[middleware_api._get_business_logic] = BusinessLogicMock
 
     r = client.post(
@@ -155,10 +158,13 @@ def test_create_or_update_arcs_invalid_json_semantic(
     class BusinessLogicMock:  # pylint: disable=too-few-public-methods
         """Service that always returns a created ARC."""
 
-        async def create_or_update_arcs(self, rdi: str, _arcs: list[Any], client_id: str) -> CreateOrUpdateArcsResponse:
+        async def create_or_update_arcs(
+            self, _rdi: str, _arcs: list[Any], _client_id: str
+        ) -> CreateOrUpdateArcsResponse:
             """Mock create_or_update_arcs method."""
             raise InvalidJsonSemanticError("invalid JSON semantic")
 
+    # pylint: disable=protected-access
     middleware_api.app.dependency_overrides[middleware_api._get_business_logic] = BusinessLogicMock
 
     r = client.post(
@@ -176,7 +182,7 @@ def test_create_or_update_arcs_invalid_json_semantic(
     middleware_api.app.dependency_overrides.clear()
 
 
-def test_create_or_update_arcs_invalid_body(client: TestClient, cert: str, middleware_api: Api) -> None:
+def test_create_or_update_arcs_invalid_body(client: TestClient, cert: str) -> None:
     """Test error handling in the /v1/arcs endpoint."""
     r = client.post(
         "/v1/arcs",
@@ -191,7 +197,7 @@ def test_create_or_update_arcs_invalid_body(client: TestClient, cert: str, middl
     assert r.status_code == 422  # unprocessable entity by FastAPI
 
 
-def test_create_or_update_arcs_invalid_accept(client: TestClient, cert: str, middleware_api: Api) -> None:
+def test_create_or_update_arcs_invalid_accept(client: TestClient, cert: str) -> None:
     """Test the /v1/arcs endpoint with an invalid accept header."""
     r = client.post(
         "/v1/arcs",
@@ -206,7 +212,7 @@ def test_create_or_update_arcs_invalid_accept(client: TestClient, cert: str, mid
     assert r.status_code == 406
 
 
-def test_create_or_update_arcs_no_cert(client: TestClient, middleware_api: Api) -> None:
+def test_create_or_update_arcs_no_cert(client: TestClient) -> None:
     """Test the /v1/arcs endpoint without a client certificate."""
     r = client.post(
         "/v1/arcs",
@@ -227,7 +233,7 @@ def test_create_or_update_arcs_no_cert(client: TestClient, middleware_api: Api) 
     ],
 )
 def test_create_or_update_arcs_cert_verification_state(
-    cert: str, client: TestClient, client_verify: str, expected_status: int, middleware_api: Api
+    cert: str, client: TestClient, client_verify: str, expected_status: int
 ) -> None:
     """Test the /v1/arcs endpoint with an invalid client certificate."""
     r = client.post(
@@ -289,11 +295,12 @@ def test_create_or_update_arcs_rdi_not_allowed(
 # -------------------------------------------------------------------
 
 
-def test_whoami_accessible_rdis_intersection(client: TestClient, middleware_api: Api, known_rdis: list[str]) -> None:
+def test_whoami_accessible_rdis_intersection(client: TestClient, middleware_api: Api) -> None:
     """Test that accessible_rdis is the intersection of allowed_rdis and known_rdis."""
     # Create certificate with RDIs that partially overlap with known_rdis
     # known_rdis fixture has ["rdi-1", "rdi-2"]
     # Let's create a cert with ["rdi-1", "rdi-3"] - only rdi-1 should be accessible
+    # pylint: disable=protected-access
     middleware_api.app.dependency_overrides[middleware_api._validate_client_id] = lambda: "TestClient"
     middleware_api.app.dependency_overrides[middleware_api._get_authorized_rdis] = lambda: ["rdi-1", "rdi-3"]
     middleware_api.app.dependency_overrides[middleware_api._get_known_rdis] = lambda: ["rdi-1", "rdi-2"]
@@ -318,6 +325,7 @@ def test_whoami_accessible_rdis_no_overlap(client: TestClient, middleware_api: A
     """Test that accessible_rdis is empty when there's no overlap between allowed and known RDIs."""
     # Create certificate with RDIs that don't overlap with known_rdis
     # known_rdis has ["rdi-1", "rdi-2"], create cert with ["rdi-3", "rdi-4"]
+    # pylint: disable=protected-access
     middleware_api.app.dependency_overrides[middleware_api._validate_client_id] = lambda: "TestClient"
     middleware_api.app.dependency_overrides[middleware_api._get_authorized_rdis] = lambda: ["rdi-3", "rdi-4"]
     middleware_api.app.dependency_overrides[middleware_api._get_known_rdis] = lambda: ["rdi-1", "rdi-2"]
@@ -337,6 +345,7 @@ def test_whoami_accessible_rdis_no_overlap(client: TestClient, middleware_api: A
 def test_whoami_accessible_rdis_complete_overlap(client: TestClient, middleware_api: Api) -> None:
     """Test that accessible_rdis contains all RDIs when there's complete overlap."""
     # Create certificate with same RDIs as known_rdis
+    # pylint: disable=protected-access
     middleware_api.app.dependency_overrides[middleware_api._validate_client_id] = lambda: "TestClient"
     middleware_api.app.dependency_overrides[middleware_api._get_authorized_rdis] = lambda: ["rdi-1", "rdi-2"]
     middleware_api.app.dependency_overrides[middleware_api._get_known_rdis] = lambda: ["rdi-1", "rdi-2"]
@@ -358,6 +367,7 @@ def test_whoami_accessible_rdis_superset_in_cert(client: TestClient, middleware_
     # Certificate has ["rdi-1", "rdi-2", "rdi-3", "rdi-4"]
     # known_rdis has ["rdi-1", "rdi-2"]
     # Result should be ["rdi-1", "rdi-2"]
+    # pylint: disable=protected-access
     middleware_api.app.dependency_overrides[middleware_api._validate_client_id] = lambda: "TestClient"
     middleware_api.app.dependency_overrides[middleware_api._get_authorized_rdis] = lambda: [
         "rdi-1",
