@@ -5,13 +5,14 @@
 	// Or use a Dockerfile or Docker Compose file. More info: https://containers.dev/guide/dockerfile
 	"image": "mcr.microsoft.com/devcontainers/base:bookworm",
 	"features": {
-		"ghcr.io/devcontainers/features/docker-in-docker:2": {
-			"moby": true,
-			"installDockerBuildx": true,
-			"installDockerComposeSwitch": true,
-			"disableIp6tables": true,
-			"version": "28.5.1"
-		},
+		"ghcr.io/devcontainers/features/docker-outside-of-docker:1": {},
+		// "ghcr.io/devcontainers/features/docker-in-docker:2": {
+		// 	"moby": true,
+		// 	"installDockerBuildx": true,
+		// 	"installDockerComposeSwitch": true,
+		// 	"disableIp6tables": true,
+		// 	"version": "28.5.1"
+		// },
 		// NOTE: this conflicts with out own pre-push git hook.
 		// Currently we do not need git-lfs in this project, anyway.
 		// "ghcr.io/devcontainers/features/git-lfs:1": {
@@ -84,9 +85,6 @@
 	"containerEnv": {
 		"UV_LINK_MODE": "copy"
 	},
-
-	// Use 'forwardPorts' to make a list of ports inside the container available locally.
-	// "forwardPorts": [],
 
 	// Configure tool-specific properties.
 	"customizations": {
