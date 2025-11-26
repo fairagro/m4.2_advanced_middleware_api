@@ -17,7 +17,7 @@ from middleware.api_client.config import Config
 @pytest.fixture
 def client_config(test_config_dict: dict) -> Config:
     """Create a Config instance for testing.
-    
+
     Uses the test_config_dict from the parent conftest.py
     """
     return Config.from_data(test_config_dict)
@@ -26,7 +26,7 @@ def client_config(test_config_dict: dict) -> Config:
 @pytest.fixture(scope="session")
 def api_config(known_rdis: list[str], oid: Any) -> dict[str, Any]:
     """Provide API configuration for integration tests.
-    
+
     Note: Uses the same known_rdis and oid fixtures from the parent conftest.py
     """
     return {
@@ -45,7 +45,7 @@ def api_config(known_rdis: list[str], oid: Any) -> dict[str, Any]:
 @pytest.fixture
 def middleware_api(api_config: dict[str, Any]) -> Api:
     """Provide the Middleware API instance for testing.
-    
+
     This creates a real API instance that can be used with TestClient.
     """
     config = ApiConfig.from_data(api_config)
@@ -55,7 +55,7 @@ def middleware_api(api_config: dict[str, Any]) -> Api:
 @pytest.fixture
 def api_test_client(middleware_api: Api) -> Generator[TestClient, None, None]:
     """Provide a TestClient for the Middleware API.
-    
+
     This allows making HTTP requests to the API without a real server.
     """
     with TestClient(middleware_api.app) as client:

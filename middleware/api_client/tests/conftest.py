@@ -1,8 +1,8 @@
 """Shared test fixtures for API client tests."""
 
 import tempfile
+from collections.abc import Generator
 from pathlib import Path
-from typing import Generator
 
 import pytest
 from cryptography import x509
@@ -21,7 +21,7 @@ def temp_dir() -> Generator[Path, None, None]:
 @pytest.fixture
 def test_cert_pem(temp_dir: Path) -> tuple[Path, Path]:
     """Generate a test certificate and key in PEM format.
-    
+
     Returns:
         Tuple of (cert_path, key_path)
     """
@@ -30,16 +30,19 @@ def test_cert_pem(temp_dir: Path) -> tuple[Path, Path]:
         public_exponent=65537,
         key_size=2048,
     )
-    
+
     # Generate self-signed certificate
-    subject = issuer = x509.Name([
-        x509.NameAttribute(NameOID.COUNTRY_NAME, "DE"),
-        x509.NameAttribute(NameOID.STATE_OR_PROVINCE_NAME, "Test-State"),
-        x509.NameAttribute(NameOID.ORGANIZATION_NAME, "Test Organization"),
-        x509.NameAttribute(NameOID.COMMON_NAME, "TestClient"),
-    ])
-    
+    subject = issuer = x509.Name(
+        [
+            x509.NameAttribute(NameOID.COUNTRY_NAME, "DE"),
+            x509.NameAttribute(NameOID.STATE_OR_PROVINCE_NAME, "Test-State"),
+            x509.NameAttribute(NameOID.ORGANIZATION_NAME, "Test Organization"),
+            x509.NameAttribute(NameOID.COMMON_NAME, "TestClient"),
+        ]
+    )
+
     import datetime
+
     cert = (
         x509.CertificateBuilder()
         .subject_name(subject)
@@ -50,13 +53,11 @@ def test_cert_pem(temp_dir: Path) -> tuple[Path, Path]:
         .not_valid_after(datetime.datetime.now(datetime.UTC) + datetime.timedelta(days=1))
         .sign(private_key, hashes.SHA256())
     )
-    
+
     # Write certificate to file
     cert_path = temp_dir / "test-cert.pem"
-    cert_path.write_bytes(
-        cert.public_bytes(serialization.Encoding.PEM)
-    )
-    
+    cert_path.write_bytes(cert.public_bytes(serialization.Encoding.PEM))
+
     # Write private key to file
     key_path = temp_dir / "test-key.pem"
     key_path.write_bytes(
@@ -66,17 +67,17 @@ def test_cert_pem(temp_dir: Path) -> tuple[Path, Path]:
             encryption_algorithm=serialization.NoEncryption(),
         )
     )
-    
+
     return cert_path, key_path
 
 
 @pytest.fixture
 def test_config_dict(test_cert_pem: tuple[Path, Path]) -> dict:
     """Create a test configuration dictionary.
-    
+
     Args:
         test_cert_pem: Tuple of (cert_path, key_path)
-    
+
     Returns:
         Dictionary with test configuration
     """
@@ -94,18 +95,18 @@ def test_config_dict(test_cert_pem: tuple[Path, Path]) -> dict:
 @pytest.fixture
 def test_config_yaml(temp_dir: Path, test_config_dict: dict) -> Path:
     """Create a test configuration YAML file.
-    
+
     Args:
         temp_dir: Temporary directory
         test_config_dict: Configuration dictionary
-    
+
     Returns:
         Path to the YAML configuration file
     """
     import yaml
-    
+
     config_path = temp_dir / "test_config.yaml"
     with config_path.open("w") as f:
         yaml.dump(test_config_dict, f)
-    
+
     return config_path

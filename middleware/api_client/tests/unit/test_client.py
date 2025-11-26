@@ -1,9 +1,11 @@
 """Unit tests for the MiddlewareClient class."""
 
-import pytest
-import httpx
-import respx
 from pathlib import Path
+from unittest.mock import AsyncMock, patch
+
+import httpx
+import pytest
+import respx
 
 from middleware.api_client import Config, MiddlewareClient, MiddlewareClientError
 from middleware.shared.api_models.models import (
@@ -32,7 +34,7 @@ async def test_client_initialization_missing_cert(test_config_dict: dict, temp_d
     # Point to non-existent certificate
     test_config_dict["client_cert_path"] = str(temp_dir / "nonexistent-cert.pem")
     config = Config.from_data(test_config_dict)
-    
+
     with pytest.raises(MiddlewareClientError, match="Client certificate not found"):
         MiddlewareClient(config)
 
@@ -43,7 +45,7 @@ async def test_client_initialization_missing_key(test_config_dict: dict, temp_di
     # Point to non-existent key
     test_config_dict["client_key_path"] = str(temp_dir / "nonexistent-key.pem")
     config = Config.from_data(test_config_dict)
-    
+
     with pytest.raises(MiddlewareClientError, match="Client key not found"):
         MiddlewareClient(config)
 
@@ -54,7 +56,7 @@ async def test_client_initialization_missing_ca_cert(test_config_dict: dict, tem
     # Point to non-existent CA cert
     test_config_dict["ca_cert_path"] = str(temp_dir / "nonexistent-ca.pem")
     config = Config.from_data(test_config_dict)
-    
+
     with pytest.raises(MiddlewareClientError, match="CA certificate not found"):
         MiddlewareClient(config)
 
@@ -76,21 +78,19 @@ async def test_create_or_update_arcs_success(client_config: Config) -> None:
             }
         ],
     }
-    
-    route = respx.post(f"{client_config.api_url}/v1/arcs").mock(
-        return_value=httpx.Response(201, json=mock_response)
-    )
-    
+
+    route = respx.post(f"{client_config.api_url}/v1/arcs").mock(return_value=httpx.Response(201, json=mock_response))
+
     # Create request
     request = CreateOrUpdateArcsRequest(
         rdi="test-rdi",
         arcs=[{"@id": "test-arc", "@type": "Dataset"}],
     )
-    
+
     # Send request
     async with MiddlewareClient(client_config) as client:
         response = await client.create_or_update_arcs(request)
-    
+
     # Verify
     assert route.called
     assert isinstance(response, CreateOrUpdateArcsResponse)
@@ -105,15 +105,13 @@ async def test_create_or_update_arcs_success(client_config: Config) -> None:
 async def test_create_or_update_arcs_http_error(client_config: Config) -> None:
     """Test create_or_update_arcs with HTTP error response."""
     # Mock an error response
-    respx.post(f"{client_config.api_url}/v1/arcs").mock(
-        return_value=httpx.Response(403, text="Forbidden")
-    )
-    
+    respx.post(f"{client_config.api_url}/v1/arcs").mock(return_value=httpx.Response(403, text="Forbidden"))
+
     request = CreateOrUpdateArcsRequest(
         rdi="test-rdi",
         arcs=[{"@id": "test-arc", "@type": "Dataset"}],
     )
-    
+
     # Should raise MiddlewareClientError
     async with MiddlewareClient(client_config) as client:
         with pytest.raises(MiddlewareClientError, match="HTTP error 403"):
@@ -125,15 +123,13 @@ async def test_create_or_update_arcs_http_error(client_config: Config) -> None:
 async def test_create_or_update_arcs_network_error(client_config: Config) -> None:
     """Test create_or_update_arcs with network error."""
     # Mock a network error
-    respx.post(f"{client_config.api_url}/v1/arcs").mock(
-        side_effect=httpx.ConnectError("Connection refused")
-    )
-    
+    respx.post(f"{client_config.api_url}/v1/arcs").mock(side_effect=httpx.ConnectError("Connection refused"))
+
     request = CreateOrUpdateArcsRequest(
         rdi="test-rdi",
         arcs=[{"@id": "test-arc", "@type": "Dataset"}],
     )
-    
+
     # Should raise MiddlewareClientError
     async with MiddlewareClient(client_config) as client:
         with pytest.raises(MiddlewareClientError, match="Request error"):
@@ -145,7 +141,7 @@ async def test_async_context_manager(client_config: Config) -> None:
     """Test that async context manager properly initializes and cleans up."""
     async with MiddlewareClient(client_config) as client:
         assert isinstance(client, MiddlewareClient)
-    
+
     # After context exit, client should be closed
     # (we can't easily verify this without accessing private attributes)
 
@@ -154,41 +150,47 @@ async def test_async_context_manager(client_config: Config) -> None:
 async def test_manual_close(client_config: Config) -> None:
     """Test manual close of the client."""
     client = MiddlewareClient(client_config)
-    
+
     # Create the HTTP client by calling _get_client
     http_client = client._get_client()
     assert http_client is not None
-    
+
     # Close manually
     await client.aclose()
-    
+
     # Client should be None after close
     assert client._client is None
 
 
 @pytest.mark.asyncio
-@respx.mock
-async def test_client_uses_certificates(client_config: Config, test_cert_pem: tuple[Path, Path]) -> None:
+async def test_client_uses_certificates(test_config_dict: dict, test_cert_pem: tuple[Path, Path]) -> None:
     """Test that client is configured with the correct certificates."""
     cert_path, key_path = test_cert_pem
-    
-    # Mock response
-    respx.post(f"{client_config.api_url}/v1/arcs").mock(
-        return_value=httpx.Response(201, json={
-            "client_id": "test",
-            "message": "ok",
-            "rdi": "test",
-            "arcs": [],
-        })
-    )
-    
-    client = MiddlewareClient(client_config)
-    http_client = client._get_client()
-    
-    # Verify that cert is configured (httpx stores it as a tuple)
-    assert http_client._transport._pool._ssl_context is not None or http_client.cert is not None
-    
-    await client.aclose()
+
+    # Update config to use the test certificates
+    test_config_dict["client_cert_path"] = str(cert_path)
+    test_config_dict["client_key_path"] = str(key_path)
+    config = Config.from_data(test_config_dict)
+
+    # Patch httpx.AsyncClient to capture the cert argument
+    with patch("middleware.api_client.main.httpx.AsyncClient") as mock_client_class:
+        # Configure the mock to return an AsyncMock instance with an async aclose method
+        mock_instance = AsyncMock()
+        mock_client_class.return_value = mock_instance
+
+        client = MiddlewareClient(config)
+        client._get_client()
+
+        # Verify AsyncClient was called with the correct cert parameter
+        mock_client_class.assert_called_once()
+        call_kwargs = mock_client_class.call_args.kwargs
+
+        # httpx expects cert as a tuple (cert_path, key_path)
+        assert "cert" in call_kwargs
+        expected_cert = (str(cert_path), str(key_path))
+        assert call_kwargs["cert"] == expected_cert
+
+        await client.aclose()
 
 
 @pytest.mark.asyncio
@@ -196,22 +198,25 @@ async def test_client_uses_certificates(client_config: Config, test_cert_pem: tu
 async def test_client_headers(client_config: Config) -> None:
     """Test that client sends correct headers."""
     route = respx.post(f"{client_config.api_url}/v1/arcs").mock(
-        return_value=httpx.Response(201, json={
-            "client_id": "test",
-            "message": "ok",
-            "rdi": "test",
-            "arcs": [],
-        })
+        return_value=httpx.Response(
+            201,
+            json={
+                "client_id": "test",
+                "message": "ok",
+                "rdi": "test",
+                "arcs": [],
+            },
+        )
     )
-    
+
     request = CreateOrUpdateArcsRequest(
         rdi="test",
         arcs=[],
     )
-    
+
     async with MiddlewareClient(client_config) as client:
         await client.create_or_update_arcs(request)
-    
+
     # Verify headers
     assert route.called
     last_request = route.calls.last.request

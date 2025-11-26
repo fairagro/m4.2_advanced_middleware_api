@@ -6,12 +6,12 @@
   "python.testing.pytestPath": ".venv/bin/pytest",
   "python.testing.cwd": "${workspaceFolder}",
   "python-envs.pythonProjects": [],
-  "python.analysis.extraPaths": [
-    "middleware/api/src",
-    "middleware/api_client/src",
-    "middleware/sql_to_arc/src",
-    "middleware/shared/src"
-  ],
+  // "python.analysis.extraPaths": [
+  //   "middleware/api/src",
+  //   "middleware/api_client/src",
+  //   "middleware/sql_to_arc/src",
+  //   "middleware/shared/src"
+  // ],
 
   // Code formatting - use ruff for both linting and formatting
   "[python]": {
@@ -33,5 +33,5 @@
   "ruff.configuration": "./pyproject.toml",
   "ruff.path": ["uv", "run", "ruff"],
   "ruff.importStrategy": "fromEnvironment",
-  "python-envs.defaultEnvManager": "ms-python.python:system"
+  "python-envs.defaultEnvManager": "ms-python.python:venv"
 }

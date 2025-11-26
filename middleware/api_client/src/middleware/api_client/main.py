@@ -1,7 +1,6 @@
 """Client for the FAIRagro Middleware API."""
 
 import logging
-from pathlib import Path
 from typing import Any
 
 import httpx
@@ -23,18 +22,18 @@ class MiddlewareClientError(Exception):
 
 class MiddlewareClient:
     """Client for the FAIRagro Middleware API.
-    
+
     This client provides access to the Middleware API with certificate-based
     authentication (mTLS). It supports creating and updating ARCs.
-    
+
     Example:
         ```python
         from pathlib import Path
         from middleware.api_client import Config, MiddlewareClient
-        
+
         # Load configuration from YAML file
         config = Config.from_yaml_file(Path("config.yaml"))
-        
+
         # Create client instance
         async with MiddlewareClient(config) as client:
             # Create request
@@ -42,7 +41,7 @@ class MiddlewareClient:
                 rdi="my-rdi",
                 arcs=[{"@context": "...", "@id": "...", ...}]
             )
-            
+
             # Send request
             response = await client.create_or_update_arcs(request)
             print(f"Created/Updated {len(response.arcs)} ARCs")
@@ -54,27 +53,27 @@ class MiddlewareClient:
 
         Args:
             config (Config): Configuration object containing API URL and certificate paths.
-        
+
         Raises:
             MiddlewareClientError: If certificate or key files don't exist.
         """
         self._config = config
         self._client: httpx.AsyncClient | None = None
-        
+
         # Validate certificate files exist
         cert_path = config.get_client_cert_path()
         key_path = config.get_client_key_path()
-        
+
         if not cert_path.exists():
             raise MiddlewareClientError(f"Client certificate not found: {cert_path}")
         if not key_path.exists():
             raise MiddlewareClientError(f"Client key not found: {key_path}")
-        
+
         # Validate CA cert if provided
         ca_path = config.get_ca_cert_path()
         if ca_path and not ca_path.exists():
             raise MiddlewareClientError(f"CA certificate not found: {ca_path}")
-        
+
         logger.debug(
             "MiddlewareClient initialized with API URL: %s, cert: %s, key: %s",
             config.api_url,
@@ -84,7 +83,7 @@ class MiddlewareClient:
 
     def _get_client(self) -> httpx.AsyncClient:
         """Get or create the HTTP client instance.
-        
+
         Returns:
             httpx.AsyncClient: Configured async HTTP client.
         """
@@ -94,7 +93,7 @@ class MiddlewareClient:
                 str(self._config.get_client_cert_path()),
                 str(self._config.get_client_key_path()),
             )
-            
+
             # Prepare verify parameter
             if not self._config.verify_ssl:
                 verify: bool | str = False
@@ -102,7 +101,7 @@ class MiddlewareClient:
                 verify = str(self._config.get_ca_cert_path())
             else:
                 verify = True
-            
+
             self._client = httpx.AsyncClient(
                 base_url=self._config.api_url,
                 cert=cert,
@@ -113,7 +112,7 @@ class MiddlewareClient:
                 },
             )
             logger.debug("Created new httpx.AsyncClient instance")
-        
+
         return self._client
 
     async def _post(
@@ -122,19 +121,19 @@ class MiddlewareClient:
         body: BaseModel,
     ) -> Any:
         """Send a POST request to the API.
-        
+
         Args:
             path (str): API endpoint path.
             body (BaseModel): Request body as Pydantic model.
-        
+
         Returns:
             Any: JSON response data.
-        
+
         Raises:
             MiddlewareClientError: If the request fails.
         """
         client = self._get_client()
-        
+
         try:
             logger.debug("Sending POST request to %s", path)
             resp = await client.post(
@@ -165,7 +164,7 @@ class MiddlewareClient:
 
         Returns:
             CreateOrUpdateArcsResponse: The response containing the result of the operation.
-        
+
         Raises:
             MiddlewareClientError: If the request fails.
         """
@@ -192,7 +191,7 @@ class MiddlewareClient:
 
     async def __aenter__(self) -> "MiddlewareClient":
         """Async context manager entry.
-        
+
         Returns:
             MiddlewareClient: This client instance.
         """
@@ -200,7 +199,7 @@ class MiddlewareClient:
 
     async def __aexit__(self, exc_type: Any, exc_val: Any, exc_tb: Any) -> None:
         """Async context manager exit.
-        
+
         Args:
             exc_type: Exception type if an error occurred.
             exc_val: Exception value if an error occurred.
