@@ -68,6 +68,8 @@ lint.select = [
   "UP",  # pyupgrade
   "B",   # bugbear
   "SIM", # flake8-simplify
+  "A",   # flake8-builtins
+  "ARG", # flake8-unused-arguments
 ]
 
 # Maximale Zeilenlänge wie in pylint (Standard: 100)
@@ -100,6 +102,7 @@ disallow_untyped_defs = true
 disallow_incomplete_defs = true
 explicit_package_bases = true
 namespace_packages = true
+mypy_path = "middleware/api/src:middleware/api_client/src:middleware/shared/src:middleware/sql_to_arc/src"
 
 # Exclude directories from type checking
 exclude = [

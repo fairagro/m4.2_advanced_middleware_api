@@ -49,6 +49,7 @@ repos:
         language: system
         types: [python]
         files: ^middleware/
+        args: [--config-file, pyproject.toml]
 
       # bandit - Security linting
       - id: bandit
