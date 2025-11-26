@@ -40,7 +40,7 @@ from middleware.shared.api_models.models import CreateOrUpdateArcsRequest
 async def main():
     # Load configuration
     config = Config.from_yaml_file(Path("config.yaml"))
-    
+
     # Use client with context manager
     async with MiddlewareClient(config) as client:
         # Create request
@@ -53,7 +53,7 @@ async def main():
                 # ... more RO-Crate fields
             }]
         )
-        
+
         # Send request
         response = await client.create_or_update_arcs(request)
         print(f"Created/Updated {len(response.arcs)} ARCs")

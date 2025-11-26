@@ -49,7 +49,7 @@ repos:
         language: system
         types: [python]
         files: ^middleware/
-        args: [--ignore-missing-imports]
+        args: [--explicit-package-bases, --ignore-missing-imports]
 
       # bandit - Security linting
       - id: bandit
