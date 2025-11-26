@@ -25,14 +25,14 @@ def test_config_from_data(test_config_dict: dict) -> None:
 
     assert config.log_level == "DEBUG"
     assert config.api_url == "https://test-api.example.com"
-    assert config.client_cert_path == test_config_dict["client_cert_path"]
-    assert config.client_key_path == test_config_dict["client_key_path"]
+    assert config.client_cert_path == Path(test_config_dict["client_cert_path"])
+    assert config.client_key_path == Path(test_config_dict["client_key_path"])
 
 
 def test_config_get_client_cert_path(test_config_dict: dict) -> None:
     """Test getting client certificate path as Path object."""
     config = Config.from_data(test_config_dict)
-    cert_path = config.get_client_cert_path()
+    cert_path = config.client_cert_path
 
     assert isinstance(cert_path, Path)
     assert str(cert_path) == test_config_dict["client_cert_path"]
@@ -41,7 +41,7 @@ def test_config_get_client_cert_path(test_config_dict: dict) -> None:
 def test_config_get_client_key_path(test_config_dict: dict) -> None:
     """Test getting client key path as Path object."""
     config = Config.from_data(test_config_dict)
-    key_path = config.get_client_key_path()
+    key_path = config.client_key_path
 
     assert isinstance(key_path, Path)
     assert str(key_path) == test_config_dict["client_key_path"]
@@ -50,7 +50,7 @@ def test_config_get_client_key_path(test_config_dict: dict) -> None:
 def test_config_get_ca_cert_path_none(test_config_dict: dict) -> None:
     """Test getting CA cert path when not configured."""
     config = Config.from_data(test_config_dict)
-    ca_path = config.get_ca_cert_path()
+    ca_path = config.ca_cert_path
 
     assert ca_path is None
 
@@ -62,7 +62,7 @@ def test_config_get_ca_cert_path_set(test_config_dict: dict, temp_dir: Path) -> 
 
     test_config_dict["ca_cert_path"] = str(ca_cert_path)
     config = Config.from_data(test_config_dict)
-    ca_path = config.get_ca_cert_path()
+    ca_path = config.ca_cert_path
 
     assert ca_path is not None
     assert isinstance(ca_path, Path)

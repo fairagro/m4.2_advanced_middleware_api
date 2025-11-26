@@ -16,11 +16,11 @@ from .config import Config
 logger = logging.getLogger(__name__)
 
 
-class MiddlewareClientError(Exception):
-    """Base exception for MiddlewareClient errors."""
+class ApiClientError(Exception):
+    """Base exception for ApiClient errors."""
 
 
-class MiddlewareClient:
+class ApiClient:
     """Client for the FAIRagro Middleware API.
 
     This client provides access to the Middleware API with certificate-based
@@ -29,13 +29,13 @@ class MiddlewareClient:
     Example:
         ```python
         from pathlib import Path
-        from middleware.api_client import Config, MiddlewareClient
+        from middleware.api_client import Config, ApiClient
 
         # Load configuration from YAML file
         config = Config.from_yaml_file(Path("config.yaml"))
 
         # Create client instance
-        async with MiddlewareClient(config) as client:
+        async with ApiClient(config) as client:
             # Create request
             request = CreateOrUpdateArcsRequest(
                 rdi="my-rdi",
@@ -49,33 +49,33 @@ class MiddlewareClient:
     """
 
     def __init__(self, config: Config) -> None:
-        """Initialize the MiddlewareClient.
+        """Initialize the ApiClient.
 
         Args:
             config (Config): Configuration object containing API URL and certificate paths.
 
         Raises:
-            MiddlewareClientError: If certificate or key files don't exist.
+            ApiClientError: If certificate or key files don't exist.
         """
         self._config = config
         self._client: httpx.AsyncClient | None = None
 
         # Validate certificate files exist
-        cert_path = config.get_client_cert_path()
-        key_path = config.get_client_key_path()
+        cert_path = config.client_cert_path
+        key_path = config.client_key_path
 
         if not cert_path.exists():
-            raise MiddlewareClientError(f"Client certificate not found: {cert_path}")
+            raise ApiClientError(f"Client certificate not found: {cert_path}")
         if not key_path.exists():
-            raise MiddlewareClientError(f"Client key not found: {key_path}")
+            raise ApiClientError(f"Client key not found: {key_path}")
 
         # Validate CA cert if provided
-        ca_path = config.get_ca_cert_path()
+        ca_path = config.ca_cert_path
         if ca_path and not ca_path.exists():
-            raise MiddlewareClientError(f"CA certificate not found: {ca_path}")
+            raise ApiClientError(f"CA certificate not found: {ca_path}")
 
         logger.debug(
-            "MiddlewareClient initialized with API URL: %s, cert: %s, key: %s",
+            "ApiClient initialized with API URL: %s, cert: %s, key: %s",
             config.api_url,
             cert_path,
             key_path,
@@ -90,15 +90,15 @@ class MiddlewareClient:
         if self._client is None:
             # Prepare certificate tuple for mTLS
             cert = (
-                str(self._config.get_client_cert_path()),
-                str(self._config.get_client_key_path()),
+                str(self._config.client_cert_path),
+                str(self._config.client_key_path),
             )
 
             # Prepare verify parameter
             if not self._config.verify_ssl:
                 verify: bool | str = False
-            elif self._config.get_ca_cert_path():
-                verify = str(self._config.get_ca_cert_path())
+            elif self._config.ca_cert_path:
+                verify = str(self._config.ca_cert_path)
             else:
                 verify = True
 
@@ -130,7 +130,7 @@ class MiddlewareClient:
             Any: JSON response data.
 
         Raises:
-            MiddlewareClientError: If the request fails.
+            ApiClientError: If the request fails.
         """
         client = self._get_client()
 
@@ -147,11 +147,11 @@ class MiddlewareClient:
         except httpx.HTTPStatusError as e:
             error_msg = f"HTTP error {e.response.status_code}: {e.response.text}"
             logger.error(error_msg)
-            raise MiddlewareClientError(error_msg) from e
+            raise ApiClientError(error_msg) from e
         except httpx.RequestError as e:
             error_msg = f"Request error: {str(e)}"
             logger.error(error_msg)
-            raise MiddlewareClientError(error_msg) from e
+            raise ApiClientError(error_msg) from e
 
     async def create_or_update_arcs(
         self,
@@ -166,7 +166,7 @@ class MiddlewareClient:
             CreateOrUpdateArcsResponse: The response containing the result of the operation.
 
         Raises:
-            MiddlewareClientError: If the request fails.
+            ApiClientError: If the request fails.
         """
         logger.info("Creating/updating ARCs for RDI: %s", request.rdi)
         result = await self._post("/v1/arcs", request)
@@ -189,11 +189,11 @@ class MiddlewareClient:
             await self._client.aclose()
             self._client = None
 
-    async def __aenter__(self) -> "MiddlewareClient":
+    async def __aenter__(self) -> "ApiClient":
         """Async context manager entry.
 
         Returns:
-            MiddlewareClient: This client instance.
+            ApiClient: This client instance.
         """
         return self
 

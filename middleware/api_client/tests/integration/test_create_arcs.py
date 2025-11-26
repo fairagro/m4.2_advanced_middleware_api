@@ -11,7 +11,7 @@ import httpx
 import pytest
 import respx
 
-from middleware.api_client import Config, MiddlewareClient
+from middleware.api_client import ApiClient, Config
 from middleware.shared.api_models.models import CreateOrUpdateArcsRequest
 
 
@@ -54,7 +54,7 @@ async def test_create_arcs_integration_mock_server(client_config: Config) -> Non
     )
 
     # Execute request
-    async with MiddlewareClient(client_config) as client:
+    async with ApiClient(client_config) as client:
         response = await client.create_or_update_arcs(request)
 
     # Verify
@@ -85,7 +85,7 @@ async def test_create_arcs_unauthorized(client_config: Config) -> None:
         arcs=[{"@id": "test", "@type": "Dataset"}],
     )
 
-    async with MiddlewareClient(client_config) as client:
+    async with ApiClient(client_config) as client:
         with pytest.raises(Exception, match="401"):
             await client.create_or_update_arcs(request)
 
@@ -103,7 +103,7 @@ async def test_create_arcs_forbidden(client_config: Config) -> None:
         arcs=[{"@id": "test", "@type": "Dataset"}],
     )
 
-    async with MiddlewareClient(client_config) as client:
+    async with ApiClient(client_config) as client:
         with pytest.raises(Exception, match="403"):
             await client.create_or_update_arcs(request)
 
@@ -121,7 +121,7 @@ async def test_create_arcs_validation_error(client_config: Config) -> None:
         arcs=[{"invalid": "data"}],
     )
 
-    async with MiddlewareClient(client_config) as client:
+    async with ApiClient(client_config) as client:
         with pytest.raises(Exception, match="422"):
             await client.create_or_update_arcs(request)
 
@@ -166,7 +166,7 @@ async def test_create_multiple_arcs(client_config: Config) -> None:
         ],
     )
 
-    async with MiddlewareClient(client_config) as client:
+    async with ApiClient(client_config) as client:
         response = await client.create_or_update_arcs(request)
 
     assert route.called
@@ -192,6 +192,6 @@ async def test_timeout_error(client_config: Config) -> None:
         arcs=[{"@id": "test", "@type": "Dataset"}],
     )
 
-    async with MiddlewareClient(client_config) as client:
+    async with ApiClient(client_config) as client:
         with pytest.raises(Exception, match="timeout|Timeout"):
             await client.create_or_update_arcs(request)

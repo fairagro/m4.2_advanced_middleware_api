@@ -34,7 +34,7 @@ verify_ssl: true
 ```python
 import asyncio
 from pathlib import Path
-from middleware.api_client import Config, MiddlewareClient
+from middleware.api_client import Config, ApiClient
 from middleware.shared.api_models.models import CreateOrUpdateArcsRequest
 
 async def main():
@@ -42,7 +42,7 @@ async def main():
     config = Config.from_yaml_file(Path("config.yaml"))
 
     # Use client with context manager
-    async with MiddlewareClient(config) as client:
+    async with ApiClient(config) as client:
         # Create request
         request = CreateOrUpdateArcsRequest(
             rdi="my-rdi",
@@ -89,18 +89,18 @@ Creates or updates ARCs in the Middleware API.
 
 **Raises:**
 
-- `MiddlewareClientError`: If the request fails
+- `ApiClientError`: If the request fails
 
 ## Error Handling
 
-All errors are raised as `MiddlewareClientError` exceptions:
+All errors are raised as `ApiClientError` exceptions:
 
 ```python
-from middleware.api_client import MiddlewareClientError
+from middleware.api_client import ApiClientError
 
 try:
     response = await client.create_or_update_arcs(request)
-except MiddlewareClientError as e:
+except ApiClientError as e:
     print(f"API Error: {e}")
 ```
 

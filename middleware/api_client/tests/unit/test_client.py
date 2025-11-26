@@ -1,4 +1,4 @@
-"""Unit tests for the MiddlewareClient class."""
+"""Unit tests for the ApiClient class."""
 
 from pathlib import Path
 from unittest.mock import AsyncMock, patch
@@ -7,7 +7,7 @@ import httpx
 import pytest
 import respx
 
-from middleware.api_client import Config, MiddlewareClient, MiddlewareClientError
+from middleware.api_client import ApiClient, ApiClientError, Config
 from middleware.shared.api_models.models import (
     CreateOrUpdateArcsRequest,
     CreateOrUpdateArcsResponse,
@@ -23,7 +23,7 @@ def client_config(test_config_dict: dict) -> Config:
 @pytest.mark.asyncio
 async def test_client_initialization_success(client_config: Config) -> None:
     """Test successful client initialization with valid config."""
-    client = MiddlewareClient(client_config)
+    client = ApiClient(client_config)
     assert client._config == client_config  # pylint: disable=protected-access
     assert client._client is None  # pylint: disable=protected-access
 
@@ -35,8 +35,8 @@ async def test_client_initialization_missing_cert(test_config_dict: dict, temp_d
     test_config_dict["client_cert_path"] = str(temp_dir / "nonexistent-cert.pem")
     config = Config.from_data(test_config_dict)
 
-    with pytest.raises(MiddlewareClientError, match="Client certificate not found"):
-        MiddlewareClient(config)
+    with pytest.raises(ApiClientError, match="Client certificate not found"):
+        ApiClient(config)
 
 
 @pytest.mark.asyncio
@@ -46,8 +46,8 @@ async def test_client_initialization_missing_key(test_config_dict: dict, temp_di
     test_config_dict["client_key_path"] = str(temp_dir / "nonexistent-key.pem")
     config = Config.from_data(test_config_dict)
 
-    with pytest.raises(MiddlewareClientError, match="Client key not found"):
-        MiddlewareClient(config)
+    with pytest.raises(ApiClientError, match="Client key not found"):
+        ApiClient(config)
 
 
 @pytest.mark.asyncio
@@ -57,8 +57,8 @@ async def test_client_initialization_missing_ca_cert(test_config_dict: dict, tem
     test_config_dict["ca_cert_path"] = str(temp_dir / "nonexistent-ca.pem")
     config = Config.from_data(test_config_dict)
 
-    with pytest.raises(MiddlewareClientError, match="CA certificate not found"):
-        MiddlewareClient(config)
+    with pytest.raises(ApiClientError, match="CA certificate not found"):
+        ApiClient(config)
 
 
 @pytest.mark.asyncio
@@ -88,7 +88,7 @@ async def test_create_or_update_arcs_success(client_config: Config) -> None:
     )
 
     # Send request
-    async with MiddlewareClient(client_config) as client:
+    async with ApiClient(client_config) as client:
         response = await client.create_or_update_arcs(request)
 
     # Verify
@@ -112,9 +112,9 @@ async def test_create_or_update_arcs_http_error(client_config: Config) -> None:
         arcs=[{"@id": "test-arc", "@type": "Dataset"}],
     )
 
-    # Should raise MiddlewareClientError
-    async with MiddlewareClient(client_config) as client:
-        with pytest.raises(MiddlewareClientError, match="HTTP error 403"):
+    # Should raise ApiClientError
+    async with ApiClient(client_config) as client:
+        with pytest.raises(ApiClientError, match="HTTP error 403"):
             await client.create_or_update_arcs(request)
 
 
@@ -130,17 +130,17 @@ async def test_create_or_update_arcs_network_error(client_config: Config) -> Non
         arcs=[{"@id": "test-arc", "@type": "Dataset"}],
     )
 
-    # Should raise MiddlewareClientError
-    async with MiddlewareClient(client_config) as client:
-        with pytest.raises(MiddlewareClientError, match="Request error"):
+    # Should raise ApiClientError
+    async with ApiClient(client_config) as client:
+        with pytest.raises(ApiClientError, match="Request error"):
             await client.create_or_update_arcs(request)
 
 
 @pytest.mark.asyncio
 async def test_async_context_manager(client_config: Config) -> None:
     """Test that async context manager properly initializes and cleans up."""
-    async with MiddlewareClient(client_config) as client:
-        assert isinstance(client, MiddlewareClient)
+    async with ApiClient(client_config) as client:
+        assert isinstance(client, ApiClient)
 
     # After context exit, client should be closed
     # (we can't easily verify this without accessing private attributes)
@@ -149,7 +149,7 @@ async def test_async_context_manager(client_config: Config) -> None:
 @pytest.mark.asyncio
 async def test_manual_close(client_config: Config) -> None:
     """Test manual close of the client."""
-    client = MiddlewareClient(client_config)
+    client = ApiClient(client_config)
 
     # Create the HTTP client by calling _get_client
     http_client = client._get_client()  # pylint: disable=protected-access
@@ -173,12 +173,12 @@ async def test_client_uses_certificates(test_config_dict: dict, test_cert_pem: t
     config = Config.from_data(test_config_dict)
 
     # Patch httpx.AsyncClient to capture the cert argument
-    with patch("middleware.api_client.main.httpx.AsyncClient") as mock_client_class:
+    with patch("middleware.api_client.api_client.httpx.AsyncClient") as mock_client_class:
         # Configure the mock to return an AsyncMock instance with an async aclose method
         mock_instance = AsyncMock()
         mock_client_class.return_value = mock_instance
 
-        client = MiddlewareClient(config)
+        client = ApiClient(config)
         client._get_client()  # pylint: disable=protected-access
 
         # Verify AsyncClient was called with the correct cert parameter
@@ -214,7 +214,7 @@ async def test_client_headers(client_config: Config) -> None:
         arcs=[],
     )
 
-    async with MiddlewareClient(client_config) as client:
+    async with ApiClient(client_config) as client:
         await client.create_or_update_arcs(request)
 
     # Verify headers

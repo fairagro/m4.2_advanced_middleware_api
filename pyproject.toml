@@ -187,4 +187,5 @@ disable = [
     "R0903",  # too-few-public-methods (opinionated, often not relevant)
     "R0913",  # too-many-arguments (opinionated, case-by-case basis)
     "C0301",  # line-too-long (handled by ruff formatter)
+    "R0801",  # duplicate-code (can be noisy in tests)
 ]
