@@ -10,6 +10,7 @@ import json
 import httpx
 import pytest
 import respx
+from arctrl import ARC, ArcInvestigation  # type: ignore[import-untyped]
 
 from middleware.api_client import ApiClient, Config
 from middleware.shared.api_models.models import CreateOrUpdateArcsRequest
@@ -39,23 +40,17 @@ async def test_create_arcs_integration_mock_server(client_config: Config) -> Non
 
     route = respx.post(f"{client_config.api_url}/v1/arcs").mock(return_value=httpx.Response(201, json=mock_response))
 
-    # Create request with realistic RO-Crate data
-    request = CreateOrUpdateArcsRequest(
-        rdi="test-rdi",
-        arcs=[
-            {
-                "@context": "https://w3id.org/ro/crate/1.1/context",
-                "@id": "test-arc-001",
-                "@type": "Dataset",
-                "name": "Test ARC",
-                "description": "Integration test ARC",
-            }
-        ],
-    )
-
-    # Execute request
+    # Execute request with ARC object
+    arc = ARC.from_arc_investigation(ArcInvestigation.create(
+        identifier="test-arc-001",
+        title="Test ARC",
+        description="Integration test ARC"
+    ))
     async with ApiClient(client_config) as client:
-        response = await client.create_or_update_arcs(request)
+        response = await client.create_or_update_arcs(
+            rdi="test-rdi",
+            arcs=[arc],
+        )
 
     # Verify
     assert route.called
@@ -80,14 +75,13 @@ async def test_create_arcs_unauthorized(client_config: Config) -> None:
     """Test handling of 401 Unauthorized response."""
     respx.post(f"{client_config.api_url}/v1/arcs").mock(return_value=httpx.Response(401, text="Unauthorized"))
 
-    request = CreateOrUpdateArcsRequest(
-        rdi="test-rdi",
-        arcs=[{"@id": "test", "@type": "Dataset"}],
-    )
-
+    arc = ARC.from_arc_investigation(ArcInvestigation.create(identifier="test", title="Test"))
     async with ApiClient(client_config) as client:
         with pytest.raises(Exception, match="401"):
-            await client.create_or_update_arcs(request)
+            await client.create_or_update_arcs(
+                rdi="test-rdi",
+                arcs=[arc],
+            )
 
 
 @pytest.mark.asyncio
@@ -98,14 +92,13 @@ async def test_create_arcs_forbidden(client_config: Config) -> None:
         return_value=httpx.Response(403, text="Forbidden - RDI not authorized")
     )
 
-    request = CreateOrUpdateArcsRequest(
-        rdi="unauthorized-rdi",
-        arcs=[{"@id": "test", "@type": "Dataset"}],
-    )
-
+    arc = ARC.from_arc_investigation(ArcInvestigation.create(identifier="test", title="Test"))
     async with ApiClient(client_config) as client:
         with pytest.raises(Exception, match="403"):
-            await client.create_or_update_arcs(request)
+            await client.create_or_update_arcs(
+                rdi="unauthorized-rdi",
+                arcs=[arc],
+            )
 
 
 @pytest.mark.asyncio
@@ -116,14 +109,13 @@ async def test_create_arcs_validation_error(client_config: Config) -> None:
         return_value=httpx.Response(422, json={"detail": "Invalid ARC data"})
     )
 
-    request = CreateOrUpdateArcsRequest(
-        rdi="test-rdi",
-        arcs=[{"invalid": "data"}],
-    )
-
+    arc = ARC.from_arc_investigation(ArcInvestigation.create(identifier="test", title="Test"))
     async with ApiClient(client_config) as client:
         with pytest.raises(Exception, match="422"):
-            await client.create_or_update_arcs(request)
+            await client.create_or_update_arcs(
+                rdi="test-rdi",
+                arcs=[arc],
+            )
 
 
 @pytest.mark.asyncio
@@ -150,24 +142,13 @@ async def test_create_multiple_arcs(client_config: Config) -> None:
 
     route = respx.post(f"{client_config.api_url}/v1/arcs").mock(return_value=httpx.Response(201, json=mock_response))
 
-    request = CreateOrUpdateArcsRequest(
-        rdi="test-rdi",
-        arcs=[
-            {
-                "@context": "https://w3id.org/ro/crate/1.1/context",
-                "@id": "arc-1",
-                "@type": "Dataset",
-            },
-            {
-                "@context": "https://w3id.org/ro/crate/1.1/context",
-                "@id": "arc-2",
-                "@type": "Dataset",
-            },
-        ],
-    )
-
+    arc1 = ARC.from_arc_investigation(ArcInvestigation.create(identifier="arc-1", title="ARC 1"))
+    arc2 = ARC.from_arc_investigation(ArcInvestigation.create(identifier="arc-2", title="ARC 2"))
     async with ApiClient(client_config) as client:
-        response = await client.create_or_update_arcs(request)
+        response = await client.create_or_update_arcs(
+            rdi="test-rdi",
+            arcs=[arc1, arc2],
+        )
 
     assert route.called
     assert len(response.arcs) == 2
@@ -187,11 +168,10 @@ async def test_timeout_error(client_config: Config) -> None:
     # Mock a slow response
     respx.post(f"{client_config.api_url}/v1/arcs").mock(side_effect=httpx.TimeoutException("Request timeout"))
 
-    request = CreateOrUpdateArcsRequest(
-        rdi="test-rdi",
-        arcs=[{"@id": "test", "@type": "Dataset"}],
-    )
-
+    arc = ARC.from_arc_investigation(ArcInvestigation.create(identifier="test", title="Test"))
     async with ApiClient(client_config) as client:
         with pytest.raises(Exception, match="timeout|Timeout"):
-            await client.create_or_update_arcs(request)
+            await client.create_or_update_arcs(
+                rdi="test-rdi",
+                arcs=[arc],
+            )

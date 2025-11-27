@@ -4,6 +4,7 @@ from typing import Annotated
 
 from pydantic import Field, SecretStr
 
+from middleware.api_client.config import Config as ApiClientConfig
 from middleware.shared.config.config_base import ConfigBase
 
 
@@ -15,3 +16,6 @@ class Config(ConfigBase):
     db_password: Annotated[SecretStr, Field(description="Database password")]
     db_host: Annotated[str, Field(description="Database host")]
     db_port: Annotated[int, Field(description="Database port")] = 5432
+    rdi: Annotated[str, Field(description="RDI identifier (e.g. edaphobase)")]
+    batch_size: Annotated[int, Field(description="Batch size for ARC uploads", gt=0)] = 10
+    api_client: Annotated[ApiClientConfig, Field(description="API Client configuration")]

@@ -9,7 +9,9 @@ dependencies = [
     "psycopg[binary]>=3.2.13",
     "pydantic>=2.12.4",
     "shared",
+    "api_client",
 ]
 
 [tool.uv.sources]
 shared = { workspace = true }
+api_client = { workspace = true }

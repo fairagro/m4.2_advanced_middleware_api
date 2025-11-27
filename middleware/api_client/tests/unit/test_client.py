@@ -6,6 +6,7 @@ from unittest.mock import AsyncMock, patch
 import httpx
 import pytest
 import respx
+from arctrl import ARC, ArcInvestigation  # type: ignore[import-untyped]
 
 from middleware.api_client import ApiClient, ApiClientError, Config
 from middleware.shared.api_models.models import (
@@ -81,15 +82,13 @@ async def test_create_or_update_arcs_success(client_config: Config) -> None:
 
     route = respx.post(f"{client_config.api_url}/v1/arcs").mock(return_value=httpx.Response(201, json=mock_response))
 
-    # Create request
-    request = CreateOrUpdateArcsRequest(
-        rdi="test-rdi",
-        arcs=[{"@id": "test-arc", "@type": "Dataset"}],
-    )
-
-    # Send request
+    # Send request with ARC object
+    arc = ARC.from_arc_investigation(ArcInvestigation.create(identifier="test-arc", title="Test ARC"))
     async with ApiClient(client_config) as client:
-        response = await client.create_or_update_arcs(request)
+        response = await client.create_or_update_arcs(
+            rdi="test-rdi",
+            arcs=[arc],
+        )
 
     # Verify
     assert route.called
@@ -107,15 +106,14 @@ async def test_create_or_update_arcs_http_error(client_config: Config) -> None:
     # Mock an error response
     respx.post(f"{client_config.api_url}/v1/arcs").mock(return_value=httpx.Response(403, text="Forbidden"))
 
-    request = CreateOrUpdateArcsRequest(
-        rdi="test-rdi",
-        arcs=[{"@id": "test-arc", "@type": "Dataset"}],
-    )
-
     # Should raise ApiClientError
+    arc = ARC.from_arc_investigation(ArcInvestigation.create(identifier="test", title="Test"))
     async with ApiClient(client_config) as client:
         with pytest.raises(ApiClientError, match="HTTP error 403"):
-            await client.create_or_update_arcs(request)
+            await client.create_or_update_arcs(
+                rdi="test-rdi",
+                arcs=[arc],
+            )
 
 
 @pytest.mark.asyncio
@@ -125,15 +123,14 @@ async def test_create_or_update_arcs_network_error(client_config: Config) -> Non
     # Mock a network error
     respx.post(f"{client_config.api_url}/v1/arcs").mock(side_effect=httpx.ConnectError("Connection refused"))
 
-    request = CreateOrUpdateArcsRequest(
-        rdi="test-rdi",
-        arcs=[{"@id": "test-arc", "@type": "Dataset"}],
-    )
-
     # Should raise ApiClientError
+    arc = ARC.from_arc_investigation(ArcInvestigation.create(identifier="test", title="Test"))
     async with ApiClient(client_config) as client:
         with pytest.raises(ApiClientError, match="Request error"):
-            await client.create_or_update_arcs(request)
+            await client.create_or_update_arcs(
+                rdi="test-rdi",
+                arcs=[arc],
+            )
 
 
 @pytest.mark.asyncio
@@ -209,13 +206,8 @@ async def test_client_headers(client_config: Config) -> None:
         )
     )
 
-    request = CreateOrUpdateArcsRequest(
-        rdi="test",
-        arcs=[],
-    )
-
     async with ApiClient(client_config) as client:
-        await client.create_or_update_arcs(request)
+        await client.create_or_update_arcs(rdi="test", arcs=[])
 
     # Verify headers
     assert route.called

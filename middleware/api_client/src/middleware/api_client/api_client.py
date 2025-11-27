@@ -1,7 +1,8 @@
 """Client for the FAIRagro Middleware API."""
 
+import json
 import logging
-from typing import Any
+from typing import Any, TYPE_CHECKING
 
 import httpx
 from pydantic import BaseModel
@@ -12,6 +13,9 @@ from middleware.shared.api_models.models import (
 )
 
 from .config import Config
+
+if TYPE_CHECKING:
+    from arctrl import ARC  # type: ignore[import-untyped]
 
 logger = logging.getLogger(__name__)
 
@@ -36,14 +40,11 @@ class ApiClient:
 
         # Create client instance
         async with ApiClient(config) as client:
-            # Create request
-            request = CreateOrUpdateArcsRequest(
+            # Send request
+            response = await client.create_or_update_arcs(
                 rdi="my-rdi",
                 arcs=[{"@context": "...", "@id": "...", ...}]
             )
-
-            # Send request
-            response = await client.create_or_update_arcs(request)
             print(f"Created/Updated {len(response.arcs)} ARCs")
         ```
     """
@@ -155,12 +156,14 @@ class ApiClient:
 
     async def create_or_update_arcs(
         self,
-        request: CreateOrUpdateArcsRequest,
+        rdi: str,
+        arcs: "list[ARC]",
     ) -> CreateOrUpdateArcsResponse:
         """Create or update ARCs in the FAIRagro Middleware API.
 
         Args:
-            request (CreateOrUpdateArcsRequest): The request payload containing RDI and ARC data.
+            rdi (str): The RDI identifier.
+            arcs (list[ARC]): List of ARC objects from arctrl library.
 
         Returns:
             CreateOrUpdateArcsResponse: The response containing the result of the operation.
@@ -168,7 +171,15 @@ class ApiClient:
         Raises:
             ApiClientError: If the request fails.
         """
-        logger.info("Creating/updating ARCs for RDI: %s", request.rdi)
+        logger.info("Creating/updating %d ARCs for RDI: %s", len(arcs), rdi)
+        
+        # Serialize each ARC to RO-Crate JSON format
+        serialized_arcs: list[dict[str, Any]] = []
+        for arc in arcs:
+            json_str = arc.ToROCrateJsonString()
+            serialized_arcs.append(json.loads(json_str))
+        
+        request = CreateOrUpdateArcsRequest(rdi=rdi, arcs=serialized_arcs)
         result = await self._post("/v1/arcs", request)
         response = CreateOrUpdateArcsResponse.model_validate(result)
         logger.info(

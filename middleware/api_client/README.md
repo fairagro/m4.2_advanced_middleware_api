@@ -34,28 +34,24 @@ verify_ssl: true
 ```python
 import asyncio
 from pathlib import Path
+from arctrl import ARC, ArcInvestigation
 from middleware.api_client import Config, ApiClient
-from middleware.shared.api_models.models import CreateOrUpdateArcsRequest
 
 async def main():
     # Load configuration
     config = Config.from_yaml_file(Path("config.yaml"))
 
+    # Create ARC object
+    inv = ArcInvestigation.create(identifier="my-arc", title="My ARC")
+    arc = ARC.from_arc_investigation(inv)
+
     # Use client with context manager
     async with ApiClient(config) as client:
-        # Create request
-        request = CreateOrUpdateArcsRequest(
-            rdi="my-rdi",
-            arcs=[{
-                "@context": "https://w3id.org/ro/crate/1.1/context",
-                "@id": "my-arc",
-                "@type": "Dataset",
-                # ... more RO-Crate fields
-            }]
-        )
-
         # Send request
-        response = await client.create_or_update_arcs(request)
+        response = await client.create_or_update_arcs(
+            rdi="my-rdi",
+            arcs=[arc]
+        )
         print(f"Created/Updated {len(response.arcs)} ARCs")
 
 asyncio.run(main())
@@ -75,23 +71,32 @@ asyncio.run(main())
 
 ## API Methods
 
-### `create_or_update_arcs(request)`
+### `create_or_update_arcs(rdi: str, arcs: list[ARC]) -> CreateOrUpdateArcsResponse`
 
-Creates or updates ARCs in the Middleware API.
+Create or update ARCs in the Middleware API.
 
 **Parameters:**
-
-- `request` (CreateOrUpdateArcsRequest): Request containing RDI and ARC data
+- `rdi` (str): The RDI identifier (e.g., "edaphobase").
+- `arcs` (list[ARC]): List of ARC objects from arctrl library.
 
 **Returns:**
-
-- `CreateOrUpdateArcsResponse`: Response with operation results
+- `CreateOrUpdateArcsResponse`: Contains the result of the operation.
 
 **Raises:**
+- `ApiClientError`: If the request fails due to HTTP errors or network issues.
 
-- `ApiClientError`: If the request fails
+**Example:**
+```python
+from arctrl import ARC, ArcInvestigation
 
-## Error Handling
+inv = ArcInvestigation.create(identifier="my-arc-001", title="My ARC")
+arc = ARC.from_arc_investigation(inv)
+
+response = await client.create_or_update_arcs(
+    rdi="edaphobase",
+    arcs=[arc]
+)
+```
 
 All errors are raised as `ApiClientError` exceptions:
 
@@ -99,7 +104,10 @@ All errors are raised as `ApiClientError` exceptions:
 from middleware.api_client import ApiClientError
 
 try:
-    response = await client.create_or_update_arcs(request)
+    response = await client.create_or_update_arcs(
+        rdi="my-rdi",
+        arcs=[arc]
+    )
 except ApiClientError as e:
     print(f"API Error: {e}")
 ```
