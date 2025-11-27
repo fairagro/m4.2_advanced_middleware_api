@@ -3,7 +3,6 @@
 import datetime
 from typing import Any
 
-import pytest
 from arctrl import ArcAssay, ArcInvestigation, ArcStudy  # type: ignore[import-untyped]
 
 from middleware.sql_to_arc.mapper import map_assay, map_investigation, map_study
@@ -26,8 +25,8 @@ def test_map_investigation() -> None:
     assert arc.Identifier == "123"
     assert arc.Title == "Test Investigation"
     assert arc.Description == "Test Description"
-    assert arc.SubmissionDate == now
-    assert arc.PublicReleaseDate == now
+    assert arc.SubmissionDate == now.isoformat()
+    assert arc.PublicReleaseDate == now.isoformat()
 
 
 def test_map_investigation_defaults() -> None:
@@ -59,11 +58,11 @@ def test_map_study() -> None:
     study = map_study(row)
 
     assert isinstance(study, ArcStudy)
-    assert study.Identifier == "Test Study"  # Currently using title as identifier
+    assert study.Identifier == "1"
     assert study.Title == "Test Study"
     assert study.Description == "Study Description"
-    assert study.SubmissionDate == now
-    assert study.PublicReleaseDate == now
+    assert study.SubmissionDate == now.isoformat()
+    assert study.PublicReleaseDate == now.isoformat()
 
 
 def test_map_assay() -> None:
@@ -77,6 +76,6 @@ def test_map_assay() -> None:
     assay = map_assay(row)
 
     assert isinstance(assay, ArcAssay)
-    assert assay.Identifier == "Proteomics"  # Currently using measurement_type as identifier
+    assert assay.Identifier == "1"
     assert str(assay.MeasurementType) == "Proteomics"
     assert str(assay.TechnologyType) == "Mass Spectrometry"

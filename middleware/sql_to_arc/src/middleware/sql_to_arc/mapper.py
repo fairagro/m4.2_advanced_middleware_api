@@ -1,6 +1,7 @@
 """Mapper module to convert database rows to ARCTRL objects."""
 
-from typing import Any
+from datetime import datetime
+from typing import Any, cast
 
 from arctrl import ArcAssay, ArcInvestigation, ArcStudy  # type: ignore[import-untyped]
 
@@ -15,12 +16,8 @@ def map_investigation(row: dict[str, Any]) -> ArcInvestigation:
         ArcInvestigation object
     """
     # Handle potential None values for dates
-    submission_date = row.get("submission_time")
-    public_release_date = row.get("release_time")
-
-    # Ensure dates are properly formatted if they are datetime objects
-    # arctrl might expect strings or specific formats, but let's pass what we have for now
-    # or convert to ISO format string if needed.
+    submission_date = cast(datetime, row.get("submission_time")).isoformat() if row.get("submission_time") else None
+    public_release_date = cast(datetime, row.get("release_time")).isoformat() if row.get("release_time") else None
 
     return ArcInvestigation.create(
         identifier=str(row["id"]),
@@ -40,11 +37,12 @@ def map_study(row: dict[str, Any]) -> ArcStudy:
     Returns:
         ArcStudy object
     """
-    submission_date = row.get("submission_time")
-    public_release_date = row.get("release_time")
+    # Handle potential None values for dates
+    submission_date = cast(datetime, row.get("submission_time")).isoformat() if row.get("submission_time") else None
+    public_release_date = cast(datetime, row.get("release_time")).isoformat() if row.get("release_time") else None
 
     return ArcStudy.create(
-        identifier=str(row["title"]),  # Using title as identifier for now as ID is int
+        identifier=str(row["id"]),
         title=row.get("title", ""),
         description=row.get("description", ""),
         submission_date=submission_date,
@@ -62,7 +60,7 @@ def map_assay(row: dict[str, Any]) -> ArcAssay:
         ArcAssay object
     """
     return ArcAssay.create(
-        identifier=str(row["measurement_type"]),  # Using measurement_type as identifier? Or generate one?
+        identifier=str(row["id"]),
         measurement_type=row.get("measurement_type", ""),
         technology_type=row.get("technology_type", ""),
     )
