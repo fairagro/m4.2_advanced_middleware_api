@@ -1524,6 +1524,7 @@ name = "sql-to-arc"
 version = "0.0.0"
 source = { editable = "middleware/sql_to_arc" }
 dependencies = [
+    { name = "api-client" },
     { name = "arctrl" },
     { name = "psycopg", extra = ["binary"] },
     { name = "pydantic" },
@@ -1532,6 +1533,7 @@ dependencies = [
 
 [package.metadata]
 requires-dist = [
+    { name = "api-client", editable = "middleware/api_client" },
     { name = "arctrl", specifier = ">=3.0.0b12" },
     { name = "psycopg", extras = ["binary"], specifier = ">=3.2.13" },
     { name = "pydantic", specifier = ">=2.12.4" },

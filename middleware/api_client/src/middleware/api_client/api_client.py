@@ -2,7 +2,7 @@
 
 import json
 import logging
-from typing import Any, TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 import httpx
 from pydantic import BaseModel
@@ -157,7 +157,7 @@ class ApiClient:
     async def create_or_update_arcs(
         self,
         rdi: str,
-        arcs: "list[ARC]",
+        arcs: list["ARC"],
     ) -> CreateOrUpdateArcsResponse:
         """Create or update ARCs in the FAIRagro Middleware API.
 
@@ -172,13 +172,13 @@ class ApiClient:
             ApiClientError: If the request fails.
         """
         logger.info("Creating/updating %d ARCs for RDI: %s", len(arcs), rdi)
-        
+
         # Serialize each ARC to RO-Crate JSON format
         serialized_arcs: list[dict[str, Any]] = []
         for arc in arcs:
             json_str = arc.ToROCrateJsonString()
             serialized_arcs.append(json.loads(json_str))
-        
+
         request = CreateOrUpdateArcsRequest(rdi=rdi, arcs=serialized_arcs)
         result = await self._post("/v1/arcs", request)
         response = CreateOrUpdateArcsResponse.model_validate(result)

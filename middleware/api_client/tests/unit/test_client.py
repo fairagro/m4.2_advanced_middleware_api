@@ -9,10 +9,7 @@ import respx
 from arctrl import ARC, ArcInvestigation  # type: ignore[import-untyped]
 
 from middleware.api_client import ApiClient, ApiClientError, Config
-from middleware.shared.api_models.models import (
-    CreateOrUpdateArcsRequest,
-    CreateOrUpdateArcsResponse,
-)
+from middleware.shared.api_models.models import CreateOrUpdateArcsResponse
 
 
 @pytest.fixture
