@@ -13,7 +13,6 @@ import respx
 from arctrl import ARC, ArcInvestigation  # type: ignore[import-untyped]
 
 from middleware.api_client import ApiClient, Config
-from middleware.shared.api_models.models import CreateOrUpdateArcsRequest
 
 
 @pytest.mark.asyncio
@@ -41,11 +40,9 @@ async def test_create_arcs_integration_mock_server(client_config: Config) -> Non
     route = respx.post(f"{client_config.api_url}/v1/arcs").mock(return_value=httpx.Response(201, json=mock_response))
 
     # Execute request with ARC object
-    arc = ARC.from_arc_investigation(ArcInvestigation.create(
-        identifier="test-arc-001",
-        title="Test ARC",
-        description="Integration test ARC"
-    ))
+    arc = ARC.from_arc_investigation(
+        ArcInvestigation.create(identifier="test-arc-001", title="Test ARC", description="Integration test ARC")
+    )
     async with ApiClient(client_config) as client:
         response = await client.create_or_update_arcs(
             rdi="test-rdi",
