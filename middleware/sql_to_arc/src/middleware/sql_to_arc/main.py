@@ -1,20 +1,19 @@
 """SQL-to-ARC middleware component."""
 
+import argparse
 import asyncio
 import logging
+from pathlib import Path
 from typing import Any
 
 import psycopg
 from arctrl import ARC, ArcInvestigation  # type: ignore[import-untyped]
 from psycopg.rows import dict_row
+from pydantic import ValidationError
 
 from middleware.api_client import ApiClient
 from middleware.sql_to_arc.config import Config
 from middleware.sql_to_arc.mapper import map_assay, map_investigation, map_study
-from pydantic import ValidationError
-
-import argparse
-from pathlib import Path
 
 # ... imports ...
 
@@ -82,17 +81,70 @@ async def process_batch(client: ApiClient, batch: list[ArcInvestigation], rdi: s
         logger.error("Failed to upload batch: %s", e)
 
 
-async def main() -> None:
-    """Connect to DB, process investigations, and upload ARCs."""
-    args = parse_args()
-    try:
-        config = Config.from_yaml_file(args.config)
-    except (FileNotFoundError, ValidationError) as e:
-        logger.error("Failed to load configuration: %s", e)
-        return
+async def populate_investigation_studies_and_assays(
+    cur: psycopg.AsyncCursor[dict[str, Any]],
+    arc: ArcInvestigation,
+    investigation_id: int,
+) -> None:
+    """Populate an investigation with its studies and assays.
 
-    logger.info("Starting SQL-to-ARC conversion with config: %s", args.config)
+    Args:
+        cur: Database cursor.
+        arc: ArcInvestigation object to populate.
+        investigation_id: Investigation ID.
+    """
+    studies_rows = await fetch_studies(cur, investigation_id)
+    for study_row in studies_rows:
+        study = map_study(study_row)
+        arc.AddRegisteredStudy(study)
 
+        # Fetch and add assays for this study
+        assays_rows = await fetch_assays(cur, study_row["id"])
+        for assay_row in assays_rows:
+            assay = map_assay(assay_row)
+            study.AddRegisteredAssay(assay)
+
+
+async def process_investigations(
+    cur: psycopg.AsyncCursor[dict[str, Any]],
+    client: ApiClient,
+    config: Config,
+) -> None:
+    """Fetch investigations from DB and process them in batches.
+
+    Args:
+        cur: Database cursor.
+        client: API client instance.
+        config: Configuration object.
+    """
+    await cur.execute(
+        'SELECT id, title, description, submission_time, release_time FROM "ARC_Investigation"',
+    )
+
+    batch: list[ArcInvestigation] = []
+
+    async for row in cur:
+        arc = map_investigation(row)
+        await populate_investigation_studies_and_assays(cur, arc, row["id"])
+
+        batch.append(arc)
+
+        # Process batch if full
+        if len(batch) >= config.batch_size:
+            await process_batch(client, batch, config.rdi)
+            batch = []
+
+    # Process remaining
+    if batch:
+        await process_batch(client, batch, config.rdi)
+
+
+async def run_conversion(config: Config) -> None:
+    """Run the SQL-to-ARC conversion with the given configuration.
+
+    Args:
+        config: Configuration object.
+    """
     async with (
         ApiClient(config.api_client) as client,
         await psycopg.AsyncConnection.connect(
@@ -104,42 +156,20 @@ async def main() -> None:
         ) as conn,
         conn.cursor(row_factory=dict_row) as cur,
     ):
-        # 1. Fetch all investigations
-        await cur.execute(
-            'SELECT id, title, description, submission_time, release_time FROM "ARC_Investigation"',
-        )
+        await process_investigations(cur, client, config)
 
-        batch: list[ArcInvestigation] = []
 
-        async for row in cur:
-            # Map Investigation
-            arc = map_investigation(row)
-            current_inv_id = row["id"]
+async def main() -> None:
+    """Connect to DB, process investigations, and upload ARCs."""
+    args = parse_args()
+    try:
+        config = Config.from_yaml_file(args.config)
+    except (FileNotFoundError, ValidationError) as e:
+        logger.error("Failed to load configuration: %s", e)
+        return
 
-            # 2. Fetch Studies
-            studies_rows = await fetch_studies(cur, current_inv_id)
-            for study_row in studies_rows:
-                study = map_study(study_row)
-                arc.AddRegisteredStudy(study)
-
-                # 3. Fetch Assays
-                assays_rows = await fetch_assays(cur, study_row["id"])
-                for assay_row in assays_rows:
-                    assay = map_assay(assay_row)
-                    study.AddRegisteredAssay(assay)
-
-            # Add to batch
-            batch.append(arc)
-
-            # Process batch if full
-            if len(batch) >= config.batch_size:
-                await process_batch(client, batch, config.rdi)
-                batch = []
-
-        # Process remaining
-        if batch:
-            await process_batch(client, batch, config.rdi)
-
+    logger.info("Starting SQL-to-ARC conversion with config: %s", args.config)
+    await run_conversion(config)
     logger.info("SQL-to-ARC conversion completed.")
 
 
