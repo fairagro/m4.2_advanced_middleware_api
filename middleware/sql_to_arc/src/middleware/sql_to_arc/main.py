@@ -9,9 +9,8 @@ from arctrl import ARC, ArcInvestigation  # type: ignore[import-untyped]
 from psycopg.rows import dict_row
 
 from middleware.api_client import ApiClient
-
-from .config import Config
-from .mapper import map_assay, map_investigation, map_study
+from middleware.sql_to_arc.config import Config
+from middleware.sql_to_arc.mapper import map_assay, map_investigation, map_study
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)

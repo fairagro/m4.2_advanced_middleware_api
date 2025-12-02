@@ -1496,10 +1496,14 @@ version = "0.0.0"
 source = { editable = "middleware/shared" }
 dependencies = [
     { name = "pydantic" },
+    { name = "pyyaml" },
 ]
 
 [package.metadata]
-requires-dist = [{ name = "pydantic", specifier = ">=2.12.4" }]
+requires-dist = [
+    { name = "pydantic", specifier = ">=2.12.4" },
+    { name = "pyyaml", specifier = ">=6.0.3" },
+]
 
 [[package]]
 name = "shellingham"
