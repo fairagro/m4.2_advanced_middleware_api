@@ -1,11 +1,11 @@
 db_name: edaphobase
 db_user: postgres
-db_host: localhost
+db_host: postgres  # Docker service name
 
 rdi: edaphobase
-batch_size: 10
+batch_size: "10"
 
 api_client:
   api_url: "http://middleware-test.fairagro.net"
-  client_cert_path: /tmp/client.crt
-  client_key_path: /tmp/client.key
+  client_cert_path: /run/secrets/client.crt
+  client_key_path: /run/secrets/client_key

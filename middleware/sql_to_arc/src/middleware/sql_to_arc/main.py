@@ -12,6 +12,7 @@ from psycopg.rows import dict_row
 from pydantic import ValidationError
 
 from middleware.api_client import ApiClient
+from middleware.shared.config.config_wrapper import ConfigWrapper
 from middleware.sql_to_arc.config import Config
 from middleware.sql_to_arc.mapper import map_assay, map_investigation, map_study
 
@@ -163,7 +164,9 @@ async def main() -> None:
     """Connect to DB, process investigations, and upload ARCs."""
     args = parse_args()
     try:
-        config = Config.from_yaml_file(args.config)
+        # Load config via ConfigWrapper so ENV/Secrets with prefix 'SQL_TO_ARC' are respected
+        wrapper = ConfigWrapper.from_yaml_file(args.config, prefix="SQL_TO_ARC")
+        config = Config.from_config_wrapper(wrapper)
     except (FileNotFoundError, ValidationError) as e:
         logger.error("Failed to load configuration: %s", e)
         return

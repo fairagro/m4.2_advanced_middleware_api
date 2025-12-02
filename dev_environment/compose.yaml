@@ -3,14 +3,72 @@ services:
     image: postgres:15
     restart: always
     environment:
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
       POSTGRES_DB: postgres
     ports:
       - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
     command: ["postgres", "-c", "listen_addresses=*"]
+
+  db-init:
+    image: postgres:15
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      PGHOST: postgres
+      PGUSER: ${POSTGRES_USER:-postgres}
+      PGPASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      PGDATABASE: postgres
+    entrypoint: /bin/bash
+    command:
+      - -c
+      - |
+        set -e
+
+        apt-get update && apt-get install -y wget
+
+        echo "Dropping and recreating database edaphobase..."
+        psql -c "DROP DATABASE IF EXISTS edaphobase;"
+        psql -c "CREATE DATABASE edaphobase;"
+
+        echo "Downloading and importing Edaphobase dump..."
+        wget -q -O - https://repo.edaphobase.org/rep/dumps/FAIRagro.sql | \
+          PGDATABASE=edaphobase psql
+
+        echo "Database initialization complete."
+    restart: "no"
+
+  sql_to_arc:
+    image: sql_to_arc:latest
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.sql_to_arc
+    depends_on:
+      db-init:
+        condition: service_completed_successfully
+    environment:
+      # DB credentials from env or secrets
+      SQL_TO_ARC_DB_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+    secrets:
+      - client_key
+    volumes:
+      - ./client.crt:/run/secrets/client.crt:ro
+      - ./config.yaml:/etc/sql_to_arc/config.yaml:ro
+    command: ["/middleware/sql_to_arc", "-c", "/etc/sql_to_arc/config.yaml"]
+    # command: sleep 3600
+    restart: "no"
+
+secrets:
+  client_key:
+    environment: data
 
 volumes:
   postgres_data:
