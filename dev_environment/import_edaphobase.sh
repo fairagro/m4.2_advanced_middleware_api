@@ -4,6 +4,7 @@ set -e
 docker compose up -d
 
 export PGPASSWORD=postgres
+export DB_PASSWORD=$PGPASSWORD
 
 # Warten bis PostgreSQL erreichbar ist
 echo "Warte auf PostgreSQL..."

@@ -1,0 +1,11 @@
+db_name: edaphobase
+db_user: postgres
+db_host: localhost
+
+rdi: edaphobase
+batch_size: 10
+
+api_client:
+  api_url: "http://middleware-test.fairagro.net"
+  client_cert_path: "/path/to/client.crt"
+  client_key_path: "/path/to/client.key"
