@@ -31,3 +31,10 @@ addopts = "-v --strict-markers --tb=short"
 markers = [
     "asyncio: marks tests as async (deselect with '-m \"not asyncio\"')",
 ]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/middleware"]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"

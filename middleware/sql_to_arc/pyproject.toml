@@ -15,3 +15,10 @@ dependencies = [
 [tool.uv.sources]
 shared = { workspace = true }
 api_client = { workspace = true }
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/middleware"]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"

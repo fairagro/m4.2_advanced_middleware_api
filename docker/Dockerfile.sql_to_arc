@@ -10,12 +10,14 @@ COPY middleware ./middleware
 # Upgrade pip and install uv
 RUN pip install --no-cache-dir --upgrade pip==25.0.1 uv==0.9.10
 
-# Build shared package first (dependency of api)
+# Build shared package first
 RUN uv build --package shared --wheel
 
-# Build the API package as wheel
-RUN uv build --package api --wheel
+# Build the api client package as wheel
+RUN uv build --package api_client --wheel
 
+# Build the sql_to_arc package as wheel
+RUN uv build --package sql_to_arc --wheel
 
 # ---- Binary Build Stage ----
 FROM python:3.12.12-alpine3.22 AS binary-builder
@@ -44,30 +46,22 @@ RUN uv pip install --system pyinstaller
 
 # Build standalone binary with PyInstaller
 RUN pyinstaller --onefile \
-    --name middleware-api \
-    $(python -c "import middleware.api; print(middleware.api.__file__.replace('__init__.py', 'main.py'))")
+    --name sql_to_arc \
+    $(python -c "import middleware.sql_to_arc; print(middleware.sql_to_arc.__file__.replace('__init__.py', 'main.py'))")
 
 
 # ---- Runtime Stage ----
 FROM alpine:3.22.2
 
-WORKDIR /api
+WORKDIR /middleware
 
-ENV UVICORN_HOST=0.0.0.0
-ENV UVICORN_PORT=8000
-
-COPY --from=binary-builder /build/dist/middleware-api .
+COPY --from=binary-builder /build/dist/sql_to_arc .
 
 # Create non-root user and group and fix permissions
-RUN apk add --no-cache curl=8.14.1-r2 \
-    && addgroup -S middleware && adduser -S middleware -G middleware \
-    && chown -R middleware:middleware /api
+RUN addgroup -S sql_to_arc && \
+    adduser -S sql_to_arc -G sql_to_arc && \
+    chown -R sql_to_arc:sql_to_arc /middleware
 
-USER middleware
+USER sql_to_arc
 
-EXPOSE $UVICORN_PORT
-
-CMD ["/api/middleware-api"]
-
-HEALTHCHECK --interval=30s --timeout=5s --start-period=5s --retries=3 \
-  CMD ["curl", "-f", "http://${UVICORN_HOST}:${UVICORN_PORT}/v1/liveness"]
+CMD ["/middleware/sql_to_arc"]
