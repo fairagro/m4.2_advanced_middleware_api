@@ -9,6 +9,19 @@ fileExistenceTests:
   - name: 'Middleware API executable'
     path: '/api/middleware-api'
     shouldExist: true
+    permissions: '-rwxr-xr-x'  # Executable
+
+  - name: 'No Python wheels in final image'
+    path: '/tmp/wheels'
+    shouldExist: false  # Wheels should not leak into runtime
+
+  - name: 'No source code in final image'
+    path: '/build'
+    shouldExist: false  # Build artifacts should not be in runtime
+
+  - name: 'No middleware directory in final image'
+    path: '/middleware'
+    shouldExist: false  # Source code should not be in runtime
 
 # File content tests
 fileContentTests:
@@ -32,7 +45,43 @@ commandTests:
     args: ['-lc', 'command -v python3']
     exitCode: 127  # Command not found - Python not in final image (security)
 
-# Metadata tests (simplified)
+  - name: 'Pip is not in final image (security)'
+    command: 'sh'
+    args: ['-lc', 'command -v pip']
+    exitCode: 127  # pip should not be in runtime for security
+
+  - name: 'UV is not in final image (security)'
+    command: 'sh'
+    args: ['-lc', 'command -v uv']
+    exitCode: 127  # uv should not be in runtime
+
+  - name: 'PyInstaller is not in final image (security)'
+    command: 'sh'
+    args: ['-lc', 'command -v pyinstaller']
+    exitCode: 127  # pyinstaller should not be in runtime
+
+  - name: 'Middleware API binary is executable'
+    command: 'test'
+    args: ['-x', '/api/middleware-api']
+    exitCode: 0
+
+  - name: 'Minimal package count (Alpine security)'
+    command: 'sh'
+    args: ['-lc', 'apk info | wc -l']
+    exitCode: 0
+    # Alpine should have minimal packages (typically < 20 for this image)
+
+  - name: 'Environment variable UVICORN_HOST is set'
+    command: 'sh'
+    args: ['-lc', 'echo $UVICORN_HOST']
+    expectedOutput: ['0.0.0.0']
+
+  - name: 'Environment variable UVICORN_PORT is set'
+    command: 'sh'
+    args: ['-lc', 'echo $UVICORN_PORT']
+    expectedOutput: ['8000']
+
+# Metadata tests
 metadataTest:
   exposedPorts: ['8000']
   user: 'middleware'
