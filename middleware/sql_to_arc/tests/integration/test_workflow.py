@@ -53,7 +53,7 @@ async def test_process_batch(mock_api_client: AsyncMock) -> None:
         ArcInvestigation.create(identifier="2", title="Test 2"),
     ]
 
-    await process_batch(mock_api_client, batch)
+    await process_batch(mock_api_client, batch, "edaphobase")
 
     assert mock_api_client.create_or_update_arcs.called
     call_args = mock_api_client.create_or_update_arcs.call_args
@@ -82,6 +82,22 @@ async def test_main_workflow(
     mocker.patch(
         "middleware.sql_to_arc.main.ApiClient",
         return_value=AsyncMock(__aenter__=AsyncMock(return_value=mock_api_client)),
+    )
+
+    # Mock Config
+    mock_config = MagicMock()
+    mock_config.db_name = "test_db"
+    mock_config.db_user = "test_user"
+    mock_config.db_password.get_secret_value.return_value = "test_password"
+    mock_config.db_host = "localhost"
+    mock_config.db_port = 5432
+    mock_config.rdi = "edaphobase"
+    mock_config.batch_size = 10
+    mock_config.api_client = MagicMock()
+
+    mocker.patch(
+        "middleware.sql_to_arc.main.Config.from_yaml_file",
+        return_value=mock_config,
     )
 
     # Setup DB data

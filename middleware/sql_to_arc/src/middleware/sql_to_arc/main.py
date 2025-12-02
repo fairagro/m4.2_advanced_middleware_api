@@ -11,28 +11,30 @@ from psycopg.rows import dict_row
 from middleware.api_client import ApiClient
 from middleware.sql_to_arc.config import Config
 from middleware.sql_to_arc.mapper import map_assay, map_investigation, map_study
+from pydantic import ValidationError
+
+import argparse
+from pathlib import Path
+
+# ... imports ...
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# Load configuration
-# In a real app, this might come from env vars or a file
-config = Config.from_data(
-    {
-        "db_name": "edaphobase",
-        "db_user": "postgres",
-        "db_password": "postgres",
-        "db_host": "localhost",
-        "rdi": "edaphobase",
-        "api_client": {
-            "api_url": "http://localhost:8000",
-            "client_cert_path": "/path/to/cert.pem",
-            "client_key_path": "/path/to/key.pem",
-            "verify_ssl": "false",
-        },
-    }
-)
+
+def parse_args() -> argparse.Namespace:
+    """Parse command line arguments, ignoring unknown args (e.g., pytest flags)."""
+    parser = argparse.ArgumentParser(description="SQL to ARC Converter")
+    parser.add_argument(
+        "-c",
+        "--config",
+        type=Path,
+        default=Path("config.yaml"),
+        help="Path to configuration file (default: config.yaml)",
+    )
+    args, _ = parser.parse_known_args()
+    return args
 
 
 async def fetch_assays(cur: psycopg.AsyncCursor[dict[str, Any]], study_id: int) -> list[dict[str, Any]]:
@@ -54,8 +56,14 @@ async def fetch_studies(cur: psycopg.AsyncCursor[dict[str, Any]], investigation_
     return await cur.fetchall()
 
 
-async def process_batch(client: ApiClient, batch: list[ArcInvestigation]) -> None:
-    """Send a batch of ARCs to the API."""
+async def process_batch(client: ApiClient, batch: list[ArcInvestigation], rdi: str) -> None:
+    """Send a batch of ARCs to the API.
+
+    Args:
+        client: API client instance.
+        batch: List of ArcInvestigation objects.
+        rdi: RDI identifier for the ARC upload.
+    """
     if not batch:
         return
 
@@ -66,7 +74,7 @@ async def process_batch(client: ApiClient, batch: list[ArcInvestigation]) -> Non
 
     try:
         response = await client.create_or_update_arcs(
-            rdi=config.rdi,
+            rdi=rdi,
             arcs=arc_objects,
         )
         logger.info("Batch upload successful. Created/Updated: %d", len(response.arcs))
@@ -76,7 +84,14 @@ async def process_batch(client: ApiClient, batch: list[ArcInvestigation]) -> Non
 
 async def main() -> None:
     """Connect to DB, process investigations, and upload ARCs."""
-    logger.info("Starting SQL-to-ARC conversion...")
+    args = parse_args()
+    try:
+        config = Config.from_yaml_file(args.config)
+    except (FileNotFoundError, ValidationError) as e:
+        logger.error("Failed to load configuration: %s", e)
+        return
+
+    logger.info("Starting SQL-to-ARC conversion with config: %s", args.config)
 
     async with (
         ApiClient(config.api_client) as client,
@@ -118,12 +133,12 @@ async def main() -> None:
 
             # Process batch if full
             if len(batch) >= config.batch_size:
-                await process_batch(client, batch)
+                await process_batch(client, batch, config.rdi)
                 batch = []
 
         # Process remaining
         if batch:
-            await process_batch(client, batch)
+            await process_batch(client, batch, config.rdi)
 
     logger.info("SQL-to-ARC conversion completed.")
 
