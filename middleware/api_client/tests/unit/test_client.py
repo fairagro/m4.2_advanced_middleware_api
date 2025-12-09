@@ -1,5 +1,6 @@
 """Unit tests for the ApiClient class."""
 
+import ssl
 from pathlib import Path
 from unittest.mock import AsyncMock, patch
 
@@ -159,8 +160,6 @@ async def test_manual_close(client_config: Config) -> None:
 @pytest.mark.asyncio
 async def test_client_uses_certificates(test_config_dict: dict, test_cert_pem: tuple[Path, Path]) -> None:
     """Test that client is configured with the correct certificates."""
-    import ssl
-
     cert_path, key_path = test_cert_pem
 
     # Update config to use the test certificates
