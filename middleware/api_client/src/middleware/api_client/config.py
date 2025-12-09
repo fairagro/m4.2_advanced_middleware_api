@@ -23,3 +23,4 @@ class Config(ConfigBase):
     ] = None
     timeout: Annotated[float, Field(description="Request timeout in seconds", gt=0)] = 30.0
     verify_ssl: Annotated[bool, Field(description="Enable SSL certificate verification")] = True
+    follow_redirects: Annotated[bool, Field(description="Follow HTTP redirects for API requests")] = True

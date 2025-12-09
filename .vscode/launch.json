@@ -5,6 +5,17 @@
     "version": "0.2.0",
     "configurations": [
         {
+            "name": "sql_to_arc",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/middleware/sql_to_arc/src/middleware/sql_to_arc/main.py",
+            "console": "integratedTerminal",
+            "args": [
+                "-c",
+                "${workspaceFolder}/dev_environment/config.yaml"
+            ]
+        },
+        {
             "name": "rocrate2arc.py",
             "type": "debugpy",
             "request": "launch",

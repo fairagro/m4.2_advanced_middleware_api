@@ -108,6 +108,7 @@ class ApiClient:
                 cert=cert,
                 verify=verify,
                 timeout=self._config.timeout,
+                follow_redirects=self._config.follow_redirects,
                 headers={
                     "accept": "application/json",
                 },

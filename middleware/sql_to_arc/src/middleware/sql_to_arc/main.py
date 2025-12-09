@@ -11,7 +11,7 @@ from arctrl import ARC, ArcInvestigation  # type: ignore[import-untyped]
 from psycopg.rows import dict_row
 from pydantic import ValidationError
 
-from middleware.api_client import ApiClient
+from middleware.api_client import ApiClient, ApiClientError
 from middleware.shared.config.config_wrapper import ConfigWrapper
 from middleware.sql_to_arc.config import Config
 from middleware.sql_to_arc.mapper import map_assay, map_investigation, map_study
@@ -79,7 +79,9 @@ async def process_batch(client: ApiClient, batch: list[ArcInvestigation], rdi: s
         )
         logger.info("Batch upload successful. Created/Updated: %d", len(response.arcs))
     except (psycopg.Error, ConnectionError, TimeoutError) as e:
-        logger.error("Failed to upload batch: %s", e)
+        logger.error("Failed to upload batch due to connection issue: %s", e, exc_info=True)
+    except ApiClientError as e:
+        logger.error("Failed to upload batch due to API error: %s", e, exc_info=True)
 
 
 async def populate_investigation_studies_and_assays(
