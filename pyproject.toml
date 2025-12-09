@@ -4,19 +4,24 @@ version = "6.0.0"
 description = "The FAIRagro advanced middleware"
 readme = "README.md"
 requires-python = ">=3.12"
-dependencies = ["api"]
+dependencies = [
+  "api",
+  "api_client",
+  "sql_to_arc",
+  "shared",
+]
 
 [dependency-groups]
 dev = [
-  "fastapi[standard]>=0.116.1",
+  "fastapi[standard]>=0.124.0",
   "httpx>=0.28.1",
-  "pylint>=3.3.8",
-  "pytest>=8.4.1",
+  "pylint>=4.0.4",
+  "pytest>=9.0.2",
   "pytest-asyncio>=1.1.0",
   "pytest-cov>=7.0.0",
-  "mypy>=1.11.0",
+  "mypy>=1.19.0",
   "bandit>=1.7.0",
-  "ruff>=0.1.0",
+  "ruff>=0.14.8",
   "types-pyyaml>=6.0.12.20250915",
   "pre-commit>=4.0.0",
   "pytest-env>=1.2.0",
@@ -24,10 +29,17 @@ dev = [
 
 [tool.uv.sources]
 api = { workspace = true }
+api_client = { workspace = true }
+sql_to_arc = { workspace = true }
+shared = { workspace = true }
 
 [tool.uv.workspace]
 members = [
     "middleware/api",
+    "middleware/api_client",
+    "middleware/sql_to_arc",
+    "middleware/shared",
+    "middleware/tools",
 ]
 
 [tool.ruff]
@@ -57,6 +69,8 @@ lint.select = [
   "UP",  # pyupgrade
   "B",   # bugbear
   "SIM", # flake8-simplify
+  "A",   # flake8-builtins
+  "ARG", # flake8-unused-arguments
 ]
 
 # Maximale Zeilenlänge wie in pylint (Standard: 100)
@@ -87,6 +101,9 @@ warn_return_any = true
 warn_unused_configs = true
 disallow_untyped_defs = true
 disallow_incomplete_defs = true
+explicit_package_bases = true
+namespace_packages = true
+mypy_path = "middleware/api/src:middleware/api_client/src:middleware/shared/src:middleware/sql_to_arc/src"
 
 # Exclude directories from type checking
 exclude = [
@@ -101,24 +118,72 @@ exclude = [
   ".ruff_cache",
 ]
 
-[tool.bandit]
-exclude_dirs = [
-  "tests",
-  "venv",
-  ".venv",
-  "__pycache__",
-  "build",
-  "dist",
-  ".pytest_cache",
-  ".mypy_cache",
-  ".ruff_cache",
-  ".git",
-]
-skips = ["B101"]  # Skip assert_used. Do not skip shell injection (B601) to ensure security.
-
 # Docstring-Regeln aktivieren, damit es wie pylint C0114/15/16 meckert
 [tool.ruff.lint.pydocstyle]
 convention = "pep257" # oder "numpy", oder "google"
+
+[tool.pytest.ini_options]
+# Test discovery
+testpaths = ["middleware/*/tests"]
+python_files = ["test_*.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+
+# Output and behavior
+addopts = [
+    "-v",                        # Verbose output
+    "--strict-markers",          # Treat unregistered markers as errors
+    "--tb=short",                # Shorter traceback format
+    "--cov=middleware",          # Enable coverage for middleware packages
+    "--cov-report=term-missing", # Show missing lines in terminal
+    "--cov-report=html",         # Generate HTML coverage report
+    "--cov-report=xml",          # Generate XML coverage report (for CI)
+    "--cov-fail-under=80",       # Fail if coverage is below 80%
+]
+
+# Asyncio mode
+asyncio_mode = "auto"
+
+# Custom markers
+markers = [
+    "asyncio: marks tests as async",
+    "unit: marks tests as unit tests",
+    "integration: marks tests as integration tests",
+]
+
+[tool.coverage.run]
+# Coverage measurement settings
+source = ["middleware"]
+omit = [
+    "*/tests/*",
+    "*/__pycache__/*",
+    "*/.venv/*",
+    "*/venv/*",
+    "*/.pytest_cache/*",
+    "*/build/*",
+    "*/dist/*",
+    "*/*.egg-info/*",
+]
+branch = true  # Measure branch coverage
+
+[tool.coverage.report]
+# Coverage reporting settings
+precision = 2
+show_missing = true
+skip_covered = false
+exclude_lines = [
+    "pragma: no cover",
+    "def __repr__",
+    "raise AssertionError",
+    "raise NotImplementedError",
+    "if __name__ == .__main__.:",
+    "if TYPE_CHECKING:",
+    "@abstractmethod",
+    "@abc.abstractmethod",
+]
+
+[tool.coverage.html]
+directory = "htmlcov"
 
 [tool.pylint.format]
 max-line-length = 120
@@ -127,6 +192,8 @@ max-line-length = 120
 # Ignore directories
 ignore = [".venv", "venv", ".git", "__pycache__", "build", "dist"]
 ignore-patterns = ["^\\..*", ".*\\.egg-info"]
+# Fail if the score is below 8.0
+fail-under = 8.0
 
 [tool.pylint.messages_control]
 # Disable checks that are already covered by ruff
@@ -164,6 +231,7 @@ disable = [
     "W0102",  # dangerous-default-value -> ruff B006
     "W0107",  # unnecessary-pass -> ruff PIE790
     "W0125",  # using-constant-test -> ruff B015
+    "W0511",  # TODO comment found
     "W0612",  # unused-variable -> ruff F841
     "W0613",  # unused-argument -> ruff ARG001-005
     "W0621",  # redefined-outer-name -> ruff F811
@@ -185,4 +253,5 @@ disable = [
     "R0903",  # too-few-public-methods (opinionated, often not relevant)
     "R0913",  # too-many-arguments (opinionated, case-by-case basis)
     "C0301",  # line-too-long (handled by ruff formatter)
+    "R0801",  # duplicate-code (can be noisy in tests)
 ]

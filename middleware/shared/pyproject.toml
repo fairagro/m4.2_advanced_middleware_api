@@ -1,0 +1,17 @@
+[project]
+name = "shared"
+version = "0.0.0" # currently we disregard the version of this subpackage
+description = "The FAIRagro advanced middleware shared components"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "pydantic>=2.12.5",
+    "pyyaml>=6.0.3",
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/middleware"]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"

@@ -139,6 +139,24 @@ jobs:
           username: ${{ secrets.DOCKERHUB_USER }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
+      - name: Set component-specific metadata
+        id: component-meta
+        run: |
+          case "${{ matrix.component }}" in
+            api)
+              echo "title=FairAgro Advanced Middleware API" >> $GITHUB_OUTPUT
+              echo "description=Advanced middleware API for FairAgro platform" >> $GITHUB_OUTPUT
+              ;;
+            sql_to_arc)
+              echo "title=FairAgro SQL to ARC Converter" >> $GITHUB_OUTPUT
+              echo "description=Converts SQL database metadata to ARC format for FairAgro platform" >> $GITHUB_OUTPUT
+              ;;
+            *)
+              echo "title=FairAgro Advanced Middleware Component: ${{ matrix.component }}" >> $GITHUB_OUTPUT
+              echo "description=Middleware component for FairAgro platform" >> $GITHUB_OUTPUT
+              ;;
+          esac
+
       - name: Extract metadata
         id: meta
         uses: docker/metadata-action@v5
@@ -151,8 +169,8 @@ jobs:
             type=raw,value=${{ needs.calculate-version.outputs.Major }},enable=${{ !contains(github.ref_name, 'feature/') }}
             type=raw,value=latest,enable=${{ !contains(github.ref_name, 'feature/') }}
           labels: |
-            org.opencontainers.image.title=${{ env.IMAGE_TITLE }}
-            org.opencontainers.image.description=${{ env.IMAGE_DESCRIPTION }}
+            org.opencontainers.image.title=${{ steps.component-meta.outputs.title }}
+            org.opencontainers.image.description=${{ steps.component-meta.outputs.description }}
             org.opencontainers.image.url=https://github.com/${{ github.repository }}
             org.opencontainers.image.source=https://github.com/${{ github.repository }}
             org.opencontainers.image.version=v${{ needs.calculate-version.outputs.version }}

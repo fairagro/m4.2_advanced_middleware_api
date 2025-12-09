@@ -1,0 +1,16 @@
+[project]
+name = "tools"
+version = "0.0.0"
+description = "ARC conversion tools"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "arctrl>=3.0.0b15",
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/middleware"]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"

@@ -1,5 +1,5 @@
 {
-  "python.testing.pytestArgs": ["middleware/tests"],
+  "python.testing.pytestArgs": [ "middleware" ],
   "python.testing.unittestEnabled": false,
   "python.testing.pytestEnabled": true,
   "python.testing.autoTestDiscoverOnSaveEnabled": true,
@@ -27,4 +27,5 @@
   "ruff.configuration": "./pyproject.toml",
   "ruff.path": ["uv", "run", "ruff"],
   "ruff.importStrategy": "fromEnvironment",
+  "python-envs.defaultEnvManager": "ms-python.python:venv"
 }

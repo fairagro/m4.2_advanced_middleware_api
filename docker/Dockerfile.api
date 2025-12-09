@@ -1,7 +1,26 @@
-# ---- Build Stage ----
-FROM python:3.12.12-alpine3.22 AS builder
+# ---- Package Build Stage ----
+FROM python:3.12.12-alpine3.22 AS package-builder
 
-# Installiere Build-Tools für native Builds
+WORKDIR /build
+
+# Copy project files needed for package build
+COPY pyproject.toml uv.lock ./
+COPY middleware ./middleware
+
+# Upgrade pip and install uv
+RUN pip install --no-cache-dir --upgrade pip==25.0.1 uv==0.9.10
+
+# Build shared package first (dependency of api)
+RUN uv build --package shared --wheel
+
+# Build the API package as wheel
+RUN uv build --package api --wheel
+
+
+# ---- Binary Build Stage ----
+FROM python:3.12.12-alpine3.22 AS binary-builder
+
+# Install build tools for PyInstaller
 RUN apk add --no-cache \
     build-base=0.5-r3 \
     python3-dev=3.12.12-r0 \
@@ -9,20 +28,27 @@ RUN apk add --no-cache \
     openssl-dev=3.5.4-r0 \
     cargo=1.87.0-r0
 
-WORKDIR /middleware
+WORKDIR /build
 
-COPY . /middleware
-
-# Upgrade pip und installiere Abhängigkeiten
+# Install uv and PyInstaller
 RUN pip install --no-cache-dir --upgrade pip==25.0.1 uv==0.9.10
-RUN uv sync --package api
-RUN uv pip install pyinstaller
-RUN . .venv/bin/activate && \
-        PYTHONPATH=. \
-        pyinstaller --onefile middleware/api/main.py --name middleware-api
+
+# Copy built wheel from package-builder stage
+COPY --from=package-builder /build/dist/*.whl /tmp/wheels/
+
+# Install the API package from wheel
+RUN uv pip install --system /tmp/wheels/*.whl
+
+# Install PyInstaller
+RUN uv pip install --system pyinstaller
+
+# Build standalone binary with PyInstaller
+RUN pyinstaller --onefile \
+    --name middleware-api \
+    $(python -c "import middleware.api; print(middleware.api.__file__.replace('__init__.py', 'main.py'))")
 
 
-# # ---- Runtime Stage ----
+# ---- Runtime Stage ----
 FROM alpine:3.22.2
 
 WORKDIR /api
@@ -30,7 +56,7 @@ WORKDIR /api
 ENV UVICORN_HOST=0.0.0.0
 ENV UVICORN_PORT=8000
 
-COPY --from=builder /middleware/dist/middleware-api .
+COPY --from=binary-builder /build/dist/middleware-api .
 
 # Create non-root user and group and fix permissions
 RUN apk add --no-cache curl=8.14.1-r2 \

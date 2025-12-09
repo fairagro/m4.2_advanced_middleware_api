@@ -1,0 +1,11 @@
+version: 2
+
+secret:
+  # Exclude dev environment files
+  ignored_paths:
+    - 'dev_environment/**'
+
+  ignored_matches:
+    # Exclude db dev password
+    - name: db_password
+      match: postgres

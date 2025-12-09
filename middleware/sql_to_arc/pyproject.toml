@@ -1,0 +1,24 @@
+[project]
+name = "sql_to_arc"
+version = "0.0.0" # currently we disregard the version of this subpackage
+description = "The FAIRagro advanced middleware SQL-to-ARC converter"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "arctrl>=3.0.0b15",
+    "psycopg[binary]>=3.3.2",
+    "pydantic>=2.12.5",
+    "shared",
+    "api_client",
+]
+
+[tool.uv.sources]
+shared = { workspace = true }
+api_client = { workspace = true }
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/middleware"]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"

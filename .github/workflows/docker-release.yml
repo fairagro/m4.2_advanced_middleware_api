@@ -39,7 +39,7 @@ jobs:
     with:
       push_to_registry: true
       version_bump: ${{ startsWith(github.ref_name, 'feature/') && 'patch' || (github.event.inputs.version_bump || 'patch') }}
-      components: '["api"]' # Add other components here in the future, e.g., '["api", "worker"]'
+      components: '["api", "sql_to_arc"]' # Add other components here in the future, e.g., '["api", "worker"]'
     secrets: inherit
 
   security-scan-release:
@@ -263,7 +263,7 @@ jobs:
       - name: Upload SBOMs as a single artifact
         uses: actions/upload-artifact@v4
         with:
-          name: sboms
+          name: sboms-${{ matrix.component }}
           path: sboms/
 
   create-release:
@@ -287,11 +287,9 @@ jobs:
         if: env.RELEASE_TYPE == 'final'
         uses: actions/download-artifact@v4
         with:
-          name: sboms
+          pattern: sboms-*
           path: sboms/
-
-      # Note: SPDX SBOM is generated in security-scan-release job
-      # and downloaded as part of the SBOM artifact above
+          merge-multiple: true
 
       - name: Create version tag
         id: create_tag

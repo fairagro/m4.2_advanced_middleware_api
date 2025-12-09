@@ -85,9 +85,6 @@
 		"UV_LINK_MODE": "copy"
 	},
 
-	// Use 'forwardPorts' to make a list of ports inside the container available locally.
-	// "forwardPorts": [],
-
 	// Configure tool-specific properties.
 	"customizations": {
 		"vscode": {
@@ -105,6 +102,7 @@
 				"ms-python.debugpy",
 				"ms-python.autopep8",
 				"ms-python.vscode-python-envs",
+				"ms-python.pylint",
 				"mhutchie.git-graph",
 				"donjayamanne.githistory",
 				"codezombiech.gitignore",

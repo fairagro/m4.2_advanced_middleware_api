@@ -5,11 +5,22 @@ description = "The FAIRagro advanced middleware API"
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
-  "arctrl>=3.0.0b3",
+  "arctrl>=3.0.0b15",
   "asn1crypto>=1.5.1",
   "cryptography>=45.0.6",
-  "fastapi>=0.116.1",
+  "fastapi>=0.124.0",
   "python-gitlab>=6.2.0",
   "pyyaml>=6.0.2",
+  "shared",
   "uvicorn>=0.35.0",
 ]
+
+[tool.uv.sources]
+shared = { workspace = true }
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/middleware"]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"

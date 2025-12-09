@@ -1,0 +1,53 @@
+# SQL to ARC Converter Configuration Example
+# Copy this file to config.yaml and adjust the values
+
+# Database Connection Settings
+# ---------------------------
+# Name of the source database (e.g., PostgreSQL database name)
+db_name: "edaphobase"
+
+# Database user with read access
+db_user: "reader"
+
+# Database password (will be handled securely)
+db_password: "secure_password_here"
+
+# Database host address (hostname or IP)
+db_host: "localhost"
+
+# Database port (default: 5432 for PostgreSQL)
+db_port: 5432
+
+# RDI Identifier
+# -------------
+# Unique identifier for the Research Data Infrastructure (RDI)
+# This is used to tag or namespace the converted ARCs
+rdi: "edaphobase"
+
+# Processing Settings
+# ------------------
+# Number of ARCs to process/upload in a single batch
+batch_size: 10
+
+# API Client Configuration
+# -----------------------
+# Settings for connecting to the Middleware API to upload ARCs
+api_client:
+  # Base URL of the Middleware API
+  api_url: "http://localhost:8000"
+
+  # Path to the client certificate file (PEM format) for mTLS authentication
+  client_cert_path: "/path/to/client.crt"
+
+  # Path to the client private key file (PEM format)
+  client_key_path: "/path/to/client.key"
+
+  # Path to the CA certificate file (optional, for self-signed server certs)
+  # ca_cert_path: "/path/to/ca.crt"
+
+  # Request timeout in seconds (default: 30.0)
+  timeout: 30.0
+
+  # Verify SSL certificates (default: true)
+  # Set to false only for testing with self-signed certs without CA
+  verify_ssl: true

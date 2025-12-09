@@ -1,0 +1,186 @@
+"""Integration tests for the SQL-to-ARC workflow."""
+
+from typing import Any
+from unittest.mock import AsyncMock, MagicMock
+
+import pytest
+from arctrl import ArcInvestigation  # type: ignore[import-untyped]
+
+from middleware.api_client import ApiClient
+from middleware.shared.api_models.models import CreateOrUpdateArcsResponse
+from middleware.sql_to_arc.main import main, process_batch
+
+
+@pytest.fixture
+def mock_db_cursor() -> AsyncMock:
+    """Mock database cursor."""
+    cursor = AsyncMock()
+    # Setup default behavior for fetchall/aiter
+    cursor.fetchall.return_value = []
+    cursor.__aiter__.return_value = []
+    return cursor
+
+
+@pytest.fixture
+def mock_db_connection(mock_db_cursor: AsyncMock) -> AsyncMock:
+    """Mock database connection."""
+    conn = AsyncMock()
+    # conn.cursor is synchronous, returns an async context manager
+    conn.cursor = MagicMock()
+    conn.cursor.return_value.__aenter__ = AsyncMock(return_value=mock_db_cursor)
+    conn.cursor.return_value.__aexit__ = AsyncMock(return_value=None)
+    return conn
+
+
+@pytest.fixture
+def mock_api_client() -> AsyncMock:
+    """Mock API client."""
+    client = AsyncMock(spec=ApiClient)
+    client.create_or_update_arcs.return_value = CreateOrUpdateArcsResponse(
+        client_id="test",
+        message="success",
+        rdi="test",
+        arcs=[],
+    )
+    return client
+
+
+@pytest.mark.asyncio
+async def test_process_batch(mock_api_client: AsyncMock) -> None:
+    """Test batch processing."""
+    batch = [
+        ArcInvestigation.create(identifier="1", title="Test 1"),
+        ArcInvestigation.create(identifier="2", title="Test 2"),
+    ]
+
+    await process_batch(mock_api_client, batch, "edaphobase")
+
+    assert mock_api_client.create_or_update_arcs.called
+    call_args = mock_api_client.create_or_update_arcs.call_args
+    # Check keyword arguments
+    assert call_args.kwargs["rdi"] == "edaphobase"
+    assert len(call_args.kwargs["arcs"]) == 2
+    assert call_args.kwargs["arcs"][0].Identifier == "1"
+    assert call_args.kwargs["arcs"][1].Identifier == "2"
+
+
+@pytest.mark.asyncio
+async def test_main_workflow(
+    mocker: MagicMock,
+    mock_db_connection: AsyncMock,
+    mock_db_cursor: AsyncMock,
+    mock_api_client: AsyncMock,
+) -> None:
+    """Test the main workflow with mocked DB and API."""
+    # Mock psycopg connection
+    mocker.patch(
+        "psycopg.AsyncConnection.connect",
+        return_value=AsyncMock(__aenter__=AsyncMock(return_value=mock_db_connection)),
+    )
+
+    # Mock ApiClient context manager
+    mocker.patch(
+        "middleware.sql_to_arc.main.ApiClient",
+        return_value=AsyncMock(__aenter__=AsyncMock(return_value=mock_api_client)),
+    )
+
+    # Mock ConfigWrapper and Config
+    mock_config = MagicMock()
+    mock_config.db_name = "test_db"
+    mock_config.db_user = "test_user"
+    mock_config.db_password.get_secret_value.return_value = "test_password"
+    mock_config.db_host = "localhost"
+    mock_config.db_port = 5432
+    mock_config.rdi = "edaphobase"
+    mock_config.batch_size = 10
+    mock_config.api_client = MagicMock()
+    mock_config.log_level = "INFO"
+
+    mock_wrapper = MagicMock()
+    mocker.patch(
+        "middleware.sql_to_arc.main.ConfigWrapper.from_yaml_file",
+        return_value=mock_wrapper,
+    )
+    mocker.patch(
+        "middleware.sql_to_arc.main.Config.from_config_wrapper",
+        return_value=mock_config,
+    )
+
+    # Mock configure_logging to avoid log config issues
+    mocker.patch("middleware.sql_to_arc.main.configure_logging")
+
+    # Setup DB data - New bulk fetch strategy
+    # 1. Investigations
+    investigations = [
+        {"id": 1, "title": "Inv 1", "description": "Desc 1", "submission_time": None, "release_time": None},
+        {"id": 2, "title": "Inv 2", "description": "Desc 2", "submission_time": None, "release_time": None},
+    ]
+
+    # 2. Studies (for both investigations)
+    studies_bulk = [
+        {
+            "id": 10,
+            "investigation_id": 1,
+            "title": "Study 1",
+            "description": "Desc S1",
+            "submission_time": None,
+            "release_time": None,
+        },
+        {
+            "id": 11,
+            "investigation_id": 2,
+            "title": "Study 2",
+            "description": "Desc S2",
+            "submission_time": None,
+            "release_time": None,
+        },
+    ]
+
+    # 3. Assays (for all studies)
+    # Note: measurement_type and technology_type are not used yet,
+    # as they require proper OntologyTerm objects which the DB doesn't provide yet
+    assays_bulk = [
+        {"id": 100, "study_id": 10},
+        {"id": 101, "study_id": 11},
+    ]
+
+    # Configure cursor behavior for bulk fetch strategy
+    # The new implementation makes 3 queries:
+    # 1. All investigations
+    # 2. All studies for those investigations (using ANY)
+    # 3. All assays for those studies (using ANY)
+
+    async def fetchall_side_effect() -> list[dict[str, Any]]:
+        # Check the last executed query to decide what to return
+        if not mock_db_cursor.execute.call_args:
+            return []
+
+        last_query = mock_db_cursor.execute.call_args[0][0]
+        if 'FROM "ARC_Investigation"' in last_query:
+            return investigations
+        elif 'FROM "ARC_Study"' in last_query:
+            return studies_bulk
+        elif 'FROM "ARC_Assay"' in last_query:
+            return assays_bulk
+        return []
+
+    mock_db_cursor.fetchall.side_effect = fetchall_side_effect
+
+    # Run main
+    await main()
+
+    # Verify interactions
+    # Should have connected to DB
+    assert mock_db_connection.cursor.called
+
+    # Should have executed 3 queries (investigations, studies bulk, assays bulk)
+    assert mock_db_cursor.execute.call_count == 3
+
+    # Should have uploaded batch (2 investigations, default batch size is 10, so 1 upload)
+    assert mock_api_client.create_or_update_arcs.called
+    call_args = mock_api_client.create_or_update_arcs.call_args
+    assert len(call_args.kwargs["arcs"]) == 2
+
+    # Verify content of uploaded ARCs
+    assert call_args.kwargs["arcs"][0].Identifier == "1"
+    assert call_args.kwargs["arcs"][1].Identifier == "2"

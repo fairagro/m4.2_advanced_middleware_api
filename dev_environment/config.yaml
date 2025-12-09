@@ -1,0 +1,14 @@
+log_level: DEBUG
+
+db_name: edaphobase
+db_user: postgres
+db_password: ~
+db_host: postgres  # Docker service name
+
+rdi: edaphobase
+batch_size: "10"
+
+api_client:
+  api_url: "https://middleware-test.fairagro.net"
+  client_cert_path: /run/secrets/client.crt
+  client_key_path: /run/secrets/client_key

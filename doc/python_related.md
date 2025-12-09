@@ -107,11 +107,8 @@ source .env
 We can start the middleware api by executing the python main file:
 
 ```bash
-PYTHONPATH=. python middleware/api/main.py
+python middleware/api/src/middleware/api/main.py
 ```
-
-The `PYTHONPATH` needs to be set, so `main.py` can find the `middleware_api`
-module.
 
 ### Running the `middleware_api.main` module
 
@@ -120,9 +117,6 @@ We can also execute the `middleware_api.main` module:
 ```bash
 python -m middleware.api.main
 ```
-
-If you do this in the project directory, there is no need to set the
-`PYTHONPATH`.
 
 ### Running via `uvicorn`
 
@@ -137,7 +131,7 @@ uvicorn middleware.api.api:app
 To run the middleware api via `fastapi` command line tool:
 
 ```bash
-fastapi run middleware/api/api.py --app app
+fastapi run middleware/api/src/middleware/api/api.py --app app
 ```
 
 ### Using a local docker image

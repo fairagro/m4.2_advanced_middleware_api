@@ -1,0 +1,23 @@
+# Example Configuration for Middleware API Client
+
+# Logging level (CRITICAL, ERROR, WARNING, INFO, DEBUG, NOTSET)
+log_level: INFO
+
+# Base URL of the Middleware API
+api_url: https://localhost:8000
+
+# Path to the client certificate file (PEM format)
+client_cert_path: /path/to/client-cert.pem
+
+# Path to the client private key file (PEM format)
+client_key_path: /path/to/client-key.pem
+
+# Path to the CA certificate file for server verification (optional)
+# Set to null or omit if not needed
+ca_cert_path: /path/to/ca-cert.pem
+
+# Request timeout in seconds
+timeout: "30.0"
+
+# Enable SSL certificate verification
+verify_ssl: true
