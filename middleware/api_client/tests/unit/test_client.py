@@ -159,6 +159,8 @@ async def test_manual_close(client_config: Config) -> None:
 @pytest.mark.asyncio
 async def test_client_uses_certificates(test_config_dict: dict, test_cert_pem: tuple[Path, Path]) -> None:
     """Test that client is configured with the correct certificates."""
+    import ssl
+
     cert_path, key_path = test_cert_pem
 
     # Update config to use the test certificates
@@ -175,14 +177,14 @@ async def test_client_uses_certificates(test_config_dict: dict, test_cert_pem: t
         client = ApiClient(config)
         client._get_client()  # pylint: disable=protected-access
 
-        # Verify AsyncClient was called with the correct cert parameter
+        # Verify AsyncClient was called with the correct verify parameter
         mock_client_class.assert_called_once()
         call_kwargs = mock_client_class.call_args.kwargs
 
-        # httpx expects cert as a tuple (cert_path, key_path)
-        assert "cert" in call_kwargs
-        expected_cert = (str(cert_path), str(key_path))
-        assert call_kwargs["cert"] == expected_cert
+        # httpx now expects verify as an ssl.SSLContext with loaded cert chain
+        assert "verify" in call_kwargs
+        verify_param = call_kwargs["verify"]
+        assert isinstance(verify_param, ssl.SSLContext)
 
         await client.aclose()
 

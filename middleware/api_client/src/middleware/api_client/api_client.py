@@ -2,6 +2,7 @@
 
 import json
 import logging
+import ssl
 from typing import TYPE_CHECKING, Any
 
 import httpx
@@ -89,23 +90,33 @@ class ApiClient:
             httpx.AsyncClient: Configured async HTTP client.
         """
         if self._client is None:
-            # Prepare certificate tuple for mTLS
-            cert = (
-                str(self._config.client_cert_path),
-                str(self._config.client_key_path),
-            )
-
             # Prepare verify parameter
             if not self._config.verify_ssl:
-                verify: bool | str = False
+                verify: bool | ssl.SSLContext = False
             elif self._config.ca_cert_path:
-                verify = str(self._config.ca_cert_path)
+                # Create SSL context with CA certificate
+                ctx = ssl.create_default_context(cafile=str(self._config.ca_cert_path))
+                # Load client certificate chain for mTLS
+                if self._config.client_cert_path and self._config.client_key_path:
+                    ctx.load_cert_chain(
+                        str(self._config.client_cert_path),
+                        str(self._config.client_key_path),
+                    )
+                verify = ctx
             else:
-                verify = True
+                # No CA cert, but load client certs if available
+                if self._config.client_cert_path and self._config.client_key_path:
+                    ctx = ssl.create_default_context()
+                    ctx.load_cert_chain(
+                        str(self._config.client_cert_path),
+                        str(self._config.client_key_path),
+                    )
+                    verify = ctx
+                else:
+                    verify = True
 
             self._client = httpx.AsyncClient(
                 base_url=self._config.api_url,
-                cert=cert,
                 verify=verify,
                 timeout=self._config.timeout,
                 follow_redirects=self._config.follow_redirects,
