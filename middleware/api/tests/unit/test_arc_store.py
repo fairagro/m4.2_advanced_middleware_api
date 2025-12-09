@@ -1,5 +1,6 @@
 """Tests for ArcStore interface and error handling."""
 
+import asyncio
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -9,8 +10,23 @@ from middleware.api.arc_store import ArcStore, ArcStoreError
 
 def create_mock_arc_store() -> ArcStore:
     """Create a mock ArcStore instance by patching abstract methods."""
-    with patch.multiple(ArcStore, __abstractmethods__=set()):
-        return ArcStore()  # type: ignore[abstract]
+
+    class ConcreteArcStore(ArcStore):
+        arc_id = MagicMock()
+
+        async def _create_or_update(self, *_args: object, **_kwargs: object) -> None:
+            pass
+
+        def _delete(self, *_args: object, **_kwargs: object) -> None:
+            pass
+
+        def _exists(self, *_args: object, **_kwargs: object) -> bool:
+            return False
+
+        def _get(self, *_args: object, **_kwargs: object) -> object:
+            pass
+
+    return ConcreteArcStore()
 
 
 class TestArcStoreError:
@@ -37,8 +53,6 @@ class TestArcStoreWrapperMethods:
         with patch.object(store, "_create_or_update") as mock_impl:
             mock_impl.side_effect = ArcStoreError("Test error")
             with pytest.raises(ArcStoreError):
-                import asyncio
-
                 asyncio.run(store.create_or_update("test_id", MagicMock()))
 
     def test_get_arc_store_error_passthrough(self) -> None:
