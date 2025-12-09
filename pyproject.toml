@@ -39,6 +39,7 @@ members = [
     "middleware/api_client",
     "middleware/sql_to_arc",
     "middleware/shared",
+    "middleware/tools",
 ]
 
 [tool.ruff]
