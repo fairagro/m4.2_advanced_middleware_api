@@ -122,6 +122,69 @@ exclude = [
 [tool.ruff.lint.pydocstyle]
 convention = "pep257" # oder "numpy", oder "google"
 
+[tool.pytest.ini_options]
+# Test discovery
+testpaths = ["middleware/*/tests"]
+python_files = ["test_*.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+
+# Output and behavior
+addopts = [
+    "-v",                        # Verbose output
+    "--strict-markers",          # Treat unregistered markers as errors
+    "--tb=short",                # Shorter traceback format
+    "--cov=middleware",          # Enable coverage for middleware packages
+    "--cov-report=term-missing", # Show missing lines in terminal
+    "--cov-report=html",         # Generate HTML coverage report
+    "--cov-report=xml",          # Generate XML coverage report (for CI)
+    "--cov-fail-under=80",       # Fail if coverage is below 80%
+]
+
+# Asyncio mode
+asyncio_mode = "auto"
+
+# Custom markers
+markers = [
+    "asyncio: marks tests as async",
+    "unit: marks tests as unit tests",
+    "integration: marks tests as integration tests",
+]
+
+[tool.coverage.run]
+# Coverage measurement settings
+source = ["middleware"]
+omit = [
+    "*/tests/*",
+    "*/__pycache__/*",
+    "*/.venv/*",
+    "*/venv/*",
+    "*/.pytest_cache/*",
+    "*/build/*",
+    "*/dist/*",
+    "*/*.egg-info/*",
+]
+branch = true  # Measure branch coverage
+
+[tool.coverage.report]
+# Coverage reporting settings
+precision = 2
+show_missing = true
+skip_covered = false
+exclude_lines = [
+    "pragma: no cover",
+    "def __repr__",
+    "raise AssertionError",
+    "raise NotImplementedError",
+    "if __name__ == .__main__.:",
+    "if TYPE_CHECKING:",
+    "@abstractmethod",
+    "@abc.abstractmethod",
+]
+
+[tool.coverage.html]
+directory = "htmlcov"
+
 [tool.pylint.format]
 max-line-length = 120
 
@@ -129,6 +192,8 @@ max-line-length = 120
 # Ignore directories
 ignore = [".venv", "venv", ".git", "__pycache__", "build", "dist"]
 ignore-patterns = ["^\\..*", ".*\\.egg-info"]
+# Fail if the score is below 8.0
+fail-under = 8.0
 
 [tool.pylint.messages_control]
 # Disable checks that are already covered by ruff

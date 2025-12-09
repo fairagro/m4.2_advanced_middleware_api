@@ -58,9 +58,15 @@ def map_assay(row: dict[str, Any]) -> ArcAssay:
 
     Returns:
         ArcAssay object
+
+    Note:
+        TODO: Currently measurement_type and technology_type from DB are simple strings,
+        but ArcAssay expects OntologyTerm objects. Once the database schema is updated to
+        provide full ontology information (term accession, ontology name, etc.), these
+        should be converted to proper OntologyTerm objects instead of being omitted.
     """
+    # TODO: Convert measurement_type and technology_type to OntologyTerms
+    # once the database provides the necessary ontology information
     return ArcAssay.create(
         identifier=str(row["id"]),
-        measurement_type=row.get("measurement_type", ""),
-        technology_type=row.get("technology_type", ""),
     )

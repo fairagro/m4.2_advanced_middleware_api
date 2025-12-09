@@ -84,7 +84,7 @@ async def test_main_workflow(
         return_value=AsyncMock(__aenter__=AsyncMock(return_value=mock_api_client)),
     )
 
-    # Mock Config
+    # Mock ConfigWrapper and Config
     mock_config = MagicMock()
     mock_config.db_name = "test_db"
     mock_config.db_user = "test_user"
@@ -94,21 +94,30 @@ async def test_main_workflow(
     mock_config.rdi = "edaphobase"
     mock_config.batch_size = 10
     mock_config.api_client = MagicMock()
+    mock_config.log_level = "INFO"
 
+    mock_wrapper = MagicMock()
     mocker.patch(
-        "middleware.sql_to_arc.main.Config.from_yaml_file",
+        "middleware.sql_to_arc.main.ConfigWrapper.from_yaml_file",
+        return_value=mock_wrapper,
+    )
+    mocker.patch(
+        "middleware.sql_to_arc.main.Config.from_config_wrapper",
         return_value=mock_config,
     )
 
-    # Setup DB data
+    # Mock configure_logging to avoid log config issues
+    mocker.patch("middleware.sql_to_arc.main.configure_logging")
+
+    # Setup DB data - New bulk fetch strategy
     # 1. Investigations
     investigations = [
         {"id": 1, "title": "Inv 1", "description": "Desc 1", "submission_time": None, "release_time": None},
         {"id": 2, "title": "Inv 2", "description": "Desc 2", "submission_time": None, "release_time": None},
     ]
 
-    # 2. Studies (for Inv 1)
-    studies_1 = [
+    # 2. Studies (for both investigations)
+    studies_bulk = [
         {
             "id": 10,
             "investigation_id": 1,
@@ -117,39 +126,42 @@ async def test_main_workflow(
             "submission_time": None,
             "release_time": None,
         },
+        {
+            "id": 11,
+            "investigation_id": 2,
+            "title": "Study 2",
+            "description": "Desc S2",
+            "submission_time": None,
+            "release_time": None,
+        },
     ]
 
-    # 3. Assays (for Study 1)
-    assays_1 = [
-        {"id": 100, "study_id": 10, "measurement_type": "Metabolomics", "technology_type": "MS"},
+    # 3. Assays (for all studies)
+    # Note: measurement_type and technology_type are not used yet,
+    # as they require proper OntologyTerm objects which the DB doesn't provide yet
+    assays_bulk = [
+        {"id": 100, "study_id": 10},
+        {"id": 101, "study_id": 11},
     ]
 
-    # Configure cursor behavior
-    # The cursor is used in a loop for investigations, and then fetchall for studies/assays
-
-    # Mocking __aiter__ for the main investigation loop
-    mock_db_cursor.__aiter__.return_value = iter(investigations)
-
-    # Mocking fetchall for studies and assays
-    # We need to handle different queries.
-    # This is a bit tricky with a single mock object for multiple queries.
-    # We can use side_effect on execute to switch the return value of fetchall,
-    # but fetchall is called AFTER execute.
+    # Configure cursor behavior for bulk fetch strategy
+    # The new implementation makes 3 queries:
+    # 1. All investigations
+    # 2. All studies for those investigations (using ANY)
+    # 3. All assays for those studies (using ANY)
 
     async def fetchall_side_effect() -> list[dict[str, Any]]:
         # Check the last executed query to decide what to return
+        if not mock_db_cursor.execute.call_args:
+            return []
+
         last_query = mock_db_cursor.execute.call_args[0][0]
-        if 'FROM "ARC_Study"' in last_query:
-            # Check investigation_id param
-            inv_id = mock_db_cursor.execute.call_args[0][1][0]
-            if inv_id == 1:
-                return studies_1
-            return []
+        if 'FROM "ARC_Investigation"' in last_query:
+            return investigations
+        elif 'FROM "ARC_Study"' in last_query:
+            return studies_bulk
         elif 'FROM "ARC_Assay"' in last_query:
-            study_id = mock_db_cursor.execute.call_args[0][1][0]
-            if study_id == 10:
-                return assays_1
-            return []
+            return assays_bulk
         return []
 
     mock_db_cursor.fetchall.side_effect = fetchall_side_effect
@@ -161,8 +173,8 @@ async def test_main_workflow(
     # Should have connected to DB
     assert mock_db_connection.cursor.called
 
-    # Should have executed investigation query
-    assert mock_db_cursor.execute.call_count >= 1
+    # Should have executed 3 queries (investigations, studies bulk, assays bulk)
+    assert mock_db_cursor.execute.call_count == 3
 
     # Should have uploaded batch (2 investigations, default batch size is 10, so 1 upload)
     assert mock_api_client.create_or_update_arcs.called
@@ -170,8 +182,5 @@ async def test_main_workflow(
     assert len(call_args.kwargs["arcs"]) == 2
 
     # Verify content of uploaded ARCs
-    # Inv 1 should have 1 study with 1 assay
-    # We can't easily check the internal structure of the dummy payload without parsing,
-    # but we can check the IDs
     assert call_args.kwargs["arcs"][0].Identifier == "1"
     assert call_args.kwargs["arcs"][1].Identifier == "2"
