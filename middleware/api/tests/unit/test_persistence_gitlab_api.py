@@ -56,8 +56,8 @@ async def test_create_or_update_no_changes(gitlab_api: Any) -> None:
     project = MagicMock()
     # .arc_hash mit "dummyhash" vorhanden
     project.files.get.return_value.content = base64.b64encode(b"dummyhash").decode()
-    gitlab_api._get_or_create_project = lambda arc_id: project
-    gitlab_api._compute_arc_hash = lambda path: "dummyhash"
+    gitlab_api._get_or_create_project = lambda _arc_id: project
+    gitlab_api._compute_arc_hash = lambda _path: "dummyhash"
 
     await gitlab_api.create_or_update("arc1", arc)
     project.commits.create.assert_not_called()
@@ -72,12 +72,12 @@ async def test_create_or_update_with_changes(gitlab_api: Any) -> None:
     project = MagicMock()
 
     # kein .arc_hash vorhanden
-    def raise_get(*args: Any, **kwargs: Any) -> None:
+    def raise_get(*_args: Any, **_kwargs: Any) -> None:
         raise GitlabGetError("not found", response_code=404)
 
     project.files.get.side_effect = raise_get
-    gitlab_api._get_or_create_project = lambda arc_id: project
-    gitlab_api._compute_arc_hash = lambda path: "newhash"
+    gitlab_api._get_or_create_project = lambda _arc_id: project
+    gitlab_api._compute_arc_hash = lambda _path: "newhash"
 
     await gitlab_api.create_or_update("arc1", arc)
     project.commits.create.assert_called_once()
@@ -106,7 +106,7 @@ def test_get_success(gitlab_api: Any, monkeypatch: Any) -> None:
     gitlab_api._gitlab.projects.list.return_value = [project]
 
     dummy_arc = MagicMock()
-    monkeypatch.setattr("middleware.api.arc_store.gitlab_api.ARC.load", lambda path: dummy_arc)
+    monkeypatch.setattr("middleware.api.arc_store.gitlab_api.ARC.load", lambda _path: dummy_arc)
 
     arc = gitlab_api.get("arc1")
     assert arc == dummy_arc  # nosec

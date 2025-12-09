@@ -264,7 +264,7 @@ async def main() -> None:
         wrapper = ConfigWrapper.from_yaml_file(args.config, prefix="SQL_TO_ARC")
         config = Config.from_config_wrapper(wrapper)
         configure_logging(config.log_level)
-    except (FileNotFoundError, ValidationError) as e:
+    except (FileNotFoundError, IsADirectoryError, ValidationError) as e:
         logger.error("Failed to load configuration: %s", e)
         return
 
