@@ -5,9 +5,9 @@ description = "The FAIRagro advanced middleware SQL-to-ARC converter"
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
-    "arctrl>=3.0.0b12",
-    "psycopg[binary]>=3.2.13",
-    "pydantic>=2.12.4",
+    "arctrl>=3.0.0b15",
+    "psycopg[binary]>=3.3.2",
+    "pydantic>=2.12.5",
     "shared",
     "api_client",
 ]

@@ -13,13 +13,12 @@ from pydantic import ValidationError
 
 from middleware.api_client import ApiClient, ApiClientError
 from middleware.shared.config.config_wrapper import ConfigWrapper
+from middleware.shared.config.logging import configure_logging
 from middleware.sql_to_arc.config import Config
 from middleware.sql_to_arc.mapper import map_assay, map_investigation, map_study
 
-# ... imports ...
-
 # Configure logging
-logging.basicConfig(level=logging.INFO)
+logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
 logger = logging.getLogger(__name__)
 
 
@@ -71,6 +70,11 @@ async def process_batch(client: ApiClient, batch: list[ArcInvestigation], rdi: s
 
     # Wrap ArcInvestigation objects in ARC containers
     arc_objects = [ARC.from_arc_investigation(inv) for inv in batch]
+
+    # Log ROCrate JSON for debugging
+    for idx, arc in enumerate(arc_objects):
+        rocrate_json = arc.ToROCrateJsonString()
+        logger.debug("ARC %d ROCrate JSON: %s", idx, rocrate_json)
 
     try:
         response = await client.create_or_update_arcs(
@@ -169,6 +173,7 @@ async def main() -> None:
         # Load config via ConfigWrapper so ENV/Secrets with prefix 'SQL_TO_ARC' are respected
         wrapper = ConfigWrapper.from_yaml_file(args.config, prefix="SQL_TO_ARC")
         config = Config.from_config_wrapper(wrapper)
+        configure_logging(config.log_level)
     except (FileNotFoundError, ValidationError) as e:
         logger.error("Failed to load configuration: %s", e)
         return

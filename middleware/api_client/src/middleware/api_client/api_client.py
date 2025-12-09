@@ -181,6 +181,7 @@ class ApiClient:
             serialized_arcs.append(json.loads(json_str))
 
         request = CreateOrUpdateArcsRequest(rdi=rdi, arcs=serialized_arcs)
+        logger.debug("Request payload: %s", json.dumps(request.model_dump(), indent=2))
         result = await self._post("/v1/arcs", request)
         response = CreateOrUpdateArcsResponse.model_validate(result)
         logger.info(

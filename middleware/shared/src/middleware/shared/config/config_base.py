@@ -8,13 +8,13 @@ from pydantic import BaseModel, Field
 
 from .config_wrapper import ConfigWrapper
 
+LogLevel = Literal["CRITICAL", "ERROR", "WARNING", "INFO", "DEBUG", "NOTSET"]
+
 
 class ConfigBase(BaseModel):
     """Configuration base class for the FAIRagro advanced Middleware."""
 
-    log_level: Annotated[
-        Literal["CRITICAL", "ERROR", "WARNING", "INFO", "DEBUG", "NOTSET"], Field(description="Logging level")
-    ] = "INFO"
+    log_level: Annotated[LogLevel, Field(description="Logging level")] = "INFO"
 
     @classmethod
     def from_config_wrapper(cls, wrapper: ConfigWrapper) -> Self:

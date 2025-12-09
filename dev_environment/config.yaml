@@ -1,3 +1,5 @@
+log_level: DEBUG
+
 db_name: edaphobase
 db_user: postgres
 db_password: ~
