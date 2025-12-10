@@ -9,6 +9,6 @@ rdi: edaphobase
 batch_size: "10"
 
 api_client:
-  api_url: "https://middleware-test.fairagro.net"
-  client_cert_path: /run/secrets/client.crt
-  client_key_path: /run/secrets/client_key
+  api_url: "http://middleware-api:8000"
+  client_cert_path: null
+  client_key_path: null

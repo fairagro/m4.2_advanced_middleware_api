@@ -47,7 +47,7 @@ async def fetch_all_investigations(cur: psycopg.AsyncCursor[dict[str, Any]]) -> 
         List of investigation rows.
     """
     await cur.execute(
-        'SELECT id, title, description, submission_time, release_time FROM "ARC_Investigation"',
+        'SELECT id, title, description, submission_time, release_time FROM "ARC_Investigation" LIMIT 1',
     )
     return await cur.fetchall()
 

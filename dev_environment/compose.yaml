@@ -31,9 +31,9 @@ services:
     command:
       - -c
       - |
-        set -e
+        set -euo pipefail
 
-        apt-get update && apt-get install -y --no-install-recommends wget
+        apt-get update && apt-get install -y --no-install-recommends wget ca-certificates
 
         echo "Dropping and recreating database edaphobase..."
         psql -c "DROP DATABASE IF EXISTS edaphobase;"
@@ -64,6 +64,22 @@ services:
       - ./config.yaml:/etc/sql_to_arc/config.yaml:ro
     command: ["/middleware/sql_to_arc", "-c", "/etc/sql_to_arc/config.yaml"]
     # command: sleep 3600
+    restart: "no"
+
+  middleware-api:
+    image: middleware-api:latest
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.api
+    depends_on:
+      postgres:
+        condition: service_healthy
+    ports:
+      - "8000:8000"
+    environment:
+      MIDDLEWARE_API_CONFIG: /run/secrets/middleware-api-config
+    volumes:
+      - ./middleware-api-config.yaml:/run/secrets/middleware-api-config:ro
     restart: "no"
 
 secrets:

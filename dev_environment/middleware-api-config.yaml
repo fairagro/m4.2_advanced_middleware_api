@@ -1,0 +1,11 @@
+gitlab_api:
+  group: FAIRagro-advanced-middleware-dev
+  token: glpat-jp9E5z0raP0q1f38kIXgvW86MQp1OjkH.01.0w029o0do
+  url: https://datahub-dev.ipk-gatersleben.de
+known_rdis:
+- bonares
+- edal
+- edaphobase
+- openagrar
+- publisso
+- thunen_atlas
