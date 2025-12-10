@@ -44,7 +44,13 @@ class ApiResponse(BaseModel):
 
     """
 
-    client_id: Annotated[str, Field(description="Client identifier which is the CN from the client certificate")]
+    client_id: Annotated[
+        str | None,
+        Field(
+            description="Client identifier which is the CN from the client certificate, "
+            "or None if client certificates are not required"
+        ),
+    ]
     message: Annotated[str, Field(description="Response message")]
 
 

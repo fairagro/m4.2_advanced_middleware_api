@@ -9,3 +9,4 @@ known_rdis:
 - openagrar
 - publisso
 - thunen_atlas
+require_client_cert: false

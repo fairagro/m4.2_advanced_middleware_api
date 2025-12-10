@@ -76,13 +76,15 @@ class BusinessLogic:
     # now we accept list[Any] that is already validated using Pydantic in the API layer.
     # The question is: do we need validation on the BusinessLogic layer as well?
     # Depending on the answer, we need to refactor the current validation approach.
-    async def create_or_update_arcs(self, rdi: str, arcs: list[Any], client_id: str) -> CreateOrUpdateArcsResponse:
+    async def create_or_update_arcs(
+        self, rdi: str, arcs: list[Any], client_id: str | None
+    ) -> CreateOrUpdateArcsResponse:
         """Create or update ARCs based on the provided RO-Crate JSON data.
 
         Args:
             rdi: Research Data Infrastructure identifier.
             arcs: List of ARC definitions.
-            client_id: The client identifier.
+            client_id: The client identifier, or None if not authenticated.
 
         Raises:
             InvalidJsonSemanticError: If the JSON is semantically incorrect.
