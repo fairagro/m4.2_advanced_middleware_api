@@ -2,6 +2,7 @@
 
 import argparse
 import asyncio
+import concurrent.futures
 import logging
 from collections import defaultdict
 from pathlib import Path
@@ -37,6 +38,30 @@ def parse_args() -> argparse.Namespace:
     )
     args, _ = parser.parse_known_args()
     return args
+
+
+def build_single_arc_task(
+    investigation_row: dict[str, Any],
+    studies: list[dict[str, Any]],
+    assays_by_study: dict[int, list[dict[str, Any]]],
+) -> ArcInvestigation:
+    """Build a single ARC investigation object.
+
+    This function is designed to run in a separate process.
+    """
+    arc = map_investigation(investigation_row)
+
+    for study_row in studies:
+        study = map_study(study_row)
+        arc.AddRegisteredStudy(study)
+
+        # Add assays for this study
+        assays_rows = assays_by_study.get(study_row["id"], [])
+        for assay_row in assays_rows:
+            assay = map_assay(assay_row)
+            study.AddRegisteredAssay(assay)
+
+    return arc
 
 
 async def fetch_all_investigations(cur: psycopg.AsyncCursor[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -119,7 +144,7 @@ async def process_batch(
     rdi: str,
     studies_by_investigation: dict[int, list[dict[str, Any]]],
     assays_by_study: dict[int, list[dict[str, Any]]],
-    max_concurrent_builds: int,
+    executor: concurrent.futures.ProcessPoolExecutor,
     batch_num: int | None = None,
     total_batches: int | None = None,
 ) -> None:
@@ -133,7 +158,7 @@ async def process_batch(
         rdi: RDI identifier for the ARC upload.
         studies_by_investigation: Pre-fetched studies data.
         assays_by_study: Pre-fetched assays data.
-        max_concurrent_builds: Maximum concurrent ARC builds within this batch.
+        executor: ProcessPoolExecutor for parallel ARC building.
         batch_num: Current batch number (for logging).
         total_batches: Total number of batches (for logging).
     """
@@ -147,28 +172,38 @@ async def process_batch(
         "process_batch", attributes={"batch_size": len(batch), "rdi": rdi, "batch_info": batch_info}
     ):
         logger.info(
-            "Building batch %s with %d investigations (max concurrent: %d)...",
+            "Building batch %s with %d investigations...",
             batch_info,
             len(batch),
-            max_concurrent_builds,
         )
 
-        # Build ArcInvestigation objects concurrently with semaphore
-        semaphore = asyncio.Semaphore(max_concurrent_builds)
+        loop = asyncio.get_running_loop()
+        tasks = []
 
-        async def build_arc(investigation_row: dict[str, Any]) -> ArcInvestigation:
-            async with semaphore:
-                arc = map_investigation(investigation_row)
-                populate_investigation_studies_and_assays(
-                    arc,
-                    investigation_row["id"],
-                    studies_by_investigation,
-                    assays_by_study,
+        for row in batch:
+            # Prepare data for this investigation to minimize pickling overhead
+            inv_id = row["id"]
+            studies = studies_by_investigation.get(inv_id, [])
+
+            # Filter assays for these studies
+            relevant_assays = {}
+            for study in studies:
+                s_id = study["id"]
+                if s_id in assays_by_study:
+                    relevant_assays[s_id] = assays_by_study[s_id]
+
+            tasks.append(
+                loop.run_in_executor(
+                    executor,
+                    build_single_arc_task,
+                    row,
+                    studies,
+                    relevant_assays,
                 )
-                return arc
+            )
 
         with tracer.start_as_current_span("arc.build_investigations", attributes={"count": len(batch)}):
-            arc_investigations = await asyncio.gather(*[build_arc(row) for row in batch])
+            arc_investigations = await asyncio.gather(*tasks)
 
         # Wrap built ArcInvestigation objects in ARC containers
         with tracer.start_as_current_span("arc.wrap_investigations", attributes={"count": len(arc_investigations)}):
@@ -187,32 +222,6 @@ async def process_batch(
             logger.error("Failed to upload batch %s due to connection issue: %s", batch_info, e, exc_info=True)
         except ApiClientError as e:
             logger.error("Failed to upload batch %s due to API error: %s", batch_info, e, exc_info=True)
-
-
-def populate_investigation_studies_and_assays(
-    arc: ArcInvestigation,
-    investigation_id: int,
-    studies_by_investigation: dict[int, list[dict[str, Any]]],
-    assays_by_study: dict[int, list[dict[str, Any]]],
-) -> None:
-    """Populate an investigation with its studies and assays using pre-fetched data.
-
-    Args:
-        arc: ArcInvestigation object to populate.
-        investigation_id: Investigation ID.
-        studies_by_investigation: Dictionary mapping investigation_id to study rows.
-        assays_by_study: Dictionary mapping study_id to assay rows.
-    """
-    studies_rows = studies_by_investigation.get(investigation_id, [])
-    for study_row in studies_rows:
-        study = map_study(study_row)
-        arc.AddRegisteredStudy(study)
-
-        # Add assays for this study
-        assays_rows = assays_by_study.get(study_row["id"], [])
-        for assay_row in assays_rows:
-            assay = map_assay(assay_row)
-            study.AddRegisteredAssay(assay)
 
 
 async def process_investigations(
@@ -290,17 +299,19 @@ async def process_investigations(
         )
 
         # Process batches sequentially, each with concurrent ARC builds
-        for i, batch in enumerate(batches):
-            await process_batch(
-                client,
-                batch,
-                config.rdi,
-                studies_by_investigation,
-                assays_by_study,
-                config.max_concurrent_arc_builds,
-                batch_num=i + 1,
-                total_batches=len(batches),
-            )
+        # Use ProcessPoolExecutor for CPU-bound ARC building
+        with concurrent.futures.ProcessPoolExecutor(max_workers=config.max_concurrent_arc_builds) as executor:
+            for i, batch in enumerate(batches):
+                await process_batch(
+                    client,
+                    batch,
+                    config.rdi,
+                    studies_by_investigation,
+                    assays_by_study,
+                    executor,
+                    batch_num=i + 1,
+                    total_batches=len(batches),
+                )
 
 
 async def run_conversion(config: Config) -> None:

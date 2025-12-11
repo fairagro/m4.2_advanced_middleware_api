@@ -1,5 +1,6 @@
 """Integration tests for the SQL-to-ARC workflow."""
 
+from concurrent.futures import ProcessPoolExecutor
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock
 
@@ -54,13 +55,14 @@ async def test_process_batch(mock_api_client: AsyncMock) -> None:
     studies_by_investigation: dict[int, list[dict[str, Any]]] = {1: [], 2: []}
     assays_by_study: dict[int, list[dict[str, Any]]] = {}
 
+    executor = ProcessPoolExecutor(max_workers=5)
     await process_batch(
         mock_api_client,
         batch_rows,
         "edaphobase",
         studies_by_investigation,
         assays_by_study,
-        max_concurrent_builds=5,
+        executor,
     )
 
     assert mock_api_client.create_or_update_arcs.called

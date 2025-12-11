@@ -1,19 +1,19 @@
 """Tests for sql_to_arc main module."""
 
+import asyncio
+import concurrent.futures
 from pathlib import Path
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import psycopg
 import pytest
-from arctrl import ArcInvestigation  # type: ignore[import-untyped]
 
 from middleware.sql_to_arc.main import (
     fetch_all_investigations,
     fetch_assays_bulk,
     fetch_studies_bulk,
     parse_args,
-    populate_investigation_studies_and_assays,
     process_batch,
 )
 
@@ -158,44 +158,12 @@ class TestFetchAssaysBulk:
         mock_cursor.execute.assert_not_called()
 
 
-class TestPopulateInvestigation:
-    """Test suite for populate_investigation_studies_and_assays function."""
-
-    def test_populate_investigation_no_studies(self) -> None:
-        """Test populate with no studies."""
-        arc = MagicMock(spec=ArcInvestigation)
-        populate_investigation_studies_and_assays(arc, 1, {}, {})
-        arc.AddRegisteredStudy.assert_not_called()
-
-    def test_populate_investigation_with_studies_and_assays(self) -> None:
-        """Test populate with studies and assays."""
-        arc = MagicMock(spec=ArcInvestigation)
-        study_mock = MagicMock()
-        arc.AddRegisteredStudy.return_value = study_mock
-
-        studies_by_investigation = {
-            1: [{"id": 1, "title": "Study 1", "description": "Desc", "submission_time": None, "release_time": None}]
-        }
-        assays_by_study = {1: [{"id": 1, "study_id": 1, "measurement_type": "Type", "technology_type": "Tech"}]}
-
-        with (
-            patch("middleware.sql_to_arc.main.map_study") as mock_map_study,
-            patch("middleware.sql_to_arc.main.map_assay") as mock_map_assay,
-        ):
-            mock_map_study.return_value = study_mock
-            mock_map_assay.return_value = MagicMock()
-
-            populate_investigation_studies_and_assays(arc, 1, studies_by_investigation, assays_by_study)
-
-            mock_map_study.assert_called_once()
-            mock_map_assay.assert_called_once()
-
-
 @pytest.mark.asyncio
 async def test_process_batch_empty() -> None:
     """Test batch processing with empty batch returns early."""
     mock_client = AsyncMock()
     batch: list[dict[str, Any]] = []
+    mock_executor = MagicMock()
 
     await process_batch(
         mock_client,
@@ -203,6 +171,59 @@ async def test_process_batch_empty() -> None:
         "test_rdi",
         {},  # studies_by_investigation
         {},  # assays_by_study
-        max_concurrent_builds=5,
+        executor=mock_executor,
     )
     mock_client.create_or_update_arcs.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_process_batch_builds_and_uploads(monkeypatch: pytest.MonkeyPatch) -> None:
+    """process_batch should build ARCs via executor and upload them."""
+    mock_client = AsyncMock()
+    mock_client.create_or_update_arcs.return_value = MagicMock(arcs=[1])
+
+    batch = [
+        {"id": 1, "title": "Inv", "description": "Desc", "submission_time": None, "release_time": None},
+    ]
+    studies_by_investigation = {
+        1: [
+            {
+                "id": 10,
+                "investigation_id": 1,
+                "title": "Study",
+                "description": "Desc",
+                "submission_time": None,
+                "release_time": None,
+            }
+        ]
+    }
+    assays_by_study = {10: [{"id": 100, "study_id": 10, "measurement_type": "Type", "technology_type": "Tech"}]}
+
+    loop_future: asyncio.Future[MagicMock] = asyncio.Future()
+    arc_investigation = MagicMock(name="ArcInvestigation")
+    loop_future.set_result(arc_investigation)
+
+    loop_mock = MagicMock()
+    loop_mock.run_in_executor.return_value = loop_future
+    monkeypatch.setattr("asyncio.get_running_loop", MagicMock(return_value=loop_mock))
+
+    with patch("middleware.sql_to_arc.main.ARC") as mock_arc_class:
+        arc_wrapper = MagicMock(name="ARCObject")
+        mock_arc_class.from_arc_investigation.return_value = arc_wrapper
+
+        executor = MagicMock(spec=concurrent.futures.ProcessPoolExecutor)
+
+        await process_batch(
+            mock_client,
+            batch,
+            "test_rdi",
+            studies_by_investigation,
+            assays_by_study,
+            executor=executor,
+            batch_num=1,
+            total_batches=1,
+        )
+
+    loop_mock.run_in_executor.assert_called_once()
+    mock_arc_class.from_arc_investigation.assert_called_once_with(arc_investigation)
+    mock_client.create_or_update_arcs.assert_called_once_with(rdi="test_rdi", arcs=[arc_wrapper])
