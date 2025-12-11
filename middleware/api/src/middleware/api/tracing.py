@@ -85,7 +85,7 @@ def initialize_tracing(
             otlp_exporter = OTLPSpanExporter(endpoint=f"{otlp_endpoint}/v1/traces")
             tracer_provider.add_span_processor(BatchSpanProcessor(otlp_exporter))
             logger.info("OpenTelemetry OTLP exporter configured: %s", otlp_endpoint)
-        except Exception as e:  # noqa: BLE001
+        except (ValueError, OSError) as e:
             logger.warning("Failed to configure OTLP exporter: %s", e)
 
     # Set the global tracer provider
@@ -121,7 +121,7 @@ def instrument_fastapi(app: "FastAPI", tracer_provider: TracerProvider | None = 
         RequestsInstrumentor().instrument(tracer_provider=tracer_provider)
 
         logger.info("FastAPI and requests instrumentation enabled")
-    except Exception as exc:  # noqa: BLE001
+    except (AttributeError, TypeError, ValueError) as exc:
         logger.warning("Failed to instrument FastAPI: %s", exc)
 
 
