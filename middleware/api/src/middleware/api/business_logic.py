@@ -56,25 +56,31 @@ class BusinessLogic:
             "create_arc_from_rocrate",
             attributes={"rdi": rdi, "arc_index": len(getattr(arc_dict, "__dict__", {}))},
         ) as span:
+            logger.debug("Processing RO-Crate JSON for RDI: %s", rdi)
             try:
                 arc_json = json.dumps(arc_dict)
                 arc = ARC.from_rocrate_json_string(arc_json)
+                logger.debug("Successfully parsed ARC from RO-Crate JSON")
             except Exception as e:
+                logger.error("Failed to parse RO-Crate JSON: %s", e, exc_info=True)
                 span.record_exception(e)
                 raise InvalidJsonSemanticError(f"Error processing RO-Crate JSON: {e!r}") from e
 
             identifier = getattr(arc, "Identifier", None)
             if not identifier or identifier == "":
+                logger.error("ARC missing identifier in RO-Crate JSON")
                 raise InvalidJsonSemanticError("RO-Crate JSON must contain an 'Identifier' in the ISA object.")
 
             arc_id = self._store.arc_id(identifier, rdi)
             exists = self._store.exists(arc_id)
+            logger.debug("ARC identifier=%s, arc_id=%s, exists=%s", identifier, arc_id, exists)
 
             span.set_attribute("arc_id", arc_id)
             span.set_attribute("arc_exists", exists)
 
             await self._store.create_or_update(arc_id, arc)
             status = ArcStatus.UPDATED if exists else ArcStatus.CREATED
+            logger.info("ARC %s: %s (id=%s)", status.value, identifier, arc_id)
 
             return ArcResponse(
                 id=arc_id,
@@ -84,12 +90,15 @@ class BusinessLogic:
 
     async def _process_arcs(self, rdi: str, arcs: list[Any]) -> list[ArcResponse]:
         """Process a batch of ARCs with span for batch timing."""
+        logger.debug("Processing batch of %d ARCs for RDI: %s", len(arcs), rdi)
         with self._tracer.start_as_current_span(
             "process_arcs_batch",
             attributes={"rdi": rdi, "batch_size": len(arcs)},
         ):
             tasks = [self._create_arc_from_rocrate(rdi, arc) for arc in arcs]
-            return await asyncio.gather(*tasks)
+            results = await asyncio.gather(*tasks)
+            logger.debug("Batch processing complete: %d ARCs processed", len(results))
+            return results
 
     # -------------------------- Create or Update ARCs --------------------------
     # TODO: in the first implementation, we accepted string data for ARC JSON,
@@ -119,9 +128,13 @@ class BusinessLogic:
             "create_or_update_arcs",
             attributes={"rdi": rdi, "num_arcs": len(arcs), "client_id": client_id or "none"},
         ) as span:
+            logger.info(
+                "Starting ARC creation/update: rdi=%s, num_arcs=%d, client_id=%s", rdi, len(arcs), client_id or "none"
+            )
             try:
                 result = await self._process_arcs(rdi, arcs)
                 span.set_attribute("success", True)
+                logger.info("Successfully processed %d ARCs for RDI: %s", len(result), rdi)
                 return CreateOrUpdateArcsResponse(
                     client_id=client_id,
                     rdi=rdi,
@@ -129,9 +142,11 @@ class BusinessLogic:
                     arcs=result,
                 )
             except (InvalidJsonSemanticError, BusinessLogicError) as exc:
+                logger.error("Business logic error while processing ARCs: %s", exc, exc_info=True)
                 span.record_exception(exc)
                 raise
             except Exception as e:
+                logger.error("Unexpected error while processing ARCs: %s", e, exc_info=True)
                 span.record_exception(e)
                 raise BusinessLogicError(f"unexpected error encountered: {str(e)}") from e
 

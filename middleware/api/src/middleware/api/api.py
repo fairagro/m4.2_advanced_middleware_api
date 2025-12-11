@@ -344,6 +344,12 @@ class Api:
             rdi: Annotated[str, Depends(self._validate_rdi_authorized)],
             response: Response,
         ) -> CreateOrUpdateArcsResponse:
+            logger.info(
+                "Received POST /v1/arcs request: rdi=%s, num_arcs=%d, client_id=%s",
+                rdi,
+                len(request_body.arcs),
+                client_id or "none",
+            )
             try:
                 result = await business_logic.create_or_update_arcs(rdi, request_body.arcs, client_id)
 
@@ -351,8 +357,14 @@ class Api:
                 response.status_code = 201 if created_arcs else 200
                 if created_arcs:
                     response.headers["Location"] = f"/v1/arcs/{created_arcs[0].id}"
+                logger.info(
+                    "POST /v1/arcs completed: %d created, %d updated",
+                    len(created_arcs),
+                    len(result.arcs) - len(created_arcs),
+                )
                 return result
             except InvalidJsonSemanticError as e:
+                logger.error("Invalid JSON semantic in POST /v1/arcs: %s", e)
                 raise HTTPException(status_code=422, detail=str(e)) from e
 
 
