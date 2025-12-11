@@ -8,10 +8,12 @@ This module provides:
 
 import asyncio
 import json
+import logging
 from datetime import UTC, datetime
 from typing import Any
 
 from arctrl import ARC  # type: ignore[import-untyped]
+from opentelemetry import trace
 
 from middleware.shared.api_models.models import (
     ArcResponse,
@@ -20,6 +22,8 @@ from middleware.shared.api_models.models import (
 )
 
 from .arc_store import ArcStore
+
+logger = logging.getLogger(__name__)
 
 
 class BusinessLogicError(Exception):
@@ -44,32 +48,48 @@ class BusinessLogic:
 
         """
         self._store = store
+        self._tracer = trace.get_tracer(__name__)
 
     async def _create_arc_from_rocrate(self, rdi: str, arc_dict: dict) -> ArcResponse:
-        try:
-            arc_json = json.dumps(arc_dict)
-            arc = ARC.from_rocrate_json_string(arc_json)
-        except Exception as e:
-            raise InvalidJsonSemanticError(f"Error processing RO-Crate JSON: {e!r}") from e
+        """Create an ARC from RO-Crate JSON with tracing."""
+        with self._tracer.start_as_current_span(
+            "create_arc_from_rocrate",
+            attributes={"rdi": rdi, "arc_index": len(getattr(arc_dict, "__dict__", {}))},
+        ) as span:
+            try:
+                arc_json = json.dumps(arc_dict)
+                arc = ARC.from_rocrate_json_string(arc_json)
+            except Exception as e:
+                span.record_exception(e)
+                raise InvalidJsonSemanticError(f"Error processing RO-Crate JSON: {e!r}") from e
 
-        identifier = getattr(arc, "Identifier", None)
-        if not identifier or identifier == "":
-            raise InvalidJsonSemanticError("RO-Crate JSON must contain an 'Identifier' in the ISA object.")
+            identifier = getattr(arc, "Identifier", None)
+            if not identifier or identifier == "":
+                raise InvalidJsonSemanticError("RO-Crate JSON must contain an 'Identifier' in the ISA object.")
 
-        arc_id = self._store.arc_id(identifier, rdi)
-        exists = self._store.exists(arc_id)
-        await self._store.create_or_update(arc_id, arc)
-        status = ArcStatus.UPDATED if exists else ArcStatus.CREATED
+            arc_id = self._store.arc_id(identifier, rdi)
+            exists = self._store.exists(arc_id)
 
-        return ArcResponse(
-            id=arc_id,
-            status=status,
-            timestamp=datetime.now(UTC).isoformat() + "Z",
-        )
+            span.set_attribute("arc_id", arc_id)
+            span.set_attribute("arc_exists", exists)
+
+            await self._store.create_or_update(arc_id, arc)
+            status = ArcStatus.UPDATED if exists else ArcStatus.CREATED
+
+            return ArcResponse(
+                id=arc_id,
+                status=status,
+                timestamp=datetime.now(UTC).isoformat() + "Z",
+            )
 
     async def _process_arcs(self, rdi: str, arcs: list[Any]) -> list[ArcResponse]:
-        tasks = [self._create_arc_from_rocrate(rdi, arc) for arc in arcs]
-        return await asyncio.gather(*tasks)
+        """Process a batch of ARCs with span for batch timing."""
+        with self._tracer.start_as_current_span(
+            "process_arcs_batch",
+            attributes={"rdi": rdi, "batch_size": len(arcs)},
+        ):
+            tasks = [self._create_arc_from_rocrate(rdi, arc) for arc in arcs]
+            return await asyncio.gather(*tasks)
 
     # -------------------------- Create or Update ARCs --------------------------
     # TODO: in the first implementation, we accepted string data for ARC JSON,
@@ -95,18 +115,25 @@ class BusinessLogic:
             ARCs.
 
         """
-        try:
-            result = await self._process_arcs(rdi, arcs)
-            return CreateOrUpdateArcsResponse(
-                client_id=client_id,
-                rdi=rdi,
-                message="ARCs processed successfully",
-                arcs=result,
-            )
-        except BusinessLogicError:
-            raise
-        except Exception as e:
-            raise BusinessLogicError(f"unexpected error encountered: {str(e)}") from e
+        with self._tracer.start_as_current_span(
+            "create_or_update_arcs",
+            attributes={"rdi": rdi, "num_arcs": len(arcs), "client_id": client_id or "none"},
+        ) as span:
+            try:
+                result = await self._process_arcs(rdi, arcs)
+                span.set_attribute("success", True)
+                return CreateOrUpdateArcsResponse(
+                    client_id=client_id,
+                    rdi=rdi,
+                    message="ARCs processed successfully",
+                    arcs=result,
+                )
+            except (InvalidJsonSemanticError, BusinessLogicError) as exc:
+                span.record_exception(exc)
+                raise
+            except Exception as e:
+                span.record_exception(e)
+                raise BusinessLogicError(f"unexpected error encountered: {str(e)}") from e
 
     # # -------------------------
     # # READ ARCs

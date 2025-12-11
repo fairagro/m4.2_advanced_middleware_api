@@ -63,12 +63,13 @@ class GitlabApi(ArcStore):
             config (GitlabApiConfig): Configuration for the Gitlab API ArcStore.
 
         """
+        super().__init__()
         logger.info("Initializing ARCPersistenceGitlabAPI")
         self._config = config
         self._gitlab = gitlab.Gitlab(str(self._config.url), private_token=self._config.token.get_secret_value())
 
     def arc_id(self, identifier: str, rdi: str) -> str:
-        """Generate a unique ARC ID by hashing the identifier and RDI.
+        """Generate a unique ARC ID by hashing the ideArcStorentifier and RDI.
 
         Args:
             identifier (str): The ARC identifier.
@@ -82,23 +83,31 @@ class GitlabApi(ArcStore):
 
     # -------------------------- Project Handling --------------------------
     def _get_or_create_project(self, arc_id: str) -> Project:
-        projects = self._gitlab.projects.list(search=arc_id)
-        for project in projects:
-            if project.path == arc_id:
-                return project
-        group = self._gitlab.groups.get(self._config.group)
-        return self._gitlab.projects.create(
-            {
-                "name": arc_id,
-                "path": arc_id,
-                "namespace_id": group.id,
-                "initialize_with_readme": False,
-            }
-        )
+        with self._tracer.start_as_current_span(
+            "gitlab.get_or_create_project",
+            attributes={"arc_id": arc_id},
+        ):
+            projects = self._gitlab.projects.list(search=arc_id)
+            for project in projects:
+                if project.path == arc_id:
+                    return project
+            group = self._gitlab.groups.get(self._config.group)
+            return self._gitlab.projects.create(
+                {
+                    "name": arc_id,
+                    "path": arc_id,
+                    "namespace_id": group.id,
+                    "initialize_with_readme": False,
+                }
+            )
 
     def _find_project(self, arc_id: str) -> Project | None:
-        projects = self._gitlab.projects.list(search=arc_id)
-        return next((p for p in projects if p.path == arc_id), None)
+        with self._tracer.start_as_current_span(
+            "gitlab.find_project",
+            attributes={"arc_id": arc_id},
+        ):
+            projects = self._gitlab.projects.list(search=arc_id)
+            return next((p for p in projects if p.path == arc_id), None)
 
     # -------------------------- Hashing --------------------------
     def _compute_arc_hash(self, arc_dir: Path) -> str:
@@ -111,31 +120,52 @@ class GitlabApi(ArcStore):
         return sha.hexdigest()
 
     def _load_old_hash(self, project: Project) -> str | None:
-        try:
-            old_hash_file = project.files.get(file_path=".arc_hash", ref=self._config.branch)
-            return base64.b64decode(old_hash_file.content).decode("utf-8").strip()
-        except GitlabGetError:
-            return None
+        with self._tracer.start_as_current_span("gitlab.load_old_hash"):
+            try:
+                old_hash_file = project.files.get(file_path=".arc_hash", ref=self._config.branch)
+                return base64.b64decode(old_hash_file.content).decode("utf-8").strip()
+            except GitlabGetError:
+                return None
 
     # -------------------------- File Actions --------------------------
-    def _prepare_file_actions(self, project: Project, arc_path: Path, old_hash: str | None) -> list[dict[str, Any]]:
-        actions = []
-        for file_path in arc_path.rglob("*"):
-            if not file_path.is_file():
-                continue
-            relative_path = str(file_path.relative_to(arc_path))
-            action_type = "update" if self._file_exists(project, relative_path) else "create"
-            actions.append(self._build_file_action(file_path, relative_path, action_type))
-        # ARC hash action separat hinzufügen
-        actions.append(self._build_hash_action(old_hash, arc_path))
-        return actions
+    def _get_existing_files(self, project: Project) -> set[str]:
+        """Get all existing file paths in the project with a single API call."""
+        with self._tracer.start_as_current_span(
+            "gitlab.get_existing_files",
+            attributes={"project_id": project.id},
+        ):
+            try:
+                tree = project.repository_tree(ref=self._config.branch, all=True, recursive=True)
+                return {item["path"] for item in tree if item["type"] == "blob"}
+            except GitlabGetError:
+                # Branch doesn't exist yet (new project)
+                return set()
 
-    def _file_exists(self, project: Project, file_path: str) -> bool:
-        try:
-            project.files.get(file_path=file_path, ref=self._config.branch)
-            return True
-        except GitlabGetError:
-            return False
+    def _prepare_file_actions(
+        self, project: Project, arc_path: Path, old_hash: str | None, new_hash: str
+    ) -> list[dict[str, Any]]:
+        """Prepare file actions with optimized batch file existence check."""
+        with self._tracer.start_as_current_span(
+            "gitlab.prepare_file_actions",
+            attributes={"arc_path": str(arc_path)},
+        ) as span:
+            # Single API call to get all existing files
+            existing_files = self._get_existing_files(project)
+            span.set_attribute("existing_files_count", len(existing_files))
+
+            actions = []
+            for file_path in arc_path.rglob("*"):
+                if not file_path.is_file():
+                    continue
+                relative_path = str(file_path.relative_to(arc_path))
+                action_type = "update" if relative_path in existing_files else "create"
+                actions.append(self._build_file_action(file_path, relative_path, action_type))
+
+            span.set_attribute("actions_count", len(actions))
+
+            # ARC hash action separat hinzufügen
+            actions.append(self._build_hash_action(old_hash, new_hash))
+            return actions
 
     def _build_file_action(self, file_path: Path, relative_path: str, action_type: str) -> dict[str, Any]:
         """Erstellt ein Action-Dict für eine Datei (Text oder Binär)."""
@@ -161,22 +191,26 @@ class GitlabApi(ArcStore):
         except UnicodeDecodeError:
             return False
 
-    def _build_hash_action(self, old_hash: str | None, arc_path: Path) -> dict[str, Any]:
+    def _build_hash_action(self, old_hash: str | None, new_hash: str) -> dict[str, Any]:
         """Erstellt die Commit-Action für die .arc_hash Datei."""
         return {
             "action": "create" if not old_hash else "update",
             "file_path": ".arc_hash",
-            "content": self._compute_arc_hash(arc_path),
+            "content": new_hash,
         }
 
     # -------------------------- Commit --------------------------
     def _commit_actions(self, project: Project, actions: list[dict[str, Any]], arc_id: str) -> None:
-        commit_data = {
-            "branch": self._config.branch,
-            "commit_message": f"Add/update ARC {arc_id}",
-            "actions": actions,
-        }
-        project.commits.create(commit_data)
+        with self._tracer.start_as_current_span(
+            "gitlab.commit_actions",
+            attributes={"arc_id": arc_id, "num_actions": len(actions)},
+        ):
+            commit_data = {
+                "branch": self._config.branch,
+                "commit_message": f"Add/update ARC {arc_id}",
+                "actions": actions,
+            }
+            project.commits.create(commit_data)
 
     # -------------------------- Create/Update --------------------------
     async def _create_or_update(self, arc_id: str, arc: ARC) -> None:
@@ -190,13 +224,17 @@ class GitlabApi(ArcStore):
             loop = asyncio.get_running_loop()
             await loop.run_in_executor(None, arc.Write, str(arc_path))
 
-            new_hash = self._compute_arc_hash(arc_path)
+            # Compute hash once with tracing
+            with self._tracer.start_as_current_span("gitlab.compute_arc_hash"):
+                new_hash = self._compute_arc_hash(arc_path)
+
             old_hash = self._load_old_hash(project)
 
             if new_hash == old_hash:
+                logger.debug("ARC %s unchanged (hash: %s), skipping commit", arc_id, new_hash)
                 return
 
-            actions = self._prepare_file_actions(project, arc_path, old_hash)
+            actions = self._prepare_file_actions(project, arc_path, old_hash, new_hash)
             self._commit_actions(project, actions, arc_id)
 
     # -------------------------- Get --------------------------

@@ -57,10 +57,10 @@ services:
     environment:
       # DB credentials from env or secrets
       SQL_TO_ARC_DB_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
-    secrets:
-      - client_key
+    # secrets:
+    #   - client_key
     volumes:
-      - ./client.crt:/run/secrets/client.crt:ro
+      # - ./client.crt:/run/secrets/client.crt:ro
       - ./config.yaml:/etc/sql_to_arc/config.yaml:ro
     command: ["/middleware/sql_to_arc", "-c", "/etc/sql_to_arc/config.yaml"]
     # command: sleep 3600
@@ -77,14 +77,15 @@ services:
     ports:
       - "8000:8000"
     environment:
-      MIDDLEWARE_API_CONFIG: /run/secrets/middleware-api-config
+      - GITLAB_API_TOKEN
+      - MIDDLEWARE_API_CONFIG=/run/secrets/middleware-api-config
     volumes:
       - ./middleware-api-config.yaml:/run/secrets/middleware-api-config:ro
     restart: "no"
 
-secrets:
-  client_key:
-    environment: data
+# secrets:
+#   client_key:
+#     environment: data
 
 volumes:
   postgres_data:

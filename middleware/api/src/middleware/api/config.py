@@ -5,7 +5,7 @@ import re
 from typing import Annotated, ClassVar
 
 from cryptography import x509
-from pydantic import ConfigDict, Field, field_validator
+from pydantic import ConfigDict, Field, HttpUrl, field_validator
 
 from middleware.shared.config.config_base import ConfigBase
 
@@ -22,6 +22,13 @@ class Config(ConfigBase):
     require_client_cert: Annotated[
         bool, Field(description="Require client certificate for API access (set to false for development)")
     ] = True
+    otel_endpoint: Annotated[
+        HttpUrl | None,
+        Field(
+            description="OpenTelemetry OTLP endpoint URL (e.g. http://signoz:4318 for Signoz). "
+            "If not set, traces will only be logged to console."
+        ),
+    ] = None
     gitlab_api: Annotated[GitlabApiConfig, Field(description="Gitlab API config")]
 
     model_config: ClassVar[ConfigDict] = ConfigDict(arbitrary_types_allowed=True)

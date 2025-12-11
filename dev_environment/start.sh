@@ -10,7 +10,6 @@
 set -euo pipefail
 
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-project_root="$(dirname "$script_dir")"
 cd "$script_dir"
 
 # Parse arguments
@@ -39,7 +38,7 @@ echo ""
 # Use sops exec-env to decrypt and run docker compose
 # We need to preserve TERM and PATH for proper terminal support
 # Use exec-env without --pristine but ensure minimal env pollution
-sops exec-env "${project_root}/.env.integration.enc" \
+sops exec-env "${script_dir}/secrets.enc.yaml" \
   "docker compose up $BUILD_FLAG"
 
 echo ""

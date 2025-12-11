@@ -30,6 +30,7 @@ from middleware.shared.api_models.models import (
 from .arc_store.gitlab_api import GitlabApi
 from .business_logic import BusinessLogic, InvalidJsonSemanticError
 from .config import Config
+from .tracing import initialize_tracing, instrument_fastapi
 
 try:
     pyproject_path = Path(__file__).parent.parent / "pyproject.toml"
@@ -95,6 +96,13 @@ class Api:
         """
         self._config = app_config
         logger.debug("API configuration: %s", self._config.model_dump())
+
+        # Initialize OpenTelemetry tracing with optional OTLP endpoint
+        otlp_endpoint = str(self._config.otel_endpoint) if self._config.otel_endpoint else None
+        self._tracer_provider, self._tracer = initialize_tracing(
+            service_name="middleware-api", otlp_endpoint=otlp_endpoint
+        )
+
         self._store = GitlabApi(self._config.gitlab_api)
         self._service = BusinessLogic(self._store)
         self._app = FastAPI(
@@ -102,6 +110,10 @@ class Api:
             description="API for managing ARC (Advanced Research Context) objects",
             version=__version__,
         )
+
+        # Instrument the FastAPI application with OpenTelemetry
+        instrument_fastapi(self._app, tracer_provider=self._tracer_provider)
+
         self._setup_routes()
         self._setup_exception_handlers()
 
