@@ -43,7 +43,7 @@ RUN uv pip install --system /tmp/wheels/*.whl
 RUN uv pip install --system pyinstaller
 
 # Build standalone binary with PyInstaller
-RUN pyinstaller --onefile \
+RUN pyinstaller --onedir \
     --name middleware-api \
     $(python -c "import middleware.api; print(middleware.api.__file__.replace('__init__.py', 'main.py'))")
 
@@ -56,7 +56,7 @@ WORKDIR /api
 ENV UVICORN_HOST=0.0.0.0
 ENV UVICORN_PORT=8000
 
-COPY --from=binary-builder /build/dist/middleware-api .
+COPY --from=binary-builder /build/dist/middleware-api /api/middleware-api
 
 # Create non-root user and group and fix permissions
 RUN apk add --no-cache curl=8.14.1-r2 \
@@ -67,7 +67,7 @@ USER middleware
 
 EXPOSE $UVICORN_PORT
 
-CMD ["/api/middleware-api"]
+CMD ["/api/middleware-api/middleware-api"]
 
 HEALTHCHECK --interval=30s --timeout=5s --start-period=5s --retries=3 \
   CMD ["curl", "-f", "http://${UVICORN_HOST}:${UVICORN_PORT}/v1/liveness"]

@@ -138,90 +138,134 @@ async def fetch_assays_bulk(
     return assays_by_study
 
 
-async def process_batch(
+def build_arc_for_investigation(
+    investigation_row: dict[str, Any],
+    studies: list[dict[str, Any]],
+    assays_by_study: dict[int, list[dict[str, Any]]],
+) -> ARC:
+    """Build a single ARC for an investigation (CPU-bound operation for ProcessPoolExecutor).
+
+    This function is designed to be called in a separate process.
+
+    Args:
+        investigation_row: Investigation database row.
+        studies: List of studies for this investigation.
+        assays_by_study: Dictionary mapping study_id to list of assays.
+
+    Returns:
+        ARC object.
+    """
+    # Filter assays for these studies
+    relevant_assays = {s["id"]: assays_by_study.get(s["id"], []) for s in studies}
+
+    # Build ArcInvestigation
+    arc_investigation = build_single_arc_task(investigation_row, studies, relevant_assays)
+
+    # Wrap in ARC container
+    return ARC.from_arc_investigation(arc_investigation)
+
+
+async def process_worker_investigations(
     client: ApiClient,
-    batch: list[dict[str, Any]],
+    investigations: list[dict[str, Any]],
     rdi: str,
     studies_by_investigation: dict[int, list[dict[str, Any]]],
     assays_by_study: dict[int, list[dict[str, Any]]],
+    batch_size: int,
+    worker_id: int,
+    total_workers: int,
     executor: concurrent.futures.ProcessPoolExecutor,
-    batch_num: int | None = None,
-    total_batches: int | None = None,
 ) -> None:
-    """Send a batch of ARCs to the API.
+    """Process a list of investigations assigned to this worker.
 
-    Builds ARC objects concurrently before uploading.
+    Each worker builds ARCs in parallel using ProcessPoolExecutor and uploads them in batches.
 
     Args:
         client: API client instance.
-        batch: List of investigation rows (dicts) to build ARCs from.
+        investigations: List of investigation rows assigned to this worker.
         rdi: RDI identifier for the ARC upload.
         studies_by_investigation: Pre-fetched studies data.
         assays_by_study: Pre-fetched assays data.
-        executor: ProcessPoolExecutor for parallel ARC building.
-        batch_num: Current batch number (for logging).
-        total_batches: Total number of batches (for logging).
+        batch_size: Number of ARCs to upload per batch.
+        worker_id: ID of this worker (for logging).
+        total_workers: Total number of workers (for logging).
+        executor: ProcessPoolExecutor for CPU-bound ARC building.
     """
-    if not batch:
+    if not investigations:
         return
 
     tracer = trace.get_tracer(__name__)
-    batch_info = f"{batch_num}/{total_batches}" if batch_num and total_batches else "unknown"
 
     with tracer.start_as_current_span(
-        "process_batch", attributes={"batch_size": len(batch), "rdi": rdi, "batch_info": batch_info}
+        "process_worker", attributes={"worker_id": worker_id, "investigation_count": len(investigations), "rdi": rdi}
     ):
         logger.info(
-            "Building batch %s with %d investigations...",
-            batch_info,
-            len(batch),
+            "Worker %d/%d processing %d investigations...",
+            worker_id,
+            total_workers,
+            len(investigations),
         )
 
-        loop = asyncio.get_running_loop()
-        tasks = []
+        # Split investigations into batches
+        batches: list[list[dict[str, Any]]] = []
+        current_batch: list[dict[str, Any]] = []
 
-        for row in batch:
-            # Prepare data for this investigation to minimize pickling overhead
-            inv_id = row["id"]
-            studies = studies_by_investigation.get(inv_id, [])
+        for row in investigations:
+            current_batch.append(row)
+            if len(current_batch) >= batch_size:
+                batches.append(current_batch)
+                current_batch = []
 
-            # Filter assays for these studies
-            relevant_assays = {}
-            for study in studies:
-                s_id = study["id"]
-                if s_id in assays_by_study:
-                    relevant_assays[s_id] = assays_by_study[s_id]
+        # Add remaining batch
+        if current_batch:
+            batches.append(current_batch)
 
-            tasks.append(
-                loop.run_in_executor(
-                    executor,
-                    build_single_arc_task,
-                    row,
-                    studies,
-                    relevant_assays,
-                )
-            )
+        logger.info("Worker %d/%d: Processing %d batches", worker_id, total_workers, len(batches))
 
-        with tracer.start_as_current_span("arc.build_investigations", attributes={"count": len(batch)}):
-            arc_investigations = await asyncio.gather(*tasks)
+        # Process each batch sequentially within this worker
+        for batch_idx, batch in enumerate(batches):
+            batch_info = f"Worker {worker_id}/{total_workers}, Batch {batch_idx + 1}/{len(batches)}"
 
-        # Wrap built ArcInvestigation objects in ARC containers
-        with tracer.start_as_current_span("arc.wrap_investigations", attributes={"count": len(arc_investigations)}):
-            arc_objects = [ARC.from_arc_investigation(inv) for inv in arc_investigations]
-
-        try:
             with tracer.start_as_current_span(
-                "api_client.create_or_update_arcs", attributes={"count": len(arc_objects), "rdi": rdi}
+                "build_batch", attributes={"batch_size": len(batch), "worker_id": worker_id, "batch_idx": batch_idx}
             ):
-                response = await client.create_or_update_arcs(
-                    rdi=rdi,
-                    arcs=arc_objects,
-                )
-            logger.info("Batch %s upload successful. Created/Updated: %d", batch_info, len(response.arcs))
-        except (psycopg.Error, ConnectionError, TimeoutError) as e:
-            logger.error("Failed to upload batch %s due to connection issue: %s", batch_info, e, exc_info=True)
-        except ApiClientError as e:
-            logger.error("Failed to upload batch %s due to API error: %s", batch_info, e, exc_info=True)
+                logger.info("%s: Building %d ARCs in parallel...", batch_info, len(batch))
+
+                # Build ARCs in parallel using ProcessPoolExecutor (multi-core)
+                loop = asyncio.get_event_loop()
+                arc_build_futures = []
+
+                for row in batch:
+                    inv_id = row["id"]
+                    studies = studies_by_investigation.get(inv_id, [])
+
+                    # Submit to ProcessPoolExecutor
+                    future = loop.run_in_executor(
+                        executor,
+                        build_arc_for_investigation,
+                        row,
+                        studies,
+                        assays_by_study,
+                    )
+                    arc_build_futures.append(future)
+
+                # Wait for all ARC builds to complete
+                arc_objects = await asyncio.gather(*arc_build_futures)
+
+            # Upload batch
+            try:
+                with tracer.start_as_current_span(
+                    "upload_batch", attributes={"count": len(arc_objects), "rdi": rdi, "worker_id": worker_id}
+                ):
+                    response = await client.create_or_update_arcs(
+                        rdi=rdi,
+                        arcs=arc_objects,
+                    )
+                logger.info("%s: Upload successful. Created/Updated: %d", batch_info, len(response.arcs))
+            except (psycopg.Error, ConnectionError, TimeoutError) as e:
+                logger.error("%s: Failed to upload due to connection issue: %s", batch_info, e, exc_info=True)
+            except ApiClientError as e:
+                logger.error("%s: Failed to upload due to API error: %s", batch_info, e, exc_info=True)
 
 
 async def process_investigations(
@@ -274,44 +318,47 @@ async def process_investigations(
         total_assays = sum(len(assays) for assays in assays_by_study.values())
         logger.info("Found %d assays", total_assays)
 
-        # Step 4: Assemble into batches and process each batch
-        batches: list[list[dict[str, Any]]] = []
-        current_batch: list[dict[str, Any]] = []
-
-        with tracer.start_as_current_span("assemble_batches"):
-            for row in investigation_rows:
-                current_batch.append(row)
-
-                # Start new batch if full
-                if len(current_batch) >= config.batch_size:
-                    batches.append(current_batch)
-                    current_batch = []
-
-            # Add remaining batch
-            if current_batch:
-                batches.append(current_batch)
+        # Step 4: Distribute investigations evenly across workers
+        num_workers = config.max_concurrent_arc_builds
+        total_investigations = len(investigation_rows)
 
         logger.info(
-            "Assembled %d batches (batch_size=%d, max_concurrent_builds=%d)",
-            len(batches),
+            "Distributing %d investigations across %d workers (batch_size=%d)",
+            total_investigations,
+            num_workers,
             config.batch_size,
-            config.max_concurrent_arc_builds,
         )
 
-        # Process batches sequentially, each with concurrent ARC builds
-        # Use ProcessPoolExecutor for CPU-bound ARC building
-        with concurrent.futures.ProcessPoolExecutor(max_workers=config.max_concurrent_arc_builds) as executor:
-            for i, batch in enumerate(batches):
-                await process_batch(
+        # Split investigations into chunks for each worker
+        worker_assignments: list[list[dict[str, Any]]] = [[] for _ in range(num_workers)]
+        for idx, investigation in enumerate(investigation_rows):
+            worker_id = idx % num_workers
+            worker_assignments[worker_id].append(investigation)
+
+        # Log distribution
+        for worker_id, assigned_investigations in enumerate(worker_assignments):
+            logger.info("Worker %d assigned %d investigations", worker_id + 1, len(assigned_investigations))
+
+        # Process workers concurrently with ProcessPoolExecutor for CPU-bound ARC building
+        # Each worker processes its assigned investigations in batches, building ARCs in parallel
+        with concurrent.futures.ProcessPoolExecutor(max_workers=num_workers) as executor:
+            tasks = [
+                process_worker_investigations(
                     client,
-                    batch,
+                    assigned_investigations,
                     config.rdi,
                     studies_by_investigation,
                     assays_by_study,
-                    executor,
-                    batch_num=i + 1,
-                    total_batches=len(batches),
+                    config.batch_size,
+                    worker_id=worker_id + 1,
+                    total_workers=num_workers,
+                    executor=executor,
                 )
+                for worker_id, assigned_investigations in enumerate(worker_assignments)
+                if assigned_investigations  # Skip empty workers
+            ]
+
+            await asyncio.gather(*tasks)
 
 
 async def run_conversion(config: Config) -> None:

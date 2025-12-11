@@ -62,7 +62,7 @@ services:
     volumes:
       # - ./client.crt:/run/secrets/client.crt:ro
       - ./config.yaml:/etc/sql_to_arc/config.yaml:ro
-    command: ["/middleware/sql_to_arc", "-c", "/etc/sql_to_arc/config.yaml"]
+    command: ["/middleware/sql_to_arc/sql_to_arc", "-c", "/etc/sql_to_arc/config.yaml"]
     # command: sleep 3600
     restart: "no"
 

@@ -45,7 +45,7 @@ RUN uv pip install --system /tmp/wheels/*.whl
 RUN uv pip install --system pyinstaller
 
 # Build standalone binary with PyInstaller
-RUN pyinstaller --onefile \
+RUN pyinstaller --onedir \
     --name sql_to_arc \
     $(python -c "import middleware.sql_to_arc; print(middleware.sql_to_arc.__file__.replace('__init__.py', 'main.py'))")
 
@@ -55,7 +55,8 @@ FROM alpine:3.22.2
 
 WORKDIR /middleware
 
-COPY --from=binary-builder /build/dist/sql_to_arc .
+# Copy the entire directory created by --onedir
+COPY --from=binary-builder /build/dist/sql_to_arc /middleware/sql_to_arc
 
 # Create non-root user and group and fix permissions
 RUN addgroup -S sql_to_arc && \
@@ -64,4 +65,5 @@ RUN addgroup -S sql_to_arc && \
 
 USER sql_to_arc
 
-CMD ["/middleware/sql_to_arc"]
+# Execute the binary inside the directory
+CMD ["/middleware/sql_to_arc/sql_to_arc"]

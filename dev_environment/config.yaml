@@ -6,7 +6,8 @@ db_password: ~
 db_host: postgres  # Docker service name
 
 rdi: edaphobase
-batch_size: "10"
+batch_size: "2"  # Smaller batches to test parallel building
+max_concurrent_arc_builds: 4  # Build up to 4 ARCs in parallel per batch
 
 api_client:
   api_url: "http://middleware-api:8000"
