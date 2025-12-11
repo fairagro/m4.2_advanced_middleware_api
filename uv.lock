@@ -1867,6 +1867,9 @@ source = { editable = "middleware/sql_to_arc" }
 dependencies = [
     { name = "api-client" },
     { name = "arctrl" },
+    { name = "opentelemetry-api" },
+    { name = "opentelemetry-exporter-otlp" },
+    { name = "opentelemetry-sdk" },
     { name = "psycopg", extra = ["binary"] },
     { name = "pydantic" },
     { name = "shared" },
@@ -1876,6 +1879,9 @@ dependencies = [
 requires-dist = [
     { name = "api-client", editable = "middleware/api_client" },
     { name = "arctrl", specifier = ">=3.0.0b15" },
+    { name = "opentelemetry-api", specifier = ">=1.27.0" },
+    { name = "opentelemetry-exporter-otlp", specifier = ">=1.27.0" },
+    { name = "opentelemetry-sdk", specifier = ">=1.27.0" },
     { name = "psycopg", extras = ["binary"], specifier = ">=3.3.2" },
     { name = "pydantic", specifier = ">=2.12.5" },
     { name = "shared", editable = "middleware/shared" },

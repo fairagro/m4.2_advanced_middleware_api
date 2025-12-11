@@ -9,6 +9,7 @@ from typing import Any
 
 import psycopg
 from arctrl import ARC, ArcInvestigation  # type: ignore[import-untyped]
+from opentelemetry import trace
 from psycopg.rows import dict_row
 from pydantic import ValidationError
 
@@ -17,6 +18,7 @@ from middleware.shared.config.config_wrapper import ConfigWrapper
 from middleware.shared.config.logging import configure_logging
 from middleware.sql_to_arc.config import Config
 from middleware.sql_to_arc.mapper import map_assay, map_investigation, map_study
+from middleware.sql_to_arc.tracing import initialize_tracing
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
@@ -122,26 +124,32 @@ async def process_batch(client: ApiClient, batch: list[ArcInvestigation], rdi: s
     if not batch:
         return
 
-    logger.info("Uploading batch of %d ARCs...", len(batch))
+    tracer = trace.get_tracer(__name__)
+    with tracer.start_as_current_span("process_batch", attributes={"batch_size": len(batch), "rdi": rdi}):
+        logger.info("Uploading batch of %d ARCs...", len(batch))
 
-    # Wrap ArcInvestigation objects in ARC containers
-    arc_objects = [ARC.from_arc_investigation(inv) for inv in batch]
+        # Wrap ArcInvestigation objects in ARC containers
+        with tracer.start_as_current_span("arc.wrap_investigations", attributes={"count": len(batch)}):
+            arc_objects = [ARC.from_arc_investigation(inv) for inv in batch]
 
-    # Log ROCrate JSON for debugging
-    for idx, arc in enumerate(arc_objects):
-        rocrate_json = arc.ToROCrateJsonString()
-        logger.debug("ARC %d ROCrate JSON: %s", idx, rocrate_json)
+        # Log ROCrate JSON for debugging
+        for idx, arc in enumerate(arc_objects):
+            rocrate_json = arc.ToROCrateJsonString()
+            logger.debug("ARC %d ROCrate JSON: %s", idx, rocrate_json)
 
-    try:
-        response = await client.create_or_update_arcs(
-            rdi=rdi,
-            arcs=arc_objects,
-        )
-        logger.info("Batch upload successful. Created/Updated: %d", len(response.arcs))
-    except (psycopg.Error, ConnectionError, TimeoutError) as e:
-        logger.error("Failed to upload batch due to connection issue: %s", e, exc_info=True)
-    except ApiClientError as e:
-        logger.error("Failed to upload batch due to API error: %s", e, exc_info=True)
+        try:
+            with tracer.start_as_current_span(
+                "api_client.create_or_update_arcs", attributes={"count": len(arc_objects), "rdi": rdi}
+            ):
+                response = await client.create_or_update_arcs(
+                    rdi=rdi,
+                    arcs=arc_objects,
+                )
+            logger.info("Batch upload successful. Created/Updated: %d", len(response.arcs))
+        except (psycopg.Error, ConnectionError, TimeoutError) as e:
+            logger.error("Failed to upload batch due to connection issue: %s", e, exc_info=True)
+        except ApiClientError as e:
+            logger.error("Failed to upload batch due to API error: %s", e, exc_info=True)
 
 
 def populate_investigation_studies_and_assays(
@@ -189,47 +197,58 @@ async def process_investigations(
         client: API client instance.
         config: Configuration object.
     """
-    # Step 1: Fetch all investigations
-    logger.info("Fetching all investigations...")
-    investigation_rows = await fetch_all_investigations(cur)
-    logger.info("Found %d investigations", len(investigation_rows))
+    tracer = trace.get_tracer(__name__)
+    with tracer.start_as_current_span("process_investigations"):
+        # Step 1: Fetch all investigations
+        logger.info("Fetching all investigations...")
+        with tracer.start_as_current_span("db.fetch_investigations"):
+            investigation_rows = await fetch_all_investigations(cur)
+        logger.info("Found %d investigations", len(investigation_rows))
 
-    if not investigation_rows:
-        logger.info("No investigations found, nothing to process")
-        return
+        if not investigation_rows:
+            logger.info("No investigations found, nothing to process")
+            return
 
-    # Step 2: Fetch all studies for these investigations in bulk
-    investigation_ids = [row["id"] for row in investigation_rows]
-    logger.info("Fetching studies for %d investigations...", len(investigation_ids))
-    studies_by_investigation = await fetch_studies_bulk(cur, investigation_ids)
-    total_studies = sum(len(studies) for studies in studies_by_investigation.values())
-    logger.info("Found %d studies", total_studies)
+        # Step 2: Fetch all studies for these investigations in bulk
+        investigation_ids = [row["id"] for row in investigation_rows]
+        logger.info("Fetching studies for %d investigations...", len(investigation_ids))
+        with tracer.start_as_current_span(
+            "db.fetch_studies", attributes={"investigation_count": len(investigation_ids)}
+        ):
+            studies_by_investigation = await fetch_studies_bulk(cur, investigation_ids)
+        total_studies = sum(len(studies) for studies in studies_by_investigation.values())
+        logger.info("Found %d studies", total_studies)
 
-    # Step 3: Fetch all assays for these studies in bulk
-    study_ids = [study["id"] for studies in studies_by_investigation.values() for study in studies]
-    logger.info("Fetching assays for %d studies...", len(study_ids))
-    assays_by_study = await fetch_assays_bulk(cur, study_ids)
-    total_assays = sum(len(assays) for assays in assays_by_study.values())
-    logger.info("Found %d assays", total_assays)
+        # Step 3: Fetch all assays for these studies in bulk
+        study_ids = [study["id"] for studies in studies_by_investigation.values() for study in studies]
+        logger.info("Fetching assays for %d studies...", len(study_ids))
+        with tracer.start_as_current_span("db.fetch_assays", attributes={"study_count": len(study_ids)}):
+            assays_by_study = await fetch_assays_bulk(cur, study_ids)
+        total_assays = sum(len(assays) for assays in assays_by_study.values())
+        logger.info("Found %d assays", total_assays)
 
-    # Step 4: Assemble ARC objects in memory and process in batches
-    batch: list[ArcInvestigation] = []
+        # Step 4: Assemble ARC objects in memory and process in batches
+        batch: list[ArcInvestigation] = []
 
-    for row in investigation_rows:
-        arc = map_investigation(row)
-        populate_investigation_studies_and_assays(
-            arc,
-            row["id"],
-            studies_by_investigation,
-            assays_by_study,
-        )
+        with tracer.start_as_current_span(
+            "assemble_and_upload_arcs",
+            attributes={"total_investigations": len(investigation_rows), "batch_size": config.batch_size},
+        ):
+            for row in investigation_rows:
+                arc = map_investigation(row)
+                populate_investigation_studies_and_assays(
+                    arc,
+                    row["id"],
+                    studies_by_investigation,
+                    assays_by_study,
+                )
 
-        batch.append(arc)
+                batch.append(arc)
 
-        # Process batch if full
-        if len(batch) >= config.batch_size:
-            await process_batch(client, batch, config.rdi)
-            batch = []
+                # Process batch if full
+                if len(batch) >= config.batch_size:
+                    await process_batch(client, batch, config.rdi)
+                    batch = []
 
     # Process remaining
     if batch:
@@ -242,18 +261,20 @@ async def run_conversion(config: Config) -> None:
     Args:
         config: Configuration object.
     """
-    async with (
-        ApiClient(config.api_client) as client,
-        await psycopg.AsyncConnection.connect(
-            dbname=config.db_name,
-            user=config.db_user,
-            password=config.db_password.get_secret_value(),
-            host=config.db_host,
-            port=config.db_port,
-        ) as conn,
-        conn.cursor(row_factory=dict_row) as cur,
-    ):
-        await process_investigations(cur, client, config)
+    tracer = trace.get_tracer(__name__)
+    with tracer.start_as_current_span("run_conversion"):
+        async with (
+            ApiClient(config.api_client) as client,
+            await psycopg.AsyncConnection.connect(
+                dbname=config.db_name,
+                user=config.db_user,
+                password=config.db_password.get_secret_value(),
+                host=config.db_host,
+                port=config.db_port,
+            ) as conn,
+            conn.cursor(row_factory=dict_row) as cur,
+        ):
+            await process_investigations(cur, client, config)
 
 
 async def main() -> None:
@@ -268,9 +289,14 @@ async def main() -> None:
         logger.error("Failed to load configuration: %s", e)
         return
 
-    logger.info("Starting SQL-to-ARC conversion with config: %s", args.config)
-    await run_conversion(config)
-    logger.info("SQL-to-ARC conversion completed.")
+    # Initialize OpenTelemetry tracing
+    otlp_endpoint = str(config.otel_endpoint) if config.otel_endpoint else None
+    _tracer_provider, tracer = initialize_tracing(service_name="sql_to_arc", otlp_endpoint=otlp_endpoint)
+
+    with tracer.start_as_current_span("sql_to_arc.main"):
+        logger.info("Starting SQL-to-ARC conversion with config: %s", args.config)
+        await run_conversion(config)
+        logger.info("SQL-to-ARC conversion completed.")
 
 
 if __name__ == "__main__":
