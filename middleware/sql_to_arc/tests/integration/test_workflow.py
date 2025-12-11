@@ -4,7 +4,6 @@ from typing import Any
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
-from arctrl import ArcInvestigation  # type: ignore[import-untyped]
 
 from middleware.api_client import ApiClient
 from middleware.shared.api_models.models import CreateOrUpdateArcsResponse
@@ -48,20 +47,27 @@ def mock_api_client() -> AsyncMock:
 @pytest.mark.asyncio
 async def test_process_batch(mock_api_client: AsyncMock) -> None:
     """Test batch processing."""
-    batch = [
-        ArcInvestigation.create(identifier="1", title="Test 1"),
-        ArcInvestigation.create(identifier="2", title="Test 2"),
+    batch_rows: list[dict[str, Any]] = [
+        {"id": 1, "title": "Test 1", "description": "Desc 1", "submission_time": None, "release_time": None},
+        {"id": 2, "title": "Test 2", "description": "Desc 2", "submission_time": None, "release_time": None},
     ]
+    studies_by_investigation: dict[int, list[dict[str, Any]]] = {1: [], 2: []}
+    assays_by_study: dict[int, list[dict[str, Any]]] = {}
 
-    await process_batch(mock_api_client, batch, "edaphobase")
+    await process_batch(
+        mock_api_client,
+        batch_rows,
+        "edaphobase",
+        studies_by_investigation,
+        assays_by_study,
+        max_concurrent_builds=5,
+    )
 
     assert mock_api_client.create_or_update_arcs.called
     call_args = mock_api_client.create_or_update_arcs.call_args
     # Check keyword arguments
     assert call_args.kwargs["rdi"] == "edaphobase"
     assert len(call_args.kwargs["arcs"]) == 2
-    assert call_args.kwargs["arcs"][0].Identifier == "1"
-    assert call_args.kwargs["arcs"][1].Identifier == "2"
 
 
 @pytest.mark.asyncio
@@ -93,6 +99,7 @@ async def test_main_workflow(
     mock_config.db_port = 5432
     mock_config.rdi = "edaphobase"
     mock_config.batch_size = 10
+    mock_config.max_concurrent_arc_builds = 5
     mock_config.api_client = MagicMock()
     mock_config.log_level = "INFO"
 

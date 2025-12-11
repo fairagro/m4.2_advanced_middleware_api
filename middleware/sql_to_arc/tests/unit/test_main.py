@@ -1,6 +1,7 @@
 """Tests for sql_to_arc main module."""
 
 from pathlib import Path
+from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import psycopg
@@ -194,7 +195,14 @@ class TestPopulateInvestigation:
 async def test_process_batch_empty() -> None:
     """Test batch processing with empty batch returns early."""
     mock_client = AsyncMock()
-    batch: list = []
+    batch: list[dict[str, Any]] = []
 
-    await process_batch(mock_client, batch, "test_rdi")  # type: ignore[arg-type]
+    await process_batch(
+        mock_client,
+        batch,
+        "test_rdi",
+        {},  # studies_by_investigation
+        {},  # assays_by_study
+        max_concurrent_builds=5,
+    )
     mock_client.create_or_update_arcs.assert_not_called()
