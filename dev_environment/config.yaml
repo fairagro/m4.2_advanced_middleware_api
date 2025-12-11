@@ -13,4 +13,5 @@ api_client:
   client_cert_path: ~
   client_key_path: ~
 
-# otel_endpoint: http://signoz:4318  # Uncomment to enable Signoz tracing
+# otel_endpoint: http://signoz:4318     # Uncomment to enable Signoz tracing
+# otel_log_console_spans: false         # Set to false to disable SPAN logging to console

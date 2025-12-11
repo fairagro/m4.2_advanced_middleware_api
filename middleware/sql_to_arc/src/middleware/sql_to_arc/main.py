@@ -16,9 +16,9 @@ from pydantic import ValidationError
 from middleware.api_client import ApiClient, ApiClientError
 from middleware.shared.config.config_wrapper import ConfigWrapper
 from middleware.shared.config.logging import configure_logging
+from middleware.shared.tracing import initialize_tracing
 from middleware.sql_to_arc.config import Config
 from middleware.sql_to_arc.mapper import map_assay, map_investigation, map_study
-from middleware.sql_to_arc.tracing import initialize_tracing
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
@@ -291,7 +291,11 @@ async def main() -> None:
 
     # Initialize OpenTelemetry tracing
     otlp_endpoint = str(config.otel_endpoint) if config.otel_endpoint else None
-    _tracer_provider, tracer = initialize_tracing(service_name="sql_to_arc", otlp_endpoint=otlp_endpoint)
+    _tracer_provider, tracer = initialize_tracing(
+        service_name="sql_to_arc",
+        otlp_endpoint=otlp_endpoint,
+        log_console_spans=config.otel_log_console_spans,
+    )
 
     with tracer.start_as_current_span("sql_to_arc.main"):
         logger.info("Starting SQL-to-ARC conversion with config: %s", args.config)

@@ -15,6 +15,17 @@ class ConfigBase(BaseModel):
     """Configuration base class for the FAIRagro advanced Middleware."""
 
     log_level: Annotated[LogLevel, Field(description="Logging level")] = "INFO"
+    otel_endpoint: Annotated[
+        str | None,
+        Field(
+            description="OpenTelemetry collector endpoint URL",
+            examples=["http://signoz:4318"],
+        ),
+    ] = None
+    otel_log_console_spans: Annotated[
+        bool,
+        Field(description="Log OpenTelemetry spans to console"),
+    ] = True
 
     @classmethod
     def from_config_wrapper(cls, wrapper: ConfigWrapper) -> Self:

@@ -11,14 +11,12 @@ from typing import TYPE_CHECKING
 
 from opentelemetry import trace
 from opentelemetry.exporter.otlp.proto.http.trace_exporter import OTLPSpanExporter
-from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor
-from opentelemetry.instrumentation.requests import RequestsInstrumentor
 from opentelemetry.sdk.resources import Resource
 from opentelemetry.sdk.trace import ReadableSpan, TracerProvider
 from opentelemetry.sdk.trace.export import BatchSpanProcessor, SimpleSpanProcessor, SpanExporter, SpanExportResult
 
 if TYPE_CHECKING:
-    from fastapi import FastAPI
+    pass
 
 logger = logging.getLogger(__name__)
 
@@ -52,7 +50,9 @@ class SimpleConsoleSpanExporter(SpanExporter):
 
 
 def initialize_tracing(
-    service_name: str = "middleware-api", otlp_endpoint: str | None = None
+    service_name: str = "middleware-api",
+    otlp_endpoint: str | None = None,
+    log_console_spans: bool = True,
 ) -> tuple[TracerProvider, trace.Tracer]:
     """
     Initialize OpenTelemetry tracing with console and optional OTLP exporter.
@@ -60,6 +60,7 @@ def initialize_tracing(
     Args:
         service_name: The service name for traces (default: "middleware-api")
         otlp_endpoint: Optional OTLP endpoint URL (e.g. http://signoz:4318)
+        log_console_spans: Whether to log spans to console (default: True)
 
     Returns:
         Tuple of (TracerProvider, Tracer) for use in the application
@@ -75,9 +76,10 @@ def initialize_tracing(
     # Create a tracer provider
     tracer_provider = TracerProvider(resource=resource)
 
-    # Always add console exporter for development/debugging
-    console_exporter = SimpleConsoleSpanExporter()
-    tracer_provider.add_span_processor(SimpleSpanProcessor(console_exporter))
+    # Optionally add console exporter for development/debugging
+    if log_console_spans:
+        console_exporter = SimpleConsoleSpanExporter()
+        tracer_provider.add_span_processor(SimpleSpanProcessor(console_exporter))
 
     # Optionally add OTLP exporter for Signoz/Jaeger/etc
     if otlp_endpoint:
@@ -96,43 +98,8 @@ def initialize_tracing(
 
     logger.info(
         "OpenTelemetry tracing initialized (console=%s, otlp=%s)",
-        True,
-        otlp_endpoint is not None,
+        log_console_spans,
+        bool(otlp_endpoint),
     )
 
     return tracer_provider, tracer
-
-
-def instrument_fastapi(app: "FastAPI", tracer_provider: TracerProvider | None = None) -> None:
-    """
-    Instrument a FastAPI application with OpenTelemetry.
-
-    This enables automatic tracing of HTTP requests and responses.
-
-    Args:
-        app: The FastAPI application instance
-        tracer_provider: Optional custom TracerProvider (uses global if not provided)
-    """
-    try:
-        # Instrument FastAPI for automatic HTTP span creation
-        FastAPIInstrumentor.instrument_app(app, tracer_provider=tracer_provider)
-
-        # Also instrument requests library for any outbound HTTP calls
-        RequestsInstrumentor().instrument(tracer_provider=tracer_provider)
-
-        logger.info("FastAPI and requests instrumentation enabled")
-    except (AttributeError, TypeError, ValueError) as exc:
-        logger.warning("Failed to instrument FastAPI: %s", exc)
-
-
-def get_tracer(name: str = __name__) -> trace.Tracer:
-    """
-    Get a tracer instance with the given name.
-
-    Args:
-        name: The tracer name (typically __name__)
-
-    Returns:
-        A Tracer instance
-    """
-    return trace.get_tracer(name)

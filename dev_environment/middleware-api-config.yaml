@@ -10,3 +10,4 @@ known_rdis:
 - thunen_atlas
 require_client_cert: false
 # otel_endpoint: http://signoz:4318  # Uncomment to enable Signoz tracing
+otel_log_console_spans: false     # Disable SPAN logging to console

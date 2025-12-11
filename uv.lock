@@ -56,11 +56,8 @@ dependencies = [
     { name = "asn1crypto" },
     { name = "cryptography" },
     { name = "fastapi" },
-    { name = "opentelemetry-api" },
-    { name = "opentelemetry-exporter-otlp" },
     { name = "opentelemetry-instrumentation-fastapi" },
     { name = "opentelemetry-instrumentation-requests" },
-    { name = "opentelemetry-sdk" },
     { name = "python-gitlab" },
     { name = "pyyaml" },
     { name = "shared" },
@@ -73,11 +70,8 @@ requires-dist = [
     { name = "asn1crypto", specifier = ">=1.5.1" },
     { name = "cryptography", specifier = ">=45.0.6" },
     { name = "fastapi", specifier = ">=0.124.0" },
-    { name = "opentelemetry-api", specifier = ">=1.27.0" },
-    { name = "opentelemetry-exporter-otlp", specifier = ">=1.27.0" },
-    { name = "opentelemetry-instrumentation-fastapi", specifier = ">=0.48b0" },
-    { name = "opentelemetry-instrumentation-requests", specifier = ">=0.48b0" },
-    { name = "opentelemetry-sdk", specifier = ">=1.27.0" },
+    { name = "opentelemetry-instrumentation-fastapi", specifier = ">=0.47b0" },
+    { name = "opentelemetry-instrumentation-requests", specifier = ">=0.47b0" },
     { name = "python-gitlab", specifier = ">=6.2.0" },
     { name = "pyyaml", specifier = ">=6.0.2" },
     { name = "shared", editable = "middleware/shared" },
@@ -1841,12 +1835,18 @@ name = "shared"
 version = "0.0.0"
 source = { editable = "middleware/shared" }
 dependencies = [
+    { name = "opentelemetry-api" },
+    { name = "opentelemetry-exporter-otlp" },
+    { name = "opentelemetry-sdk" },
     { name = "pydantic" },
     { name = "pyyaml" },
 ]
 
 [package.metadata]
 requires-dist = [
+    { name = "opentelemetry-api", specifier = ">=1.26.0" },
+    { name = "opentelemetry-exporter-otlp", specifier = ">=1.26.0" },
+    { name = "opentelemetry-sdk", specifier = ">=1.26.0" },
     { name = "pydantic", specifier = ">=2.12.5" },
     { name = "pyyaml", specifier = ">=6.0.3" },
 ]
@@ -1867,9 +1867,6 @@ source = { editable = "middleware/sql_to_arc" }
 dependencies = [
     { name = "api-client" },
     { name = "arctrl" },
-    { name = "opentelemetry-api" },
-    { name = "opentelemetry-exporter-otlp" },
-    { name = "opentelemetry-sdk" },
     { name = "psycopg", extra = ["binary"] },
     { name = "pydantic" },
     { name = "shared" },
@@ -1879,9 +1876,6 @@ dependencies = [
 requires-dist = [
     { name = "api-client", editable = "middleware/api_client" },
     { name = "arctrl", specifier = ">=3.0.0b15" },
-    { name = "opentelemetry-api", specifier = ">=1.27.0" },
-    { name = "opentelemetry-exporter-otlp", specifier = ">=1.27.0" },
-    { name = "opentelemetry-sdk", specifier = ">=1.27.0" },
     { name = "psycopg", extras = ["binary"], specifier = ">=3.3.2" },
     { name = "pydantic", specifier = ">=2.12.5" },
     { name = "shared", editable = "middleware/shared" },
