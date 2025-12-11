@@ -2,6 +2,7 @@
 
 import asyncio
 import base64
+import concurrent.futures
 import hashlib
 import logging
 import tempfile
@@ -30,11 +31,25 @@ class GitlabApiConfig(BaseModel):
             min_length=1,  # may not be empty
         ),
     ]
-    branch: Annotated[str, Field(description="The git branch to use for ARC repos", default="main")]
+    branch: Annotated[str, Field(description="The git branch to use for ARC repos")] = "main"
     token: Annotated[
         SecretStr,
         Field(description="A gitlab token with CRUD permissions to the gitlab group"),
     ]
+    max_workers: Annotated[
+        int,
+        Field(
+            description="Maximum number of parallel threads for GitLab API calls",
+            ge=1,
+        ),
+    ] = 5
+    commit_chunk_size: Annotated[
+        int,
+        Field(
+            description="Maximum number of file actions per commit (avoids 'Too many total parameters' error)",
+            ge=1,
+        ),
+    ] = 100
 
     @field_validator("group", mode="before")
     @classmethod
@@ -67,6 +82,7 @@ class GitlabApi(ArcStore):
         logger.info("Initializing ARCPersistenceGitlabAPI")
         self._config = config
         self._gitlab = gitlab.Gitlab(str(self._config.url), private_token=self._config.token.get_secret_value())
+        self._executor = concurrent.futures.ThreadPoolExecutor(max_workers=self._config.max_workers)
 
     def arc_id(self, identifier: str, rdi: str) -> str:
         """Generate a unique ARC ID by hashing the ideArcStorentifier and RDI.
@@ -150,7 +166,7 @@ class GitlabApi(ArcStore):
         ):
             try:
                 logger.debug("Fetching repository tree for project %s", project.id)
-                tree = project.repository_tree(ref=self._config.branch, all=True, recursive=True)
+                tree = project.repository_tree(ref=self._config.branch, all=True, recursive=True, per_page=100)
                 file_paths = {item["path"] for item in tree if item["type"] == "blob"}
                 logger.debug("Found %d existing files in repository", len(file_paths))
                 return file_paths
@@ -226,42 +242,76 @@ class GitlabApi(ArcStore):
             attributes={"arc_id": arc_id, "num_actions": len(actions)},
         ):
             logger.debug("Committing %d actions to GitLab for ARC: %s", len(actions), arc_id)
-            commit_data = {
-                "branch": self._config.branch,
-                "commit_message": f"Add/update ARC {arc_id}",
-                "actions": actions,
-            }
-            commit = project.commits.create(commit_data)
-            logger.info("Successfully committed ARC %s to GitLab (commit: %s)", arc_id, commit.id[:8])
+
+            # Split actions into chunks to avoid "Too many total parameters" error
+            chunk_size = self._config.commit_chunk_size
+            action_chunks = [actions[i : i + chunk_size] for i in range(0, len(actions), chunk_size)]
+            total_chunks = len(action_chunks)
+
+            if total_chunks > 1:
+                logger.info(
+                    "Commit for ARC %s is large, splitting into %d chunks (chunk_size=%d)",
+                    arc_id,
+                    total_chunks,
+                    chunk_size,
+                )
+
+            for i, chunk in enumerate(action_chunks):
+                commit_message = (
+                    f"Add/update ARC {arc_id}"
+                    if total_chunks == 1
+                    else f"Add/update ARC {arc_id} (part {i + 1}/{total_chunks})"
+                )
+                commit_data = {
+                    "branch": self._config.branch,
+                    "commit_message": commit_message,
+                    "actions": chunk,
+                }
+
+                with self._tracer.start_as_current_span(
+                    "gitlab.commit_chunk",
+                    attributes={"arc_id": arc_id, "chunk_num": i + 1, "chunk_size": len(chunk)},
+                ):
+                    commit = project.commits.create(commit_data)
+                    logger.info(
+                        "Successfully committed chunk %d/%d for ARC %s to GitLab (commit: %s)",
+                        i + 1,
+                        total_chunks,
+                        arc_id,
+                        commit.id[:8],
+                    )
 
     # -------------------------- Create/Update --------------------------
     async def _create_or_update(self, arc_id: str, arc: ARC) -> None:
         logger.debug("Creating/updating ARC %s in GitLab", arc_id)
-        project = self._get_or_create_project(arc_id)
+        loop = asyncio.get_running_loop()
+
+        project = await loop.run_in_executor(self._executor, self._get_or_create_project, arc_id)
+
         with tempfile.TemporaryDirectory() as tmp_root:
             arc_path = Path(tmp_root) / arc_id
             arc_path.mkdir(parents=True, exist_ok=True)
 
-            # arc.Write is using asyncio internally, but is not async itself.
-            # We need to run it our event loop to avoid blocking.
+            # arc.Write is not async, run in executor
             logger.debug("Writing ARC to temporary directory: %s", arc_path)
-            loop = asyncio.get_running_loop()
-            await loop.run_in_executor(None, arc.Write, str(arc_path))
+            await loop.run_in_executor(self._executor, arc.Write, str(arc_path))
 
             # Compute hash once with tracing
             with self._tracer.start_as_current_span("gitlab.compute_arc_hash"):
-                new_hash = self._compute_arc_hash(arc_path)
+                new_hash = await loop.run_in_executor(self._executor, self._compute_arc_hash, arc_path)
             logger.debug("Computed ARC hash: %s", new_hash[:16])
 
-            old_hash = self._load_old_hash(project)
+            old_hash = await loop.run_in_executor(self._executor, self._load_old_hash, project)
 
             if new_hash == old_hash:
                 logger.info("ARC %s unchanged (hash: %s...), skipping commit", arc_id, new_hash[:16])
                 return
 
             logger.debug("ARC %s has changed, preparing commit", arc_id)
-            actions = self._prepare_file_actions(project, arc_path, old_hash, new_hash)
-            self._commit_actions(project, actions, arc_id)
+            actions = await loop.run_in_executor(
+                self._executor, self._prepare_file_actions, project, arc_path, old_hash, new_hash
+            )
+            await loop.run_in_executor(self._executor, self._commit_actions, project, actions, arc_id)
 
     # -------------------------- Get --------------------------
     def _get(self, arc_id: str) -> ARC | None:

@@ -25,7 +25,7 @@ class ConfigBase(BaseModel):
     otel_log_console_spans: Annotated[
         bool,
         Field(description="Log OpenTelemetry spans to console"),
-    ] = True
+    ] = False
 
     @classmethod
     def from_config_wrapper(cls, wrapper: ConfigWrapper) -> Self:

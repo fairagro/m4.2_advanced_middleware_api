@@ -49,7 +49,7 @@ async def fetch_all_investigations(cur: psycopg.AsyncCursor[dict[str, Any]]) -> 
         List of investigation rows.
     """
     await cur.execute(
-        'SELECT id, title, description, submission_time, release_time FROM "ARC_Investigation" LIMIT 2',
+        'SELECT id, title, description, submission_time, release_time FROM "ARC_Investigation" LIMIT 10',
     )
     return await cur.fetchall()
 
@@ -131,11 +131,6 @@ async def process_batch(client: ApiClient, batch: list[ArcInvestigation], rdi: s
         # Wrap ArcInvestigation objects in ARC containers
         with tracer.start_as_current_span("arc.wrap_investigations", attributes={"count": len(batch)}):
             arc_objects = [ARC.from_arc_investigation(inv) for inv in batch]
-
-        # Log ROCrate JSON for debugging
-        for idx, arc in enumerate(arc_objects):
-            rocrate_json = arc.ToROCrateJsonString()
-            logger.debug("ARC %d ROCrate JSON: %s", idx, rocrate_json)
 
         try:
             with tracer.start_as_current_span(

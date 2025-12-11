@@ -10,6 +10,7 @@ batch_size: "10"
 
 api_client:
   api_url: "http://middleware-api:8000"
+  timeout: 300  # seconds
   client_cert_path: ~
   client_key_path: ~
 
