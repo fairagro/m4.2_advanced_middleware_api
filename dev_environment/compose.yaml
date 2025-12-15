@@ -79,6 +79,8 @@ services:
     environment:
       - GITLAB_API_TOKEN
       - MIDDLEWARE_API_CONFIG=/run/secrets/middleware-api-config
+      - GUNICORN_WORKERS=4  # Number of worker processes for parallel requests
+      - GUNICORN_LOG_LEVEL=info
     volumes:
       - ./middleware-api-config.yaml:/run/secrets/middleware-api-config:ro
     restart: "no"
