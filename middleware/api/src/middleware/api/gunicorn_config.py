@@ -12,7 +12,7 @@ bind = f"{os.getenv('UVICORN_HOST', '127.0.0.1')}:{os.getenv('UVICORN_PORT', '80
 
 # Worker Processes - auto-detect if GUNICORN_WORKERS=0
 _workers_env = int(os.getenv("GUNICORN_WORKERS", "0"))
-workers = multiprocessing.cpu_count() * 2 + 1 if _workers_env == 0 else _workers_env
+workers = multiprocessing.cpu_count() * 2 if _workers_env == 0 else _workers_env
 worker_class = "uvicorn.workers.UvicornWorker"
 
 # Worker Connections
