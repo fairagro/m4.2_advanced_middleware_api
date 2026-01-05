@@ -48,4 +48,6 @@ class Config(ConfigBase):
         """Validate that client_auth_oid is a valid OID (e.g. 1.2.3.4.55516)."""
         if isinstance(oid, str):
             return x509.ObjectIdentifier(oid)
-        return oid
+        if isinstance(oid, x509.ObjectIdentifier):
+            return oid
+        raise TypeError("client_auth_oid must be a string or x509.ObjectIdentifier")
