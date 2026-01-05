@@ -6,6 +6,8 @@ This provides multi-process parallelism for I/O-bound operations.
 import os.path
 import sys
 
+from gunicorn.app.wsgiapp import run  # type: ignore[import-untyped]
+
 import middleware.api
 from middleware.api.api import middleware_api
 
@@ -30,9 +32,6 @@ def main() -> None:
         "--config",
         config_path,
     ] + sys.argv[1:]
-
-    # Import and run Gunicorn
-    from gunicorn.app.wsgiapp import run  # type: ignore[import-untyped]
 
     run()
 

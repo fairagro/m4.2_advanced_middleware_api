@@ -4,13 +4,13 @@
 
 The Middleware API is **I/O-bound** (waits on external services like GitLab API, PostgreSQL, etc.), not CPU-bound. Therefore, the optimal parallelization strategy is:
 
-**Gunicorn (multi-process) + Uvicorn Workers (async/await)**
+### Gunicorn (multi-process) + Uvicorn Workers (async/await)
 
 This provides true parallelism across multiple CPU cores while maintaining efficient async I/O handling.
 
 ## Architecture
 
-```
+```text
 ┌─────────────────────────────────────────────┐
 │          Gunicorn Process Manager           │
 ├─────────────────────────────────────────────┤
@@ -37,16 +37,19 @@ This provides true parallelism across multiple CPU cores while maintaining effic
 ## Key Benefits
 
 ### 1. True Parallelism
+
 - **Multiple processes** bypass Python's GIL
 - Each process runs on a separate CPU core
 - Parallel request handling across cores
 
 ### 2. Async I/O Efficiency
+
 - Each Uvicorn worker uses **async/await**
 - Non-blocking I/O operations (HTTP, DB)
 - High concurrency within each worker
 
 ### 3. Fault Isolation
+
 - Worker process crashes don't affect others
 - Gunicorn automatically restarts failed workers
 
@@ -66,6 +69,7 @@ This provides true parallelism across multiple CPU cores while maintaining effic
 Location: `middleware/api/src/middleware/api/gunicorn_config.py`
 
 Key settings:
+
 ```python
 workers = (CPU_COUNT * 2) + 1  # Auto-detected
 worker_class = "uvicorn.workers.UvicornWorker"
@@ -100,17 +104,20 @@ middleware-api:
 ## When to Use What
 
 ### ✅ Use Gunicorn + Uvicorn (Current Architecture)
+
 - **I/O-bound operations**: Waiting on external APIs, databases
 - **Many concurrent requests**: Handling multiple HTTP requests
 - **Network-bound tasks**: File downloads, API calls
 - **Example**: Middleware API (waits on GitLab, PostgreSQL)
 
 ### ❌ Don't Use ProcessPoolExecutor Here
+
 - **Not needed**: I/O operations don't consume CPU
 - **Overhead**: Creating processes for I/O tasks wastes resources
 - **Complexity**: Serialization overhead for data passing
 
 ### ✅ Use ProcessPoolExecutor (sql_to_arc)
+
 - **CPU-bound operations**: Heavy computation, parsing
 - **Bypassing GIL**: Parallel CPU work
 - **Example**: ARC parsing, data transformation
@@ -118,14 +125,16 @@ middleware-api:
 ## Performance Comparison
 
 ### Before (Single Uvicorn Process)
-```
+
+```text
 CPU Usage: 25% (1 core)
 Requests/sec: ~50
 Concurrency: Limited by single event loop
 ```
 
 ### After (Gunicorn + 4 Uvicorn Workers)
-```
+
+```text
 CPU Usage: 80-100% (4 cores)
 Requests/sec: ~180-200 (4x improvement)
 Concurrency: 4 independent event loops
@@ -134,16 +143,19 @@ Concurrency: 4 independent event loops
 ## Monitoring
 
 ### Check Worker Count
+
 ```bash
 docker exec middleware-api ps aux | grep uvicorn
 ```
 
 ### View Logs
+
 ```bash
 docker compose logs -f middleware-api
 ```
 
 ### CPU Usage (in container)
+
 ```bash
 docker stats middleware-api
 ```
@@ -157,6 +169,7 @@ docker stats middleware-api
 **Cause**: `GUNICORN_WORKERS=1` or not set
 
 **Solution**:
+
 ```yaml
 environment:
   - GUNICORN_WORKERS=4  # Or 0 for auto-detect
@@ -169,8 +182,10 @@ environment:
 **Cause**: Too many workers or memory leaks
 
 **Solutions**:
+
 1. Reduce worker count: `GUNICORN_WORKERS=2`
 2. Enable worker recycling (already configured):
+
    ```python
    max_requests = 1000
    max_requests_jitter = 100
@@ -191,11 +206,13 @@ environment:
    - Balance: throughput vs memory
 
 2. **Development**: Use fewer workers
+
    ```yaml
    GUNICORN_WORKERS=2
    ```
 
 3. **Production**: Auto-detect or set explicitly
+
    ```yaml
    GUNICORN_WORKERS=0  # Auto
    ```
@@ -226,6 +243,7 @@ environment:
 **Last Updated**: 2025-12-11
 **Author**: GitHub Copilot
 **Related Files**:
+
 - `middleware/api/src/middleware/api/gunicorn_config.py`
 - `middleware/api/src/middleware/api/main_gunicorn.py`
 - `docker/Dockerfile.api`
