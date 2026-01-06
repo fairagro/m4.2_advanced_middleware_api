@@ -118,3 +118,171 @@ def test_list_access_and_items(
     assert isinstance(item_2, ConfigWrapper)  # nosec, narrowing for typchecker
     assert item_2["value"] == 42  # nosec
     assert len(cfg) == 3  # nosec
+
+
+# New tests for primitive type support
+
+
+def test_parse_primitive_value_bool_true() -> None:
+    """Test parsing boolean true value."""
+    assert ConfigWrapper._parse_primitive_value("true") is True  # pylint: disable=protected-access  # nosec
+    assert ConfigWrapper._parse_primitive_value("True") is True  # pylint: disable=protected-access  # nosec
+    assert ConfigWrapper._parse_primitive_value("TRUE") is True  # pylint: disable=protected-access  # nosec
+
+
+def test_parse_primitive_value_bool_false() -> None:
+    """Test parsing boolean false value."""
+    assert ConfigWrapper._parse_primitive_value("false") is False  # pylint: disable=protected-access  # nosec
+    assert ConfigWrapper._parse_primitive_value("False") is False  # pylint: disable=protected-access  # nosec
+    assert ConfigWrapper._parse_primitive_value("FALSE") is False  # pylint: disable=protected-access  # nosec
+
+
+def test_parse_primitive_value_int() -> None:
+    """Test parsing integer values."""
+    assert ConfigWrapper._parse_primitive_value("42") == 42  # pylint: disable=protected-access  # nosec
+    assert ConfigWrapper._parse_primitive_value("-42") == -42  # pylint: disable=protected-access  # nosec
+    assert ConfigWrapper._parse_primitive_value("0") == 0  # pylint: disable=protected-access  # nosec
+
+
+def test_parse_primitive_value_float() -> None:
+    """Test parsing float values."""
+    assert ConfigWrapper._parse_primitive_value("3.14") == 3.14  # pylint: disable=protected-access  # nosec
+    assert ConfigWrapper._parse_primitive_value("-3.14") == -3.14  # pylint: disable=protected-access  # nosec
+    assert ConfigWrapper._parse_primitive_value("0.5") == 0.5  # pylint: disable=protected-access  # nosec
+
+
+def test_parse_primitive_value_string() -> None:
+    """Test parsing string values that are not primitives."""
+    assert ConfigWrapper._parse_primitive_value("hello") == "hello"  # pylint: disable=protected-access  # nosec
+    assert ConfigWrapper._parse_primitive_value("3.14.15") == "3.14.15"  # pylint: disable=protected-access  # nosec
+    assert ConfigWrapper._parse_primitive_value("notabool") == "notabool"  # pylint: disable=protected-access  # nosec
+
+
+def test_parse_primitive_value_empty_string() -> None:
+    """Test parsing empty string returns None."""
+    assert ConfigWrapper._parse_primitive_value("") is None  # pylint: disable=protected-access  # nosec
+
+
+def test_override_key_access_int_env(monkeypatch: Any) -> None:
+    """Test environment variable override with integer value."""
+    monkeypatch.setenv("FOO_PORT", "8080")
+    cfg = ConfigWrapperDict({"port": 3000}, path="foo")
+    result = cfg["port"]
+    assert result == 8080  # nosec
+    assert isinstance(result, int)  # nosec
+
+
+def test_override_key_access_float_env(monkeypatch: Any) -> None:
+    """Test environment variable override with float value."""
+    monkeypatch.setenv("FOO_TIMEOUT", "3.5")
+    cfg = ConfigWrapperDict({"timeout": 1.0}, path="foo")
+    result = cfg["timeout"]
+    assert result == 3.5  # nosec
+    assert isinstance(result, float)  # nosec
+
+
+def test_override_key_access_bool_env(monkeypatch: Any) -> None:
+    """Test environment variable override with boolean value."""
+    monkeypatch.setenv("FOO_DEBUG", "true")
+    cfg = ConfigWrapperDict({"debug": False}, path="foo")
+    result = cfg["debug"]
+    assert result is True  # nosec
+    assert isinstance(result, bool)  # nosec
+
+
+def test_override_key_access_bool_false_env(monkeypatch: Any) -> None:
+    """Test environment variable override with boolean false value."""
+    monkeypatch.setenv("FOO_ENABLED", "false")
+    cfg = ConfigWrapperDict({"enabled": True}, path="foo")
+    result = cfg["enabled"]
+    assert result is False  # nosec
+    assert isinstance(result, bool)  # nosec
+
+
+def test_override_key_access_none_env(monkeypatch: Any) -> None:
+    """Test environment variable override with empty string returns default value."""
+    monkeypatch.setenv("FOO_EMPTY", "")
+    cfg = ConfigWrapperDict({"empty": "default"}, path="foo")
+    result = cfg["empty"]
+    # Empty string from env variable is parsed to None, so the default value is used
+    assert result == "default"  # nosec
+
+
+def test_parse_primitive_value_for_none_case() -> None:
+    """Test that explicitly None values are preserved in YAML config."""
+    cfg = ConfigWrapperDict({"nullable": None}, path="foo")
+    result = cfg["nullable"]
+    assert result is None  # nosec
+
+
+def test_override_key_access_string_env(monkeypatch: Any) -> None:
+    """Test environment variable override with string value."""
+    monkeypatch.setenv("FOO_NAME", "John")
+    cfg = ConfigWrapperDict({"name": "default"}, path="foo")
+    result = cfg["name"]
+    assert result == "John"  # nosec
+    assert isinstance(result, str)  # nosec
+
+
+def test_dict_with_primitive_types() -> None:
+    """Test ConfigWrapperDict with various primitive types."""
+    data: dict[str, Any] = {
+        "string": "hello",
+        "integer": 42,
+        "float": 3.14,
+        "bool": True,
+    }
+    cfg = ConfigWrapperDict(data)
+    assert cfg["string"] == "hello"  # nosec
+    assert cfg["integer"] == 42  # nosec
+    assert cfg["float"] == 3.14  # nosec
+    assert cfg["bool"] is True  # nosec
+
+
+def test_unwrap_with_primitive_types() -> None:
+    """Test unwrapping ConfigWrapper with primitive types."""
+    data: dict[str, Any] = {
+        "string": "hello",
+        "integer": 42,
+        "float": 3.14,
+        "bool": True,
+        "null": None,
+    }
+    cfg = ConfigWrapper.from_data(data)
+    unwrapped = cfg.unwrap()
+    assert isinstance(unwrapped, dict)  # nosec
+    assert unwrapped["string"] == "hello"  # nosec
+    assert unwrapped["integer"] == 42  # nosec
+    assert unwrapped["float"] == 3.14  # nosec
+    assert unwrapped["bool"] is True  # nosec
+    assert unwrapped["null"] is None  # nosec
+
+
+def test_nested_dict_with_primitives() -> None:
+    """Test nested dictionaries with primitive types."""
+    data: dict[str, Any] = {
+        "nested": {
+            "port": 8080,
+            "timeout": 5.5,
+            "debug": False,
+            "name": "app",
+        }
+    }
+    cfg = ConfigWrapper.from_data(data)  # type: ignore[arg-type]
+    nested = cfg["nested"]
+    assert isinstance(nested, ConfigWrapper)  # nosec
+    assert nested["port"] == 8080  # nosec
+    assert nested["timeout"] == 5.5  # nosec
+    assert nested["debug"] is False  # nosec
+    assert nested["name"] == "app"  # nosec
+
+
+def test_list_with_primitive_types() -> None:
+    """Test ConfigWrapperList with primitive types."""
+    data: ListType = ["string", 42, 3.14, True, None]
+    cfg = ConfigWrapperList(data)
+    assert cfg[0] == "string"  # nosec
+    assert cfg[1] == 42  # nosec
+    assert cfg[2] == 3.14  # nosec
+    assert cfg[3] is True  # nosec
+    assert cfg[4] is None  # nosec
