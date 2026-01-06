@@ -7,7 +7,7 @@ schemaVersion: 2.0.0
 # File existence tests
 fileExistenceTests:
   - name: 'SQL to ARC executable'
-    path: '/middleware/sql_to_arc'
+    path: '/middleware/sql_to_arc/sql_to_arc'
     shouldExist: true
     permissions: '-rwxr-xr-x'  # Executable
 

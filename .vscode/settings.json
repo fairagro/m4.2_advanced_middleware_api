@@ -1,4 +1,8 @@
 {
+  // GitHub Copilot Configuration
+  // For AI assistant instructions, see: copilot-instructions.md
+  // For detailed project context, see: AGENTS.md
+
   "python.testing.pytestArgs": [ "middleware" ],
   "python.testing.unittestEnabled": false,
   "python.testing.pytestEnabled": true,

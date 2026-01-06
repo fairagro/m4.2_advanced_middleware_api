@@ -62,13 +62,13 @@ class ApiClient:
         self._config = config
         self._client: httpx.AsyncClient | None = None
 
-        # Validate certificate files exist
+        # Validate certificate files exist (if provided)
         cert_path = config.client_cert_path
         key_path = config.client_key_path
 
-        if not cert_path.exists():
+        if cert_path is not None and not cert_path.exists():
             raise ApiClientError(f"Client certificate not found: {cert_path}")
-        if not key_path.exists():
+        if key_path is not None and not key_path.exists():
             raise ApiClientError(f"Client key not found: {key_path}")
 
         # Validate CA cert if provided

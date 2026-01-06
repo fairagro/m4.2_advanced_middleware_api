@@ -15,8 +15,9 @@ import yaml
 type KeyType = str | int
 type DictType = dict[str, "ValueType"]
 type ListType = list["ValueType"]
-type ValueType = DictType | ListType | str
-type WrapType = "ConfigWrapper | str | None"
+type PrimitiveType = str | int | float | bool | None
+type ValueType = DictType | ListType | PrimitiveType
+type WrapType = "ConfigWrapper | PrimitiveType"
 
 
 class ConfigWrapper:
@@ -114,7 +115,7 @@ class ConfigWrapper:
             return {k: cls._unwrap(v) for k, v in wrapper.items()}
         if isinstance(wrapper, ConfigWrapperList):
             return [cls._unwrap(wrapper[i]) for i in range(len(wrapper))]
-        if isinstance(wrapper, str):
+        if isinstance(wrapper, (str, int, float, bool, type(None))):
             return wrapper
         raise TypeError(f"Cannot unwrap element of type '{type(wrapper)}'")
 
@@ -163,20 +164,81 @@ class ConfigWrapper:
         """
         raise NotImplementedError("Please do not use class 'ConfigWrapper' directly, but a derived class")
 
-    def _override_key_access(self, key: str) -> str | None:
+    def _override_key_access(self, key: str) -> PrimitiveType:
+        """Get override value for a key from environment or Docker secrets.
+
+        Attempts to parse the override value as a primitive type (bool, int, float).
+        Supports the following formats:
+        - "true", "false" (case-insensitive) -> bool
+        - Numeric strings -> int or float
+        - Other strings -> str
+        - Empty string defaults to None
+
+        Args:
+            key: The configuration key to lookup.
+
+        Returns:
+            The override value as a primitive type, or None if not found.
+        """
         # self._path should alwys be upper case
         full_key = self._path + "_" + key.upper()
 
+        override_value = None
+
         # 1️⃣ Check ENV
         if full_key in os.environ:
-            return os.environ[full_key]
+            override_value = os.environ[full_key]
 
         # 2️⃣ Check Docker secret file
-        secret_file = Path(f"/run/secrets/{full_key.lower()}")
-        if secret_file.exists():
-            return secret_file.read_text(encoding="utf-8").strip()
+        if override_value is None:
+            secret_file = Path(f"/run/secrets/{full_key.lower()}")
+            if secret_file.exists():
+                override_value = secret_file.read_text(encoding="utf-8").strip()
 
-        return None
+        if override_value is None:
+            return None
+
+        # Parse the override value to appropriate primitive type
+        return self._parse_primitive_value(override_value)
+
+    @staticmethod
+    def _parse_primitive_value(value: str) -> PrimitiveType:
+        """Parse a string value into its appropriate primitive type.
+
+        Conversion rules (in order):
+        1. Empty string -> None
+        2. "true"/"false" (case-insensitive) -> bool
+        3. Integer-like strings -> int
+        4. Float-like strings -> float
+        5. Everything else -> str
+
+        Args:
+            value: The string value to parse.
+
+        Returns:
+            The parsed primitive value.
+        """
+        if not value:
+            return None
+
+        # Try bool
+        if value.lower() in ("true", "false"):
+            return value.lower() == "true"
+
+        # Try int
+        try:
+            return int(value)
+        except ValueError:
+            pass
+
+        # Try float
+        try:
+            return float(value)
+        except ValueError:
+            pass
+
+        # Default to string
+        return value
 
 
 class ConfigWrapperDict(ConfigWrapper):

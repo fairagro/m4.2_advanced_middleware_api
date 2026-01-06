@@ -26,10 +26,12 @@ from middleware.shared.api_models.models import (
     LivenessResponse,
     WhoamiResponse,
 )
+from middleware.shared.tracing import initialize_tracing
 
 from .arc_store.gitlab_api import GitlabApi
 from .business_logic import BusinessLogic, InvalidJsonSemanticError
 from .config import Config
+from .fastapi_tracing import instrument_fastapi
 
 try:
     pyproject_path = Path(__file__).parent.parent / "pyproject.toml"
@@ -95,6 +97,15 @@ class Api:
         """
         self._config = app_config
         logger.debug("API configuration: %s", self._config.model_dump())
+
+        # Initialize OpenTelemetry tracing with optional OTLP endpoint
+        otlp_endpoint = str(self._config.otel_endpoint) if self._config.otel_endpoint else None
+        self._tracer_provider, self._tracer = initialize_tracing(
+            service_name="middleware-api",
+            otlp_endpoint=otlp_endpoint,
+            log_console_spans=self._config.otel_log_console_spans,
+        )
+
         self._store = GitlabApi(self._config.gitlab_api)
         self._service = BusinessLogic(self._store)
         self._app = FastAPI(
@@ -102,6 +113,10 @@ class Api:
             description="API for managing ARC (Advanced Research Context) objects",
             version=__version__,
         )
+
+        # Instrument the FastAPI application with OpenTelemetry
+        instrument_fastapi(self._app)
+
         self._setup_routes()
         self._setup_exception_handlers()
 
@@ -124,19 +139,21 @@ class Api:
         """
         return self._service
 
-    @staticmethod
-    def _validate_client_cert(request: Request) -> x509.Certificate:
+    def _validate_client_cert(self, request: Request) -> x509.Certificate | None:
         """Extract and parse client certificate from request headers.
 
         Args:
             request (Request): FastAPI request object.
 
         Returns:
-            x509.Certificate: Parsed client certificate.
+            x509.Certificate | None: Parsed client certificate or None if not required/provided.
+
+        Raises:
+            HTTPException: If certificate is required and missing or invalid.
         """
         # check, if we've already cached the cert in the request state
-        if hasattr(request.state, "cert") and isinstance(request.state.cert, x509.Certificate):
-            return request.state.cert
+        if hasattr(request.state, "cert"):
+            return getattr(request.state, "cert", None)
 
         headers = request.headers
         logger.debug("Request headers: %s", dict(headers.items()))
@@ -147,9 +164,14 @@ class Api:
         logger.debug("Client verify status: %s", client_verify)
 
         if not client_cert:
-            msg = "Client certificate required for access"
-            logger.warning(msg)
-            raise HTTPException(status_code=401, detail=msg)
+            if self._config.require_client_cert:
+                msg = "Client certificate required for access"
+                logger.warning(msg)
+                raise HTTPException(status_code=401, detail=msg)
+            logger.debug("Client certificate not required - proceeding without authentication")
+            request.state.cert = None
+            return None
+
         if client_verify != "SUCCESS":
             detail_msg = f"Client certificate verification failed: {client_verify}"
             logger.warning(detail_msg)
@@ -167,17 +189,20 @@ class Api:
         request.state.cert = cert
         return cert
 
-    @classmethod
-    def _validate_client_id(cls, request: Request) -> str:
+    def _validate_client_id(self, request: Request) -> str | None:
         """Extract client ID from certificate Common Name (CN) attribute.
 
         Args:
             request (Request): FastAPI request object.
 
         Returns:
-            str: Client identifier extracted from the certificate.
+            str | None: Client identifier extracted from the certificate, or None if not authenticated.
         """
-        cert = cls._validate_client_cert(request)
+        cert = self._validate_client_cert(request)
+        if cert is None:
+            logger.debug("No client certificate - client ID is None")
+            return None
+
         cn_attributes = cert.subject.get_attributes_for_oid(NameOID.COMMON_NAME)
         if not cn_attributes:
             msg = "Certificate subject does not contain Common Name (CN) attribute"
@@ -195,6 +220,10 @@ class Api:
         Example: 1.3.6.1.4.1.64609.1.1 = SEQUENCE { UTF8String:"bonares", UTF8String:"edal" }
         """
         cert = self._validate_client_cert(request)
+        if cert is None:
+            logger.debug("No client certificate - returning empty authorized RDIs")
+            return []
+
         oid = self._config.client_auth_oid
         allowed_rdis = self._extract_rdis_from_extension(cert, oid)
 
@@ -264,10 +293,17 @@ class Api:
         return cast(str, rdi)
 
     def _validate_rdi_authorized(self, request: Request, request_body: CreateOrUpdateArcsRequest) -> str:
-        authorized_rdis = self._get_authorized_rdis(request)
         rdi = self._validate_rdi_known(request_body)
-        if rdi not in authorized_rdis:
-            raise HTTPException(status_code=403, detail=f"RDI '{rdi}' not authorized.")
+
+        # If client certificates are required, check authorized RDIs from certificate
+        if self._config.require_client_cert:
+            authorized_rdis = self._get_authorized_rdis(request)
+            if rdi not in authorized_rdis:
+                raise HTTPException(status_code=403, detail=f"RDI '{rdi}' not authorized.")
+        else:
+            # If client certificates are not required, RDI just needs to be in known_rdis
+            logger.debug("Client certificates not required - RDI '%s' authorized via known_rdis", rdi)
+
         return cast(str, rdi)
 
     def _setup_exception_handlers(self) -> None:
@@ -284,7 +320,7 @@ class Api:
         async def whoami(
             known_rdis: Annotated[list[str], Depends(self._get_known_rdis)],
             authorized_rdis: Annotated[list[str], Depends(self._get_authorized_rdis)],
-            client_id: Annotated[str, Depends(self._validate_client_id)],
+            client_id: Annotated[str | None, Depends(self._validate_client_id)],
             _accept_validated: Annotated[None, Depends(self._validate_accept_type)],
         ) -> WhoamiResponse:
             logger.debug("Authorized RDIs: %s", authorized_rdis)
@@ -304,13 +340,19 @@ class Api:
         @self._app.post("/v1/arcs", response_model=CreateOrUpdateArcsResponse)
         async def create_or_update_arcs(
             request_body: CreateOrUpdateArcsRequest,
-            client_id: Annotated[str, Depends(self._validate_client_id)],
+            client_id: Annotated[str | None, Depends(self._validate_client_id)],
             business_logic: Annotated[BusinessLogic, Depends(self._get_business_logic)],
             _content_type_validated: Annotated[None, Depends(self._validate_content_type)],
             _accept_validated: Annotated[None, Depends(self._validate_accept_type)],
             rdi: Annotated[str, Depends(self._validate_rdi_authorized)],
             response: Response,
         ) -> CreateOrUpdateArcsResponse:
+            logger.info(
+                "Received POST /v1/arcs request: rdi=%s, num_arcs=%d, client_id=%s",
+                rdi,
+                len(request_body.arcs),
+                client_id or "none",
+            )
             try:
                 result = await business_logic.create_or_update_arcs(rdi, request_body.arcs, client_id)
 
@@ -318,8 +360,14 @@ class Api:
                 response.status_code = 201 if created_arcs else 200
                 if created_arcs:
                     response.headers["Location"] = f"/v1/arcs/{created_arcs[0].id}"
+                logger.info(
+                    "POST /v1/arcs completed: %d created, %d updated",
+                    len(created_arcs),
+                    len(result.arcs) - len(created_arcs),
+                )
                 return result
             except InvalidJsonSemanticError as e:
+                logger.error("Invalid JSON semantic in POST /v1/arcs: %s", e)
                 raise HTTPException(status_code=422, detail=str(e)) from e
 
 

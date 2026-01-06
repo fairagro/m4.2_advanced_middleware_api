@@ -36,17 +36,19 @@ alias ksn="kubectl config set-context --current --namespace"
 declare -F __start_kubectl &>/dev/null && complete -o default -F __start_kubectl k
 declare -F __start_docker &>/dev/null && complete -o default -F __start_docker d
 
-# Install pre-commit hooks if not already installed
+# Install pre-commit and Git LFS hooks if not already installed
 if command -v pre-commit &> /dev/null; then
     install_status=0
+    # Install pre-commit hook
     if [ ! -f "${mydir}/../.git/hooks/pre-commit" ]; then
         echo "🔧 Installing pre-commit hooks..."
         (cd "${mydir}/.." && pre-commit install --hook-type pre-commit) || install_status=$?
     fi
-    if [ ! -f "${mydir}/../.git/hooks/pre-push" ]; then
-        echo "🔧 Installing pre-push hooks..."
-        (cd "${mydir}/.." && pre-commit install --hook-type pre-push) || install_status=$?
-    fi
+
+    # Install Git LFS hooks (this includes a combined pre-push hook)
+    echo "🔧 Setting up Git LFS hooks..."
+    bash "${mydir}/setup-git-lfs.sh" || install_status=$?
+
     if [ $install_status -eq 0 ]; then
         echo "✅ Pre-commit and pre-push hooks are installed."
     else

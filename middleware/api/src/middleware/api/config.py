@@ -20,6 +20,9 @@ class Config(ConfigBase):
         x509.ObjectIdentifier("1.3.6.1.4.1.64609.1.1")
     )
     gitlab_api: Annotated[GitlabApiConfig, Field(description="Gitlab API config")]
+    require_client_cert: Annotated[
+        bool, Field(description="Require client certificate for API access (set to false for development)")
+    ] = True
 
     model_config: ClassVar[ConfigDict] = ConfigDict(arbitrary_types_allowed=True)
 
@@ -45,4 +48,6 @@ class Config(ConfigBase):
         """Validate that client_auth_oid is a valid OID (e.g. 1.2.3.4.55516)."""
         if isinstance(oid, str):
             return x509.ObjectIdentifier(oid)
-        return oid
+        if isinstance(oid, x509.ObjectIdentifier):
+            return oid
+        raise TypeError("client_auth_oid must be a string or x509.ObjectIdentifier")
