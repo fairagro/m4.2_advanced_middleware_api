@@ -1,0 +1,11 @@
+#!/bin/sh
+# Git LFS post-checkout hook
+# This file is version-controlled and should be installed via scripts/setup-git-hooks.sh
+
+command -v git-lfs >/dev/null 2>&1 || {
+    echo >&2 "\nThis repository is configured for Git LFS but 'git-lfs' was not found on your path."
+    echo >&2 "Please install git-lfs or run: sudo apt-get install git-lfs"
+    echo >&2 "If you no longer wish to use Git LFS, remove this hook.\n"
+    exit 2
+}
+git lfs post-checkout "$@"

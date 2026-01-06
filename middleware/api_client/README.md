@@ -76,16 +76,20 @@ asyncio.run(main())
 Create or update ARCs in the Middleware API.
 
 **Parameters:**
+
 - `rdi` (str): The RDI identifier (e.g., "edaphobase").
 - `arcs` (list[ARC]): List of ARC objects from arctrl library.
 
 **Returns:**
+
 - `CreateOrUpdateArcsResponse`: Contains the result of the operation.
 
 **Raises:**
+
 - `ApiClientError`: If the request fails due to HTTP errors or network issues.
 
 **Example:**
+
 ```python
 from arctrl import ARC, ArcInvestigation
 

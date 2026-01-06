@@ -6,3 +6,4 @@ known_rdis:
 gitlab_api:
     url: https://datahub-dev.ipk-gatersleben.de
     group: FAIRagro-advanced-middleware-integration-tests
+    max_workers: 5

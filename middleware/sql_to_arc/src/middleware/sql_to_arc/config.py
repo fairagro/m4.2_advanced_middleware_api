@@ -18,4 +18,11 @@ class Config(ConfigBase):
     db_port: Annotated[int, Field(description="Database port")] = 5432
     rdi: Annotated[str, Field(description="RDI identifier (e.g. edaphobase)")]
     batch_size: Annotated[int, Field(description="Batch size for ARC uploads", gt=0)] = 10
+    max_concurrent_arc_builds: Annotated[
+        int,
+        Field(
+            description="Maximum number of ARCs to build concurrently within a batch",
+            ge=1,
+        ),
+    ] = 5
     api_client: Annotated[ApiClientConfig, Field(description="API Client configuration")]

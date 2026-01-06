@@ -5,29 +5,47 @@ Complete Docker Compose setup for local development and testing of the SQL-to-AR
 ## Services
 
 ### 1. postgres
+
 PostgreSQL 15 database server with:
+
 - Default credentials: `postgres/postgres`
 - Port: `5432`
 - Persistent volume: `postgres_data`
 - Health check enabled
 
 ### 2. db-init
+
 One-time initialization container that:
+
 - Waits for PostgreSQL to be healthy
 - Drops and recreates `edaphobase` database
-- Downloads and imports the Edaphobase dump from https://repo.edaphobase.org/rep/dumps/FAIRagro.sql
+- Downloads and imports the Edaphobase dump from <https://repo.edaphobase.org/rep/dumps/FAIRagro.sql>
 - Exits after completion
 
 ### 3. sql_to_arc
+
 The SQL-to-ARC converter that:
+
 - Builds from `../docker/Dockerfile.sql_to_arc`
 - Waits for db-init to complete
+- Connects to PostgreSQL and Middleware API
 - Mounts encrypted secrets via sops
-- Runs the conversion and exits
+- Currently set to `sleep 3600` (modify compose.yaml to enable converter)
+
+### 4. middleware-api
+
+The FAIRagro Middleware API service that:
+
+- Builds from `../docker/Dockerfile.api`
+- Runs on port `8000`
+- Provides REST API for ARC management
+- No mTLS validation in dev mode (HTTP without client certs)
+- Health check via `/live` endpoint
 
 ## Quick Start
 
 ### Prerequisites
+
 - Docker and Docker Compose
 - [sops](https://github.com/getsops/sops) for secret management
 - Age or PGP key configured for sops decryption
@@ -39,11 +57,13 @@ The SQL-to-ARC converter that:
 ```
 
 This will:
+
 1. Start PostgreSQL
 2. Initialize the database with Edaphobase data
 3. Run the SQL-to-ARC converter
 
 With image rebuild:
+
 ```bash
 ./start.sh --build
 ```
@@ -97,13 +117,14 @@ The `start.sh` script uses `sops exec-file` to temporarily decrypt `client.key` 
 ### config.yaml
 
 Application configuration for sql_to_arc:
+
 - `db_host`: Set to `postgres` (Docker service name)
 - `api_client.client_cert_path`: `/run/secrets/client.crt`
 - `api_client.client_key_path`: `/run/secrets/client.key`
 
 ## Service Dependencies
 
-```
+```text
 postgres (healthcheck)
   ↓
 db-init (waits for healthy postgres)
@@ -114,27 +135,34 @@ sql_to_arc (waits for db-init completion)
 ## Troubleshooting
 
 ### Database not initializing
+
 Check db-init logs:
+
 ```bash
 docker compose logs db-init
 ```
 
 Common issues:
+
 - Network timeout downloading dump → retry with `docker compose up db-init`
 - PostgreSQL not ready → check postgres healthcheck
 
 ### sql_to_arc fails
+
 Check logs:
+
 ```bash
 docker compose logs sql_to_arc
 ```
 
 Common issues:
+
 - Secrets not mounted → verify sops decryption works: `sops -d client.key`
 - API unreachable → check `api_url` in config.yaml
 - Database connection → verify db-init completed successfully
 
 ### Rebuild specific service
+
 ```bash
 docker compose build sql_to_arc
 docker compose up sql_to_arc
