@@ -10,6 +10,7 @@
             "request": "launch",
             "program": "${workspaceFolder}/middleware/sql_to_arc/src/middleware/sql_to_arc/main.py",
             "console": "integratedTerminal",
+            "envFile": "${workspaceFolder}/dev_environment/.env",
             "args": [
                 "-c",
                 "${workspaceFolder}/dev_environment/config.yaml"

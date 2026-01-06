@@ -1,12 +1,12 @@
 # SOPS configuration
 creation_rules:
-  - path_regex: \.env\.integration\.enc$
-    input_type: dotenv
-    output_type: dotenv
+  - path_regex: \.enc\.yaml$|\.enc\.yml$|\.enc\.json$|\.enc\.toml$|\.enc\.ini$|\.key$
     pgp: >-
       37D38A6C0248214B007B6C5685E825F3377228D6,
       CC7B10CE8D78010ABB043F8DB1C462E90012ECFE
-  - path_regex: \.key$
+  - path_regex: \.env.*\.enc$
+    input_type: dotenv
+    output_type: dotenv
     pgp: >-
       37D38A6C0248214B007B6C5685E825F3377228D6,
       CC7B10CE8D78010ABB043F8DB1C462E90012ECFE

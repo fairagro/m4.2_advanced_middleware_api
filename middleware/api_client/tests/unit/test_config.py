@@ -113,11 +113,26 @@ def test_config_invalid_timeout() -> None:
 
 
 def test_config_missing_required_fields() -> None:
-    """Test configuration with missing required fields."""
+    """Test configuration with only required fields (api_url).
+
+    Client certificates are now optional, so only api_url is required.
+    """
+    config = Config.from_data(
+        {
+            "api_url": "https://api.example.com",
+            # client_cert_path and client_key_path are optional
+        }
+    )
+    assert config.api_url == "https://api.example.com"
+    assert config.client_cert_path is None
+    assert config.client_key_path is None
+
+
+def test_config_missing_api_url() -> None:
+    """Test configuration with missing required api_url field."""
     with pytest.raises(ValidationError):  # Pydantic ValidationError
         Config.from_data(
             {
-                "api_url": "https://api.example.com",
-                # Missing client_cert_path and client_key_path
+                # Missing api_url (the only required field)
             }
         )

@@ -4,6 +4,7 @@ import logging
 from abc import ABC, abstractmethod
 
 from arctrl import ARC  # type: ignore[import-untyped]
+from opentelemetry import trace
 
 logger = logging.getLogger(__name__)
 
@@ -17,6 +18,10 @@ class ArcStoreError(Exception):
 
 class ArcStore(ABC):
     """Abstract base class for ARC storage backends."""
+
+    def __init__(self) -> None:
+        """Initialize ArcStore with tracer."""
+        self._tracer = trace.get_tracer(__name__)
 
     @abstractmethod
     def arc_id(self, identifier: str, rdi: str) -> str:
@@ -57,17 +62,23 @@ class ArcStore(ABC):
             _type_: None
 
         """
-        try:
-            return await self._create_or_update(arc_id, arc)
-        except ArcStoreError:
-            raise
-        except Exception as e:
-            logger.exception(
-                "Caught exception when trying to create or update ARC '%s': %s",
-                arc_id,
-                str(e),
-            )
-            raise ArcStoreError(f"General exception caught in `ArcStore.create_or_update`: {str(e)}") from e
+        with self._tracer.start_as_current_span(
+            "arc_store.create_or_update",
+            attributes={"arc_id": arc_id},
+        ) as span:
+            try:
+                return await self._create_or_update(arc_id, arc)
+            except ArcStoreError as e:
+                span.record_exception(e)
+                raise
+            except Exception as e:
+                logger.exception(
+                    "Caught exception when trying to create or update ARC '%s': %s",
+                    arc_id,
+                    str(e),
+                )
+                span.record_exception(e)
+                raise ArcStoreError(f"General exception caught in `ArcStore.create_or_update`: {str(e)}") from e
 
     def get(self, arc_id: str) -> ARC | None:
         """_Get an ARC by its ID.

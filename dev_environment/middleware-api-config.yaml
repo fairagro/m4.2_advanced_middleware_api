@@ -1,0 +1,17 @@
+log_level: DEBUG
+
+gitlab_api:
+  group: FAIRagro-advanced-middleware-dev
+  url: https://datahub-dev.ipk-gatersleben.de
+  max_workers: 10
+  commit_chunk_size: 200
+known_rdis:
+- bonares
+- edal
+- edaphobase
+- openagrar
+- publisso
+- thunen_atlas
+require_client_cert: false
+# otel_endpoint: http://signoz:4318  # Uncomment to enable Signoz tracing
+# otel_log_console_spans: true     # Enable SPAN logging to console
