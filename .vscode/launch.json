@@ -10,9 +10,7 @@
             "request": "launch",
             "program": "${workspaceFolder}/middleware/sql_to_arc/src/middleware/sql_to_arc/main.py",
             "console": "integratedTerminal",
-            "env": {
-                "SQL_TO_ARC_DB_PASSWORD": "postgres"
-            },
+            "envFile": "${workspaceFolder}/dev_environment/.env",
             "args": [
                 "-c",
                 "${workspaceFolder}/dev_environment/config.yaml"
