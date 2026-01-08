@@ -6,10 +6,10 @@
 -- Drop existing views if they exist to allow clean recreation
 DROP VIEW IF EXISTS vAnnotationTable CASCADE;
 DROP VIEW IF EXISTS vAssay CASCADE;
-DROP VIEW IF EXISTS vStudy CASCADE;
 DROP VIEW IF EXISTS vContact CASCADE;
-DROP VIEW IF EXISTS vPublication CASCADE;
 DROP VIEW IF EXISTS vInvestigation CASCADE;
+DROP VIEW IF EXISTS vPublication CASCADE;
+DROP VIEW IF EXISTS vStudy CASCADE;
 
 -- View: vInvestigation
 CREATE OR REPLACE VIEW vInvestigation AS
