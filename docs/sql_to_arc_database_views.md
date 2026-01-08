@@ -66,7 +66,7 @@ Note: the ISA XLSX spec does not define a comments field for investigations, but
 
 This view represents a publication for an investigation or study.
 
-| Field | Datatype | Required | Description |sometimes
+| Field | Datatype | Required | Description |
 |-------|----------|----------|-------------|
 | pubmed_id | TEXT | no | The [PubMed IDs](https://pubmed.ncbi.nlm.nih.gov/) of the described publication(s) associated with this investigation. |
 | doi | TEXT | no | A [Digital Object Identifier (DOI)](https://www.doi.org/) for that publication (where available). |
@@ -77,7 +77,7 @@ This view represents a publication for an investigation or study.
 | status_version | TEXT | no | The version of the ontology the publication status refers to. |
 | target_type | TEXT | yes | Either `investigation`, `study`. |
 | target_ref | TEXT | no | The `vStudy`.`identifier` that identifies the study this publication belongs to. NULL, if it does not belong to a study, but to the investigation itself. |
-| investigation_ref | TEXT | yes | The `vInvestigation`.`identifier` this publication belongs to. . This is always required, even it's a study.|
+| investigation_ref | TEXT | yes | The `vInvestigation`.`identifier` this publication belongs to. This is always required, even it's a study.|
 
 Note: the ISA XLSX spec does not define a comments field for investigation publications, but the `ARCtrl` library as well as `ARCitect` both offer this field. We currently opt to omit it to be compatible to all flavors.
 
@@ -95,7 +95,7 @@ This view represents a person or contact that is involved in creating an investi
 | fax | TEXT | no | The fax number of a person associated with the investigation. |
 | postal_address | TEXT | no | The address of a person associated with the investigation. |
 | affiliation | TEXT | no | The organization affiliation for a person associated with the investigation. |
-| roles | TEXT | no | A JSON string (list of dicts) defining the roles of a contact. Each contact can have an arbitrary number of roles, comprising the outer list of the JSON string. Each role definition is an ontology reference that consists of a readable string, an URI and an version, modeled as inner dict in the JSON string: [{"term": "...", "uri": "https://...", "version": "..."}, {...}]. |
+| roles | TEXT | no | A JSON string (list of dicts) defining the roles of a contact. Each contact can have an arbitrary number of roles, comprising the outer list of the JSON string. Each role definition is an ontology reference that consists of a readable string, a URI and a version, modeled as inner dict in the JSON string: [{"term": "...", "uri": "https://...", "version": "..."}, {...}]. |
 | target_type | TEXT | yes | Either `investigation`, `study` or `assay`. |
 | target_ref | TEXT | no | The `vStudy`.`identifier` or `vAssay`.`identifier` denoting the target this contact belongs to. NULL in case the target is the investigation. |
 | investigation_ref | TEXT | yes | The `vInvestigation`.`identifier` the contact belongs to. This is always required, even it's a study or assay contact. |
@@ -144,11 +144,11 @@ In addition to the entity `Assay` there is the identical entity `StudyAssay` def
 
 ### View `vAnnotationTable`
 
-This view in fact represents an annotation table cell (refer to the ARCitect table for a graphical representation). In addition it also contains all information a the annotation table column the cell belongs to and the annotation table the column belongs to. In pure SQL we would distribute this information among the three entities AnnotationTable, AnnotationTableColumn (referencing the annotation table) and AnnotationTableCell (referencing the AnnotationTableColumn). This requires dedicated indices of AnnotationTable and AnnotationTableColumn, but we do not want to introduce additional index columns in the views. Interestingly, without an additional index column, all column of an AnnotationTable are required to reference it unambiguously, the same holds true for AnnotationTableColumns. So when we define an AnnotationTableCell, we need to specify all information included in the corresponding AnnotationTableColumn and AnnotationTable. Thus we can just omit AnnotationTabelColumn and AnnotationTable and rename AnnotationTableCell to `vAnnotationTable`.
+This view in fact represents an annotation table cell (refer to the ARCitect table for a graphical representation). In addition it also contains all information about the annotation table column the cell belongs to and the annotation table the column belongs to. In pure SQL we would distribute this information among the three entities AnnotationTable, AnnotationTableColumn (referencing the annotation table) and AnnotationTableCell (referencing the AnnotationTableColumn). This requires dedicated indices of AnnotationTable and AnnotationTableColumn, but we do not want to introduce additional index columns in the views. Interestingly, without an additional index column, all columns of an AnnotationTable are required to reference it unambiguously, the same holds true for AnnotationTableColumns. So when we define an AnnotationTableCell, we need to specify all information included in the corresponding AnnotationTableColumn and AnnotationTable. Thus we can just omit AnnotationTableColumn and AnnotationTable and rename AnnotationTableCell to `vAnnotationTable`.
 
-An important feature of an annotaion table column is its type. Please refer to <https://nfdi4plants.github.io/AnnotationPrinciples/> for some documentation on the type.
+An important feature of an annotation table column is its type. Please refer to <https://nfdi4plants.github.io/AnnotationPrinciples/> for some documentation on the type.
 
-An annotation table cell may have a value or an ontology reference or both. Probably most cells will just use an ontology reference to denote some feature or characeteristic. If no ontology reference is suitable, it is possible to define a free-text cell by specifying the value field instead. If both the value and the ontology reference are specified, we refer to this as a unit cell. The value should then be numerical (aka convertable to a number) and the ontology reference is considered to refer to a phyical unit term.
+An annotation table cell may have a value or an ontology reference or both. Probably most cells will just use an ontology reference to denote some feature or characteristic. If no ontology reference is suitable, it is possible to define a free-text cell by specifying the value field instead. If both the value and the ontology reference are specified, we refer to this as a unit cell. The value should then be numerical (aka convertable to a number) and the ontology reference is considered to refer to a physical unit term.
 
 | Field | Datatype | Required | Description |
 |-------|----------|----------|-------------|
@@ -157,8 +157,8 @@ An annotation table cell may have a value or an ontology reference or both. Prob
 | target_ref | TEXT | yes | The `vStudy`.`identifier` or `vAssay`.`identifier`, depending on `target_type`. |
 | investigation_ref | TEXT | yes | The `vInvestigation`.`identifier` this annotation table belongs to. |
 | column_type | TEXT | yes | The annotation table column type. Allowed values are: `characteristic`, `comment`, `component`, `date`, `factor`, `input`, `output`, `parameter`, `performer`. |
-| column_io_type | TEXT | no | In case the annotation table column type is `input` or `output` the field `io_type` is required. Allowed values for `io_type` are: `data`, `material_name`, `sample_name` or `source_name` (the latter is only valid, if the column type is `input`). |
-| column_value | TEXT | no | In case the annotation table column type is `comment` the `value` field is required. |
+| column_io_type | TEXT | no | In case the annotation table column type is `input` or `output` the field `column_io_type` is required. Allowed values for `column_io_type` are: `data`, `material_name`, `sample_name` or `source_name` (the latter is only valid, if the column type is `input`). |
+| column_value | TEXT | no | In case the annotation table column type is `comment` the `column_value` field is required. |
 | column_annotation_term | TEXT | no | String representation for an ontology reference that is needed depending on the annotation table column type. Required for the column types: `characteristic`, `component`, `factor` and `parameter`. |
 | column_annotation_uri | TEXT | no | URI for the annotation table column ontology reference. |
 | column_annotation_version | TEXT | no | Version of the ontology of the column annotation. |
