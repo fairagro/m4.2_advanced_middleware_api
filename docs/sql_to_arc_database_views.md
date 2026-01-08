@@ -67,7 +67,7 @@ Note: the ISA XLSX spec does not define a comments field for investigations, but
 
 This view represents a publication for an investigation or study.
 
-| Field | Datatype | Required | Description |sometimes
+| Field | Datatype | Required | Description |
 |-------|----------|----------|-------------|
 | pubmed_id | TEXT | no | The [PubMed IDs](https://pubmed.ncbi.nlm.nih.gov/) of the described publication(s) associated with this investigation. |
 | doi | TEXT | no | A [Digital Object Identifier (DOI)](https://www.doi.org/) for that publication (where available). |
