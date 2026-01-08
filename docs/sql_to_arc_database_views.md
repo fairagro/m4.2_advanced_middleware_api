@@ -78,7 +78,7 @@ This view represents a publication for an investigation or study.
 | status_version | TEXT | no | The version of the ontology the publication status refers to. |
 | target_type | TEXT | yes | Either `investigation`, `study`. |
 | target_ref | TEXT | no | The `vStudy`.`identifier` that identifies the study this publication belongs to. NULL, if it does not belong to a study, but to the investigation itself. |
-| investigation_ref | TEXT | yes | The `vInvestigation`.`identifier` this publication belongs to. . This is always required, even it's a study.|
+| investigation_ref | TEXT | yes | The `vInvestigation`.`identifier` this publication belongs to. This is always required, even it's a study.|
 
 Note: the ISA XLSX spec does not define a comments field for investigation publications, but the `ARCtrl` library as well as `ARCitect` both offer this field. We currently opt to omit it to be compatible to all flavors.
 
