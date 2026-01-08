@@ -155,7 +155,7 @@ An annotation table cell may have a value or an ontology reference or both. Prob
 | table_name | TEXT | yes | The name for the annotation table (as shown in the ARCitect bottom tabs). |
 | target_type | TEXT | yes | Either `study` or `assay`, depending on the entity type, this annotation table belongs to. |
 | target_ref | TEXT | yes | The `vStudy`.`identifier` or `vAssay`.`identifier`, depending on `target_type`. |
-| investigation_ref | TEXT | yes | The `vInvestigation`.`identifier` this annotion table belongs to. |
+| investigation_ref | TEXT | yes | The `vInvestigation`.`identifier` this annotation table belongs to. |
 | column_type | TEXT | yes | The annotation table column type. Allowed values are: `characteristic`, `comment`, `component`, `date`, `factor`, `input`, `output`, `parameter`, `performer`. |
 | column_io_type | TEXT | no | In case the annotation table column type is `input` or `output` the field `io_type` is required. Allowed values for `io_type` are: `data`, `material_name`, `sample_name` or `source_name` (the latter is only valid, if the column type is `input`). |
 | column_value | TEXT | no | In case the annotation table column type is `comment` the `value` field is required. |
@@ -164,9 +164,9 @@ An annotation table cell may have a value or an ontology reference or both. Prob
 | column_annotation_version | TEXT | no | Version of the ontology of the column annotation. |
 | row_index | INTEGER | yes | The row of the annotation table the cell belongs to. |
 | cell_value | TEXT | no | The value of the annotation table cell. |
-| cell_annotation_term | TEXT | no | String representation for an ontology reference for an annotation tabel cell. |
+| cell_annotation_term | TEXT | no | String representation for an ontology reference for an annotation table cell. |
 | cell_annotation_uri | TEXT | no | URI for the ontology reference for an annotation table cell. |
 | cell_annotation_version | TEXT | no | Version of the ontology of the annotation of a table cell. |
 
 Note: `ARCtrl` allows the definition of `input` or `output` columns without a `column_io_type` but with a `column_value` instead. As this is not covered by the ISA XLSX spec, we omit this feature here.
-Actually there are further `column_type`'s available: `protocol_description`, `protocol_ref`, `protocol_type` and `protocol_uri`. But as `ARCtrl` has no dedicated notion of a protocols -- outside of annotation tables -- we neclect them here.
+Actually there are further `column_type`'s available: `protocol_description`, `protocol_ref`, `protocol_type` and `protocol_uri`. But as `ARCtrl` has no dedicated notion of a protocols -- outside of annotation tables -- we neglect them here.
