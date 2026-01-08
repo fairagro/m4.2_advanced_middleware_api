@@ -7,7 +7,7 @@ import hashlib
 import logging
 import tempfile
 from pathlib import Path
-from typing import Annotated, Any
+from typing import Annotated, Any, Literal
 
 import gitlab
 from arctrl import ARC  # type: ignore[import-untyped]
@@ -23,6 +23,7 @@ logger = logging.getLogger(__name__)
 class GitlabApiConfig(BaseModel):
     """Configuration for Gitlab API ArcStore."""
 
+    type: Annotated[Literal["gitlab"], Field(description="Type of backend")] = "gitlab"  # Discriminator
     url: Annotated[HttpUrl, Field(description="URL of the gitlab server to store ARCs in")]
     group: Annotated[
         str,

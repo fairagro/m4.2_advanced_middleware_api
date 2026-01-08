@@ -26,10 +26,11 @@ def config(oid: x509.ObjectIdentifier, known_rdis: list[str]) -> "DictType | Lis
             "log_level": "DEBUG",
             "known_rdis": list(known_rdis),
             "client_auth_oid": oid.dotted_string,
-            "gitlab_api": {
+            "arc_store": {
+                "type": "gitlab",
                 "url": "https://datahub-dev.ipk-gatersleben.de",
                 "group": "FAIRagro-advanced-middleware-integration-tests",
-                "token": "",
+                "token": os.getenv("GITLAB_API_TOKEN", ""),
             },
         }
     )
@@ -42,13 +43,13 @@ def gitlab_api(
 ) -> Gitlab:  # pylint: disable=redefined-outer-name
     """Provide a Gitlab API client for tests."""
     token = os.getenv("GITLAB_API_TOKEN")
-    return Gitlab(config["gitlab_api"]["url"], private_token=token)
+    return Gitlab(config["arc_store"]["url"], private_token=token)
 
 
 @pytest.fixture(scope="session")
 def gitlab_group(config: dict[str, Any], gitlab_api: Gitlab) -> Any:  # pylint: disable=redefined-outer-name
     """Provide the Gitlab group for tests."""
-    group = gitlab_api.groups.get(config["gitlab_api"]["group"])
+    group = gitlab_api.groups.get(config["arc_store"]["group"])
     return group
 
 

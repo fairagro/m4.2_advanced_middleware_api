@@ -28,7 +28,9 @@ from middleware.shared.api_models.models import (
 )
 from middleware.shared.tracing import initialize_tracing
 
-from .arc_store.gitlab_api import GitlabApi
+from .arc_store import ArcStore
+from .arc_store.git_repo import GitRepo, GitRepoConfig
+from .arc_store.gitlab_api import GitlabApi, GitlabApiConfig
 from .business_logic import BusinessLogic, InvalidJsonSemanticError
 from .config import Config
 from .fastapi_tracing import instrument_fastapi
@@ -50,7 +52,8 @@ if "pytest" in sys.modules:
     loaded_config = Config.from_data(
         {
             "log_level": "DEBUG",
-            "gitlab_api": {
+            "arc_store": {
+                "type": "gitlab",
                 "url": "https://localhost/",
                 "branch": "dummy",
                 "token": "dummy-token",
@@ -106,7 +109,13 @@ class Api:
             log_console_spans=self._config.otel_log_console_spans,
         )
 
-        self._store = GitlabApi(self._config.gitlab_api)
+        self._store: ArcStore
+        if isinstance(self._config.arc_store, GitlabApiConfig):
+            self._store = GitlabApi(self._config.arc_store)
+        elif isinstance(self._config.arc_store, GitRepoConfig):
+            self._store = GitRepo(self._config.arc_store)
+        else:
+            raise ValueError("Invalid ArcStore configuration")
         self._service = BusinessLogic(self._store)
         self._app = FastAPI(
             title="FAIR Middleware API",

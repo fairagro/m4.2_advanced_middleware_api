@@ -1,5 +1,6 @@
 """Integration tests for the SQL-to-ARC workflow."""
 
+import multiprocessing
 from concurrent.futures import ProcessPoolExecutor
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock
@@ -55,7 +56,8 @@ async def test_process_worker_investigations(mock_api_client: AsyncMock) -> None
     studies_by_investigation: dict[int, list[dict[str, Any]]] = {1: [], 2: []}
     assays_by_study: dict[int, list[dict[str, Any]]] = {}
 
-    with ProcessPoolExecutor(max_workers=5) as executor:
+    mp_context = multiprocessing.get_context("spawn")
+    with ProcessPoolExecutor(max_workers=5, mp_context=mp_context) as executor:
         await process_worker_investigations(
             mock_api_client,
             investigation_rows,
@@ -107,6 +109,7 @@ async def test_main_workflow(
     mock_config.max_concurrent_arc_builds = 5
     mock_config.api_client = MagicMock()
     mock_config.log_level = "INFO"
+    mock_config.otel_endpoint = None
 
     mock_wrapper = MagicMock()
     mocker.patch(

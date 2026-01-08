@@ -9,7 +9,10 @@ from pydantic import ConfigDict, Field, field_validator
 
 from middleware.shared.config.config_base import ConfigBase
 
+from .arc_store.git_repo import GitRepoConfig
 from .arc_store.gitlab_api import GitlabApiConfig
+
+ArcStoreConfig = Annotated[GitlabApiConfig | GitRepoConfig, Field(discriminator="type")]
 
 
 class Config(ConfigBase):
@@ -19,7 +22,7 @@ class Config(ConfigBase):
     client_auth_oid: Annotated[x509.ObjectIdentifier, Field(description="OID for client authentication")] = (
         x509.ObjectIdentifier("1.3.6.1.4.1.64609.1.1")
     )
-    gitlab_api: Annotated[GitlabApiConfig, Field(description="Gitlab API config")]
+    arc_store: Annotated[ArcStoreConfig, Field(description="ArcStore backend configuration")]
     require_client_cert: Annotated[
         bool, Field(description="Require client certificate for API access (set to false for development)")
     ] = True

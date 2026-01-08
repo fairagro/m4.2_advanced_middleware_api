@@ -4,6 +4,7 @@ import argparse
 import asyncio
 import concurrent.futures
 import logging
+import multiprocessing
 from collections import defaultdict
 from pathlib import Path
 from typing import Any
@@ -340,8 +341,10 @@ async def process_investigations(
             logger.info("Worker %d assigned %d investigations", worker_id + 1, len(assigned_investigations))
 
         # Process workers concurrently with ProcessPoolExecutor for CPU-bound ARC building
-        # Each worker processes its assigned investigations in batches, building ARCs in parallel
-        with concurrent.futures.ProcessPoolExecutor(max_workers=num_workers) as executor:
+        # Each worker processes its assigned investigations in batches, building ARCs in parallel.
+        # Use "spawn" context to avoid deadlocks/warnings in multi-threaded environments (e.g. pytest).
+        mp_context = multiprocessing.get_context("spawn")
+        with concurrent.futures.ProcessPoolExecutor(max_workers=num_workers, mp_context=mp_context) as executor:
             tasks = [
                 process_worker_investigations(
                     client,

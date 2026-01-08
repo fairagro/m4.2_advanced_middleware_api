@@ -24,11 +24,12 @@ def config(oid: x509.ObjectIdentifier, known_rdis: list[str]) -> Config:
         log_level="DEBUG",
         known_rdis=known_rdis,
         client_auth_oid=oid,
-        gitlab_api=GitlabApiConfig(
+        arc_store=GitlabApiConfig(
             url=HttpUrl("http://localhost:8080"),
             token=SecretStr("test-token"),
             group="test-group",
             branch="main",
+            type="gitlab",
         ),
     )
 
@@ -67,7 +68,9 @@ def service() -> BusinessLogic:
 @pytest.fixture
 def gitlab_api() -> GitlabApi:
     """Provide a GitlabApi instance with a mocked Gitlab client."""
-    api_config = GitlabApiConfig(url=HttpUrl("http://gitlab"), token=SecretStr("token"), group="1", branch="main")  # nosec
+    api_config = GitlabApiConfig(
+        url=HttpUrl("http://gitlab"), token=SecretStr("token"), group="1", branch="main", type="gitlab"
+    )  # nosec
     api = GitlabApi(api_config)
     api._gitlab = MagicMock()  # pylint: disable=protected-access
     return api
