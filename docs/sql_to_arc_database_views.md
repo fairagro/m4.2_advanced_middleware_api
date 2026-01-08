@@ -98,7 +98,7 @@ This view represents a person or contact that is involved in creating an investi
 | affiliation | TEXT | no | The organization affiliation for a person associated with the investigation. |
 | roles | TEXT | no | A JSON string (list of dicts) defining the roles of a contact. Each contact can have an arbitrary number of roles, comprising the outer list of the JSON string. Each role definition is an ontology reference that consists of a readable string, an URI and an version, modeled as inner dict in the JSON string: [{"term": "...", "uri": "https://...", "version": "..."}, {...}]. |
 | target_type | TEXT | yes | Either `investigation`, `study` or `assay`. |
-| target_ref | TEXT | yes | The `vStudy`.`identifier` or `vAssay`.`identifier` denoting the target this contact belongs to. NULL in case the target is the investigation. |
+| target_ref | TEXT | no | The `vStudy`.`identifier` or `vAssay`.`identifier` denoting the target this contact belongs to. NULL in case the target is the investigation. |
 | investigation_ref | TEXT | yes | The `vInvestigation`.`identifier` the contact belongs to. This is always required, even it's a study or assay contact. |
 
 Note: the ISA XLSX spec does not define an orcid field for investigation contacts, but the `ARCtrl` library as well as `ARCitect` both offer this field. We currently opt to omit it to be compatible to all flavors.
