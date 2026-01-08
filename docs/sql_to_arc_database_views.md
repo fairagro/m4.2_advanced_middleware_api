@@ -158,8 +158,8 @@ An annotation table cell may have a value or an ontology reference or both. Prob
 | target_ref | TEXT | yes | The `vStudy`.`identifier` or `vAssay`.`identifier`, depending on `target_type`. |
 | investigation_ref | TEXT | yes | The `vInvestigation`.`identifier` this annotion table belongs to. |
 | column_type | TEXT | yes | The annotation table column type. Allowed values are: `characteristic`, `comment`, `component`, `date`, `factor`, `input`, `output`, `parameter`, `performer`. |
-| column_io_type | TEXT | no | In case the annotation table column type is `input` or `output` the field `io_type` is required. Allowed values for `io_type` are: `data`, `material_name`, `sample_name` or `source_name` (the latter is only valid, if the column type is `input`). |
-| column_value | TEXT | no | In case the annotation table column type is `comment` the `value` field is required. |
+| column_io_type | TEXT | no | In case the annotation table column type is `input` or `output` the field `column_io_type` is required. Allowed values for `column_io_type` are: `data`, `material_name`, `sample_name` or `source_name` (the latter is only valid, if the column type is `input`). |
+| column_value | TEXT | no | In case the annotation table column type is `comment` the `column_value` field is required. |
 | column_annotation_term | TEXT | no | String representation for an ontology reference that is needed depending on the annotation table column type. Required for the column types: `characteristic`, `component`, `factor` and `parameter`. |
 | column_annotation_uri | TEXT | no | URI for the annotation table column ontology reference. |
 | column_annotation_version | TEXT | no | Version of the ontology of the column annotation. |
