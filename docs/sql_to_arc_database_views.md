@@ -31,8 +31,7 @@ fields: an arbitrary name, a termAccession URI - e.g. <http://purl.obolibrary.or
 Specifying the name without ontology term and version means 'there is a yet unknown ontology reference', the actual ontology URI can then be added in a later postprocessing step. Omitting the name field means 'there is no ontology reference at all', the other two fields will be disregarded, even if filled in.
 The version field can always be omitted.
 
-In addition to the mentioned concepts there are further ones. Please refers to the ARC and ISA docs for
-details.
+In addition to the mentioned concepts there are further ones. Please refer to the ARC and ISA docs for details.
 
 ## Database Preparations
 
@@ -43,11 +42,11 @@ All the following views have to be present, conforming to the specified column l
 The investigation is the main view. Each investigation can be seen as 'dataset' and will be converted into a single ARC.
 All other views directly or indirectly enrich the investigations/datasets.
 
-Any view may be empty, if the correspding data is not available. If a view contains data, all required fields have to be specified. Fields that are not required may contain `NULL`.
+Any view may be empty, if the corresponding data is not available. If a view contains data, all required fields have to be specified. Fields that are not required may contain `NULL`.
 
 ## Views
 
-The described views are based on to the [ARC ISA XLSX specification](https://github.com/nfdi4plants/ARC-specification/blob/release/ISA-XLSX.md) and are adapted to match the features of ARCtrl. Currently we opt to make use of the greatest common divisor between the ISA XLSX features and those offered by ARCtrl. An additional design objective of the views is not to introduce additional indices and not to define complex relationships between the views. To achieve this goal some relationships are modeled in terms of JSON strings instead of SQL construct. Creating JSON strings is possible in all popular SQL dialects and should simplify view generation a lot.
+The described views are based on the [ARC ISA XLSX specification](https://github.com/nfdi4plants/ARC-specification/blob/release/ISA-XLSX.md) and are adapted to match the features of ARCtrl. Currently we opt to make use of the greatest common divisor between the ISA XLSX features and those offered by ARCtrl. An additional design objective of the views is not to introduce additional indices and not to define complex relationships between the views. To achieve this goal some relationships are modeled in terms of JSON strings instead of SQL construct. Creating JSON strings is possible in all popular SQL dialects and should simplify view generation a lot.
 
 ### View `vInvestigation`
 
