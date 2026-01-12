@@ -204,6 +204,7 @@ async def test_create_or_update(git_repo: GitRepo, tmp_path: Path) -> None:
             assert (fake_repo_path / ".git").exists()
 
             # Check ARC write
+            # pylint: disable=no-member
             arc.Write.assert_called_once_with(str(fake_repo_path))
 
             # Check commit/push

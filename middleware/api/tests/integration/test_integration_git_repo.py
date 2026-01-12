@@ -87,9 +87,7 @@ async def test_create_arc_via_git_repo(
     body = {"rdi": "rdi-1", "arcs": [json_content]}
 
     # Calculate expected ARC ID for identifier "Test"
-    identifier = "Test"
-    arc_id_input = f"{identifier}:rdi-1"
-    arc_id = hashlib.sha256(arc_id_input.encode("utf-8")).hexdigest()
+    arc_id = hashlib.sha256(b"Test:rdi-1").hexdigest()
 
     # 2. Pre-create the bare repo
     # Expected remote path: base / group / arc_id.git
@@ -111,7 +109,11 @@ async def test_create_arc_via_git_repo(
     assert response_data["client_id"] == "TestClient"
 
     # 4. Verify Push
-    # Clone the bare repo to verify it has files
+    _verify_repo_content(repo_path)
+
+
+def _verify_repo_content(repo_path: Path) -> None:
+    """Verify the content of the pushed repository."""
     with tempfile.TemporaryDirectory() as tmp_clone:
         Repo.clone_from(str(repo_path), tmp_clone, branch="main")
 

@@ -43,6 +43,12 @@ async def test_create_arcs(
     body = response.json()
     assert body["client_id"] == "TestClient"  # nosec
 
+    # verify
+    _verify_gitlab_project(gitlab_api, config, json_info)
+
+
+def _verify_gitlab_project(gitlab_api: Gitlab, config: dict[str, Any], json_info: dict[str, Any]) -> None:
+    """Verify that the project was created in GitLab and contains the expected file."""
     # check that we have a project/repo that contains the isa.investigation.xlsx file
     group_name = config["gitlab_api"]["group"].lower()
     group = gitlab_api.groups.get(group_name)
