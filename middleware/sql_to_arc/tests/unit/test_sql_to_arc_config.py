@@ -24,6 +24,7 @@ def test_config_creation() -> None:
         db_host="localhost",
         db_port=5432,
         rdi="edaphobase",
+        rdi_url="https://edaphobase.org",
         batch_size=10,
         api_client=api_client_config,
         log_level="INFO",
@@ -35,6 +36,7 @@ def test_config_creation() -> None:
     assert config.db_host == "localhost"
     assert config.db_port == 5432
     assert config.rdi == "edaphobase"
+    assert config.rdi_url == "https://edaphobase.org"
     assert config.batch_size == 10
     assert config.log_level == "INFO"
 
@@ -53,6 +55,7 @@ def test_config_with_defaults() -> None:
         db_password=SecretStr("secret"),
         db_host="localhost",
         rdi="edaphobase",
+        rdi_url="https://edaphobase.org",
         api_client=api_client_config,
     )
 
@@ -76,6 +79,7 @@ def test_config_batch_size_validation() -> None:
             db_password=SecretStr("secret"),
             db_host="localhost",
             rdi="edaphobase",
+            rdi_url="https://edaphobase.org",
             batch_size=0,  # Invalid: must be > 0
             api_client=api_client_config,
         )

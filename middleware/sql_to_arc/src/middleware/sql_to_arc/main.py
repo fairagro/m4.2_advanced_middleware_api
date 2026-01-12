@@ -6,6 +6,7 @@ import concurrent.futures
 import json
 import logging
 import multiprocessing
+import time
 from collections import defaultdict
 from pathlib import Path
 from typing import Any, cast
@@ -32,8 +33,11 @@ class ProcessingStats(BaseModel):
     """Statistics for the conversion process."""
 
     found_datasets: int = 0
+    total_studies: int = 0
+    total_assays: int = 0
     failed_datasets: int = 0
     failed_ids: list[str] = []
+    duration_seconds: float = 0.0
 
     model_config = ConfigDict(arbitrary_types_allowed=True)
 
@@ -42,19 +46,59 @@ class ProcessingStats(BaseModel):
         self.found_datasets += other.found_datasets
         self.failed_datasets += other.failed_datasets
         self.failed_ids.extend(other.failed_ids)
+        # Note: total_studies, total_assays are counted centrally, not merged from workers
 
-    def to_json(self) -> str:
-        """Return JSON representation of stats."""
-        # Use Pydantic's serialization to ensure we get a valid dict,
-        # but re-dump with indent=2 as requested.
-        return json.dumps(
-            {
-                "found_datasets": self.found_datasets,
-                "failed_datasets": self.failed_datasets,
-                "failed_ids": sorted(self.failed_ids),
+    def to_jsonld(self, rdi_identifier: str | None = None, rdi_url: str | None = None) -> str:
+        """Return JSON-LD representation of stats using Schema.org and PROV terms."""
+        # Convert duration to ISO 8601 duration format (PTx.xS)
+        duration_iso = f"PT{self.duration_seconds:.2f}S"
+
+        ld_struct = {
+            "@context": {
+                "schema": "http://schema.org/",
+                "prov": "http://www.w3.org/ns/prov#",
+                "void": "http://rdfs.org/ns/void#",
+                "xsd": "http://www.w3.org/2001/XMLSchema#",
+                # Map duration to schema:duration (Expects ISO 8601 string)
+                "duration": {"@id": "schema:duration", "@type": "schema:Duration"},
+                # Map failed IDs to schema:error (list of strings)
+                "failed_ids": {"@id": "schema:error", "@container": "@set"},
+                # Map status
+                "status": {"@id": "schema:actionStatus"},
+                # Use VoID for counts (statistic items)
+                "found_datasets": {"@id": "void:entities", "@type": "xsd:integer"},
+                # Custom descriptive terms for study/assay counts as they are domain specific
+                # We map them to schema:result for semantics, but keep key names
+                "total_studies": {"@id": "schema:result", "@type": "xsd:integer"},
+                "total_assays": {"@id": "schema:result", "@type": "xsd:integer"},
             },
-            indent=2,
-        )
+            "@type": ["prov:Activity", "schema:CreateAction"],
+            "schema:name": "SQL to ARC Conversion Run",
+            "schema:instrument": {
+                "@type": "schema:SoftwareApplication",
+                "schema:name": "FAIRagro Middleware SQL-to-ARC",
+            },
+            # Process status
+            "status": "schema:CompletedActionStatus" if self.failed_datasets == 0 else "schema:FailedActionStatus",
+            # Metrics
+            "duration": duration_iso,
+            "duration_seconds": round(self.duration_seconds, 2),  # Keep raw float for easy parsing
+            "found_datasets": self.found_datasets,
+            "total_studies": self.total_studies,
+            "total_assays": self.total_assays,
+            "failed_datasets": self.failed_datasets,
+            "failed_ids": sorted(self.failed_ids),
+        }
+
+        if rdi_identifier and rdi_url:
+            ld_struct["prov:used"] = {
+                "@id": rdi_url,
+                "@type": "schema:Organization",  # RDI acts as an Organization/Service
+                "schema:identifier": rdi_identifier,
+                "schema:name": f"Research Data Infrastructure: {rdi_identifier}",
+            }
+
+        return json.dumps(ld_struct, indent=2)
 
 
 def parse_args() -> argparse.Namespace:
@@ -392,6 +436,7 @@ async def process_investigations(  # pylint: disable=too-many-locals
             studies_by_investigation = await fetch_studies_bulk(cur, investigation_ids)
         total_studies = sum(len(studies) for studies in studies_by_investigation.values())
         logger.info("Found %d studies", total_studies)
+        stats.total_studies = total_studies
 
         # Step 3: Fetch all assays for these studies in bulk
         study_ids = [study["id"] for studies in studies_by_investigation.values() for study in studies]
@@ -400,6 +445,7 @@ async def process_investigations(  # pylint: disable=too-many-locals
             assays_by_study = await fetch_assays_bulk(cur, study_ids)
         total_assays = sum(len(assays) for assays in assays_by_study.values())
         logger.info("Found %d assays", total_assays)
+        stats.total_assays = total_assays
 
         # Step 4: Distribute investigations evenly across workers
         num_workers = config.max_concurrent_arc_builds
@@ -501,10 +547,15 @@ async def main() -> None:
         logger.info("Starting SQL-to-ARC conversion with config: %s", args.config)
 
         try:
+            start_time = time.perf_counter()
             stats = await run_conversion(config)
+            end_time = time.perf_counter()
+            stats.duration_seconds = end_time - start_time
 
             logger.info("SQL-to-ARC conversion completed. Report:")
-            print(stats.to_json())  # Print to stdout as requested for report
+            print(
+                stats.to_jsonld(rdi_identifier=config.rdi, rdi_url=config.rdi_url)
+            )  # Print to stdout as requested for report
 
             # Log final summary
             if stats.failed_datasets > 0:
