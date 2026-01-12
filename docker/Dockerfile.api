@@ -45,6 +45,15 @@ RUN uv pip install --system pyinstaller
 # Build standalone binary with PyInstaller
 RUN pyinstaller --onedir \
     --name middleware-api \
+    --hidden-import "gunicorn.glogging" \
+    --hidden-import "uvicorn.workers" \
+    --copy-metadata requests \
+    --copy-metadata opentelemetry-instrumentation-requests \
+    --copy-metadata opentelemetry-instrumentation-fastapi \
+    --copy-metadata opentelemetry-instrumentation \
+    --copy-metadata opentelemetry-api \
+    --copy-metadata opentelemetry-sdk \
+    --add-data "$(python -c "import middleware.api; import os; print(os.path.join(os.path.dirname(middleware.api.__file__), 'gunicorn_config.py'))"):." \
     $(python -c "import middleware.api; print(middleware.api.__file__.replace('__init__.py', 'main_gunicorn.py'))")
 
 
@@ -61,7 +70,7 @@ ENV GUNICORN_LOG_LEVEL=info
 COPY --from=binary-builder /build/dist/middleware-api /api/middleware-api
 
 # Create non-root user and group and fix permissions
-RUN apk add --no-cache curl=8.14.1-r2 \
+RUN apk add --no-cache curl=8.14.1-r2 git=2.49.1-r0 \
     && addgroup -S middleware && adduser -S middleware -G middleware \
     && chown -R middleware:middleware /api
 
@@ -71,5 +80,5 @@ EXPOSE $UVICORN_PORT
 
 CMD ["/api/middleware-api/middleware-api"]
 
-HEALTHCHECK --interval=30s --timeout=5s --start-period=5s --retries=3 \
-  CMD ["curl", "-f", "http://${UVICORN_HOST}:${UVICORN_PORT}/v1/liveness"]
+HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
+  CMD curl -f "http://127.0.0.1:${UVICORN_PORT}/v1/liveness"

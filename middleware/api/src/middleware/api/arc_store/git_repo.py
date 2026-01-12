@@ -101,8 +101,10 @@ class GitContext:
             logger.info("Clone failed. Initializing new repo at %s", repo_path)
             self.repo = Repo.init(repo_path)
             self.repo.create_remote("origin", url)
-            with contextlib.suppress(OSError, GitCommandError):
-                self.repo.head.reference = self.repo.create_head(self.config.branch)
+            # Create a detached head if branch doesn't exist yet (e.g. empty repo)
+            # We don't need to force HEAD creation if it fails, just init is enough
+            with contextlib.suppress(OSError, GitCommandError, ValueError, IndexError, AttributeError):
+                self.repo.git.checkout("-b", self.config.branch)
         elif not self.repo:
             self.repo = Repo(repo_path)
 
