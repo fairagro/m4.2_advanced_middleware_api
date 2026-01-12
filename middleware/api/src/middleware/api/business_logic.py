@@ -96,9 +96,20 @@ class BusinessLogic:
             attributes={"rdi": rdi, "batch_size": len(arcs)},
         ):
             tasks = [self._create_arc_from_rocrate(rdi, arc) for arc in arcs]
-            results = await asyncio.gather(*tasks)
-            logger.debug("Batch processing complete: %d ARCs processed", len(results))
-            return results
+            # Use return_exceptions=True to ensure one failure doesn't stop the whole batch
+            results = await asyncio.gather(*tasks, return_exceptions=True)
+
+            processed_arcs: list[ArcResponse] = []
+            for i, res in enumerate(results):
+                if isinstance(res, Exception):
+                    logger.error(
+                        "Failed to process ARC at index %d in batch for RDI %s: %s", i, rdi, res, exc_info=True
+                    )
+                else:
+                    processed_arcs.append(res)  # type: ignore[arg-type]
+
+            logger.debug("Batch processing complete: %d/%d ARCs processed successfully", len(processed_arcs), len(arcs))
+            return processed_arcs
 
     # -------------------------- Create or Update ARCs --------------------------
     # TODO: in the first implementation, we accepted string data for ARC JSON,
@@ -132,21 +143,24 @@ class BusinessLogic:
                 "Starting ARC creation/update: rdi=%s, num_arcs=%d, client_id=%s", rdi, len(arcs), client_id or "none"
             )
             try:
+                # We do not catch InvalidJsonSemanticError or BusinessLogicError here anymore explicitly
+                # because individual ARC failures are handled inside _process_arcs now.
+                # Only if _process_arcs itself crashes (unexpectedly) will we land here.
                 result = await self._process_arcs(rdi, arcs)
+
                 span.set_attribute("success", True)
-                logger.info("Successfully processed %d ARCs for RDI: %s", len(result), rdi)
+                span.set_attribute("processed_count", len(result))
+
+                logger.info("Successfully processed %d/%d ARCs for RDI: %s", len(result), len(arcs), rdi)
+
                 return CreateOrUpdateArcsResponse(
                     client_id=client_id,
                     rdi=rdi,
-                    message="ARCs processed successfully",
+                    message=f"Processed {len(result)}/{len(arcs)} ARCs successfully",
                     arcs=result,
                 )
-            except (InvalidJsonSemanticError, BusinessLogicError) as exc:
-                logger.error("Business logic error while processing ARCs: %s", exc, exc_info=True)
-                span.record_exception(exc)
-                raise
             except Exception as e:
-                logger.error("Unexpected error while processing ARCs: %s", e, exc_info=True)
+                logger.error("Unexpected error while processing ARCs batch: %s", e, exc_info=True)
                 span.record_exception(e)
                 raise BusinessLogicError(f"unexpected error encountered: {str(e)}") from e
 

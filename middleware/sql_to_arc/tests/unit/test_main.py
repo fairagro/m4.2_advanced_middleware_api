@@ -10,10 +10,13 @@ import psycopg
 import pytest
 
 from middleware.sql_to_arc.main import (
+    ProcessingStats,
+    WorkerContext,
     fetch_all_investigations,
     fetch_assays_bulk,
     fetch_studies_bulk,
     parse_args,
+    process_investigations,
     process_worker_investigations,
 )
 
@@ -165,17 +168,17 @@ async def test_process_worker_investigations_empty() -> None:
     investigations: list[dict[str, Any]] = []
     mock_executor = MagicMock()
 
-    await process_worker_investigations(
-        mock_client,
-        investigations,
-        "test_rdi",
-        {},  # studies_by_investigation
-        {},  # assays_by_study
+    ctx = WorkerContext(
+        client=mock_client,
+        rdi="test_rdi",
+        studies_by_investigation={},  # studies_by_investigation
+        assays_by_study={},  # assays_by_study
         batch_size=2,
         worker_id=1,
         total_workers=1,
         executor=mock_executor,
     )
+    await process_worker_investigations(ctx, investigations)
     mock_client.create_or_update_arcs.assert_not_called()
 
 
@@ -213,17 +216,49 @@ async def test_process_worker_investigations_builds_and_uploads(monkeypatch: pyt
 
     executor = MagicMock(spec=concurrent.futures.ProcessPoolExecutor)
 
-    await process_worker_investigations(
-        mock_client,
-        investigations,
-        "test_rdi",
-        studies_by_investigation,
-        assays_by_study,
+    ctx = WorkerContext(
+        client=mock_client,
+        rdi="test_rdi",
+        studies_by_investigation=studies_by_investigation,
+        assays_by_study=assays_by_study,
         batch_size=2,
         worker_id=1,
         total_workers=1,
         executor=executor,
     )
+    await process_worker_investigations(ctx, investigations)
 
     loop_mock.run_in_executor.assert_called_once()
     mock_client.create_or_update_arcs.assert_called_once_with(rdi="test_rdi", arcs=[arc_object])
+
+
+@pytest.mark.asyncio
+async def test_process_investigations(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Test full process_investigations flow."""
+    mock_cursor = AsyncMock()
+    mock_client = AsyncMock()
+    mock_config = MagicMock(max_concurrent_arc_builds=2, batch_size=2, rdi="test")
+
+    # Mock fetchers
+    async def mock_fetch_inv(*_args: Any) -> list[dict[str, Any]]:
+        return [{"id": 1}, {"id": 2}, {"id": 3}]
+
+    async def mock_fetch_studies(*_args: Any) -> dict[int, list[dict[str, Any]]]:
+        return {1: [{"id": 10}], 2: [], 3: []}
+
+    async def mock_fetch_assays(*_args: Any) -> dict[int, list[dict[str, Any]]]:
+        return {10: []}
+
+    monkeypatch.setattr("middleware.sql_to_arc.main.fetch_all_investigations", mock_fetch_inv)
+    monkeypatch.setattr("middleware.sql_to_arc.main.fetch_studies_bulk", mock_fetch_studies)
+    monkeypatch.setattr("middleware.sql_to_arc.main.fetch_assays_bulk", mock_fetch_assays)
+
+    # Mock process_worker_investigations
+    async def mock_process_worker_inv(_ctx: WorkerContext, invs: list[dict[str, Any]]) -> ProcessingStats:
+        return ProcessingStats(found_datasets=len(invs))
+
+    monkeypatch.setattr("middleware.sql_to_arc.main.process_worker_investigations", mock_process_worker_inv)
+
+    stats = await process_investigations(mock_cursor, mock_client, mock_config)
+
+    assert stats.found_datasets == 3

@@ -9,7 +9,7 @@ import pytest
 
 from middleware.api_client import ApiClient
 from middleware.shared.api_models.models import CreateOrUpdateArcsResponse
-from middleware.sql_to_arc.main import main, process_worker_investigations
+from middleware.sql_to_arc.main import WorkerContext, main, process_worker_investigations
 
 
 @pytest.fixture
@@ -58,17 +58,17 @@ async def test_process_worker_investigations(mock_api_client: AsyncMock) -> None
 
     mp_context = multiprocessing.get_context("spawn")
     with ProcessPoolExecutor(max_workers=5, mp_context=mp_context) as executor:
-        await process_worker_investigations(
-            mock_api_client,
-            investigation_rows,
-            "edaphobase",
-            studies_by_investigation,
-            assays_by_study,
+        ctx = WorkerContext(
+            client=mock_api_client,
+            rdi="edaphobase",
+            studies_by_investigation=studies_by_investigation,
+            assays_by_study=assays_by_study,
             batch_size=2,
             worker_id=1,
             total_workers=1,
             executor=executor,
         )
+        await process_worker_investigations(ctx, investigation_rows)
 
     assert mock_api_client.create_or_update_arcs.called
     call_args = mock_api_client.create_or_update_arcs.call_args
