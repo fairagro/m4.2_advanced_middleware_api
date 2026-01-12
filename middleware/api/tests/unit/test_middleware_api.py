@@ -8,12 +8,24 @@ from cryptography import x509
 from fastapi.testclient import TestClient
 
 from middleware.api.api import Api
-from middleware.api.business_logic import InvalidJsonSemanticError
+from middleware.api.business_logic import BusinessLogicError, InvalidJsonSemanticError
 from middleware.shared.api_models.models import ArcResponse, ArcStatus, CreateOrUpdateArcsResponse
 
 
 class SimpleBusinessLogicMock:
     """Straight forward mock of BusinessLogic for testing purposes."""
+
+    def __init__(self, is_healthy: bool = True) -> None:
+        """Initialize the mock with a health status.
+
+        Args:
+            is_healthy: Whether the mock should report as healthy. Defaults to True.
+        """
+        self._is_healthy = is_healthy
+
+    def check_health(self) -> bool:
+        """Mock check_health."""
+        return self._is_healthy
 
     async def create_or_update_arcs(self, rdi: str, _arcs: list[Any], client_id: str) -> CreateOrUpdateArcsResponse:
         """Mock create_or_update_arcs that captures the RDI."""
@@ -87,6 +99,50 @@ def test_whoami_cert_verify_not_success(client: TestClient, cert: str, verify_st
         headers={"ssl-client-cert": cert, "ssl-client-verify": verify_status, "accept": "application/json"},
     )
     assert r.status_code == 401
+
+
+def test_health_check_success(client: TestClient, middleware_api: Api) -> None:
+    """Test /v1/health success."""
+    # pylint: disable=protected-access
+    mock_logic = SimpleBusinessLogicMock(is_healthy=True)
+    middleware_api.app.dependency_overrides[middleware_api._get_business_logic] = lambda: mock_logic
+
+    r = client.get("/v1/health", headers={"accept": "application/json"})
+    assert r.status_code == 200
+    assert r.json() == {"status": "ok", "backend_reachable": True}
+
+    middleware_api.app.dependency_overrides.clear()
+
+
+def test_health_check_failure(client: TestClient, middleware_api: Api) -> None:
+    """Test /v1/health failure."""
+    # pylint: disable=protected-access
+    mock_logic = SimpleBusinessLogicMock(is_healthy=False)
+    middleware_api.app.dependency_overrides[middleware_api._get_business_logic] = lambda: mock_logic
+
+    r = client.get("/v1/health", headers={"accept": "application/json"})
+    assert r.status_code == 503
+    assert r.json() == {"status": "error", "backend_reachable": False}
+
+    middleware_api.app.dependency_overrides.clear()
+
+
+def test_health_check_exception(client: TestClient, middleware_api: Api) -> None:
+    """Test /v1/health when logic raises exception."""
+
+    # pylint: disable=protected-access
+    class ExceptionMock(SimpleBusinessLogicMock):
+        def check_health(self) -> bool:
+            raise BusinessLogicError("Oops")
+
+    mock_logic = ExceptionMock()
+    middleware_api.app.dependency_overrides[middleware_api._get_business_logic] = lambda: mock_logic
+
+    r = client.get("/v1/health", headers={"accept": "application/json"})
+    assert r.status_code == 503
+    assert r.json() == {"status": "error", "backend_reachable": False}
+
+    middleware_api.app.dependency_overrides.clear()
 
 
 # -------------------------------------------------------------------

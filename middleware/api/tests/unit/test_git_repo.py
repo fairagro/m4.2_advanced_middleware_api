@@ -10,6 +10,7 @@ from unittest.mock import MagicMock, PropertyMock, patch
 
 import pytest
 from git.exc import GitCommandError
+from pydantic import SecretStr
 
 from middleware.api.arc_store.git_repo import GitContext, GitContextConfig, GitRepo, GitRepoConfig
 
@@ -47,16 +48,15 @@ def test_git_repo_context_config_generation(git_repo: GitRepo) -> None:
     config = git_repo._get_context_config("arc123")
     assert config.local_path is not None
     assert config.local_path == git_repo._config.cache_dir / "arc123"
-    assert config.repo_url == "https://gitlab.example.com/mygroup/arc123.git"
+    assert config.repo_url.get_secret_value() == "https://gitlab.example.com/mygroup/arc123.git"
 
 
 def test_git_context_ensure_path(tmp_path: Path) -> None:
     """Test that GitContext creates local directories."""
     target_path = tmp_path / "deep" / "nested" / "repo"
     config = GitContextConfig(
-        repo_url="https://example.com/repo.git",
+        repo_url=SecretStr("https://example.com/repo.git"),
         branch="main",
-        token=None,
         user_name=None,
         user_email=None,
         local_path=target_path,
@@ -77,9 +77,8 @@ def test_git_context_enter_clone(mock_repo: MagicMock, tmp_path: Path) -> None:
     target_path.mkdir()
 
     config = GitContextConfig(
-        repo_url="https://example.com/repo.git",
+        repo_url=SecretStr("https://example.com/repo.git"),
         branch="main",
-        token=None,
         user_name=None,
         user_email=None,
         local_path=target_path,
@@ -102,9 +101,8 @@ def test_git_context_enter_existing(mock_repo: MagicMock, tmp_path: Path) -> Non
     (target_path / ".git").mkdir()
 
     config = GitContextConfig(
-        repo_url="https://example.com/repo.git",
+        repo_url=SecretStr("https://example.com/repo.git"),
         branch="main",
-        token=None,
         user_name=None,
         user_email=None,
         local_path=target_path,

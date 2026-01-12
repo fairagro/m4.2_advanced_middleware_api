@@ -23,15 +23,16 @@ from fastapi.responses import JSONResponse
 from middleware.shared.api_models.models import (
     CreateOrUpdateArcsRequest,
     CreateOrUpdateArcsResponse,
+    HealthResponse,
     LivenessResponse,
     WhoamiResponse,
 )
 from middleware.shared.tracing import initialize_tracing
 
-from .arc_store import ArcStore
+from .arc_store import ArcStore, ArcStoreError
 from .arc_store.git_repo import GitRepo
 from .arc_store.gitlab_api import GitlabApi
-from .business_logic import BusinessLogic, InvalidJsonSemanticError
+from .business_logic import BusinessLogic, BusinessLogicError, InvalidJsonSemanticError
 from .config import Config
 from .fastapi_tracing import instrument_fastapi
 
@@ -343,7 +344,28 @@ class Api:
         async def liveness(
             _accept_validated: Annotated[None, Depends(self._validate_accept_type)],
         ) -> LivenessResponse:
+            """Check if the API service is running."""
             return LivenessResponse()
+
+        @self._app.get("/v1/health", response_model=HealthResponse)
+        def health_check(
+            response: Response,
+            business_logic: Annotated[BusinessLogic, Depends(self._get_business_logic)],
+            _accept_validated: Annotated[None, Depends(self._validate_accept_type)],
+        ) -> HealthResponse:
+            """Check health of API and connected services (Git)."""
+            is_healthy = False
+            try:
+                is_healthy = business_logic.check_health()
+            except (ArcStoreError, BusinessLogicError):
+                logger.exception("Health check failed with exception")
+
+            if is_healthy:
+                return HealthResponse(status="ok", backend_reachable=True)
+
+            # Set status code to 503 and return HealthResponse model
+            response.status_code = 503
+            return HealthResponse(status="error", backend_reachable=False)
 
         @self._app.post("/v1/arcs", response_model=CreateOrUpdateArcsResponse)
         async def create_or_update_arcs(

@@ -45,9 +45,10 @@ class GitRepoConfig(BaseModel):
     @field_validator("url")
     @classmethod
     def validate_url_scheme(cls, v: str) -> str:
-        """Ensure URL uses HTTPS."""
-        if not v.lower().startswith("https://"):
-            raise ValueError("Git URL must start with https://")
+        """Ensure URL uses HTTP, HTTPS or FILE (for tests)."""
+        valid_schemes = ("https://", "file://", "http://")
+        if not v.lower().startswith(valid_schemes):
+            raise ValueError(f"Git URL must start with one of: {valid_schemes}")
         return v
 
     @field_validator("cache_dir", mode="before")
@@ -62,11 +63,10 @@ class GitRepoConfig(BaseModel):
 class GitContextConfig(BaseModel):
     """Configuration for a specific GitContext."""
 
-    repo_url: str
+    repo_url: SecretStr
     branch: str
     user_name: str | None
     user_email: str | None
-    token: SecretStr | None
     local_path: Path
 
 
@@ -83,14 +83,6 @@ class GitContext:
         if not repo_path.parent.exists():
             repo_path.parent.mkdir(parents=True, exist_ok=True)
         return repo_path
-
-    def _get_authenticated_url(self) -> str:
-        url = self.config.repo_url
-        if self.config.token and url.startswith("https://"):
-            clean_url = url.replace("https://", "")
-            token_val = quote(self.config.token.get_secret_value())
-            url = f"https://oauth2:{token_val}@{clean_url}"
-        return url
 
     def _sync_existing_repo(self, repo_path: Path, url: str) -> None:
         self.repo = Repo(repo_path)
@@ -121,7 +113,7 @@ class GitContext:
     def __enter__(self) -> "GitContext":
         """Enter context: clone or init repo."""
         repo_path = self._ensure_path()
-        url = self._get_authenticated_url()
+        url = self.config.repo_url.get_secret_value()
 
         logger.debug("Accessing repo at %s", repo_path)
         try:
@@ -182,22 +174,33 @@ class GitRepo(ArcStore):
         input_str = f"{identifier}:{rdi}"
         return hashlib.sha256(input_str.encode("utf-8")).hexdigest()
 
-    def _check_server_availability(self) -> None:
-        """Check if the git server is reachable via HTTP."""
+    def _check_health(self) -> bool:
+        """Check connection to the storage backend."""
         url = self._config.url
+
+        # Check for file:// scheme used in integration tests
+        if url.lower().startswith("file://"):
+            logger.debug("Skipping health check for file:// URL: %s", url)
+            return True
+
         try:
             # Set a short timeout, disable bandit check, as we've already validated the URL
             with urllib.request.urlopen(url, timeout=5) as response:  # nosec B310
                 if response.status >= 400:
                     logger.error("Git server check failed: %s returned status %s", url, response.status)
+                    return False
                 else:
-                    logger.info("Git server check passed: %s returned status %s", url, response.status)
+                    logger.debug("Git server check passed: %s returned status %s", url, response.status)
+                    return True
         except urllib.error.HTTPError as e:
             logger.error("Git server check failed: %s returned HTTP error %s: %s", url, e.code, e.reason)
+            return False
         except urllib.error.URLError as e:
             logger.error("Git server check failed: %s is unreachable. Reason: %s", url, e.reason)
+            return False
         except Exception as e:  # pylint: disable=broad-exception-caught
             logger.error("Git server check failed: %s caused unexpected error: %s", url, e)
+            return False
 
     def _get_repo_url(self, arc_id: str) -> str:
         # Construct URL: base/group/arc_id.git
@@ -205,15 +208,28 @@ class GitRepo(ArcStore):
         group = self._config.group.strip("/")
         return f"{base}/{group}/{arc_id}.git"
 
+    def _get_authenticated_url(self, repo_url: str) -> str:
+        """Inject auth token into URL if present."""
+        if self._config.token:
+            token = quote(self._config.token.get_secret_value())
+            if repo_url.startswith("https://"):
+                clean = repo_url.replace("https://", "")
+                return f"https://oauth2:{token}@{clean}"
+            elif repo_url.startswith("http://"):
+                clean = repo_url.replace("http://", "")
+                return f"http://oauth2:{token}@{clean}"
+        return repo_url
+
     def _get_context_config(self, arc_id: str) -> GitContextConfig:
         repo_url = self._get_repo_url(arc_id)
+        auth_url = self._get_authenticated_url(repo_url)
+
         # cache_dir is guaranteed to be a Path by Pydantic validation
         local_path = self._config.cache_dir / arc_id
 
         return GitContextConfig(
-            repo_url=repo_url,
+            repo_url=SecretStr(auth_url),
             branch=self._config.branch,
-            token=self._config.token,
             user_name=self._config.user_name,
             user_email=self._config.user_email,
             local_path=local_path,
@@ -249,7 +265,7 @@ class GitRepo(ArcStore):
                     ctx.commit_and_push(f"Update ARC {arc_id}")
             except GitCommandError:
                 # Try to diagnose connection issues
-                self._check_server_availability()
+                self.check_health()
                 raise
 
         await loop.run_in_executor(self._executor, _task)
@@ -287,11 +303,7 @@ class GitRepo(ArcStore):
         repo_url = self._get_repo_url(arc_id)
 
         # Inject token for ls-remote check
-        url = repo_url
-        if self._config.token and url.startswith("https://"):
-            clean = url.replace("https://", "")
-            token = quote(self._config.token.get_secret_value())
-            url = f"https://oauth2:{token}@{clean}"
+        url = self._get_authenticated_url(repo_url)
 
         g = git.cmd.Git()
         try:

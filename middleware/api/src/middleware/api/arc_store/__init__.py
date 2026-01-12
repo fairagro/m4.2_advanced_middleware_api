@@ -48,6 +48,11 @@ class ArcStore(ABC):
         """Check if an ARC of a given id already exists."""
         raise NotImplementedError("`ArcStore._exists` is not implemented")
 
+    @abstractmethod
+    def _check_health(self) -> bool:
+        """Check connection to the storage backend."""
+        raise NotImplementedError("`ArcStore._check_health` is not implemented")
+
     async def create_or_update(self, arc_id: str, arc: ARC) -> None:
         """_Create or update an ARC.
 
@@ -140,3 +145,15 @@ class ArcStore(ABC):
             msg = f"Caught exception when trying to check if ARC '{arc_id}' exists: {e!r}"
             logger.exception(msg)
             raise ArcStoreError(msg) from e
+
+    def check_health(self) -> bool:
+        """Check connection to the storage backend.
+
+        Returns:
+            bool: True if backend is reachable, False otherwise.
+        """
+        try:
+            return self._check_health()
+        except (RuntimeError, OSError, ValueError, ConnectionError, TimeoutError) as e:
+            logger.exception("Caught exception during health check: %s", str(e))
+            return False

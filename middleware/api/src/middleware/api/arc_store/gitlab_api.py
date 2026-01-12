@@ -97,6 +97,17 @@ class GitlabApi(ArcStore):
         input_str = f"{identifier}:{rdi}"
         return hashlib.sha256(input_str.encode("utf-8")).hexdigest()
 
+    def _check_health(self) -> bool:
+        """Check connection to the storage backend."""
+        try:
+            self._gitlab.auth()
+            # Also check if we can access the group
+            self._gitlab.groups.get(self._config.group)
+            return True
+        except (gitlab.GitlabError, OSError, ValueError):
+            logger.exception("GitLab health check failed")
+            return False
+
     # -------------------------- Project Handling --------------------------
     def _get_or_create_project(self, arc_id: str) -> Project:
         with self._tracer.start_as_current_span(
