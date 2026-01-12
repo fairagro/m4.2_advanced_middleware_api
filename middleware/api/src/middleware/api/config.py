@@ -2,17 +2,15 @@
 
 import logging
 import re
-from typing import Annotated, ClassVar
+from typing import Annotated, ClassVar, Self
 
 from cryptography import x509
-from pydantic import ConfigDict, Field, field_validator
+from pydantic import ConfigDict, Field, field_validator, model_validator
 
 from middleware.shared.config.config_base import ConfigBase
 
 from .arc_store.git_repo import GitRepoConfig
 from .arc_store.gitlab_api import GitlabApiConfig
-
-ArcStoreConfig = Annotated[GitlabApiConfig | GitRepoConfig, Field(discriminator="type")]
 
 
 class Config(ConfigBase):
@@ -22,7 +20,10 @@ class Config(ConfigBase):
     client_auth_oid: Annotated[x509.ObjectIdentifier, Field(description="OID for client authentication")] = (
         x509.ObjectIdentifier("1.3.6.1.4.1.64609.1.1")
     )
-    arc_store: Annotated[ArcStoreConfig, Field(description="ArcStore backend configuration")]
+
+    git_repo: Annotated[GitRepoConfig | None, Field(description="GitRepo storage backend configuration")] = None
+    gitlab_api: Annotated[GitlabApiConfig | None, Field(description="GitLab API storage backend configuration")] = None
+
     require_client_cert: Annotated[
         bool, Field(description="Require client certificate for API access (set to false for development)")
     ] = True
@@ -54,3 +55,12 @@ class Config(ConfigBase):
         if isinstance(oid, x509.ObjectIdentifier):
             return oid
         raise TypeError("client_auth_oid must be a string or x509.ObjectIdentifier")
+
+    @model_validator(mode="after")
+    def validate_mutual_exclusivity(self) -> Self:
+        """Validate that exactly one backend is configured."""
+        if self.git_repo is None and self.gitlab_api is None:
+            raise ValueError("Either git_repo or gitlab_api must be configured")
+        if self.git_repo is not None and self.gitlab_api is not None:
+            raise ValueError("Only one of git_repo or gitlab_api can be configured")
+        return self

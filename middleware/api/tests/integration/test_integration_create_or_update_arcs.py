@@ -44,7 +44,7 @@ async def test_create_arcs(
     assert body["client_id"] == "TestClient"  # nosec
 
     # check that we have a project/repo that contains the isa.investigation.xlsx file
-    group_name = config["arc_store"]["group"].lower()
+    group_name = config["gitlab_api"]["group"].lower()
     group = gitlab_api.groups.get(group_name)
     arc_id = hashlib.sha256(f"{json_info['identifier']}:rdi-1".encode()).hexdigest()
     project_light = group.projects.list(search=arc_id)[0]

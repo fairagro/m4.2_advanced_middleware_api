@@ -8,7 +8,7 @@ import logging
 import shutil
 import tempfile
 from pathlib import Path
-from typing import Annotated, Literal
+from typing import Annotated
 from urllib.parse import quote
 
 import git.cmd
@@ -25,7 +25,6 @@ logger = logging.getLogger(__name__)
 class GitRepoConfig(BaseModel):
     """Configuration for Git CLI based ArcStore."""
 
-    type: Annotated[Literal["git"], Field(description="Type of backend")] = "git"
     url: Annotated[str, Field(description="Base URL of the git server (e.g. https://gitlab.com)")]
     group: Annotated[str, Field(description="The group/namespace the ARC repos belong to")]
     branch: Annotated[str, Field(description="The git branch to use for ARC repos")] = "main"
