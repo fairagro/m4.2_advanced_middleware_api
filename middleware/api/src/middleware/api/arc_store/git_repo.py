@@ -7,6 +7,8 @@ import hashlib
 import logging
 import shutil
 import tempfile
+import urllib.error
+import urllib.request
 from pathlib import Path
 from typing import Annotated
 from urllib.parse import quote
@@ -39,6 +41,14 @@ class GitRepoConfig(BaseModel):
             validate_default=True,
         ),
     ] = None  # type: ignore[assignment]
+
+    @field_validator("url")
+    @classmethod
+    def validate_url_scheme(cls, v: str) -> str:
+        """Ensure URL uses HTTPS."""
+        if not v.lower().startswith("https://"):
+            raise ValueError("Git URL must start with https://")
+        return v
 
     @field_validator("cache_dir", mode="before")
     @classmethod
@@ -172,6 +182,23 @@ class GitRepo(ArcStore):
         input_str = f"{identifier}:{rdi}"
         return hashlib.sha256(input_str.encode("utf-8")).hexdigest()
 
+    def _check_server_availability(self) -> None:
+        """Check if the git server is reachable via HTTP."""
+        url = self._config.url
+        try:
+            # Set a short timeout, disable bandit check, as we've already validated the URL
+            with urllib.request.urlopen(url, timeout=5) as response:  # nosec B310
+                if response.status >= 400:
+                    logger.error("Git server check failed: %s returned status %s", url, response.status)
+                else:
+                    logger.info("Git server check passed: %s returned status %s", url, response.status)
+        except urllib.error.HTTPError as e:
+            logger.error("Git server check failed: %s returned HTTP error %s: %s", url, e.code, e.reason)
+        except urllib.error.URLError as e:
+            logger.error("Git server check failed: %s is unreachable. Reason: %s", url, e.reason)
+        except Exception as e:  # pylint: disable=broad-exception-caught
+            logger.error("Git server check failed: %s caused unexpected error: %s", url, e)
+
     def _get_repo_url(self, arc_id: str) -> str:
         # Construct URL: base/group/arc_id.git
         base = self._config.url.rstrip("/")
@@ -199,26 +226,31 @@ class GitRepo(ArcStore):
 
         def _task() -> None:
             ctx_config = self._get_context_config(arc_id)
-            with GitContext(ctx_config) as ctx:
-                if not ctx.repo:
-                    raise RuntimeError("Failed to initialize git repo")
+            try:
+                with GitContext(ctx_config) as ctx:
+                    if not ctx.repo:
+                        raise RuntimeError("Failed to initialize git repo")
 
-                repo_path = Path(ctx.path)
+                    repo_path = Path(ctx.path)
 
-                # Cleanup existing files (except .git) to ensure sync with ARC object
-                for child in repo_path.iterdir():
-                    if child.name == ".git":
-                        continue
-                    if child.is_dir():
-                        shutil.rmtree(child)
-                    else:
-                        child.unlink()
+                    # Cleanup existing files (except .git) to ensure sync with ARC object
+                    for child in repo_path.iterdir():
+                        if child.name == ".git":
+                            continue
+                        if child.is_dir():
+                            shutil.rmtree(child)
+                        else:
+                            child.unlink()
 
-                # Write ARC to repo path
-                arc.Write(str(repo_path))
+                    # Write ARC to repo path
+                    arc.Write(str(repo_path))
 
-                # Commit and push
-                ctx.commit_and_push(f"Update ARC {arc_id}")
+                    # Commit and push
+                    ctx.commit_and_push(f"Update ARC {arc_id}")
+            except GitCommandError:
+                # Try to diagnose connection issues
+                self._check_server_availability()
+                raise
 
         await loop.run_in_executor(self._executor, _task)
 

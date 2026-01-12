@@ -74,6 +74,14 @@ RUN apk add --no-cache curl=8.14.1-r2 git=2.49.1-r0 \
     && addgroup -S middleware && adduser -S middleware -G middleware \
     && chown -R middleware:middleware /api
 
+# Configure Git system-wide (before switching user) to ensure settings apply
+# http.postBuffer: 500MB buffer for large requests
+# http.version: Force HTTP/1.1 as HTTP/2 can be unstable
+# http.keepAlive: Disable to prevent unexpected connection drops
+RUN git config --system http.postBuffer 524288000 \
+    && git config --system http.version HTTP/1.1 \
+    && git config --system http.keepAlive false
+
 USER middleware
 
 EXPOSE $UVICORN_PORT
