@@ -5,18 +5,24 @@ description = "The FAIRagro advanced middleware API"
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
+  "shared",
   "arctrl>=3.0.0b15",
   "asn1crypto>=1.5.1",
+  "celery>=5.3.6",
   "cryptography>=45.0.6",
   "fastapi>=0.124.0",
   "gitpython>=3.1.46",
-  "gunicorn>=23.0.0",
+  "opentelemetry-instrumentation-celery>=0.47b0",
   "opentelemetry-instrumentation-fastapi>=0.47b0",
+  "opentelemetry-instrumentation-redis>=0.47b0",
   "opentelemetry-instrumentation-requests>=0.47b0",
+  "opentelemetry-instrumentation-starlette>=0.47b0",
   "python-gitlab>=6.2.0",
   "pyyaml>=6.0.2",
-  "shared",
+  "redis>=5.0.1",
+  "sse-starlette>=2.0.0",
   "uvicorn>=0.35.0",
+  "celery-types>=0.24.0",
 ]
 
 [tool.uv.sources]
