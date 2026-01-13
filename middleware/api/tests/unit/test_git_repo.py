@@ -283,3 +283,19 @@ def test_delete(git_repo: GitRepo) -> None:
     """Test _delete just logs warning."""
     # Just ensure it doesn't raise
     git_repo._delete("arc1")
+
+
+def test_get_arc_load_os_error(git_repo: GitRepo) -> None:
+    """Test _get handles ARC load OSError."""
+    with (
+        patch("middleware.api.arc_store.git_repo.GitContext") as mock_ctx,
+        patch("middleware.api.arc_store.git_repo.ARC") as mock_arc,
+    ):
+        mock_ctx_instance = mock_ctx.return_value
+        mock_ctx_instance.__enter__.return_value = mock_ctx_instance
+        mock_ctx_instance.repo = MagicMock()
+
+        mock_arc.load.side_effect = FileNotFoundError("Missing file")
+
+        result = git_repo._get("arc1")
+        assert result is None

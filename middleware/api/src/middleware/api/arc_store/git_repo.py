@@ -202,6 +202,9 @@ class GitRepo(ArcStore):
         except urllib.error.URLError as e:
             logger.error("Git server check failed: %s is unreachable. Reason: %s", url, e.reason)
             return False
+        except TimeoutError:
+            logger.error("Git server check failed: %s timed out", url)
+            return False
         except Exception as e:  # pylint: disable=broad-exception-caught
             logger.error("Git server check failed: %s caused unexpected error: %s", url, e)
             return False
@@ -285,8 +288,13 @@ class GitRepo(ArcStore):
                         return None
                     try:
                         return ARC.load(ctx.path)
-                    except Exception:  # pylint: disable=broad-exception-caught
-                        logger.warning("Failed to load ARC from repo %s (might not be an ARC)", arc_id)
+                    except (FileNotFoundError, OSError) as e:
+                        logger.warning("File system error loading ARC from repo %s: %s", arc_id, e)
+                        return None
+                    except Exception as e:  # pylint: disable=broad-exception-caught
+                        logger.warning(
+                            "Failed to load ARC from repo %s (might not be an ARC or invalid): %s", arc_id, e
+                        )
                         return None
             except GitCommandError as e:
                 logger.debug("Failed to clone/access repo for %s: %s", arc_id, e)

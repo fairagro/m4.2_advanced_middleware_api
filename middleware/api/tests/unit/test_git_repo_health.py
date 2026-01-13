@@ -59,3 +59,14 @@ def test_check_health_https_failure_status(mock_urlopen: MagicMock) -> None:
     repo = GitRepo(config)
 
     assert repo.check_health() is False
+
+
+@patch("urllib.request.urlopen")
+def test_check_health_timeout(mock_urlopen: MagicMock) -> None:
+    """Test health check timeout handling."""
+    mock_urlopen.side_effect = TimeoutError("timed out")
+
+    config = GitRepoConfig(url="https://example.com", group="group", cache_dir=Path("/tmp"))  # nosec B108
+    repo = GitRepo(config)
+
+    assert repo.check_health() is False
