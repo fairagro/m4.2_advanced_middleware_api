@@ -11,10 +11,12 @@ from middleware.api.business_logic import (
     CreateOrUpdateArcsResponse,
 )
 
+SHA256_LENGTH = 64
+
 
 def is_valid_sha256(s: str) -> bool:
     """Check if a string is a valid SHA-256 hash."""
-    if len(s) != 64:
+    if len(s) != SHA256_LENGTH:
         return False
     try:
         int(s, 16)
