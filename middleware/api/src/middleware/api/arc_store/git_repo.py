@@ -2,7 +2,6 @@
 
 import asyncio
 import concurrent.futures
-import contextlib
 import hashlib
 import logging
 import shutil
@@ -105,8 +104,13 @@ class GitContext:
             self.repo.create_remote("origin", url)
             # Create a detached head if branch doesn't exist yet (e.g. empty repo)
             # We don't need to force HEAD creation if it fails, just init is enough
-            with contextlib.suppress(OSError, GitCommandError, ValueError, IndexError, AttributeError):
+            try:
                 self.repo.git.checkout("-b", self.config.branch)
+            except GitCommandError as e:
+                # If branch already exists or other git error, log and continue
+                logger.debug("Could not create new branch '%s': %s", self.config.branch, e)
+            except (OSError, ValueError, IndexError, AttributeError) as e:
+                logger.warning("Unexpected error during repo init checkout: %s", e)
         elif not self.repo:
             self.repo = Repo(repo_path)
 
