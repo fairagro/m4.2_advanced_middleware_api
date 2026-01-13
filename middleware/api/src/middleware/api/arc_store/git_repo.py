@@ -192,16 +192,14 @@ class GitRepo(ArcStore):
                     return True
         except urllib.error.HTTPError as e:
             logger.error("Git server check failed: %s returned HTTP error %s: %s", url, e.code, e.reason)
-            return False
         except urllib.error.URLError as e:
             logger.error("Git server check failed: %s is unreachable. Reason: %s", url, e.reason)
-            return False
         except TimeoutError:
             logger.error("Git server check failed: %s timed out", url)
-            return False
         except Exception as e:  # pylint: disable=broad-exception-caught
             logger.error("Git server check failed: %s caused unexpected error: %s", url, e)
-            return False
+
+        return False
 
     def _get_repo_url(self, arc_id: str) -> str:
         # Construct URL: base/group/arc_id.git
