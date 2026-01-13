@@ -9,6 +9,7 @@ dependencies = [
   "asn1crypto>=1.5.1",
   "cryptography>=45.0.6",
   "fastapi>=0.124.0",
+  "gitpython>=3.1.46",
   "gunicorn>=23.0.0",
   "opentelemetry-instrumentation-fastapi>=0.47b0",
   "opentelemetry-instrumentation-requests>=0.47b0",

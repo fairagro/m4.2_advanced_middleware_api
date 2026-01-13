@@ -22,6 +22,11 @@ def _create_test_cert(oid: x509.ObjectIdentifier, rdis: list[str]) -> str:
         PEM-encoded certificate as string.
 
     """
+    # DER encoding constants
+    der_sequence_tag = 0x30
+    der_short_form_max = 128
+    der_long_form_flag = 0x80
+
     # Generate private key
     private_key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
 
@@ -40,12 +45,12 @@ def _create_test_cert(oid: x509.ObjectIdentifier, rdis: list[str]) -> str:
 
     # SEQUENCE tag (0x30) + length + content
     seq_length = len(utf8_bytes)
-    if seq_length < 128:
-        extension_value = bytes([0x30, seq_length]) + utf8_bytes
+    if seq_length < der_short_form_max:
+        extension_value = bytes([der_sequence_tag, seq_length]) + utf8_bytes
     else:
         # Long form length encoding
         length_bytes = seq_length.to_bytes((seq_length.bit_length() + 7) // 8, "big")
-        extension_value = bytes([0x30, 0x80 | len(length_bytes)]) + length_bytes + utf8_bytes
+        extension_value = bytes([der_sequence_tag, der_long_form_flag | len(length_bytes)]) + length_bytes + utf8_bytes
 
     # Create UnrecognizedExtension with the custom OID
     custom_extension = x509.UnrecognizedExtension(oid, extension_value)

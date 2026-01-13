@@ -5,6 +5,7 @@ allowing us to test the full request/response cycle without needing nginx or
 a real HTTP server.
 """
 
+import http
 import json
 
 import httpx
@@ -37,7 +38,9 @@ async def test_create_arcs_integration_mock_server(client_config: Config) -> Non
         ],
     }
 
-    route = respx.post(f"{client_config.api_url}/v1/arcs").mock(return_value=httpx.Response(201, json=mock_response))
+    route = respx.post(f"{client_config.api_url}/v1/arcs").mock(
+        return_value=httpx.Response(http.HTTPStatus.CREATED, json=mock_response)
+    )
 
     # Execute request with ARC object
     arc = ARC.from_arc_investigation(
@@ -70,11 +73,13 @@ async def test_create_arcs_integration_mock_server(client_config: Config) -> Non
 @respx.mock
 async def test_create_arcs_unauthorized(client_config: Config) -> None:
     """Test handling of 401 Unauthorized response."""
-    respx.post(f"{client_config.api_url}/v1/arcs").mock(return_value=httpx.Response(401, text="Unauthorized"))
+    respx.post(f"{client_config.api_url}/v1/arcs").mock(
+        return_value=httpx.Response(http.HTTPStatus.UNAUTHORIZED, text="Unauthorized")
+    )
 
     arc = ARC.from_arc_investigation(ArcInvestigation.create(identifier="test", title="Test"))
     async with ApiClient(client_config) as client:
-        with pytest.raises(Exception, match="401"):
+        with pytest.raises(Exception, match=str(http.HTTPStatus.UNAUTHORIZED.value)):
             await client.create_or_update_arcs(
                 rdi="test-rdi",
                 arcs=[arc],
@@ -86,12 +91,12 @@ async def test_create_arcs_unauthorized(client_config: Config) -> None:
 async def test_create_arcs_forbidden(client_config: Config) -> None:
     """Test handling of 403 Forbidden response."""
     respx.post(f"{client_config.api_url}/v1/arcs").mock(
-        return_value=httpx.Response(403, text="Forbidden - RDI not authorized")
+        return_value=httpx.Response(http.HTTPStatus.FORBIDDEN, text="Forbidden - RDI not authorized")
     )
 
     arc = ARC.from_arc_investigation(ArcInvestigation.create(identifier="test", title="Test"))
     async with ApiClient(client_config) as client:
-        with pytest.raises(Exception, match="403"):
+        with pytest.raises(Exception, match=str(http.HTTPStatus.FORBIDDEN.value)):
             await client.create_or_update_arcs(
                 rdi="unauthorized-rdi",
                 arcs=[arc],
@@ -103,12 +108,12 @@ async def test_create_arcs_forbidden(client_config: Config) -> None:
 async def test_create_arcs_validation_error(client_config: Config) -> None:
     """Test handling of 422 Validation Error response."""
     respx.post(f"{client_config.api_url}/v1/arcs").mock(
-        return_value=httpx.Response(422, json={"detail": "Invalid ARC data"})
+        return_value=httpx.Response(http.HTTPStatus.UNPROCESSABLE_ENTITY, json={"detail": "Invalid ARC data"})
     )
 
     arc = ARC.from_arc_investigation(ArcInvestigation.create(identifier="test", title="Test"))
     async with ApiClient(client_config) as client:
-        with pytest.raises(Exception, match="422"):
+        with pytest.raises(Exception, match=str(http.HTTPStatus.UNPROCESSABLE_ENTITY.value)):
             await client.create_or_update_arcs(
                 rdi="test-rdi",
                 arcs=[arc],
@@ -137,7 +142,9 @@ async def test_create_multiple_arcs(client_config: Config) -> None:
         ],
     }
 
-    route = respx.post(f"{client_config.api_url}/v1/arcs").mock(return_value=httpx.Response(201, json=mock_response))
+    route = respx.post(f"{client_config.api_url}/v1/arcs").mock(
+        return_value=httpx.Response(http.HTTPStatus.CREATED, json=mock_response)
+    )
 
     arc1 = ARC.from_arc_investigation(ArcInvestigation.create(identifier="arc-1", title="ARC 1"))
     arc2 = ARC.from_arc_investigation(ArcInvestigation.create(identifier="arc-2", title="ARC 2"))
@@ -148,11 +155,11 @@ async def test_create_multiple_arcs(client_config: Config) -> None:
         )
 
     assert route.called
-    assert len(response.arcs) == 2
+    assert len(response.arcs) == 2  # noqa: PLR2004
 
     # Verify request body has both ARCs
     body = json.loads(route.calls.last.request.content)
-    assert len(body["arcs"]) == 2
+    assert len(body["arcs"]) == 2  # noqa: PLR2004
 
 
 @pytest.mark.asyncio

@@ -1,5 +1,6 @@
 """Integration tests for the SQL-to-ARC workflow."""
 
+import multiprocessing
 from concurrent.futures import ProcessPoolExecutor
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock
@@ -8,7 +9,7 @@ import pytest
 
 from middleware.api_client import ApiClient
 from middleware.shared.api_models.models import CreateOrUpdateArcsResponse
-from middleware.sql_to_arc.main import main, process_worker_investigations
+from middleware.sql_to_arc.main import WorkerContext, main, process_worker_investigations
 
 
 @pytest.fixture
@@ -55,24 +56,25 @@ async def test_process_worker_investigations(mock_api_client: AsyncMock) -> None
     studies_by_investigation: dict[int, list[dict[str, Any]]] = {1: [], 2: []}
     assays_by_study: dict[int, list[dict[str, Any]]] = {}
 
-    with ProcessPoolExecutor(max_workers=5) as executor:
-        await process_worker_investigations(
-            mock_api_client,
-            investigation_rows,
-            "edaphobase",
-            studies_by_investigation,
-            assays_by_study,
+    mp_context = multiprocessing.get_context("spawn")
+    with ProcessPoolExecutor(max_workers=5, mp_context=mp_context) as executor:
+        ctx = WorkerContext(
+            client=mock_api_client,
+            rdi="edaphobase",
+            studies_by_investigation=studies_by_investigation,
+            assays_by_study=assays_by_study,
             batch_size=2,
             worker_id=1,
             total_workers=1,
             executor=executor,
         )
+        await process_worker_investigations(ctx, investigation_rows)
 
     assert mock_api_client.create_or_update_arcs.called
     call_args = mock_api_client.create_or_update_arcs.call_args
     # Check keyword arguments
     assert call_args.kwargs["rdi"] == "edaphobase"
-    assert len(call_args.kwargs["arcs"]) == 2
+    assert len(call_args.kwargs["arcs"]) == 2  # noqa: PLR2004
 
 
 @pytest.mark.asyncio
@@ -107,6 +109,7 @@ async def test_main_workflow(
     mock_config.max_concurrent_arc_builds = 5
     mock_config.api_client = MagicMock()
     mock_config.log_level = "INFO"
+    mock_config.otel_endpoint = None
 
     mock_wrapper = MagicMock()
     mocker.patch(
@@ -186,7 +189,7 @@ async def test_main_workflow(
     assert mock_db_connection.cursor.called
 
     # Should have executed 3 queries (investigations, studies bulk, assays bulk)
-    assert mock_db_cursor.execute.call_count == 3
+    assert mock_db_cursor.execute.call_count == 3  # noqa: PLR2004
 
     # Should have uploaded ARCs (2 investigations distributed across workers)
     # With max_concurrent_arc_builds=5 and batch_size=10, both investigations
@@ -200,7 +203,7 @@ async def test_main_workflow(
         all_arcs.extend(call.kwargs["arcs"])
 
     # Should have uploaded 2 ARCs in total
-    assert len(all_arcs) == 2
+    assert len(all_arcs) == 2  # noqa: PLR2004
 
     # Verify content of uploaded ARCs
     identifiers = {arc.Identifier for arc in all_arcs}

@@ -1,10 +1,14 @@
 log_level: DEBUG
 
-gitlab_api:
-  group: FAIRagro-advanced-middleware-dev
+# gitlab_api:
+#   group: FAIRagro-advanced-middleware-dev
+#   url: https://datahub-dev.ipk-gatersleben.de
+#   max_workers: 10
+#   commit_chunk_size: 200
+git_repo:
   url: https://datahub-dev.ipk-gatersleben.de
+  group: FAIRagro-advanced-middleware-dev
   max_workers: 10
-  commit_chunk_size: 200
 known_rdis:
 - bonares
 - edal

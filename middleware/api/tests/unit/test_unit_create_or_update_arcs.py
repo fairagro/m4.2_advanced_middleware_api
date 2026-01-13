@@ -9,13 +9,14 @@ from middleware.api.business_logic import (
     ArcResponse,
     BusinessLogic,
     CreateOrUpdateArcsResponse,
-    InvalidJsonSemanticError,
 )
+
+SHA256_LENGTH = 64
 
 
 def is_valid_sha256(s: str) -> bool:
     """Check if a string is a valid SHA-256 hash."""
-    if len(s) != 64:
+    if len(s) != SHA256_LENGTH:
         return False
     try:
         int(s, 16)
@@ -193,5 +194,8 @@ async def test_update_arc_success(service: BusinessLogic) -> None:
 )
 async def test_element_missing(service: BusinessLogic, rocrate: list[dict[str, Any]]) -> None:
     """Test handling of RO-Crate JSON missing required elements."""
-    with pytest.raises(InvalidJsonSemanticError):
-        await service.create_or_update_arcs(rdi="TestRDI", arcs=rocrate, client_id="TestClient")
+    # Since we now support partial failures, this should not raise an exception,
+    # but instead return a result with 0 successful ARCs and log the error.
+    response = await service.create_or_update_arcs(rdi="TestRDI", arcs=rocrate, client_id="TestClient")
+    assert len(response.arcs) == 0
+    assert "Processed 0/1 ARCs successfully" in response.message

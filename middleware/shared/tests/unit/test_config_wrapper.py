@@ -95,7 +95,7 @@ def test_dict_iteration_and_len(monkeypatch: Any) -> None:
     keys = set(cfg)
     assert "bar" in keys  # nosec
     assert "newkey" in keys  # nosec
-    assert len(cfg) == 2  # nosec
+    assert len(cfg) == 2  # nosec  # noqa: PLR2004
     items = dict(cfg.items())
     assert items["bar"] == "baz"  # nosec
     assert items["newkey"] == "val"  # nosec
@@ -109,15 +109,15 @@ def test_list_access_and_items(
     assert cfg[0] == "a"  # nosec
     item_2 = cfg[2]
     assert isinstance(item_2, ConfigWrapper)  # nosec, narrowing for typchecker
-    assert item_2["value"] == 42  # nosec
+    assert item_2["value"] == 42  # nosec  # noqa: PLR2004
     keys = list(cfg)
     assert keys == [0, 1, 2]  # nosec
     items = dict(cfg.items())
     assert items[0] == "a"  # nosec
     item_2 = cfg[2]
     assert isinstance(item_2, ConfigWrapper)  # nosec, narrowing for typchecker
-    assert item_2["value"] == 42  # nosec
-    assert len(cfg) == 3  # nosec
+    assert item_2["value"] == 42  # nosec  # noqa: PLR2004
+    assert len(cfg) == 3  # nosec  # noqa: PLR2004
 
 
 # New tests for primitive type support
@@ -139,16 +139,16 @@ def test_parse_primitive_value_bool_false() -> None:
 
 def test_parse_primitive_value_int() -> None:
     """Test parsing integer values."""
-    assert ConfigWrapper._parse_primitive_value("42") == 42  # pylint: disable=protected-access  # nosec
-    assert ConfigWrapper._parse_primitive_value("-42") == -42  # pylint: disable=protected-access  # nosec
+    assert ConfigWrapper._parse_primitive_value("42") == 42  # pylint: disable=protected-access  # nosec  # noqa: PLR2004
+    assert ConfigWrapper._parse_primitive_value("-42") == -42  # pylint: disable=protected-access  # nosec  # noqa: PLR2004
     assert ConfigWrapper._parse_primitive_value("0") == 0  # pylint: disable=protected-access  # nosec
 
 
 def test_parse_primitive_value_float() -> None:
     """Test parsing float values."""
-    assert ConfigWrapper._parse_primitive_value("3.14") == 3.14  # pylint: disable=protected-access  # nosec
-    assert ConfigWrapper._parse_primitive_value("-3.14") == -3.14  # pylint: disable=protected-access  # nosec
-    assert ConfigWrapper._parse_primitive_value("0.5") == 0.5  # pylint: disable=protected-access  # nosec
+    assert ConfigWrapper._parse_primitive_value("3.14") == 3.14  # pylint: disable=protected-access  # nosec  # noqa: PLR2004
+    assert ConfigWrapper._parse_primitive_value("-3.14") == -3.14  # pylint: disable=protected-access  # nosec  # noqa: PLR2004
+    assert ConfigWrapper._parse_primitive_value("0.5") == 0.5  # pylint: disable=protected-access  # nosec  # noqa: PLR2004
 
 
 def test_parse_primitive_value_string() -> None:
@@ -168,7 +168,7 @@ def test_override_key_access_int_env(monkeypatch: Any) -> None:
     monkeypatch.setenv("FOO_PORT", "8080")
     cfg = ConfigWrapperDict({"port": 3000}, path="foo")
     result = cfg["port"]
-    assert result == 8080  # nosec
+    assert result == 8080  # nosec  # noqa: PLR2004
     assert isinstance(result, int)  # nosec
 
 
@@ -177,7 +177,7 @@ def test_override_key_access_float_env(monkeypatch: Any) -> None:
     monkeypatch.setenv("FOO_TIMEOUT", "3.5")
     cfg = ConfigWrapperDict({"timeout": 1.0}, path="foo")
     result = cfg["timeout"]
-    assert result == 3.5  # nosec
+    assert result == 3.5  # nosec  # noqa: PLR2004
     assert isinstance(result, float)  # nosec
 
 
@@ -234,8 +234,8 @@ def test_dict_with_primitive_types() -> None:
     }
     cfg = ConfigWrapperDict(data)
     assert cfg["string"] == "hello"  # nosec
-    assert cfg["integer"] == 42  # nosec
-    assert cfg["float"] == 3.14  # nosec
+    assert cfg["integer"] == 42  # nosec  # noqa: PLR2004
+    assert cfg["float"] == 3.14  # nosec  # noqa: PLR2004
     assert cfg["bool"] is True  # nosec
 
 
@@ -252,8 +252,8 @@ def test_unwrap_with_primitive_types() -> None:
     unwrapped = cfg.unwrap()
     assert isinstance(unwrapped, dict)  # nosec
     assert unwrapped["string"] == "hello"  # nosec
-    assert unwrapped["integer"] == 42  # nosec
-    assert unwrapped["float"] == 3.14  # nosec
+    assert unwrapped["integer"] == 42  # nosec  # noqa: PLR2004
+    assert unwrapped["float"] == 3.14  # nosec  # noqa: PLR2004
     assert unwrapped["bool"] is True  # nosec
     assert unwrapped["null"] is None  # nosec
 
@@ -271,8 +271,8 @@ def test_nested_dict_with_primitives() -> None:
     cfg = ConfigWrapper.from_data(data)  # type: ignore[arg-type]
     nested = cfg["nested"]
     assert isinstance(nested, ConfigWrapper)  # nosec
-    assert nested["port"] == 8080  # nosec
-    assert nested["timeout"] == 5.5  # nosec
+    assert nested["port"] == 8080  # nosec  # noqa: PLR2004
+    assert nested["timeout"] == 5.5  # nosec  # noqa: PLR2004
     assert nested["debug"] is False  # nosec
     assert nested["name"] == "app"  # nosec
 
@@ -282,7 +282,7 @@ def test_list_with_primitive_types() -> None:
     data: ListType = ["string", 42, 3.14, True, None]
     cfg = ConfigWrapperList(data)
     assert cfg[0] == "string"  # nosec
-    assert cfg[1] == 42  # nosec
-    assert cfg[2] == 3.14  # nosec
+    assert cfg[1] == 42  # nosec  # noqa: PLR2004
+    assert cfg[2] == 3.14  # nosec  # noqa: PLR2004
     assert cfg[3] is True  # nosec
     assert cfg[4] is None  # nosec

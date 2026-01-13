@@ -26,6 +26,9 @@ def create_mock_arc_store() -> ArcStore:
         def _get(self, *_args: object, **_kwargs: object) -> object:
             pass
 
+        def _check_health(self) -> bool:
+            return True
+
     return ConcreteArcStore()
 
 
