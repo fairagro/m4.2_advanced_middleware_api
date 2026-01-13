@@ -84,19 +84,6 @@ class GitlabApi(ArcStore):
         self._gitlab = gitlab.Gitlab(str(self._config.url), private_token=self._config.token.get_secret_value())
         self._executor = concurrent.futures.ThreadPoolExecutor(max_workers=self._config.max_workers)
 
-    def arc_id(self, identifier: str, rdi: str) -> str:
-        """Generate a unique ARC ID by hashing the ideArcStorentifier and RDI.
-
-        Args:
-            identifier (str): The ARC identifier.
-            rdi (str): The RDI string.
-
-        Returns:
-            str: A SHA-256 hash representing the ARC ID.
-        """
-        input_str = f"{identifier}:{rdi}"
-        return hashlib.sha256(input_str.encode("utf-8")).hexdigest()
-
     def _check_health(self) -> bool:
         """Check connection to the storage backend."""
         try:

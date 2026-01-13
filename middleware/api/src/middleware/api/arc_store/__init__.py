@@ -1,5 +1,6 @@
 """Contains the ArcStore interface and its implementations."""
 
+import hashlib
 import logging
 from abc import ABC, abstractmethod
 
@@ -23,10 +24,10 @@ class ArcStore(ABC):
         """Initialize ArcStore with tracer."""
         self._tracer = trace.get_tracer(__name__)
 
-    @abstractmethod
     def arc_id(self, identifier: str, rdi: str) -> str:
-        """Generate an ARC ID based on identifier and RDI."""
-        raise NotImplementedError("`ArcStore.arc_id` is not implemented")
+        """Generate ARC ID."""
+        input_str = f"{identifier}:{rdi}"
+        return hashlib.sha256(input_str.encode("utf-8")).hexdigest()
 
     @abstractmethod
     async def _create_or_update(self, arc_id: str, arc: ARC) -> None:

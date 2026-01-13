@@ -2,7 +2,6 @@
 
 import asyncio
 import concurrent.futures
-import hashlib
 import logging
 import shutil
 import tempfile
@@ -172,11 +171,6 @@ class GitRepo(ArcStore):
         super().__init__()
         self._config = config
         self._executor = concurrent.futures.ThreadPoolExecutor(max_workers=self._config.max_workers)
-
-    def arc_id(self, identifier: str, rdi: str) -> str:
-        """Generate ARC ID."""
-        input_str = f"{identifier}:{rdi}"
-        return hashlib.sha256(input_str.encode("utf-8")).hexdigest()
 
     def _check_health(self) -> bool:
         """Check connection to the storage backend."""
