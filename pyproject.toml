@@ -71,6 +71,7 @@ lint.select = [
   "SIM", # flake8-simplify
   "A",   # flake8-builtins
   "ARG", # flake8-unused-arguments
+  "PLR", # Pylint Refactor (inkl. complexity rules wie too-many-return-statements)
 ]
 
 # Maximale Zeilenlänge wie in pylint (Standard: 100)
