@@ -255,6 +255,54 @@ class WorkerContext(BaseModel):
     model_config = ConfigDict(arbitrary_types_allowed=True)
 
 
+async def _upload_and_update_stats(
+    ctx: WorkerContext,
+    valid_arcs: list[ARC],
+    valid_rows: list[dict[str, Any]],
+    stats: ProcessingStats,
+    batch_info: str,
+) -> None:
+    """Upload batch of ARCs and update statistics."""
+    tracer = trace.get_tracer(__name__)
+    try:
+        with tracer.start_as_current_span(
+            "upload_batch", attributes={"count": len(valid_arcs), "rdi": ctx.rdi, "worker_id": ctx.worker_id}
+        ):
+            response = await ctx.client.create_or_update_arcs(
+                rdi=ctx.rdi,
+                arcs=valid_arcs,
+            )
+        logger.info("%s: Upload request finished. API reported %d successful ARCs.", batch_info, len(response.arcs))
+
+        if len(response.arcs) < len(valid_arcs):
+            logger.warning(
+                "%s: Only %d/%d ARCs were successfully processed by API.",
+                batch_info,
+                len(response.arcs),
+                len(valid_arcs),
+            )
+            # Identify exactly which ARCs failed by comparing sent ARCs with successful response IDs
+            successful_ids = {a.id for a in response.arcs}
+
+            for arc in valid_arcs:
+                identifier = getattr(arc, "Identifier", None)
+                if identifier:
+                    # Use identifier directly (no hashing)
+                    if identifier not in successful_ids:
+                        stats.failed_datasets += 1
+                        stats.failed_ids.append(identifier)
+                else:
+                    logger.error("%s: ARC with missing identifier failed upload", batch_info)
+                    stats.failed_datasets += 1
+                    stats.failed_ids.append("unknown_id")
+
+    except (psycopg.Error, ConnectionError, TimeoutError, ApiClientError) as e:
+        logger.error("%s: Failed to upload batch: %s", batch_info, e, exc_info=True)
+        stats.failed_datasets += len(valid_arcs)
+        for row in valid_rows:
+            stats.failed_ids.append(str(row["id"]))
+
+
 async def process_batch(  # pylint: disable=too-many-locals
     ctx: WorkerContext,
     batch: list[dict[str, Any]],
@@ -310,37 +358,8 @@ async def process_batch(  # pylint: disable=too-many-locals
                 valid_arcs.append(cast(ARC, res))
                 valid_rows.append(batch[i])
 
-    if not valid_arcs:
-        return stats
-
-    # Upload batch
-    try:
-        with tracer.start_as_current_span(
-            "upload_batch", attributes={"count": len(valid_arcs), "rdi": ctx.rdi, "worker_id": ctx.worker_id}
-        ):
-            response = await ctx.client.create_or_update_arcs(
-                rdi=ctx.rdi,
-                arcs=valid_arcs,
-            )
-        logger.info("%s: Upload request finished. API reported %d successful ARCs.", batch_info, len(response.arcs))
-
-        if len(response.arcs) < len(valid_arcs):
-            logger.warning(
-                "%s: Only %d/%d ARCs were successfully processed by API.",
-                batch_info,
-                len(response.arcs),
-                len(valid_arcs),
-            )
-            failed_count = len(valid_arcs) - len(response.arcs)
-            if failed_count > 0:
-                stats.failed_datasets += failed_count
-                stats.failed_ids.append(f"<{failed_count} IDs from batch {batch_idx + 1} failed upload>")
-
-    except (psycopg.Error, ConnectionError, TimeoutError, ApiClientError) as e:
-        logger.error("%s: Failed to upload batch: %s", batch_info, e, exc_info=True)
-        stats.failed_datasets += len(valid_arcs)
-        for row in valid_rows:
-            stats.failed_ids.append(str(row["id"]))
+    if valid_arcs:
+        await _upload_and_update_stats(ctx, valid_arcs, valid_rows, stats, batch_info)
 
     return stats
 
