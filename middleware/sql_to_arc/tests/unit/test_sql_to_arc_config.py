@@ -34,10 +34,10 @@ def test_config_creation() -> None:
     assert config.db_user == "test_user"
     assert config.db_password.get_secret_value() == "test_password"
     assert config.db_host == "localhost"
-    assert config.db_port == 5432
+    assert config.db_port == 5432  # noqa: PLR2004
     assert config.rdi == "edaphobase"
     assert config.rdi_url == "https://edaphobase.org"
-    assert config.batch_size == 10
+    assert config.batch_size == 10  # noqa: PLR2004
     assert config.log_level == "INFO"
 
 
@@ -60,8 +60,8 @@ def test_config_with_defaults() -> None:
     )
 
     # Check defaults
-    assert config.db_port == 5432  # Default port
-    assert config.batch_size == 10  # Default batch size
+    assert config.db_port == 5432  # Default port  # noqa: PLR2004
+    assert config.batch_size == 10  # Default batch size  # noqa: PLR2004
 
 
 def test_config_batch_size_validation() -> None:

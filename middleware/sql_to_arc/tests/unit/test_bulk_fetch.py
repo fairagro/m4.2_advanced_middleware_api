@@ -70,12 +70,12 @@ async def test_fetch_studies_bulk() -> None:
 
     # Verify the results are grouped by investigation_id
     assert 1 in result
-    assert 2 in result
-    assert len(result[1]) == 2  # Investigation 1 has 2 studies
+    assert 2 in result  # noqa: PLR2004
+    assert len(result[1]) == 2  # Investigation 1 has 2 studies  # noqa: PLR2004
     assert len(result[2]) == 1  # Investigation 2 has 1 study
-    assert result[1][0]["id"] == 10
-    assert result[1][1]["id"] == 11
-    assert result[2][0]["id"] == 12
+    assert result[1][0]["id"] == 10  # noqa: PLR2004
+    assert result[1][1]["id"] == 11  # noqa: PLR2004
+    assert result[2][0]["id"] == 12  # noqa: PLR2004
 
 
 @pytest.mark.asyncio
@@ -112,13 +112,13 @@ async def test_fetch_assays_bulk() -> None:
     assert call_args[1] == (study_ids,)
 
     # Verify the results are grouped by study_id
-    assert 10 in result
-    assert 11 in result
-    assert len(result[10]) == 2  # Study 10 has 2 assays
+    assert 10 in result  # noqa: PLR2004
+    assert 11 in result  # noqa: PLR2004
+    assert len(result[10]) == 2  # Study 10 has 2 assays  # noqa: PLR2004
     assert len(result[11]) == 1  # Study 11 has 1 assay
-    assert result[10][0]["id"] == 100
-    assert result[10][1]["id"] == 101
-    assert result[11][0]["id"] == 102
+    assert result[10][0]["id"] == 100  # noqa: PLR2004
+    assert result[10][1]["id"] == 101  # noqa: PLR2004
+    assert result[11][0]["id"] == 102  # noqa: PLR2004
 
 
 @pytest.mark.asyncio
