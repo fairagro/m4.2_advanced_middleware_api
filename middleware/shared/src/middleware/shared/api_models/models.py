@@ -34,6 +34,8 @@ class HealthResponse(BaseModel):
 
     status: Annotated[str, Field(description="Overall service status (ok/error)")] = "ok"
     backend_reachable: Annotated[bool, Field(description="True if storage backend is reachable")]
+    redis_reachable: Annotated[bool, Field(description="True if Redis is reachable")]
+    rabbitmq_reachable: Annotated[bool, Field(description="True if RabbitMQ is reachable")]
 
 
 class CreateOrUpdateArcsRequest(BaseModel):
@@ -55,10 +57,10 @@ class ApiResponse(BaseModel):
         str | None,
         Field(
             description="Client identifier which is the CN from the client certificate, "
-            "or None if client certificates are not required"
+            "or None if client certificates are not required",
         ),
-    ]
-    message: Annotated[str, Field(description="Response message")]
+    ] = None
+    message: Annotated[str, Field(description="Response message")] = ""
 
 
 class WhoamiResponse(ApiResponse):
@@ -83,7 +85,20 @@ class ArcResponse(BaseModel):
 
 
 class CreateOrUpdateArcsResponse(ApiResponse):
-    """Response model for create or update ARC operations."""
+    """Response model for create or update ARC operations (Task Ticket or Result)."""
 
-    rdi: Annotated[str, Field(description="Research Data Infrastructure identifier the ARCs belong to")]
-    arcs: Annotated[list[ArcResponse], Field(description="List of ARC responses for the operation")]
+    rdi: Annotated[str | None, Field(description="Research Data Infrastructure identifier the ARCs belong to")] = None
+    arcs: Annotated[list[ArcResponse], Field(description="List of ARC responses for the operation")] = Field(default_factory=list)
+    
+    # Async task fields
+    task_id: Annotated[str | None, Field(description="The ID of the background task processing the ARC")] = None
+    status: Annotated[str | None, Field(description="The status of the task submission")] = None
+
+
+class GetTaskStatusResponse(BaseModel):
+    """Response model for task status."""
+
+    task_id: Annotated[str, Field(description="The ID of the background task")]
+    status: Annotated[str, Field(description="The status of the task")]
+    result: Annotated[CreateOrUpdateArcsResponse | None, Field(description="The result of the task if completed")] = None
+    error: Annotated[str | None, Field(description="Error message if task failed")] = None

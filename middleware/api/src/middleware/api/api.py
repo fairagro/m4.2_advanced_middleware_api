@@ -10,7 +10,7 @@ import os
 import sys
 import tomllib
 from pathlib import Path
-from typing import Annotated, cast
+from typing import Annotated, Any, cast
 from urllib.parse import unquote
 
 from asn1crypto.core import Sequence, UTF8String  # type: ignore
@@ -19,10 +19,12 @@ from cryptography.x509.extensions import ExtensionNotFound
 from cryptography.x509.oid import NameOID
 from fastapi import Depends, FastAPI, HTTPException, Request, Response
 from fastapi.responses import JSONResponse
+from pydantic import ValidationError
 
 from middleware.shared.api_models.models import (
     CreateOrUpdateArcsRequest,
     CreateOrUpdateArcsResponse,
+    GetTaskStatusResponse,
     HealthResponse,
     LivenessResponse,
     WhoamiResponse,
@@ -33,8 +35,10 @@ from .arc_store import ArcStore, ArcStoreError
 from .arc_store.git_repo import GitRepo
 from .arc_store.gitlab_api import GitlabApi
 from .business_logic import BusinessLogic, BusinessLogicError, InvalidJsonSemanticError
+from .celery_app import celery_app
 from .config import Config
-from .fastapi_tracing import instrument_fastapi
+from .tracing import instrument_app
+from .worker import process_arc
 
 try:
     pyproject_path = Path(__file__).parent.parent / "pyproject.toml"
@@ -124,7 +128,7 @@ class Api:
         )
 
         # Instrument the FastAPI application with OpenTelemetry
-        instrument_fastapi(self._app)
+        instrument_app(self._app)
 
         self._setup_routes()
         self._setup_exception_handlers()
@@ -353,52 +357,97 @@ class Api:
             business_logic: Annotated[BusinessLogic, Depends(self._get_business_logic)],
             _accept_validated: Annotated[None, Depends(self._validate_accept_type)],
         ) -> HealthResponse:
-            """Check health of API and connected services (Git)."""
-            is_healthy = False
+            """Check health of API and connected services (Git, Redis, RabbitMQ)."""
+            status_dict = {
+                "backend_reachable": False,
+                "redis_reachable": False,
+                "rabbitmq_reachable": False,
+            }
+            
             try:
-                is_healthy = business_logic.check_health()
+                # Type convention: check_health returns dict[str, bool]
+                status_dict = business_logic.check_health()
             except (ArcStoreError, BusinessLogicError):
                 logger.exception("Health check failed with exception")
 
-            if is_healthy:
-                return HealthResponse(status="ok", backend_reachable=True)
+            is_healthy = all(status_dict.values())
 
-            # Set status code to 503 and return HealthResponse model
-            response.status_code = 503
-            return HealthResponse(status="error", backend_reachable=False)
+            if not is_healthy:
+                response.status_code = 503
+                
+            return HealthResponse(
+                status="ok" if is_healthy else "error",
+                backend_reachable=status_dict.get("backend_reachable", False),
+                redis_reachable=status_dict.get("redis_reachable", False),
+                rabbitmq_reachable=status_dict.get("rabbitmq_reachable", False),
+            )
 
-        @self._app.post("/v1/arcs", response_model=CreateOrUpdateArcsResponse)
+        @self._app.post("/v1/arcs", status_code=202)
         async def create_or_update_arcs(
             request_body: CreateOrUpdateArcsRequest,
             client_id: Annotated[str | None, Depends(self._validate_client_id)],
-            business_logic: Annotated[BusinessLogic, Depends(self._get_business_logic)],
             _content_type_validated: Annotated[None, Depends(self._validate_content_type)],
             _accept_validated: Annotated[None, Depends(self._validate_accept_type)],
             rdi: Annotated[str, Depends(self._validate_rdi_authorized)],
             response: Response,
         ) -> CreateOrUpdateArcsResponse:
+            """Submit ARCs for processing asynchronously."""
             logger.info(
                 "Received POST /v1/arcs request: rdi=%s, num_arcs=%d, client_id=%s",
                 rdi,
                 len(request_body.arcs),
                 client_id or "none",
             )
-            try:
-                result = await business_logic.create_or_update_arcs(rdi, request_body.arcs, client_id)
+            
+            if len(request_body.arcs) != 1:
+                # For now we enforce single ARC per request as per requirements
+                raise HTTPException(status_code=400, detail="Currently only single ARC submission is supported per request.")
 
-                created_arcs = [arc for arc in result.arcs if arc.status == "created"]
-                response.status_code = 201 if created_arcs else 200
-                if created_arcs:
-                    response.headers["Location"] = f"/v1/arcs/{created_arcs[0].id}"
-                logger.info(
-                    "POST /v1/arcs completed: %d created, %d updated",
-                    len(created_arcs),
-                    len(result.arcs) - len(created_arcs),
-                )
-                return result
-            except InvalidJsonSemanticError as e:
-                logger.error("Invalid JSON semantic in POST /v1/arcs: %s", e)
-                raise HTTPException(status_code=422, detail=str(e)) from e
+            # Submit task to Celery
+            # We take the first (and only) ARC
+            arc_data = request_body.arcs[0]
+            
+            # Use rate limiting config if available
+            # Note: rate limit is usually applied at task definition or globally, 
+            # here we just dispatch.
+            
+            task = process_arc.delay(rdi, arc_data, client_id)
+            
+            logger.info("Enqueued task %s for ARC processing", task.id)
+            
+            return CreateOrUpdateArcsResponse(task_id=task.id, status="processing")
+
+        @self._app.get("/v1/tasks/{task_id}")
+        async def get_task_status(
+            task_id: str,
+            _accept_validated: Annotated[None, Depends(self._validate_accept_type)],
+        ) -> GetTaskStatusResponse:
+            """Get the status of an async task."""
+            result = celery_app.AsyncResult(task_id)
+            
+            task_result = None
+            error_message = None
+
+            if result.ready():
+                 if result.successful():
+                     # If successful, the result is a dict representation of CreateOrUpdateArcsResponse
+                     # (as returned by process_arc's model_dump())
+                     try:
+                        task_result = CreateOrUpdateArcsResponse.model_validate(result.result)
+                     except ValidationError as e:
+                         # Use more specific exception handling if possible, or just log
+                         logger.error("Failed to validate task result: %s", e)
+                         # Fallback if result is not valid model-dump
+                         pass
+                 elif result.failed():
+                     error_message = str(result.result)
+
+            return GetTaskStatusResponse(
+                task_id=task_id,
+                status=result.status,
+                result=task_result,
+                error=error_message
+            )
 
 
 middleware_api = Api(loaded_config)
