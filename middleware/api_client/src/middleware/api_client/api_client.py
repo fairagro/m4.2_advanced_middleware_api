@@ -103,17 +103,16 @@ class ApiClient:
                         str(self._config.client_key_path),
                     )
                 verify = ctx
-            else:
+            elif self._config.client_cert_path and self._config.client_key_path:
                 # No CA cert, but load client certs if available
-                if self._config.client_cert_path and self._config.client_key_path:
-                    ctx = ssl.create_default_context()
-                    ctx.load_cert_chain(
-                        str(self._config.client_cert_path),
-                        str(self._config.client_key_path),
-                    )
-                    verify = ctx
-                else:
-                    verify = True
+                ctx = ssl.create_default_context()
+                ctx.load_cert_chain(
+                    str(self._config.client_cert_path),
+                    str(self._config.client_key_path),
+                )
+                verify = ctx
+            else:
+                verify = True
 
             self._client = httpx.AsyncClient(
                 base_url=self._config.api_url,
