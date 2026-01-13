@@ -42,6 +42,8 @@ on:
         description: 'A JSON string array of components that were built'
         value: ${{ jobs.calculate-version.outputs.components }}
 
+# Environment variables with fallback values
+# Repository variables (vars.*) are optional and will use defaults if not configured
 env:
   GIT_USER_NAME: ${{ vars.GIT_USER_NAME || 'GitHub Pipeline' }}
   GIT_USER_EMAIL: ${{ vars.GIT_USER_EMAIL || 'github_pipeline@fairagro.net' }}

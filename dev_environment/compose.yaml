@@ -68,6 +68,56 @@ services:
     # command: sleep 3600
     restart: "no"
 
+  rabbitmq:
+    image: rabbitmq:3-management
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    environment:
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_DEFAULT_USER:-guest}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_DEFAULT_PASS:-guest}
+    healthcheck:
+      test: ["CMD", "rabbitmqctl", "status"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: "no"
+
+  redis:
+    image: redis:7
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    restart: "no"
+
+  celery-worker:
+    image: middleware-api:latest
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.api
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      middleware-api:
+        condition: service_started
+    environment:
+      - MIDDLEWARE_API_CONFIG=/run/secrets/middleware-api-config
+      - CELERY_BROKER_URL=amqp://${RABBITMQ_DEFAULT_USER:-guest}:${RABBITMQ_DEFAULT_PASS:-guest}@rabbitmq:5672//
+      - CELERY_RESULT_BACKEND=redis://redis:6379/0
+      # GITLAB_API_TOKEN etc. if needed for the worker to access git
+      - GIT_REPO_TOKEN
+    volumes:
+      - ./middleware-api-config.yaml:/run/secrets/middleware-api-config:ro
+    # Command to run celery worker
+    command: ["celery", "-A", "middleware.api.celery_app", "worker", "--loglevel=info"]
+    restart: "no"
+
   middleware-api:
     image: middleware-api:latest
     build:
@@ -76,16 +126,22 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
     ports:
       - "8000:8000"
     environment:
       - GITLAB_API_TOKEN
       - GIT_REPO_TOKEN
       - MIDDLEWARE_API_CONFIG=/run/secrets/middleware-api-config
-      - GUNICORN_WORKERS=4  # Number of worker processes for parallel requests
-      - GUNICORN_LOG_LEVEL=info
+      - CELERY_BROKER_URL=amqp://${RABBITMQ_DEFAULT_USER:-guest}:${RABBITMQ_DEFAULT_PASS:-guest}@rabbitmq:5672//
+      - CELERY_RESULT_BACKEND=redis://redis:6379/0
     volumes:
       - ./middleware-api-config.yaml:/run/secrets/middleware-api-config:ro
+    # Run uvicorn directly
+    command: ["uvicorn", "middleware.api.api:app", "--host", "0.0.0.0", "--port", "8000"]
     restart: "no"
 
 # secrets:
