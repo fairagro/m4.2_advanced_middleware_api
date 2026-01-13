@@ -15,7 +15,7 @@ def test_config_from_yaml_file(test_config_yaml: Path) -> None:
 
     assert config.log_level == "DEBUG"
     assert config.api_url == "https://test-api.example.com"
-    assert config.timeout == 30.0
+    assert config.timeout == 30.0  # noqa: PLR2004
     assert config.verify_ssl is True
 
 
@@ -87,7 +87,7 @@ def test_config_default_values() -> None:
         )
 
         assert config.log_level == "INFO"  # Default from ConfigBase
-        assert config.timeout == 30.0
+        assert config.timeout == 30.0  # noqa: PLR2004
         assert config.verify_ssl is True
         assert config.ca_cert_path is None
 

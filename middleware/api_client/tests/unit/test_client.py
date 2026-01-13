@@ -1,5 +1,6 @@
 """Unit tests for the ApiClient class."""
 
+import http
 import ssl
 from pathlib import Path
 from unittest.mock import AsyncMock, patch
@@ -78,7 +79,9 @@ async def test_create_or_update_arcs_success(client_config: Config) -> None:
         ],
     }
 
-    route = respx.post(f"{client_config.api_url}/v1/arcs").mock(return_value=httpx.Response(201, json=mock_response))
+    route = respx.post(f"{client_config.api_url}/v1/arcs").mock(
+        return_value=httpx.Response(http.HTTPStatus.CREATED, json=mock_response)
+    )
 
     # Send request with ARC object
     arc = ARC.from_arc_investigation(ArcInvestigation.create(identifier="test-arc", title="Test ARC"))
@@ -102,12 +105,14 @@ async def test_create_or_update_arcs_success(client_config: Config) -> None:
 async def test_create_or_update_arcs_http_error(client_config: Config) -> None:
     """Test create_or_update_arcs with HTTP error response."""
     # Mock an error response
-    respx.post(f"{client_config.api_url}/v1/arcs").mock(return_value=httpx.Response(403, text="Forbidden"))
+    respx.post(f"{client_config.api_url}/v1/arcs").mock(
+        return_value=httpx.Response(http.HTTPStatus.FORBIDDEN, text="Forbidden")
+    )
 
     # Should raise ApiClientError
     arc = ARC.from_arc_investigation(ArcInvestigation.create(identifier="test", title="Test"))
     async with ApiClient(client_config) as client:
-        with pytest.raises(ApiClientError, match="HTTP error 403"):
+        with pytest.raises(ApiClientError, match=f"HTTP error {http.HTTPStatus.FORBIDDEN.value}"):
             await client.create_or_update_arcs(
                 rdi="test-rdi",
                 arcs=[arc],
@@ -194,7 +199,7 @@ async def test_client_headers(client_config: Config) -> None:
     """Test that client sends correct headers."""
     route = respx.post(f"{client_config.api_url}/v1/arcs").mock(
         return_value=httpx.Response(
-            201,
+            http.HTTPStatus.CREATED,
             json={
                 "client_id": "test",
                 "message": "ok",

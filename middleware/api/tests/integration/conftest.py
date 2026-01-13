@@ -29,7 +29,7 @@ def config(oid: x509.ObjectIdentifier, known_rdis: list[str]) -> "DictType | Lis
             "gitlab_api": {
                 "url": "https://datahub-dev.ipk-gatersleben.de",
                 "group": "FAIRagro-advanced-middleware-integration-tests",
-                "token": "",
+                "token": os.getenv("GITLAB_API_TOKEN", ""),
             },
         }
     )

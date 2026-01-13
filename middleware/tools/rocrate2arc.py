@@ -17,7 +17,7 @@ def rocrate_json_to_arc(rocrate_input_path: str, arc_path: str) -> None:
 if __name__ == "__main__":
     import sys
 
-    if len(sys.argv) != 3:
+    if len(sys.argv) != 3:  # noqa: PLR2004
         print("Usage: python rocrate2arc.py <input.json> <output.arc>")
         sys.exit(1)
 

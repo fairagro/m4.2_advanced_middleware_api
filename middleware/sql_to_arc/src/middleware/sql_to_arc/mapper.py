@@ -19,8 +19,13 @@ def map_investigation(row: dict[str, Any]) -> ArcInvestigation:
     submission_date = cast(datetime, row.get("submission_time")).isoformat() if row.get("submission_time") else None
     public_release_date = cast(datetime, row.get("release_time")).isoformat() if row.get("release_time") else None
 
+    # Validate ID (mandatory per DB view spec, but we enforce it here to be safe)
+    identifier = str(row["id"]) if row.get("id") is not None else ""
+    if not identifier.strip():
+        raise ValueError(f"Investigation ID cannot be empty (row={row})")
+
     return ArcInvestigation.create(
-        identifier=str(row["id"]),
+        identifier=identifier,
         title=row.get("title", ""),
         description=row.get("description", ""),
         submission_date=submission_date,

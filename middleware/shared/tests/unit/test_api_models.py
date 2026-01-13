@@ -29,7 +29,7 @@ def test_create_or_update_arcs_request() -> None:
     request = CreateOrUpdateArcsRequest(rdi="edaphobase", arcs=arcs_data)
 
     assert request.rdi == "edaphobase"
-    assert len(request.arcs) == 2
+    assert len(request.arcs) == 2  # noqa: PLR2004
     assert request.arcs[0]["identifier"] == "1"
     assert request.arcs[1]["identifier"] == "2"
 
@@ -49,4 +49,4 @@ def test_arc_status_enum_all_values() -> None:
     assert "updated" in statuses
     assert "deleted" in statuses
     assert "requested" in statuses
-    assert len(statuses) == 4
+    assert len(statuses) == 4  # noqa: PLR2004

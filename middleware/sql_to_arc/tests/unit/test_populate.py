@@ -55,11 +55,11 @@ def test_build_single_arc_task_populates_studies_and_assays() -> None:
     )
 
     assert arc.Identifier == "1"
-    assert len(arc.RegisteredStudies) == 2
+    assert len(arc.RegisteredStudies) == 2  # noqa: PLR2004
     study1 = next(study for study in arc.RegisteredStudies if study.Identifier == "10")
     study2 = next(study for study in arc.RegisteredStudies if study.Identifier == "11")
 
-    assert len(study1.RegisteredAssays) == 2
+    assert len(study1.RegisteredAssays) == 2  # noqa: PLR2004
     assert len(study2.RegisteredAssays) == 1
 
 
@@ -71,6 +71,6 @@ def test_build_single_arc_task_handles_empty_assays() -> None:
         {},
     )
 
-    assert len(arc.RegisteredStudies) == 2
+    assert len(arc.RegisteredStudies) == 2  # noqa: PLR2004
     for study in arc.RegisteredStudies:
         assert len(study.RegisteredAssays) == 0

@@ -54,6 +54,8 @@ services:
     depends_on:
       db-init:
         condition: service_completed_successfully
+      middleware-api:
+        condition: service_healthy
     environment:
       # DB credentials from env or secrets
       SQL_TO_ARC_DB_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
@@ -78,6 +80,7 @@ services:
       - "8000:8000"
     environment:
       - GITLAB_API_TOKEN
+      - GIT_REPO_TOKEN
       - MIDDLEWARE_API_CONFIG=/run/secrets/middleware-api-config
       - GUNICORN_WORKERS=4  # Number of worker processes for parallel requests
       - GUNICORN_LOG_LEVEL=info

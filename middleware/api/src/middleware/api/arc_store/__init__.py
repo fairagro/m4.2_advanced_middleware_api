@@ -1,5 +1,6 @@
 """Contains the ArcStore interface and its implementations."""
 
+import hashlib
 import logging
 from abc import ABC, abstractmethod
 
@@ -23,10 +24,10 @@ class ArcStore(ABC):
         """Initialize ArcStore with tracer."""
         self._tracer = trace.get_tracer(__name__)
 
-    @abstractmethod
     def arc_id(self, identifier: str, rdi: str) -> str:
-        """Generate an ARC ID based on identifier and RDI."""
-        raise NotImplementedError("`ArcStore.arc_id` is not implemented")
+        """Generate ARC ID."""
+        input_str = f"{identifier}:{rdi}"
+        return hashlib.sha256(input_str.encode("utf-8")).hexdigest()
 
     @abstractmethod
     async def _create_or_update(self, arc_id: str, arc: ARC) -> None:
@@ -47,6 +48,11 @@ class ArcStore(ABC):
     def _exists(self, arc_id: str) -> bool:
         """Check if an ARC of a given id already exists."""
         raise NotImplementedError("`ArcStore._exists` is not implemented")
+
+    @abstractmethod
+    def _check_health(self) -> bool:
+        """Check connection to the storage backend."""
+        raise NotImplementedError("`ArcStore._check_health` is not implemented")
 
     async def create_or_update(self, arc_id: str, arc: ARC) -> None:
         """_Create or update an ARC.
@@ -140,3 +146,15 @@ class ArcStore(ABC):
             msg = f"Caught exception when trying to check if ARC '{arc_id}' exists: {e!r}"
             logger.exception(msg)
             raise ArcStoreError(msg) from e
+
+    def check_health(self) -> bool:
+        """Check connection to the storage backend.
+
+        Returns:
+            bool: True if backend is reachable, False otherwise.
+        """
+        try:
+            return self._check_health()
+        except (RuntimeError, OSError, ValueError, ConnectionError, TimeoutError) as e:
+            logger.exception("Caught exception during health check: %s", str(e))
+            return False

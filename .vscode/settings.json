@@ -31,5 +31,12 @@
   "ruff.configuration": "./pyproject.toml",
   "ruff.path": ["uv", "run", "ruff"],
   "ruff.importStrategy": "fromEnvironment",
+
+  // Pylint Extension Settings
+  "pylint.args": [
+    "--rcfile=${workspaceFolder}/pyproject.toml"
+  ],
+  "pylint.importStrategy": "fromEnvironment",
+
   "python-envs.defaultEnvManager": "ms-python.python:venv"
 }

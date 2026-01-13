@@ -29,6 +29,13 @@ class LivenessResponse(BaseModel):
     message: Annotated[str, Field(description="Liveness message")] = "ok"
 
 
+class HealthResponse(BaseModel):
+    """Response model for health check including backend status."""
+
+    status: Annotated[str, Field(description="Overall service status (ok/error)")] = "ok"
+    backend_reachable: Annotated[bool, Field(description="True if storage backend is reachable")]
+
+
 class CreateOrUpdateArcsRequest(BaseModel):
     """Request model for creating or updating ARCs."""
 

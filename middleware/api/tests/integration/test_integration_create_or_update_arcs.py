@@ -1,6 +1,7 @@
 """Integration tests for creating or updating ARCs."""
 
 import hashlib
+import http
 import json
 from pathlib import Path
 from typing import Any
@@ -39,10 +40,16 @@ async def test_create_arcs(
 
     response = client.post("/v1/arcs", headers=headers, json=body)
 
-    assert response.status_code == 201  # nosec
+    assert response.status_code == http.HTTPStatus.CREATED  # nosec
     body = response.json()
     assert body["client_id"] == "TestClient"  # nosec
 
+    # verify
+    _verify_gitlab_project(gitlab_api, config, json_info)
+
+
+def _verify_gitlab_project(gitlab_api: Gitlab, config: dict[str, Any], json_info: dict[str, Any]) -> None:
+    """Verify that the project was created in GitLab and contains the expected file."""
     # check that we have a project/repo that contains the isa.investigation.xlsx file
     group_name = config["gitlab_api"]["group"].lower()
     group = gitlab_api.groups.get(group_name)

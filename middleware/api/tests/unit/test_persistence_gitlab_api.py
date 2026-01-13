@@ -3,6 +3,7 @@
 # pylint: disable=protected-access
 
 import base64
+import http
 from pathlib import Path
 from typing import Any
 from unittest.mock import MagicMock
@@ -73,7 +74,7 @@ async def test_create_or_update_with_changes(gitlab_api: Any) -> None:
 
     # kein .arc_hash vorhanden
     def raise_get(*_args: Any, **_kwargs: Any) -> None:
-        raise GitlabGetError("not found", response_code=404)
+        raise GitlabGetError("not found", response_code=http.HTTPStatus.NOT_FOUND)
 
     project.files.get.side_effect = raise_get
     gitlab_api._get_or_create_project = lambda _arc_id: project

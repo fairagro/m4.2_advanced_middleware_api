@@ -8,7 +8,6 @@ import sys
 
 from gunicorn.app.wsgiapp import run  # type: ignore[import-untyped]
 
-import middleware.api
 from middleware.api.api import middleware_api
 
 
@@ -20,10 +19,21 @@ def main() -> None:
     multiple CPU cores.
     """
     # Construct the app path for Gunicorn
-    app_path = f"{middleware_api.__module__}:middleware_api.app"
+    app_path = f"{middleware_api.__module__}:app"
 
     # Get config path relative to this module
-    config_path = os.path.join(os.path.dirname(middleware.api.__file__), "gunicorn_config.py")
+    if getattr(sys, "frozen", False):
+        # In PyInstaller (onedir), we place the config file in the root of the dist folder.
+        # However, due to how pyinstaller extracts things, it might end up in _internal depending on how we add it.
+        # But we added it to "." which is the directory containing the executable.
+        config_path = os.path.join(os.path.dirname(sys.executable), "gunicorn_config.py")
+
+        # Fallback: check if it is in _internal which is sys._MEIPASS
+        if not os.path.exists(config_path):
+            # pylint: disable=no-member,protected-access
+            config_path = os.path.join(sys._MEIPASS, "gunicorn_config.py")  # type: ignore
+    else:
+        config_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "gunicorn_config.py")
 
     # Build Gunicorn command line
     sys.argv = [

@@ -6,7 +6,8 @@ db_password: ~
 db_host: postgres  # Docker service name
 
 rdi: edaphobase
-batch_size: "2"  # Smaller batches to test parallel building
+rdi_url: https://edaphobase.org
+batch_size: "4"  # Smaller batches to test parallel building
 max_concurrent_arc_builds: 4  # Build up to 4 ARCs in parallel per batch
 
 api_client:
@@ -16,4 +17,4 @@ api_client:
   client_key_path: ~
 
 # otel_endpoint: http://signoz:4318     # Uncomment to enable Signoz tracing
-# otel_log_console_spans: false         # Set to false to disable SPAN logging to console
+otel_log_console_spans: false         # Set to false to disable SPAN logging to console

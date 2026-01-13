@@ -36,7 +36,7 @@ def test_config_with_all_fields() -> None:
 
     assert config.api_url == "https://api.example.com"
     assert config.ca_cert_path == Path("/path/to/ca.pem")
-    assert config.timeout == 60.0
+    assert config.timeout == 60.0  # noqa: PLR2004
     assert config.verify_ssl is False
     assert config.follow_redirects is False
     assert config.log_level == "DEBUG"
@@ -52,7 +52,7 @@ def test_config_with_defaults() -> None:
 
     # Check defaults
     assert config.ca_cert_path is None
-    assert config.timeout == 30.0
+    assert config.timeout == 30.0  # noqa: PLR2004
     assert config.verify_ssl is True
     assert config.follow_redirects is True
 
