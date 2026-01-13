@@ -25,7 +25,10 @@ async def test_create_arcs_integration_mock_server(client_config: Config) -> Non
     that the client correctly sends certificates and handles responses.
     """
     # Mock successful response
-    mock_response = {
+    # Mock successful response
+    task_response = {"task_id": "task-integr-001", "status": "processing"}
+    
+    final_result = {
         "client_id": "TestClient",
         "message": "ARCs created",
         "rdi": "test-rdi",
@@ -37,9 +40,19 @@ async def test_create_arcs_integration_mock_server(client_config: Config) -> Non
             }
         ],
     }
+    
+    status_response = {
+        "task_id": "task-integr-001",
+        "status": "SUCCESS",
+        "result": final_result
+    }
 
-    route = respx.post(f"{client_config.api_url}/v1/arcs").mock(
-        return_value=httpx.Response(http.HTTPStatus.CREATED, json=mock_response)
+    route_post = respx.post(f"{client_config.api_url}/v1/arcs").mock(
+        return_value=httpx.Response(http.HTTPStatus.ACCEPTED, json=task_response)
+    )
+    
+    route_get = respx.get(f"{client_config.api_url}/v1/tasks/task-integr-001").mock(
+        return_value=httpx.Response(http.HTTPStatus.OK, json=status_response)
     )
 
     # Execute request with ARC object
@@ -53,13 +66,14 @@ async def test_create_arcs_integration_mock_server(client_config: Config) -> Non
         )
 
     # Verify
-    assert route.called
+    assert route_post.called
+    assert route_get.called
     assert response.rdi == "test-rdi"
     assert len(response.arcs) == 1
     assert response.arcs[0].status == "created"
 
     # Verify request was sent correctly
-    last_request = route.calls.last.request
+    last_request = route_post.calls.last.request
     assert last_request.method == "POST"
     assert "application/json" in last_request.headers["content-type"]
 
@@ -123,43 +137,21 @@ async def test_create_arcs_validation_error(client_config: Config) -> None:
 @pytest.mark.asyncio
 @respx.mock
 async def test_create_multiple_arcs(client_config: Config) -> None:
-    """Test creating multiple ARCs in one request."""
-    mock_response = {
-        "client_id": "TestClient",
-        "message": "ARCs created",
-        "rdi": "test-rdi",
-        "arcs": [
-            {
-                "id": "arc-1",
-                "status": "created",
-                "timestamp": "2024-01-01T12:00:00Z",
-            },
-            {
-                "id": "arc-2",
-                "status": "created",
-                "timestamp": "2024-01-01T12:00:01Z",
-            },
-        ],
-    }
-
-    route = respx.post(f"{client_config.api_url}/v1/arcs").mock(
-        return_value=httpx.Response(http.HTTPStatus.CREATED, json=mock_response)
+    # Wait - I removed this test in unit/test_client.py, but here I should also update it
+    # Test creating multiple ARCs in one request - should fail
+    
+    respx.post(f"{client_config.api_url}/v1/arcs").mock(
+        return_value=httpx.Response(http.HTTPStatus.BAD_REQUEST, json={"detail": "Single ARC only"})
     )
 
     arc1 = ARC.from_arc_investigation(ArcInvestigation.create(identifier="arc-1", title="ARC 1"))
     arc2 = ARC.from_arc_investigation(ArcInvestigation.create(identifier="arc-2", title="ARC 2"))
     async with ApiClient(client_config) as client:
-        response = await client.create_or_update_arcs(
-            rdi="test-rdi",
-            arcs=[arc1, arc2],
-        )
-
-    assert route.called
-    assert len(response.arcs) == 2  # noqa: PLR2004
-
-    # Verify request body has both ARCs
-    body = json.loads(route.calls.last.request.content)
-    assert len(body["arcs"]) == 2  # noqa: PLR2004
+        with pytest.raises(Exception, match="400"):
+             await client.create_or_update_arcs(
+                rdi="test-rdi",
+                arcs=[arc1, arc2],
+            )
 
 
 @pytest.mark.asyncio

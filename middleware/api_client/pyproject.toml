@@ -16,6 +16,7 @@ dev = [
     "pytest-mock>=3.10.0",
     "respx>=0.20.0",
     "cryptography>=45.0.6",
+    "types-pyyaml>=6.0.12.20240917",
 ]
 
 [tool.uv.sources]
