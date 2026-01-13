@@ -1,6 +1,7 @@
 """Integration tests for creating or updating ARCs."""
 
 import hashlib
+import http
 import json
 from pathlib import Path
 from typing import Any
@@ -39,7 +40,7 @@ async def test_create_arcs(
 
     response = client.post("/v1/arcs", headers=headers, json=body)
 
-    assert response.status_code == 201  # nosec
+    assert response.status_code == http.HTTPStatus.CREATED  # nosec
     body = response.json()
     assert body["client_id"] == "TestClient"  # nosec
 

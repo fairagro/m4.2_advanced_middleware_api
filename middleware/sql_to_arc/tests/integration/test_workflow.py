@@ -74,7 +74,7 @@ async def test_process_worker_investigations(mock_api_client: AsyncMock) -> None
     call_args = mock_api_client.create_or_update_arcs.call_args
     # Check keyword arguments
     assert call_args.kwargs["rdi"] == "edaphobase"
-    assert len(call_args.kwargs["arcs"]) == 2
+    assert len(call_args.kwargs["arcs"]) == 2  # noqa: PLR2004
 
 
 @pytest.mark.asyncio
@@ -189,7 +189,7 @@ async def test_main_workflow(
     assert mock_db_connection.cursor.called
 
     # Should have executed 3 queries (investigations, studies bulk, assays bulk)
-    assert mock_db_cursor.execute.call_count == 3
+    assert mock_db_cursor.execute.call_count == 3  # noqa: PLR2004
 
     # Should have uploaded ARCs (2 investigations distributed across workers)
     # With max_concurrent_arc_builds=5 and batch_size=10, both investigations
@@ -203,7 +203,7 @@ async def test_main_workflow(
         all_arcs.extend(call.kwargs["arcs"])
 
     # Should have uploaded 2 ARCs in total
-    assert len(all_arcs) == 2
+    assert len(all_arcs) == 2  # noqa: PLR2004
 
     # Verify content of uploaded ARCs
     identifiers = {arc.Identifier for arc in all_arcs}

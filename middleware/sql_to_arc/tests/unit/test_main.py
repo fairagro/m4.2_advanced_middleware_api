@@ -115,8 +115,8 @@ class TestFetchStudiesBulk:
 
         result = await fetch_studies_bulk(mock_cursor, [1, 2])
 
-        assert len(result) == 2
-        assert len(result[1]) == 2
+        assert len(result) == 2  # noqa: PLR2004
+        assert len(result[1]) == 2  # noqa: PLR2004
         assert len(result[2]) == 1
 
     @pytest.mark.asyncio
@@ -146,8 +146,8 @@ class TestFetchAssaysBulk:
 
         result = await fetch_assays_bulk(mock_cursor, [1, 2])
 
-        assert len(result) == 2
-        assert len(result[1]) == 2
+        assert len(result) == 2  # noqa: PLR2004
+        assert len(result[1]) == 2  # noqa: PLR2004
         assert len(result[2]) == 1
 
     @pytest.mark.asyncio
@@ -261,4 +261,4 @@ async def test_process_investigations(monkeypatch: pytest.MonkeyPatch) -> None:
 
     stats = await process_investigations(mock_cursor, mock_client, mock_config)
 
-    assert stats.found_datasets == 3
+    assert stats.found_datasets == 3  # noqa: PLR2004

@@ -1,5 +1,6 @@
 """Unit tests for GitRepo health checks and validation."""
 
+import http
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
@@ -36,7 +37,7 @@ def test_check_health_file_scheme() -> None:
 def test_check_health_https_success(mock_urlopen: MagicMock) -> None:
     """Test health check for https:// scheme success."""
     mock_response = MagicMock()
-    mock_response.status = 200
+    mock_response.status = http.HTTPStatus.OK
     mock_response.__enter__.return_value = mock_response
     mock_urlopen.return_value = mock_response
 
@@ -51,7 +52,7 @@ def test_check_health_https_success(mock_urlopen: MagicMock) -> None:
 def test_check_health_https_failure_status(mock_urlopen: MagicMock) -> None:
     """Test health check for https:// scheme failure (404)."""
     mock_response = MagicMock()
-    mock_response.status = 404
+    mock_response.status = http.HTTPStatus.NOT_FOUND
     mock_response.__enter__.return_value = mock_response
     mock_urlopen.return_value = mock_response
 

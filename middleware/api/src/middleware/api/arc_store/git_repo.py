@@ -2,6 +2,7 @@
 
 import asyncio
 import concurrent.futures
+import http
 import logging
 import shutil
 import tempfile
@@ -46,7 +47,8 @@ class GitRepoConfig(BaseModel):
         """Ensure URL uses HTTP, HTTPS or FILE (for tests)."""
         valid_schemes = ("https://", "file://", "http://")
         if not v.lower().startswith(valid_schemes):
-            raise ValueError(f"Git URL must start with one of: {valid_schemes}")
+            msg = f"Git URL must start with one of: {valid_schemes}"
+            raise ValueError(msg)
         return v
 
     @field_validator("cache_dir", mode="before")
@@ -150,7 +152,8 @@ class GitContext:
     def commit_and_push(self, message: str) -> None:
         """Add all changes, commit and push."""
         if not self.repo:
-            raise RuntimeError("Repository not initialized")
+            msg = "Repository not initialized"
+            raise RuntimeError(msg)
 
         # Check if dirty or untracked files exist
         if not self.repo.is_dirty(untracked_files=True):
@@ -184,20 +187,19 @@ class GitRepo(ArcStore):
         try:
             # Set a short timeout, disable bandit check, as we've already validated the URL
             with urllib.request.urlopen(url, timeout=5) as response:  # nosec B310
-                if response.status >= 400:
+                if response.status >= http.HTTPStatus.BAD_REQUEST:
                     logger.error("Git server check failed: %s returned status %s", url, response.status)
                     return False
-                else:
-                    logger.debug("Git server check passed: %s returned status %s", url, response.status)
-                    return True
+                logger.debug("Git server check passed: %s returned status %s", url, response.status)
+                return True
         except urllib.error.HTTPError as e:
-            logger.error("Git server check failed: %s returned HTTP error %s: %s", url, e.code, e.reason)
+            logger.exception("Git server check failed: %s returned HTTP error %s: %s", url, e.code, e.reason)
         except urllib.error.URLError as e:
-            logger.error("Git server check failed: %s is unreachable. Reason: %s", url, e.reason)
+            logger.exception("Git server check failed: %s is unreachable. Reason: %s", url, e.reason)
         except TimeoutError:
-            logger.error("Git server check failed: %s timed out", url)
-        except Exception as e:  # pylint: disable=broad-exception-caught
-            logger.error("Git server check failed: %s caused unexpected error: %s", url, e)
+            logger.exception("Git server check failed: %s timed out", url)
+        except Exception:  # pylint: disable=broad-exception-caught
+            logger.exception("Git server check failed: %s caused unexpected error", url)
 
         return False
 
@@ -214,7 +216,7 @@ class GitRepo(ArcStore):
             if repo_url.startswith("https://"):
                 clean = repo_url.replace("https://", "")
                 return f"https://oauth2:{token}@{clean}"
-            elif repo_url.startswith("http://"):
+            if repo_url.startswith("http://"):
                 clean = repo_url.replace("http://", "")
                 return f"http://oauth2:{token}@{clean}"
         return repo_url
@@ -244,7 +246,8 @@ class GitRepo(ArcStore):
             try:
                 with GitContext(ctx_config) as ctx:
                     if not ctx.repo:
-                        raise RuntimeError("Failed to initialize git repo")
+                        msg = "Failed to initialize git repo"
+                        raise RuntimeError(msg)
 
                     repo_path = Path(ctx.path)
 
@@ -283,9 +286,11 @@ class GitRepo(ArcStore):
                     except (FileNotFoundError, OSError) as e:
                         logger.warning("File system error loading ARC from repo %s: %s", arc_id, e)
                         return None
-                    except Exception as e:  # pylint: disable=broad-exception-caught
+                    except Exception as e:  # pylint: disable=broad-exception-caught # noqa: BLE001
                         logger.warning(
-                            "Failed to load ARC from repo %s (might not be an ARC or invalid): %s", arc_id, e
+                            "Failed to load ARC from repo %s (might not be an ARC or invalid): %s",
+                            arc_id,
+                            e,
                         )
                         return None
             except GitCommandError as e:
@@ -298,7 +303,8 @@ class GitRepo(ArcStore):
     def _delete(self, arc_id: str) -> None:
         """Delete ARC (Not supported via Git CLI easily without platform API)."""
         logger.warning(
-            "Delete operation is not supported by GitRepo (CLI backend). Manual deletion required for %s", arc_id
+            "Delete operation is not supported by GitRepo (CLI backend). Manual deletion required for %s",
+            arc_id,
         )
 
     def _exists(self, arc_id: str) -> bool:
@@ -312,6 +318,7 @@ class GitRepo(ArcStore):
         g = git.cmd.Git()
         try:
             g.ls_remote(url)
-            return True
         except GitCommandError:
             return False
+        else:
+            return True

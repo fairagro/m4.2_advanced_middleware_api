@@ -1,6 +1,7 @@
 """Integration tests for GitRepo backend."""
 
 import hashlib
+import http
 import json
 import shutil
 import tempfile
@@ -104,7 +105,7 @@ async def test_create_arc_via_git_repo(
     # Assert
     # GitRepo backend reports "updated" (200) if the repo exists (which it must for file:// push)
     # So we accept 200 or 201
-    assert response.status_code in [200, 201], f"Response: {response.text}"
+    assert response.status_code in [http.HTTPStatus.OK, http.HTTPStatus.CREATED], f"Response: {response.text}"
     response_data = response.json()
     assert response_data["client_id"] == "TestClient"
 

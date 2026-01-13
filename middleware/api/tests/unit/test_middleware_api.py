@@ -1,5 +1,6 @@
 """Unit tests for the FastAPI middleware API endpoints."""
 
+import http
 from collections.abc import Callable
 from typing import Any
 
@@ -52,7 +53,7 @@ def test_whoami_success(client: TestClient, middleware_api: Api, cert: str) -> N
         "/v1/whoami",
         headers={"ssl-client-cert": cert, "ssl-client-verify": "SUCCESS", "accept": "application/json"},
     )
-    assert r.status_code == 200
+    assert r.status_code == http.HTTPStatus.OK
     body = r.json()
     assert body["client_id"] == "TestClient"
 
@@ -65,7 +66,7 @@ def test_whoami_invalid_accept(client: TestClient, cert: str) -> None:
         "/v1/whoami",
         headers={"ssl-client-cert": cert, "ssl-client-verify": "SUCCESS", "accept": "application/xml"},
     )
-    assert r.status_code == 406
+    assert r.status_code == http.HTTPStatus.NOT_ACCEPTABLE
 
 
 def test_whoami_no_cert(client: TestClient) -> None:
@@ -74,7 +75,7 @@ def test_whoami_no_cert(client: TestClient) -> None:
         "/v1/whoami",
         headers={"accept": "application/json"},
     )
-    assert r.status_code == 401
+    assert r.status_code == http.HTTPStatus.UNAUTHORIZED
 
 
 def test_whoami_invalid_cert(client: TestClient, middleware_api: Api) -> None:
@@ -86,7 +87,7 @@ def test_whoami_invalid_cert(client: TestClient, middleware_api: Api) -> None:
         "/v1/whoami",
         headers={"ssl-client-cert": "dummy cert", "ssl-client-verify": "SUCCESS", "accept": "application/json"},
     )
-    assert r.status_code == 400
+    assert r.status_code == http.HTTPStatus.BAD_REQUEST
 
     middleware_api.app.dependency_overrides.clear()
 
@@ -98,7 +99,7 @@ def test_whoami_cert_verify_not_success(client: TestClient, cert: str, verify_st
         "/v1/whoami",
         headers={"ssl-client-cert": cert, "ssl-client-verify": verify_status, "accept": "application/json"},
     )
-    assert r.status_code == 401
+    assert r.status_code == http.HTTPStatus.UNAUTHORIZED
 
 
 def test_health_check_success(client: TestClient, middleware_api: Api) -> None:
@@ -108,7 +109,7 @@ def test_health_check_success(client: TestClient, middleware_api: Api) -> None:
     middleware_api.app.dependency_overrides[middleware_api._get_business_logic] = lambda: mock_logic
 
     r = client.get("/v1/health", headers={"accept": "application/json"})
-    assert r.status_code == 200
+    assert r.status_code == http.HTTPStatus.OK
     assert r.json() == {"status": "ok", "backend_reachable": True}
 
     middleware_api.app.dependency_overrides.clear()
@@ -121,7 +122,7 @@ def test_health_check_failure(client: TestClient, middleware_api: Api) -> None:
     middleware_api.app.dependency_overrides[middleware_api._get_business_logic] = lambda: mock_logic
 
     r = client.get("/v1/health", headers={"accept": "application/json"})
-    assert r.status_code == 503
+    assert r.status_code == http.HTTPStatus.SERVICE_UNAVAILABLE
     assert r.json() == {"status": "error", "backend_reachable": False}
 
     middleware_api.app.dependency_overrides.clear()
@@ -139,7 +140,7 @@ def test_health_check_exception(client: TestClient, middleware_api: Api) -> None
     middleware_api.app.dependency_overrides[middleware_api._get_business_logic] = lambda: mock_logic
 
     r = client.get("/v1/health", headers={"accept": "application/json"})
-    assert r.status_code == 503
+    assert r.status_code == http.HTTPStatus.SERVICE_UNAVAILABLE
     assert r.json() == {"status": "error", "backend_reachable": False}
 
     middleware_api.app.dependency_overrides.clear()
@@ -153,8 +154,8 @@ def test_health_check_exception(client: TestClient, middleware_api: Api) -> None
 @pytest.mark.parametrize(
     "arc_status, expected_http_status",
     [
-        (ArcStatus.CREATED, 201),
-        (ArcStatus.UPDATED, 200),
+        (ArcStatus.CREATED, http.HTTPStatus.CREATED),
+        (ArcStatus.UPDATED, http.HTTPStatus.OK),
     ],
 )
 def test_create_or_update_arcs_success(
@@ -233,7 +234,7 @@ def test_create_or_update_arcs_invalid_json_semantic(
         },
         json={"rdi": "rdi-1", "arcs": [{"dummy": "crate"}]},
     )
-    assert r.status_code == 422  # InvalidJSONSemantic by BusinessLogic
+    assert r.status_code == http.HTTPStatus.UNPROCESSABLE_ENTITY  # InvalidJSONSemantic by BusinessLogic
 
     middleware_api.app.dependency_overrides.clear()
 
@@ -250,7 +251,7 @@ def test_create_or_update_arcs_invalid_body(client: TestClient, cert: str) -> No
         },
         json=[{"dummy": "crate"}],
     )
-    assert r.status_code == 422  # unprocessable entity by FastAPI
+    assert r.status_code == http.HTTPStatus.UNPROCESSABLE_ENTITY  # unprocessable entity by FastAPI
 
 
 def test_create_or_update_arcs_invalid_accept(client: TestClient, cert: str) -> None:
@@ -265,7 +266,7 @@ def test_create_or_update_arcs_invalid_accept(client: TestClient, cert: str) -> 
         },
         json={"rdi": "rdi-1", "arcs": [{"dummy": "crate"}]},
     )
-    assert r.status_code == 406
+    assert r.status_code == http.HTTPStatus.NOT_ACCEPTABLE
 
 
 def test_create_or_update_arcs_no_cert(client: TestClient) -> None:
@@ -278,14 +279,14 @@ def test_create_or_update_arcs_no_cert(client: TestClient) -> None:
         },
         json={"rdi": "rdi-1", "arcs": [{"dummy": "crate"}]},
     )
-    assert r.status_code == 401
+    assert r.status_code == http.HTTPStatus.UNAUTHORIZED
 
 
 @pytest.mark.parametrize(
     "client_verify, expected_status",
     [
-        ("FAILED", 401),
-        ("NONE", 401),
+        ("FAILED", http.HTTPStatus.UNAUTHORIZED),
+        ("NONE", http.HTTPStatus.UNAUTHORIZED),
     ],
 )
 def test_create_or_update_arcs_cert_verification_state(
@@ -322,7 +323,7 @@ def test_create_or_update_arcs_rdi_not_known(client: TestClient, cert: str) -> N
         },
         json={"rdi": "rdi-unknown", "arcs": [{"dummy": "crate"}]},
     )
-    assert r.status_code == 400
+    assert r.status_code == http.HTTPStatus.BAD_REQUEST
 
 
 def test_create_or_update_arcs_rdi_not_allowed(
@@ -343,7 +344,7 @@ def test_create_or_update_arcs_rdi_not_allowed(
         },
         json={"rdi": "rdi-1", "arcs": [{"dummy": "crate"}]},
     )
-    assert r.status_code == 403
+    assert r.status_code == http.HTTPStatus.FORBIDDEN
 
 
 # -------------------------------------------------------------------
@@ -369,7 +370,7 @@ def test_whoami_accessible_rdis_intersection(client: TestClient, middleware_api:
             "accept": "application/json",
         },
     )
-    assert r.status_code == 200
+    assert r.status_code == http.HTTPStatus.OK
     # Only rdi-1 should be in the intersection
     assert set(r.json()["accessible_rdis"]) == {"rdi-1"}
 
@@ -390,7 +391,7 @@ def test_whoami_accessible_rdis_no_overlap(client: TestClient, middleware_api: A
         "/v1/whoami",
         headers={"ssl-client-cert": "dummy-cert", "ssl-client-verify": "SUCCESS", "accept": "application/json"},
     )
-    assert r.status_code == 200
+    assert r.status_code == http.HTTPStatus.OK
     # No overlap, should be empty
     assert r.json()["accessible_rdis"] == []
 
@@ -410,7 +411,7 @@ def test_whoami_accessible_rdis_complete_overlap(client: TestClient, middleware_
         "/v1/whoami",
         headers={"ssl-client-cert": "dummy-cert", "ssl-client-verify": "SUCCESS", "accept": "application/json"},
     )
-    assert r.status_code == 200
+    assert r.status_code == http.HTTPStatus.OK
     # Complete overlap
     assert set(r.json()["accessible_rdis"]) == {"rdi-1", "rdi-2"}
 
@@ -437,7 +438,7 @@ def test_whoami_accessible_rdis_superset_in_cert(client: TestClient, middleware_
         "/v1/whoami",
         headers={"ssl-client-cert": "dummy-cert", "ssl-client-verify": "SUCCESS", "accept": "application/json"},
     )
-    assert r.status_code == 200
+    assert r.status_code == http.HTTPStatus.OK
     # Only the intersection should be returned
     assert set(r.json()["accessible_rdis"]) == {"rdi-1", "rdi-2"}
 
