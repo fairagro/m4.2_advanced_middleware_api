@@ -219,7 +219,7 @@ def test_get_arc_success(git_repo: GitRepo) -> None:
     ):
         mock_ctx_instance = mock_ctx.return_value
         mock_ctx_instance.__enter__.return_value = mock_ctx_instance
-        mock_ctx_instance.path = "/tmp/fake/path"
+        mock_ctx_instance.path = "/tmp/fake/path"  # nosec B108
         mock_ctx_instance.repo = MagicMock()
 
         mock_arc.load.return_value = "MyARC"
@@ -227,7 +227,7 @@ def test_get_arc_success(git_repo: GitRepo) -> None:
         result = git_repo._get(arc_id)
 
         assert result == "MyARC"
-        mock_arc.load.assert_called_once_with("/tmp/fake/path")
+        mock_arc.load.assert_called_once_with("/tmp/fake/path")  # nosec B108
 
 
 def test_get_arc_repo_fail(git_repo: GitRepo) -> None:
