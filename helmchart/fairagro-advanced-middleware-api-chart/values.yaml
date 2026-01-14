@@ -20,6 +20,29 @@ image:
   # Overrides the image tag whose default is the chart appVersion.
   tag: ""
 
+rabbitmq:
+  enabled: true
+  image: rabbitmq:3.12-management
+  username: guest
+  password: guest
+  service:
+    port: 5672
+    managementPort: 15672
+
+redis:
+  enabled: true
+  image: redis:7
+  service:
+    port: 6379
+
+celery:
+  brokerUrl: ""
+  resultBackend: ""
+  worker:
+    enabled: true
+    replicaCount: 1
+    concurrency: 4
+
 # This is for the secrets for pulling an image from a private repository more information can be found here: https://kubernetes.io/docs/tasks/configure-pod-container/pull-image-private-registry/
 imagePullSecrets: []
 # This is to override the chart name.

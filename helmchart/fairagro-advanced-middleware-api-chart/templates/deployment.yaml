@@ -41,6 +41,11 @@ spec:
           {{- end }}
           image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
           imagePullPolicy: {{ .Values.image.pullPolicy }}
+          env:
+            - name: CELERY_BROKER_URL
+              value: {{ default (printf "amqp://%s-rabbitmq:5672//" (include "fairagro-advanced-middleware-api-chart.fullname" .)) .Values.celery.brokerUrl | quote }}
+            - name: CELERY_RESULT_BACKEND
+              value: {{ default (printf "redis://%s-redis:6379/0" (include "fairagro-advanced-middleware-api-chart.fullname" .)) .Values.celery.resultBackend | quote }}
           ports:
             - name: http
               containerPort: {{ .Values.service.port }}

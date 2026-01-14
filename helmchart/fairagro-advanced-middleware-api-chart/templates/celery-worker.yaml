@@ -1,0 +1,56 @@
+{{- if and .Values.celery.worker.enabled .Values.rabbitmq.enabled .Values.redis.enabled }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "fairagro-advanced-middleware-api-chart.fullname" . }}-celery-worker
+  labels:
+    {{- include "fairagro-advanced-middleware-api-chart.labels" . | nindent 4 }}
+    app.kubernetes.io/component: celery-worker
+spec:
+  replicas: {{ .Values.celery.worker.replicaCount }}
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: {{ include "fairagro-advanced-middleware-api-chart.name" . }}-celery-worker
+      app.kubernetes.io/instance: {{ .Release.Name }}
+  template:
+    metadata:
+      labels:
+        {{- include "fairagro-advanced-middleware-api-chart.labels" . | nindent 8 }}
+        app.kubernetes.io/name: {{ include "fairagro-advanced-middleware-api-chart.name" . }}-celery-worker
+        app.kubernetes.io/component: celery-worker
+        app.kubernetes.io/instance: {{ .Release.Name }}
+    spec:
+      serviceAccountName: {{ include "fairagro-advanced-middleware-api-chart.serviceAccountName" . }}
+      containers:
+        - name: celery-worker
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          env:
+            - name: CELERY_BROKER_URL
+              value: {{ default (printf "amqp://%s-rabbitmq:5672//" (include "fairagro-advanced-middleware-api-chart.fullname" .)) .Values.celery.brokerUrl | quote }}
+            - name: CELERY_RESULT_BACKEND
+              value: {{ default (printf "redis://%s-redis:6379/0" (include "fairagro-advanced-middleware-api-chart.fullname" .)) .Values.celery.resultBackend | quote }}
+            - name: MIDDLEWARE_API_CONFIG
+              value: /run/secrets/middleware-api-config
+          volumeMounts:
+            - name: config
+              mountPath: /run/secrets/middleware-api-config
+              readOnly: true
+              subPath: middleware-api-config
+          command:
+            - /api/middleware-api/middleware-api
+          args:
+            - celery
+            - -A
+            - middleware.api.celery_app
+            - worker
+            - --loglevel=info
+            - --concurrency={{ .Values.celery.worker.concurrency }}
+      volumes:
+        - name: config
+          secret:
+            secretName: {{ include "fairagro-advanced-middleware-api-chart.fullname" . }}-config
+            items:
+              - key: middleware-api-config
+                path: middleware-api-config
+{{- end }}
