@@ -20,6 +20,9 @@ logger = logging.getLogger(__name__)
 # Load config from YAML file
 config_path = Path(os.environ.get("MIDDLEWARE_API_CONFIG", "/run/secrets/middleware-api-config"))
 
+# Global config instance (can be None in test mode)
+loaded_config: Config | None = None
+
 # Check if running in test environment (pytest sets PYTEST_CURRENT_TEST) or if config file doesn't exist
 if "pytest" in sys.modules or not config_path.is_file():
     # Create a dummy celery app for testing
@@ -30,15 +33,16 @@ if "pytest" in sys.modules or not config_path.is_file():
         backend="cache+memory://",
         include=["middleware.api.worker"],
     )
+    loaded_config = None
 else:
-    config = Config.from_yaml_file(config_path)
+    loaded_config = Config.from_yaml_file(config_path)
 
-    if not config.celery:
+    if not loaded_config.celery:
         logger.error("Celery configuration missing in config file")
         raise ValueError("Celery configuration missing in config file")
 
-    broker_url = config.celery.broker_url
-    backend_url = config.celery.result_backend
+    broker_url = loaded_config.celery.broker_url
+    backend_url = loaded_config.celery.result_backend
 
     logger.info("Celery configured with broker: %s", broker_url)
 
@@ -66,3 +70,23 @@ celery_app.conf.update(
     enable_utc=True,
     task_track_started=True,
 )
+
+# Initialize BusinessLogic for workers (None in test mode)
+business_logic = None
+if loaded_config is not None:
+    from .arc_store import ArcStore
+    from .arc_store.git_repo import GitRepo
+    from .arc_store.gitlab_api import GitlabApi
+    from .business_logic import BusinessLogic
+
+    store: ArcStore
+    if loaded_config.gitlab_api:
+        store = GitlabApi(loaded_config.gitlab_api)
+    elif loaded_config.git_repo:
+        store = GitRepo(loaded_config.git_repo)
+    else:
+        logger.error("Invalid ArcStore configuration")
+        raise ValueError("Invalid ArcStore configuration")
+
+    business_logic = BusinessLogic(store)
+    logger.info("BusinessLogic initialized for Celery workers")
