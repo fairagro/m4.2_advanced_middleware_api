@@ -13,6 +13,7 @@ from pathlib import Path
 from typing import Annotated, cast
 from urllib.parse import unquote
 
+import redis
 from asn1crypto.core import Sequence, UTF8String  # type: ignore
 from cryptography import x509
 from cryptography.x509.extensions import ExtensionNotFound
@@ -31,11 +32,7 @@ from middleware.shared.api_models.models import (
 )
 from middleware.shared.tracing import initialize_tracing
 
-from .arc_store import ArcStore, ArcStoreError
-from .arc_store.git_repo import GitRepo
-from .arc_store.gitlab_api import GitlabApi
-from .business_logic import BusinessLogic, BusinessLogicError
-from .celery_app import celery_app
+from .celery_app import BACKEND_URL, celery_app
 from .config import Config
 from .tracing import instrument_app
 from .worker import process_arc
@@ -113,14 +110,6 @@ class Api:
             log_console_spans=self._config.otel_log_console_spans,
         )
 
-        self._store: ArcStore
-        if self._config.gitlab_api:
-            self._store = GitlabApi(self._config.gitlab_api)
-        elif self._config.git_repo:
-            self._store = GitRepo(self._config.git_repo)
-        else:
-            raise ValueError("Invalid ArcStore configuration")
-        self._service = BusinessLogic(self._store)
         self._app = FastAPI(
             title="FAIR Middleware API",
             description="API for managing ARC (Advanced Research Context) objects",
@@ -142,15 +131,6 @@ class Api:
 
         """
         return self._app
-
-    def _get_business_logic(self) -> BusinessLogic:
-        """Get the business logic service instance.
-
-        Returns:
-            BusinessLogic: The configured business logic service.
-
-        """
-        return self._service
 
     def _validate_client_cert(self, request: Request) -> x509.Certificate | None:
         """Extract and parse client certificate from request headers.
@@ -363,32 +343,42 @@ class Api:
         @self._app.get("/v1/health", response_model=HealthResponse)
         def health_check(
             response: Response,
-            business_logic: Annotated[BusinessLogic, Depends(self._get_business_logic)],
             _accept_validated: Annotated[None, Depends(self._validate_accept_type)],
         ) -> HealthResponse:
-            """Check health of API and connected services (Git, Redis, RabbitMQ)."""
-            status_dict = {
-                "backend_reachable": False,
-                "redis_reachable": False,
-                "rabbitmq_reachable": False,
+            """Check health of API and connected services (Redis, RabbitMQ)."""
+            # Check Redis (result backend)
+            redis_reachable = False
+            try:
+                r = redis.from_url(BACKEND_URL)
+                r.ping()
+                redis_reachable = True
+            except redis.RedisError as e:
+                logger.error("Redis health check failed: %s", e)
+
+            # Check RabbitMQ (broker)
+            rabbitmq_reachable = False
+            try:
+                with celery_app.connection_or_acquire() as conn:
+                    conn.ensure_connection(max_retries=1)
+                    rabbitmq_reachable = True
+            except Exception as e:  # pylint: disable=broad-exception-caught
+                logger.error("RabbitMQ health check failed: %s", e)
+
+            # API only checks its direct dependencies
+            status = {
+                "redis_reachable": redis_reachable,
+                "rabbitmq_reachable": rabbitmq_reachable,
             }
 
-            try:
-                # Type convention: check_health returns dict[str, bool]
-                status_dict = business_logic.check_health()
-            except (ArcStoreError, BusinessLogicError):
-                logger.exception("Health check failed with exception")
-
-            is_healthy = all(status_dict.values())
+            is_healthy = all(status.values())
 
             if not is_healthy:
                 response.status_code = 503
 
             return HealthResponse(
                 status="ok" if is_healthy else "error",
-                backend_reachable=status_dict.get("backend_reachable", False),
-                redis_reachable=status_dict.get("redis_reachable", False),
-                rabbitmq_reachable=status_dict.get("rabbitmq_reachable", False),
+                redis_reachable=redis_reachable,
+                rabbitmq_reachable=rabbitmq_reachable,
             )
 
     def _setup_create_or_update_arcs_route(self) -> None:

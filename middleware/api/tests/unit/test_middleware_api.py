@@ -3,58 +3,18 @@
 import http
 import unittest.mock
 from collections.abc import Callable
-from typing import Any
 from unittest.mock import MagicMock
 
 import pytest
+import redis
 from cryptography import x509
 from fastapi.testclient import TestClient
 
 from middleware.api.api import Api
-from middleware.api.business_logic import BusinessLogicError
-from middleware.shared.api_models.models import ArcResponse, ArcStatus, CreateOrUpdateArcsResponse
-
-
-class SimpleBusinessLogicMock:
-    """Straight forward mock of BusinessLogic for testing purposes."""
-
-    def __init__(self, is_healthy: bool = True) -> None:
-        """Initialize the mock with a health status.
-
-        Args:
-            is_healthy: Whether the mock should report as healthy. Defaults to True.
-        """
-        self._is_healthy = is_healthy
-
-    def check_health(self) -> dict[str, bool]:
-        """Mock check_health."""
-        return {
-            "backend_reachable": self._is_healthy,
-            "redis_reachable": self._is_healthy,
-            "rabbitmq_reachable": self._is_healthy,
-        }
-
-    async def create_or_update_arcs(self, rdi: str, _arcs: list[Any], client_id: str) -> CreateOrUpdateArcsResponse:
-        """Mock create_or_update_arcs that captures the RDI."""
-        return CreateOrUpdateArcsResponse(
-            client_id=client_id,
-            rdi=rdi,
-            message="ok",
-            arcs=[
-                ArcResponse(
-                    id="test-arc-id",
-                    status=ArcStatus.CREATED,
-                    timestamp="2025-01-01T00:00:00Z",
-                )
-            ],
-        )
 
 
 def test_whoami_success(client: TestClient, middleware_api: Api, cert: str) -> None:
     """Test the /v1/whoami endpoint with a valid certificate and accept header."""
-    # pylint: disable=protected-access
-    middleware_api.app.dependency_overrides[middleware_api._get_business_logic] = SimpleBusinessLogicMock
-
     r = client.get(
         "/v1/whoami",
         headers={"ssl-client-cert": cert, "ssl-client-verify": "SUCCESS", "accept": "application/json"},
@@ -86,9 +46,6 @@ def test_whoami_no_cert(client: TestClient) -> None:
 
 def test_whoami_invalid_cert(client: TestClient, middleware_api: Api) -> None:
     """Test the /v1/whoami endpoint with an invalid client certificate."""
-    # pylint: disable=protected-access
-    middleware_api.app.dependency_overrides[middleware_api._get_business_logic] = SimpleBusinessLogicMock
-
     r = client.get(
         "/v1/whoami",
         headers={"ssl-client-cert": "dummy cert", "ssl-client-verify": "SUCCESS", "accept": "application/json"},
@@ -108,63 +65,46 @@ def test_whoami_cert_verify_not_success(client: TestClient, cert: str, verify_st
     assert r.status_code == http.HTTPStatus.UNAUTHORIZED
 
 
-def test_health_check_success(client: TestClient, middleware_api: Api) -> None:
+def test_health_check_success(client: TestClient) -> None:
     """Test /v1/health success."""
-    # pylint: disable=protected-access
-    mock_logic = SimpleBusinessLogicMock(is_healthy=True)
-    middleware_api.app.dependency_overrides[middleware_api._get_business_logic] = lambda: mock_logic
+    # Mock Redis
+    mock_redis = MagicMock()
+    mock_redis.ping.return_value = True
 
-    r = client.get("/v1/health", headers={"accept": "application/json"})
-    assert r.status_code == http.HTTPStatus.OK
-    assert r.json() == {
-        "status": "ok",
-        "backend_reachable": True,
-        "redis_reachable": True,
-        "rabbitmq_reachable": True,
-    }
+    # Mock Celery connection
+    mock_conn = MagicMock()
 
-    middleware_api.app.dependency_overrides.clear()
+    with (
+        unittest.mock.patch("middleware.api.api.redis.from_url", return_value=mock_redis),
+        unittest.mock.patch("middleware.api.api.celery_app.connection_or_acquire") as mock_acquire,
+    ):
+        mock_acquire.return_value.__enter__.return_value = mock_conn
+
+        r = client.get("/v1/health", headers={"accept": "application/json"})
+        assert r.status_code == http.HTTPStatus.OK
+        assert r.json() == {
+            "status": "ok",
+            "redis_reachable": True,
+            "rabbitmq_reachable": True,
+        }
 
 
-def test_health_check_failure(client: TestClient, middleware_api: Api) -> None:
+def test_health_check_failure(client: TestClient) -> None:
     """Test /v1/health failure."""
-    # pylint: disable=protected-access
-    mock_logic = SimpleBusinessLogicMock(is_healthy=False)
-    middleware_api.app.dependency_overrides[middleware_api._get_business_logic] = lambda: mock_logic
-
-    r = client.get("/v1/health", headers={"accept": "application/json"})
-    assert r.status_code == http.HTTPStatus.SERVICE_UNAVAILABLE
-    assert r.json() == {
-        "status": "error",
-        "backend_reachable": False,
-        "redis_reachable": False,
-        "rabbitmq_reachable": False,
-    }
-
-    middleware_api.app.dependency_overrides.clear()
-
-
-def test_health_check_exception(client: TestClient, middleware_api: Api) -> None:
-    """Test /v1/health when logic raises exception."""
-
-    # pylint: disable=protected-access
-    class ExceptionMock(SimpleBusinessLogicMock):
-        def check_health(self) -> dict[str, bool]:
-            raise BusinessLogicError("Oops")
-
-    mock_logic = ExceptionMock()
-    middleware_api.app.dependency_overrides[middleware_api._get_business_logic] = lambda: mock_logic
-
-    r = client.get("/v1/health", headers={"accept": "application/json"})
-    assert r.status_code == http.HTTPStatus.SERVICE_UNAVAILABLE
-    assert r.json() == {
-        "status": "error",
-        "backend_reachable": False,
-        "redis_reachable": False,
-        "rabbitmq_reachable": False,
-    }
-
-    middleware_api.app.dependency_overrides.clear()
+    # Mock Redis failure
+    with (
+        unittest.mock.patch("middleware.api.api.redis.from_url", side_effect=redis.exceptions.RedisError("Redis down")),
+        unittest.mock.patch(
+            "middleware.api.api.celery_app.connection_or_acquire", side_effect=Exception("RabbitMQ down")
+        ),
+    ):
+        r = client.get("/v1/health", headers={"accept": "application/json"})
+        assert r.status_code == http.HTTPStatus.SERVICE_UNAVAILABLE
+        assert r.json() == {
+            "status": "error",
+            "redis_reachable": False,
+            "rabbitmq_reachable": False,
+        }
 
 
 # -------------------------------------------------------------------

@@ -33,7 +33,6 @@ class HealthResponse(BaseModel):
     """Response model for health check including backend status."""
 
     status: Annotated[str, Field(description="Overall service status (ok/error)")] = "ok"
-    backend_reachable: Annotated[bool, Field(description="True if storage backend is reachable")]
     redis_reachable: Annotated[bool, Field(description="True if Redis is reachable")]
     rabbitmq_reachable: Annotated[bool, Field(description="True if RabbitMQ is reachable")]
 
