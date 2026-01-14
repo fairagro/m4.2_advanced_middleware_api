@@ -115,7 +115,13 @@ services:
     volumes:
       - ./middleware-api-config.yaml:/run/secrets/middleware-api-config:ro
     # Command to run celery worker
-    command: ["/api/middleware-api/middleware-api", "celery", "-A", "middleware.api.celery_app", "worker", "--loglevel=info"]
+    command: [
+      "/api/middleware-api/middleware-api",
+      "celery",
+      "-A", "middleware.api.celery_app",
+      "worker",
+      "--loglevel=info",
+      "--concurrency=8",]
     restart: "no"
 
   middleware-api:
