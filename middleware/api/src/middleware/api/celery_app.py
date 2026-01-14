@@ -1,4 +1,13 @@
+"""Celery application configuration and initialization.
+
+This module sets up the Celery app for the middleware API, including:
+- Broker and backend configuration from environment variables
+- Optional OpenTelemetry instrumentation for distributed tracing
+- Task serialization and timezone settings
+"""
+
 import os
+
 from celery import Celery
 
 # Get configuration from environment variables (set by docker-compose)
@@ -18,6 +27,7 @@ celery_app = Celery(
 # The actual export will only happen if a processor/exporter is configured via env vars
 try:
     from .tracing import instrument_celery
+
     instrument_celery(celery_app)
 except ImportError:
     # Graceful fallback if dependencies are missing or during build

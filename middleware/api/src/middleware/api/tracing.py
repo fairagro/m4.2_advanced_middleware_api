@@ -9,6 +9,7 @@ from opentelemetry.instrumentation.redis import RedisInstrumentor
 from opentelemetry.instrumentation.requests import RequestsInstrumentor
 
 if TYPE_CHECKING:
+    from celery import Celery
     from fastapi import FastAPI
 
 
@@ -34,7 +35,7 @@ def instrument_app(app: "FastAPI") -> None:
     logger.info("FastAPI app instrumented for OpenTelemetry (with Redis, Requests)")
 
 
-def instrument_celery(**kwargs: Any) -> None:
+def instrument_celery(_app: "Celery | None" = None, **kwargs: Any) -> None:
     """Instrument a Celery application with OpenTelemetry."""
     CeleryInstrumentor().instrument(**kwargs)
 
