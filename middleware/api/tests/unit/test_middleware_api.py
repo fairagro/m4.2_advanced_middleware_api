@@ -7,6 +7,7 @@ from unittest.mock import MagicMock
 
 import pytest
 import redis
+import redis.exceptions
 from cryptography import x509
 from fastapi.testclient import TestClient
 
@@ -118,7 +119,7 @@ def test_health_check_failure(client: TestClient) -> None:
         (http.HTTPStatus.ACCEPTED),
     ],
 )
-def test_create_or_update_arcs_success(client: TestClient, cert: str) -> None:
+def test_create_or_update_arcs_success(client: TestClient, cert: str, expected_http_status: int) -> None:
     """Test creating a new ARC via the /v1/arcs endpoint."""
     # Mock the Celery task
     mock_task = MagicMock()
@@ -141,7 +142,7 @@ def test_create_or_update_arcs_success(client: TestClient, cert: str) -> None:
             },
             json={"rdi": "rdi-1", "arcs": [{"dummy": "crate"}]},
         )
-        assert r.status_code == http.HTTPStatus.ACCEPTED
+        assert r.status_code == expected_http_status
 
 
 def test_create_or_update_arcs_invalid_cert_format(client: TestClient) -> None:

@@ -50,57 +50,6 @@ class BusinessLogic:
         self._store = store
         self._tracer = trace.get_tracer(__name__)
 
-    def check_health(self) -> dict[str, bool]:
-        """Check if the backend systems are healthy.
-
-        Returns:
-            dict[str, bool]: Status of each component.
-        """
-        with self._tracer.start_as_current_span("check_health") as span:
-            # Check primary backend (Git/GitLab) - critical
-            backend_reachable = self._store.check_health()
-            
-            # Check Redis (result backend)
-            redis_reachable = False
-            try:
-                import redis
-                from .celery_app import BACKEND_URL
-                r = redis.from_url(BACKEND_URL)
-                r.ping()
-                redis_reachable = True
-            except Exception as e:
-                logger.error("Redis health check failed: %s", e)
-
-            # Check RabbitMQ (broker)
-            rabbitmq_reachable = False
-            try:
-                # Avoid circular import at top level
-                from .celery_app import celery_app
-                with celery_app.connection_or_acquire() as conn:
-                    conn.ensure_connection(max_retries=1)
-                    rabbitmq_reachable = True
-            except Exception as e:
-                logger.error("RabbitMQ health check failed: %s", e)
-
-            status = {
-                "backend_reachable": backend_reachable,
-                "redis_reachable": redis_reachable,
-                "rabbitmq_reachable": rabbitmq_reachable,
-            }
-
-            is_healthy = all(status.values())
-            span.set_attribute("is_healthy", is_healthy)
-            span.set_attribute("backend_reachable", backend_reachable)
-            span.set_attribute("redis_reachable", redis_reachable)
-            span.set_attribute("rabbitmq_reachable", rabbitmq_reachable)
-            
-            if is_healthy:
-                logger.debug("Health check passed: %s", status)
-            else:
-                logger.error("Health check failed: %s", status)
-            
-            return status
-
     async def _create_arc_from_rocrate(self, rdi: str, arc_dict: dict) -> ArcResponse:
         """Create an ARC from RO-Crate JSON with tracing."""
         with self._tracer.start_as_current_span(
