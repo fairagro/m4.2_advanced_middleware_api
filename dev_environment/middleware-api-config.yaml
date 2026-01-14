@@ -18,9 +18,7 @@ known_rdis:
 - thunen_atlas
 require_client_cert: false
 
-celery:
-  broker_url: amqp://guest:guest@rabbitmq:5672//
-  result_backend: redis://redis:6379/0
+celery: {}
 
 # otel_endpoint: http://signoz:4318  # Uncomment to enable Signoz tracing
 # otel_log_console_spans: true     # Enable SPAN logging to console

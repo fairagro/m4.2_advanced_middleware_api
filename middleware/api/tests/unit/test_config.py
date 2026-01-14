@@ -1,12 +1,21 @@
+"""Unit tests for the API configuration module.
+
+Tests cover:
+- RDI identifier validation
+- Client authentication OID parsing
+- Backend mutual exclusivity (git_repo vs gitlab_api)
+- YAML configuration file loading
+"""
+
+from pathlib import Path
+from typing import Any
+
 import pytest
 from cryptography import x509
 from pydantic import ValidationError
-from typing import Any
-from pathlib import Path
 
 from middleware.api.config import Config
-from middleware.api.arc_store.git_repo import GitRepoConfig
-from middleware.api.arc_store.gitlab_api import GitlabApiConfig
+
 
 def test_config_validate_known_rdis_valid() -> None:
     """Test valid known RDIs."""
@@ -14,20 +23,22 @@ def test_config_validate_known_rdis_valid() -> None:
     config_data = {
         "known_rdis": ["valid-rdi", "rdi.123", "under_score"],
         "git_repo": {"url": "file:///tmp", "group": "g", "path": "/tmp"},
+        "celery": {"broker_url": "memory://", "result_backend": "cache+memory://"},
     }
     config = Config.model_validate(config_data)
-    assert len(config.known_rdis) == 3
+    assert len(config.known_rdis) == 3  # noqa: PLR2004
+
 
 def test_config_validate_known_rdis_invalid() -> None:
     """Test invalid known RDIs."""
     config_data = {
-        "known_rdis": ["invalid rdi"], # space not allowed
+        "known_rdis": ["invalid rdi"],  # space not allowed
         "git_repo": {"url": "file:///tmp", "group": "g", "path": "/tmp"},
+        "celery": {"broker_url": "memory://", "result_backend": "cache+memory://"},
     }
     with pytest.raises(ValidationError) as exc:
         Config.model_validate(config_data)
     assert "Invalid RDI identifier" in str(exc.value)
-
 
 
 def test_config_parse_client_auth_oid_str() -> None:
@@ -36,10 +47,12 @@ def test_config_parse_client_auth_oid_str() -> None:
     config_data = {
         "client_auth_oid": oid_str,
         "git_repo": {"url": "file:///tmp", "group": "g", "path": "/tmp"},
+        "celery": {"broker_url": "memory://", "result_backend": "cache+memory://"},
     }
     config = Config.model_validate(config_data)
     assert isinstance(config.client_auth_oid, x509.ObjectIdentifier)
     assert config.client_auth_oid.dotted_string == oid_str
+
 
 def test_config_parse_client_auth_oid_obj() -> None:
     """Test parsing OID from ObjectIdentifier."""
@@ -47,32 +60,40 @@ def test_config_parse_client_auth_oid_obj() -> None:
     config_data = {
         "client_auth_oid": oid,
         "git_repo": {"url": "file:///tmp", "group": "g", "path": "/tmp"},
+        "celery": {"broker_url": "memory://", "result_backend": "cache+memory://"},
     }
     config = Config.model_validate(config_data)
     assert config.client_auth_oid == oid
+
 
 def test_config_parse_client_auth_oid_invalid_type() -> None:
     """Test invalid OID type."""
     config_data = {
         "client_auth_oid": 1234,
         "git_repo": {"url": "file:///tmp", "group": "g", "path": "/tmp"},
+        "celery": {"broker_url": "memory://", "result_backend": "cache+memory://"},
     }
     with pytest.raises(TypeError) as exc:
         Config.model_validate(config_data)
     assert "client_auth_oid must be a string or x509.ObjectIdentifier" in str(exc.value)
 
+
 def test_config_mutual_exclusivity_none() -> None:
     """Test failure when neither backend is configured."""
-    config_data: dict[str, Any] = {}
+    config_data: dict[str, Any] = {
+        "celery": {"broker_url": "memory://", "result_backend": "cache+memory://"},
+    }
     with pytest.raises(ValidationError) as exc:
         Config.model_validate(config_data)
     assert "Either git_repo or gitlab_api must be configured" in str(exc.value)
+
 
 def test_config_mutual_exclusivity_both() -> None:
     """Test failure when both backends are configured."""
     config_data = {
         "git_repo": {"url": "file:///tmp", "group": "g", "path": "/tmp"},
         "gitlab_api": {"url": "https://gitlab.com", "token": "t", "group": "g", "branch": "b"},
+        "celery": {"broker_url": "memory://", "result_backend": "cache+memory://"},
     }
     with pytest.raises(ValidationError) as exc:
         Config.model_validate(config_data)
@@ -93,8 +114,11 @@ log_level: DEBUG
 git_repo:
   url: file:///tmp
   group: my-group
+celery:
+  broker_url: memory://
+  result_backend: cache+memory://
     """)
-    
+
     config = Config.from_yaml_file(config_file)
     assert config.log_level == "DEBUG"
     assert config.git_repo is not None

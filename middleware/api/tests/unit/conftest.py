@@ -21,7 +21,7 @@ from middleware.api.config import CeleryConfig, Config
 
 
 @pytest.fixture(scope="session", autouse=True)
-def setup_test_config():
+def setup_test_config() -> Generator[None, None, None]:
     """Create a temporary config file for tests and set MIDDLEWARE_API_CONFIG env var."""
     # Create a minimal config file for celery_app to load
     config_content = """
@@ -36,15 +36,15 @@ celery:
   broker_url: amqp://guest:guest@localhost:5672//
   result_backend: redis://localhost:6379/0
 """
-    with tempfile.NamedTemporaryFile(mode='w', suffix='.yaml', delete=False) as f:
+    with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml", delete=False) as f:
         f.write(config_content)
         temp_config_path = f.name
-    
+
     # Set environment variable before any imports happen
     os.environ["MIDDLEWARE_API_CONFIG"] = temp_config_path
-    
+
     yield
-    
+
     # Cleanup
     Path(temp_config_path).unlink(missing_ok=True)
 

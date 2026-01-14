@@ -32,7 +32,7 @@ class Config(ConfigBase):
     git_repo: Annotated[GitRepoConfig | None, Field(description="GitRepo storage backend configuration")] = None
     gitlab_api: Annotated[GitlabApiConfig | None, Field(description="GitLab API storage backend configuration")] = None
 
-    celery: Annotated[CeleryConfig | None, Field(description="Celery configuration")] = None
+    celery: Annotated[CeleryConfig, Field(description="Celery configuration")]
 
     require_client_cert: Annotated[
         bool, Field(description="Require client certificate for API access (set to false for development)")

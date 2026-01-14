@@ -74,8 +74,8 @@ services:
       - "5672:5672"
       - "15672:15672"
     environment:
-      RABBITMQ_DEFAULT_USER: ${RABBITMQ_DEFAULT_USER:-guest}
-      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_DEFAULT_PASS:-guest}
+      - RABBITMQ_DEFAULT_USER
+      - RABBITMQ_DEFAULT_PASS
     healthcheck:
       test: ["CMD", "rabbitmqctl", "status"]
       interval: 10s
@@ -108,7 +108,9 @@ services:
         condition: service_started
     environment:
       - MIDDLEWARE_API_CONFIG=/run/secrets/middleware-api-config
-      # GITLAB_API_TOKEN etc. if needed for the worker to access git
+      - CELERY_BROKER_URL
+      - CELERY_RESULT_BACKEND
+      - GITLAB_API_TOKEN
       - GIT_REPO_TOKEN
     volumes:
       - ./middleware-api-config.yaml:/run/secrets/middleware-api-config:ro
@@ -131,13 +133,14 @@ services:
     ports:
       - "8000:8000"
     environment:
-      - GITLAB_API_TOKEN
-      - GIT_REPO_TOKEN
+      - CELERY_BROKER_URL
+      - CELERY_RESULT_BACKEND
       - MIDDLEWARE_API_CONFIG=/run/secrets/middleware-api-config
     volumes:
       - ./middleware-api-config.yaml:/run/secrets/middleware-api-config:ro
     # Run uvicorn directly (default command of the binary runs uvicorn)
     command: ["/api/middleware-api/middleware-api", "--host", "0.0.0.0", "--port", "8000"]
+    # command: sleep 3600
     restart: "no"
 
 # secrets:

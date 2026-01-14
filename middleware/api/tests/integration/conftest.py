@@ -31,6 +31,10 @@ def config(oid: x509.ObjectIdentifier, known_rdis: list[str]) -> "DictType | Lis
                 "group": "FAIRagro-advanced-middleware-integration-tests",
                 "token": os.getenv("GITLAB_API_TOKEN", ""),
             },
+            "celery": {
+                "broker_url": "memory://",
+                "result_backend": "cache+memory://",
+            },
         }
     )
     return config_wrapper.unwrap()

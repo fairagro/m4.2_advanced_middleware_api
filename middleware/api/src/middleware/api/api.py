@@ -54,6 +54,10 @@ if "pytest" in sys.modules:
     loaded_config = Config.from_data(
         {
             "log_level": "DEBUG",
+            "celery": {
+                "broker_url": "memory://",
+                "result_backend": "cache+memory://",
+            },
             "gitlab_api": {
                 "url": "https://localhost/",
                 "branch": "dummy",
