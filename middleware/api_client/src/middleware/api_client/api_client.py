@@ -203,22 +203,22 @@ class ApiClient:
 
         request = CreateOrUpdateArcsRequest(rdi=rdi, arcs=serialized_arcs)
         logger.debug("Request payload: %s", json.dumps(request.model_dump(), indent=2))
-        
+
         # 1. Submit task
         result = await self._post("/v1/arcs", request)
-        
+
         task_id = result.get("task_id")
         if not task_id:
-             raise ApiClientError("No task_id returned from API")
-             
+            raise ApiClientError("No task_id returned from API")
+
         logger.info("Task submitted, ID: %s. Polling for results...", task_id)
-        
+
         # 2. Poll for results
         while True:
-            await asyncio.sleep(1.0) # Poll every second
+            await asyncio.sleep(1.0)  # Poll every second
             status_response = await self._get(f"/v1/tasks/{task_id}")
             status = status_response.get("status")
-            
+
             if status == "SUCCESS":
                 result_data = status_response.get("result")
                 response = CreateOrUpdateArcsResponse.model_validate(result_data)
@@ -228,11 +228,11 @@ class ApiClient:
                     response.rdi,
                 )
                 return response
-            
+
             if status == "FAILURE":
                 error_msg = status_response.get("error", "Unknown error")
                 raise ApiClientError(f"Task failed: {error_msg}")
-                
+
             # continue polling if PENDING, STARTED, RETRY etc.
 
     async def aclose(self) -> None:

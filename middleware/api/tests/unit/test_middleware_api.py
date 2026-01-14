@@ -1,17 +1,16 @@
 """Unit tests for the FastAPI middleware API endpoints."""
 
 import http
+import unittest.mock
 from collections.abc import Callable
 from typing import Any
+from unittest.mock import MagicMock
 
 import pytest
 from cryptography import x509
 from fastapi.testclient import TestClient
 
 from middleware.api.api import Api
-from unittest.mock import MagicMock
-import unittest.mock 
-
 from middleware.api.business_logic import BusinessLogicError
 from middleware.shared.api_models.models import ArcResponse, ArcStatus, CreateOrUpdateArcsResponse
 
@@ -179,15 +178,12 @@ def test_health_check_exception(client: TestClient, middleware_api: Api) -> None
         (http.HTTPStatus.ACCEPTED),
     ],
 )
-def test_create_or_update_arcs_success(
-    client: TestClient, middleware_api: Api, cert: str, expected_http_status: int
-) -> None:
+def test_create_or_update_arcs_success(client: TestClient, cert: str) -> None:
     """Test creating a new ARC via the /v1/arcs endpoint."""
-
     # Mock the Celery task
     mock_task = MagicMock()
     mock_task.id = "task-123"
-    
+
     # Check where process_arc is imported in api.py. It is imported as: from .worker import process_arc
     # We need to patch the one in api.py
     with pytest.MonkeyPatch.context() as mp:
@@ -229,14 +225,14 @@ def test_create_or_update_arcs_no_cert_allowed(client: TestClient, middleware_ap
     # pylint: disable=protected-access
     # Disable client cert requirement
     middleware_api._config.require_client_cert = False
-    
+
     # Needs to be known RDI
     middleware_api._config.known_rdis = ["rdi-1"]
-    
+
     # We must mock process_arc.delay since we expect success
     mock_task = MagicMock()
     mock_task.id = "task-no-cert"
-    
+
     with unittest.mock.patch("middleware.api.api.process_arc.delay", return_value=mock_task):
         r = client.post(
             "/v1/arcs",
@@ -254,9 +250,8 @@ def test_create_or_update_arcs_no_cert_allowed(client: TestClient, middleware_ap
     middleware_api._config.require_client_cert = True
 
 
-def test_get_task_status(client: TestClient, middleware_api: Api) -> None:
+def test_get_task_status(client: TestClient) -> None:
     """Test getting task status."""
-    
     mock_result = MagicMock()
     mock_result.status = "SUCCESS"
     mock_result.ready.return_value = True

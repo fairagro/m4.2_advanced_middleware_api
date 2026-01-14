@@ -88,8 +88,10 @@ class CreateOrUpdateArcsResponse(ApiResponse):
     """Response model for create or update ARC operations (Task Ticket or Result)."""
 
     rdi: Annotated[str | None, Field(description="Research Data Infrastructure identifier the ARCs belong to")] = None
-    arcs: Annotated[list[ArcResponse], Field(description="List of ARC responses for the operation")] = Field(default_factory=list)
-    
+    arcs: Annotated[list[ArcResponse], Field(description="List of ARC responses for the operation")] = Field(
+        default_factory=list
+    )
+
     # Async task fields
     task_id: Annotated[str | None, Field(description="The ID of the background task processing the ARC")] = None
     status: Annotated[str | None, Field(description="The status of the task submission")] = None
@@ -100,5 +102,7 @@ class GetTaskStatusResponse(BaseModel):
 
     task_id: Annotated[str, Field(description="The ID of the background task")]
     status: Annotated[str, Field(description="The status of the task")]
-    result: Annotated[CreateOrUpdateArcsResponse | None, Field(description="The result of the task if completed")] = None
+    result: Annotated[CreateOrUpdateArcsResponse | None, Field(description="The result of the task if completed")] = (
+        None
+    )
     error: Annotated[str | None, Field(description="Error message if task failed")] = None

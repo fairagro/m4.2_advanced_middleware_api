@@ -27,7 +27,7 @@ async def test_create_arcs_integration_mock_server(client_config: Config) -> Non
     # Mock successful response
     # Mock successful response
     task_response = {"task_id": "task-integr-001", "status": "processing"}
-    
+
     final_result = {
         "client_id": "TestClient",
         "message": "ARCs created",
@@ -40,17 +40,13 @@ async def test_create_arcs_integration_mock_server(client_config: Config) -> Non
             }
         ],
     }
-    
-    status_response = {
-        "task_id": "task-integr-001",
-        "status": "SUCCESS",
-        "result": final_result
-    }
+
+    status_response = {"task_id": "task-integr-001", "status": "SUCCESS", "result": final_result}
 
     route_post = respx.post(f"{client_config.api_url}/v1/arcs").mock(
         return_value=httpx.Response(http.HTTPStatus.ACCEPTED, json=task_response)
     )
-    
+
     route_get = respx.get(f"{client_config.api_url}/v1/tasks/task-integr-001").mock(
         return_value=httpx.Response(http.HTTPStatus.OK, json=status_response)
     )
@@ -137,9 +133,10 @@ async def test_create_arcs_validation_error(client_config: Config) -> None:
 @pytest.mark.asyncio
 @respx.mock
 async def test_create_multiple_arcs(client_config: Config) -> None:
+    """Test that creating multiple ARCs in one request fails with 400 Bad Request."""
     # Wait - I removed this test in unit/test_client.py, but here I should also update it
     # Test creating multiple ARCs in one request - should fail
-    
+
     respx.post(f"{client_config.api_url}/v1/arcs").mock(
         return_value=httpx.Response(http.HTTPStatus.BAD_REQUEST, json={"detail": "Single ARC only"})
     )
@@ -148,7 +145,7 @@ async def test_create_multiple_arcs(client_config: Config) -> None:
     arc2 = ARC.from_arc_investigation(ArcInvestigation.create(identifier="arc-2", title="ARC 2"))
     async with ApiClient(client_config) as client:
         with pytest.raises(Exception, match="400"):
-             await client.create_or_update_arcs(
+            await client.create_or_update_arcs(
                 rdi="test-rdi",
                 arcs=[arc1, arc2],
             )
