@@ -1,7 +1,10 @@
 """Unit tests for the FAIRagro middleware API."""
 
 import hashlib
+import os
+import tempfile
 from collections.abc import Generator
+from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
@@ -14,7 +17,36 @@ from middleware.api.arc_store.gitlab_api import GitlabApi, GitlabApiConfig
 from middleware.api.business_logic import (
     BusinessLogic,
 )
-from middleware.api.config import Config
+from middleware.api.config import CeleryConfig, Config
+
+
+@pytest.fixture(scope="session", autouse=True)
+def setup_test_config():
+    """Create a temporary config file for tests and set MIDDLEWARE_API_CONFIG env var."""
+    # Create a minimal config file for celery_app to load
+    config_content = """
+log_level: DEBUG
+known_rdis: []
+gitlab_api:
+  url: http://localhost
+  token: test-token
+  group: test-group
+  branch: main
+celery:
+  broker_url: amqp://guest:guest@localhost:5672//
+  result_backend: redis://localhost:6379/0
+"""
+    with tempfile.NamedTemporaryFile(mode='w', suffix='.yaml', delete=False) as f:
+        f.write(config_content)
+        temp_config_path = f.name
+    
+    # Set environment variable before any imports happen
+    os.environ["MIDDLEWARE_API_CONFIG"] = temp_config_path
+    
+    yield
+    
+    # Cleanup
+    Path(temp_config_path).unlink(missing_ok=True)
 
 
 @pytest.fixture
@@ -29,6 +61,10 @@ def config(oid: x509.ObjectIdentifier, known_rdis: list[str]) -> Config:
             token=SecretStr("test-token"),
             group="test-group",
             branch="main",
+        ),
+        celery=CeleryConfig(
+            broker_url="amqp://guest:guest@localhost:5672//",
+            result_backend="redis://localhost:6379/0",
         ),
     )
 

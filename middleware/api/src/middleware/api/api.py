@@ -32,7 +32,7 @@ from middleware.shared.api_models.models import (
 )
 from middleware.shared.tracing import initialize_tracing
 
-from .celery_app import BACKEND_URL, celery_app
+from .celery_app import celery_app
 from .config import Config
 from .tracing import instrument_app
 from .worker import process_arc
@@ -349,7 +349,9 @@ class Api:
             # Check Redis (result backend)
             redis_reachable = False
             try:
-                r = redis.from_url(BACKEND_URL)
+                # Get Redis URL from config
+                redis_url = self._config.celery.result_backend if self._config.celery else "redis://localhost:6379/0"
+                r = redis.from_url(redis_url)
                 r.ping()
                 redis_reachable = True
             except redis.RedisError as e:

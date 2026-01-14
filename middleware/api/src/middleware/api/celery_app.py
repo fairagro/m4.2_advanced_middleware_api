@@ -1,30 +1,47 @@
 """Celery application configuration and initialization.
 
 This module sets up the Celery app for the middleware API, including:
-- Broker and backend configuration from environment variables
+- Broker and backend configuration from YAML config file
 - Optional OpenTelemetry instrumentation for distributed tracing
 - Task serialization and timezone settings
 """
 
+import logging
 import os
+from pathlib import Path
 
 from celery import Celery
 
-# Get configuration from environment variables (set by docker-compose)
-BROKER_URL = os.environ.get("CELERY_BROKER_URL", "amqp://guest:guest@localhost:5672//")
-BACKEND_URL = os.environ.get("CELERY_RESULT_BACKEND", "redis://localhost:6379/0")
+from .config import Config
+
+logger = logging.getLogger(__name__)
+
+# Load config from YAML file
+config_path = Path(os.environ.get("MIDDLEWARE_API_CONFIG", "/run/secrets/middleware-api-config"))
+
+if not config_path.is_file():
+    logger.error("Config file not found: %s", config_path)
+    raise FileNotFoundError(f"Config file not found: {config_path}")
+
+config = Config.from_yaml_file(config_path)
+
+if not config.celery:
+    logger.error("Celery configuration missing in config file")
+    raise ValueError("Celery configuration missing in config file")
+
+broker_url = config.celery.broker_url
+backend_url = config.celery.result_backend
+
+logger.info("Celery configured with broker: %s", broker_url)
 
 celery_app = Celery(
     "middleware_api",
-    broker=BROKER_URL,
-    backend=BACKEND_URL,
+    broker=broker_url,
+    backend=backend_url,
     include=["middleware.api.worker"],
 )
 
 # Instrument the Celery app if OTLP endpoint is configured
-# Note: In a real deployment, we might want to check the config file or env var explicitly
-# For now, we rely on standard OTEL env vars or assume instrumentation is safe to always apply
-# The actual export will only happen if a processor/exporter is configured via env vars
 try:
     from .tracing import instrument_celery
 
