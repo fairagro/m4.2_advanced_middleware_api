@@ -1,24 +1,33 @@
-tls:
-  serverCrtFile: server.crt
-  serverKeyFile: server.key
-  caCrtFile: ca.crt
-
-image:
-  repository: fairagro-advanced-middleware-api
-  tag: test
-  imagePullPolicy: Never
-
-ingress:
-  enabled: true
-  mtlsEnabled: true
-  annotations:
-    nginx.ingress.kubernetes.io/backend-protocol: "HTTP"
-  hosts:
-    - host: chart-example.local
-      paths:
-        - path: /
-          pathType: ImplementationSpecific
+api:
   tls:
-    - secretName: server-tls
-      hosts:
-        - chart-example.local
+    serverCrtFile: server.crt
+    serverKeyFile: server.key
+    caCrtFile: ca.crt
+
+  image:
+    repository: fairagro-advanced-middleware-api
+    tag: test
+    imagePullPolicy: Never
+
+  ingress:
+    enabled: true
+    mtlsEnabled: true
+    annotations:
+      nginx.ingress.kubernetes.io/backend-protocol: "HTTP"
+    hosts:
+      - host: chart-example.local
+        paths:
+          - path: /
+            pathType: ImplementationSpecific
+    tls:
+      - secretName: server-tls
+        hosts:
+          - chart-example.local
+
+celery:
+  worker:
+    image:
+      repository: fairagro-advanced-middleware-api
+      tag: test
+      imagePullPolicy: Never
+    concurrency: 1

@@ -93,7 +93,7 @@ api:
   affinity: {}
   serviceAccount:
     create: true
-    automount: true
+    automount: false
     annotations: {}
     name: ""
   autoscaling:
@@ -108,16 +108,16 @@ celery:
   # brokerUrl: ""     # use this setting if you want to override the generated RabbitMQ URL
   # resultBackend: "" # use this setting if you want to override the generated Redis URL
   image:
-    repository: ""
-    pullPolicy: ""
+    repository: zalf/fairagro-advanced-middleware-api
+    pullPolicy: IfNotPresent
     tag: ""
   worker:
     enabled: true
     replicaCount: 1
     concurrency: 4
     serviceAccount:
-      create: false
-      automount: true
+      create: true
+      automount: false
       annotations: {}
       name: ""
     livenessProbe:
