@@ -1,4 +1,19 @@
 {{- if .Values.redis.enabled }}
+{{- $redisSecret := default (printf "%s-redis-auth" (include "fairagro-advanced-middleware-api-chart.fullname" .)) .Values.redis.auth.existingSecret }}
+{{- $redisPassword := default "" .Values.redis.auth.password }}
+{{- if and (not .Values.redis.auth.existingSecret) $redisPassword }}
+apiVersion: v1
+kind: Secret
+metadata:
+  name: {{ $redisSecret }}
+  labels:
+    {{- include "fairagro-advanced-middleware-api-chart.labels" . | nindent 4 }}
+    app.kubernetes.io/component: redis
+type: Opaque
+stringData:
+  password: {{ $redisPassword | quote }}
+---
+{{- end }}
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -23,6 +38,19 @@ spec:
       containers:
         - name: redis
           image: {{ .Values.redis.image | quote }}
+{{- if or .Values.redis.auth.existingSecret $redisPassword }}
+          env:
+            - name: REDIS_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ $redisSecret }}
+                  key: password
+          command:
+            - /bin/sh
+          args:
+            - -c
+            - redis-server --requirepass "$REDIS_PASSWORD"
+{{- end }}
           ports:
             - containerPort: {{ .Values.redis.service.port }}
               name: redis

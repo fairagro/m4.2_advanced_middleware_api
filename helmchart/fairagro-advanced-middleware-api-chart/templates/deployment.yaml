@@ -5,8 +5,8 @@ metadata:
   labels:
     {{- include "fairagro-advanced-middleware-api-chart.labels" . | nindent 4 }}
 spec:
-  {{- if not .Values.autoscaling.enabled }}
-  replicas: {{ .Values.replicaCount }}
+  {{- if not .Values.api.autoscaling.enabled }}
+  replicas: {{ .Values.api.replicaCount }}
   {{- end }}
   selector:
     matchLabels:
@@ -15,12 +15,12 @@ spec:
     metadata:
       annotations:
         checksum/config: {{ include (print $.Template.BasePath "/config-secret.yaml") . | sha256sum }}
-        {{- with .Values.podAnnotations }}
+        {{- with .Values.api.podAnnotations }}
         {{- toYaml . | nindent 8 }}
         {{- end }}
       labels:
         {{- include "fairagro-advanced-middleware-api-chart.labels" . | nindent 8 }}
-        {{- with .Values.podLabels }}
+        {{- with .Values.api.podLabels }}
         {{- toYaml . | nindent 8 }}
         {{- end }}
     spec:
@@ -29,36 +29,36 @@ spec:
         {{- toYaml . | nindent 8 }}
       {{- end }}
       serviceAccountName: {{ include "fairagro-advanced-middleware-api-chart.serviceAccountName" . }}
-      {{- with .Values.podSecurityContext }}
+      {{- with .Values.api.podSecurityContext }}
       securityContext:
         {{- toYaml . | nindent 8 }}
       {{- end }}
       containers:
         - name: {{ .Chart.Name }}
-          {{- with .Values.securityContext }}
+          {{- with .Values.api.securityContext }}
           securityContext:
             {{- toYaml . | nindent 12 }}
           {{- end }}
-          image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
-          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          image: "{{ .Values.api.image.repository }}:{{ .Values.api.image.tag | default .Chart.AppVersion }}"
+          imagePullPolicy: {{ .Values.api.image.pullPolicy }}
           env:
             - name: CELERY_BROKER_URL
-              value: {{ default (printf "amqp://%s-rabbitmq:5672//" (include "fairagro-advanced-middleware-api-chart.fullname" .)) .Values.celery.brokerUrl | quote }}
+              value: {{ include "fairagro-advanced-middleware-api-chart.celeryBrokerUrl" . | quote }}
             - name: CELERY_RESULT_BACKEND
-              value: {{ default (printf "redis://%s-redis:6379/0" (include "fairagro-advanced-middleware-api-chart.fullname" .)) .Values.celery.resultBackend | quote }}
+              value: {{ include "fairagro-advanced-middleware-api-chart.celeryResultBackend" . | quote }}
           ports:
             - name: http
-              containerPort: {{ .Values.service.port }}
+              containerPort: {{ .Values.api.service.port }}
               protocol: TCP
-          {{- with .Values.livenessProbe }}
+          {{- with .Values.api.livenessProbe }}
           livenessProbe:
             {{- toYaml . | nindent 12 }}
           {{- end }}
-          {{- with .Values.readinessProbe }}
+          {{- with .Values.api.readinessProbe }}
           readinessProbe:
             {{- toYaml . | nindent 12 }}
           {{- end }}
-          {{- with .Values.resources }}
+          {{- with .Values.api.resources }}
           resources:
             {{- toYaml . | nindent 12 }}
           {{- end }}
@@ -67,7 +67,7 @@ spec:
               mountPath: /run/secrets/middleware-api-config
               readOnly: true
               subPath: middleware-api-config
-            {{- with .Values.volumeMounts }}
+            {{- with .Values.api.volumeMounts }}
             {{- toYaml . | nindent 12 }}
             {{- end }}
       volumes:
@@ -77,18 +77,18 @@ spec:
             items:
               - key: middleware-api-config
                 path: middleware-api-config
-        {{- with .Values.volumes }}
+        {{- with .Values.api.volumes }}
         {{- toYaml . | nindent 8 }}
         {{- end }}
-      {{- with .Values.nodeSelector }}
+      {{- with .Values.api.nodeSelector }}
       nodeSelector:
         {{- toYaml . | nindent 8 }}
       {{- end }}
-      {{- with .Values.affinity }}
+      {{- with .Values.api.affinity }}
       affinity:
         {{- toYaml . | nindent 8 }}
       {{- end }}
-      {{- with .Values.tolerations }}
+      {{- with .Values.api.tolerations }}
       tolerations:
         {{- toYaml . | nindent 8 }}
       {{- end }}

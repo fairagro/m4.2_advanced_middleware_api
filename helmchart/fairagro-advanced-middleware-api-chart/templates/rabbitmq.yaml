@@ -1,4 +1,20 @@
 {{- if .Values.rabbitmq.enabled }}
+{{- $secretName := default (printf "%s-rabbitmq-auth" (include "fairagro-advanced-middleware-api-chart.fullname" .)) .Values.rabbitmq.auth.existingSecret }}
+{{- if not .Values.rabbitmq.auth.existingSecret }}
+apiVersion: v1
+kind: Secret
+metadata:
+  name: {{ $secretName }}
+  labels:
+    {{- include "fairagro-advanced-middleware-api-chart.labels" . | nindent 4 }}
+    app.kubernetes.io/component: rabbitmq
+type: Opaque
+stringData:
+  username: {{ default "guest" .Values.rabbitmq.auth.username | quote }}
+  password: {{ default "guest" .Values.rabbitmq.auth.password | quote }}
+  erlang_cookie: {{ default "" .Values.rabbitmq.auth.erlang_cookie | quote }}
+---
+{{- end }}
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -30,9 +46,20 @@ spec:
               name: management
           env:
             - name: RABBITMQ_DEFAULT_USER
-              value: {{ .Values.rabbitmq.username | quote }}
+              valueFrom:
+                secretKeyRef:
+                  name: {{ $secretName }}
+                  key: username
             - name: RABBITMQ_DEFAULT_PASS
-              value: {{ .Values.rabbitmq.password | quote }}
+              valueFrom:
+                secretKeyRef:
+                  name: {{ $secretName }}
+                  key: password
+            - name: RABBITMQ_ERLANG_COOKIE
+              valueFrom:
+                secretKeyRef:
+                  name: {{ $secretName }}
+                  key: erlang_cookie
           readinessProbe:
             tcpSocket:
               port: amqp
