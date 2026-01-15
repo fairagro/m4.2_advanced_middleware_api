@@ -5,7 +5,7 @@ import re
 from typing import Annotated, ClassVar, Self
 
 from cryptography import x509
-from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
+from pydantic import BaseModel, ConfigDict, Field, SecretStr, field_validator, model_validator
 
 from middleware.shared.config.config_base import ConfigBase
 
@@ -16,8 +16,8 @@ from .arc_store.gitlab_api import GitlabApiConfig
 class CeleryConfig(BaseModel):
     """Configuration for Celery worker."""
 
-    broker_url: Annotated[str, Field(description="RabbitMQ broker URL")]
-    result_backend: Annotated[str, Field(description="Redis backend URL")]
+    broker_url: Annotated[SecretStr, Field(description="RabbitMQ broker URL")]
+    result_backend: Annotated[SecretStr, Field(description="Redis backend URL")]
     task_rate_limit: Annotated[str | None, Field(description="Rate limit for tasks (e.g. '10/m')")] = None
 
 

@@ -63,8 +63,8 @@ def config(oid: x509.ObjectIdentifier, known_rdis: list[str]) -> Config:
             branch="main",
         ),
         celery=CeleryConfig(
-            broker_url="amqp://guest:guest@localhost:5672//",
-            result_backend="redis://localhost:6379/0",
+            broker_url=SecretStr("amqp://guest:guest@localhost:5672//"),
+            result_backend=SecretStr("redis://localhost:6379/0"),
         ),
     )
 

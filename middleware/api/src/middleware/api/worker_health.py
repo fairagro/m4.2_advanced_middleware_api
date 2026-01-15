@@ -56,7 +56,7 @@ def check_worker_health() -> bool:
         # Check Redis (result backend)
         redis_reachable = False
         try:
-            redis_url = config.celery.result_backend if config.celery else "redis://localhost:6379/0"
+            redis_url = config.celery.result_backend.get_secret_value() if config.celery else "redis://localhost:6379/0"
             r = redis.from_url(redis_url)
             r.ping()
             redis_reachable = True

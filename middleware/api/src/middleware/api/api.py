@@ -354,7 +354,11 @@ class Api:
             redis_reachable = False
             try:
                 # Get Redis URL from config
-                redis_url = self._config.celery.result_backend if self._config.celery else "redis://localhost:6379/0"
+                redis_url = (
+                    self._config.celery.result_backend.get_secret_value()
+                    if self._config.celery
+                    else "redis://localhost:6379/0"
+                )
                 r = redis.from_url(redis_url)
                 r.ping()
                 redis_reachable = True

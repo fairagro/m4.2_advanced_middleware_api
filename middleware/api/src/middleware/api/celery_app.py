@@ -41,8 +41,8 @@ else:
         logger.error("Celery configuration missing in config file")
         raise ValueError("Celery configuration missing in config file")
 
-    broker_url = loaded_config.celery.broker_url
-    backend_url = loaded_config.celery.result_backend
+    broker_url = loaded_config.celery.broker_url.get_secret_value()
+    backend_url = loaded_config.celery.result_backend.get_secret_value()
 
     logger.info("Celery configured with broker: %s", broker_url)
 

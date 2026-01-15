@@ -1,6 +1,9 @@
 """Unit tests for worker health check."""
 
+from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
+
+from pydantic import SecretStr
 
 from middleware.api.worker_health import check_worker_health
 
@@ -10,7 +13,7 @@ def test_check_worker_health_success() -> None:
     mock_config = MagicMock()
     mock_config.gitlab_api = None
     mock_config.git_repo = "/tmp/test"
-    mock_config.celery.result_backend = "redis://localhost:6379/0"
+    mock_config.celery = SimpleNamespace(result_backend=SecretStr("redis://localhost:6379/0"))
 
     mock_store = MagicMock()
     mock_store.check_health.return_value = True
@@ -40,7 +43,7 @@ def test_check_worker_health_backend_failure() -> None:
     mock_config = MagicMock()
     mock_config.gitlab_api = None
     mock_config.git_repo = "/tmp/test"
-    mock_config.celery.result_backend = "redis://localhost:6379/0"
+    mock_config.celery = SimpleNamespace(result_backend=SecretStr("redis://localhost:6379/0"))
 
     mock_store = MagicMock()
     mock_store.check_health.return_value = False  # Backend unreachable
@@ -70,7 +73,7 @@ def test_check_worker_health_redis_failure() -> None:
     mock_config = MagicMock()
     mock_config.gitlab_api = None
     mock_config.git_repo = "/tmp/test"
-    mock_config.celery.result_backend = "redis://localhost:6379/0"
+    mock_config.celery = SimpleNamespace(result_backend=SecretStr("redis://localhost:6379/0"))
 
     mock_store = MagicMock()
     mock_store.check_health.return_value = True
@@ -97,7 +100,7 @@ def test_check_worker_health_rabbitmq_failure() -> None:
     mock_config = MagicMock()
     mock_config.gitlab_api = None
     mock_config.git_repo = "/tmp/test"
-    mock_config.celery.result_backend = "redis://localhost:6379/0"
+    mock_config.celery = SimpleNamespace(result_backend=SecretStr("redis://localhost:6379/0"))
 
     mock_store = MagicMock()
     mock_store.check_health.return_value = True
