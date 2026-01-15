@@ -100,6 +100,7 @@ api:
   tolerations: []
   affinity: {}
   serviceAccount:
+    create: true
     automount: false
     annotations: {}
     name: ""
@@ -123,6 +124,7 @@ celery:
     replicaCount: 1
     concurrency: 4
     serviceAccount:
+      create: true
       automount: false
       annotations: {}
       name: ""
