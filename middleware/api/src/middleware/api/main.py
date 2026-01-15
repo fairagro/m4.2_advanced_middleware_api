@@ -6,6 +6,7 @@ import uvicorn
 from celery.__main__ import main as celery_main
 
 from middleware.api.api import middleware_api
+from middleware.api.worker_health import check_worker_health
 
 
 def main() -> None:
@@ -14,6 +15,9 @@ def main() -> None:
     If the first argument is 'celery', we pass control to celery.
     Otherwise we default to uvicorn with the hardcoded app path.
     """
+    if len(sys.argv) > 1 and sys.argv[1] == "worker-health":
+        sys.exit(0 if check_worker_health() else 1)
+
     if len(sys.argv) > 1 and sys.argv[1] == "celery":
         # Remove the executable name and the 'celery' command, so sys.argv[0] becomes 'celery'
         # effectively mimicking 'python -m celery ...'

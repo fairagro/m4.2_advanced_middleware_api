@@ -123,9 +123,8 @@ celery:
     livenessProbe:
       exec:
         command:
-          - /bin/sh
-          - -c
-          - "celery -A middleware.api.celery_app inspect ping -d celery@$HOSTNAME -t 5"
+          - /api/middleware-api/middleware-api
+          - worker-health
       initialDelaySeconds: 30
       periodSeconds: 30
       timeoutSeconds: 5
@@ -133,9 +132,8 @@ celery:
     readinessProbe:
       exec:
         command:
-          - python
-          - -m
-          - middleware.api.worker_health
+          - /api/middleware-api/middleware-api
+          - worker-health
       initialDelaySeconds: 20
       periodSeconds: 30
       timeoutSeconds: 10
