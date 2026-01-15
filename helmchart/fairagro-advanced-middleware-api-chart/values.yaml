@@ -124,7 +124,15 @@ celery:
       exec:
         command:
           - /api/middleware-api/middleware-api
-          - worker-health
+          - celery
+          - -A
+          - middleware.api.celery_app
+          - inspect
+          - ping
+          - -d
+          - celery@$HOSTNAME
+          - -t
+          - "5"
       initialDelaySeconds: 30
       periodSeconds: 30
       timeoutSeconds: 5
