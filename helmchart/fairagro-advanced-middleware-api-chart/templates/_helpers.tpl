@@ -92,9 +92,10 @@ Compute Celery broker URL based on enabled RabbitMQ or provided override.
 {{- $fullname := include "fairagro-advanced-middleware-api-chart.fullname" . -}}
 {{- $brokerOverride := .Values.celery.brokerUrl -}}
 {{- if .Values.rabbitmq.enabled -}}
-	{{- $user := default "" .Values.rabbitmq.auth.username -}}
-	{{- $pass := default "" .Values.rabbitmq.auth.password -}}
-	{{- $existing := default "" .Values.rabbitmq.auth.existingSecret -}}
+	{{- $rabbitAuth := default (dict) .Values.rabbitmq.auth -}}
+	{{- $user := default "" $rabbitAuth.username -}}
+	{{- $pass := default "" $rabbitAuth.password -}}
+	{{- $existing := default "" $rabbitAuth.existingSecret -}}
 	{{- if and $existing (or (eq $user "") (eq $pass "")) -}}
 		{{- required "Provide rabbitmq.auth.username/password when rabbitmq.auth.existingSecret is set, or set celery.brokerUrl" $brokerOverride -}}
 	{{- else -}}
