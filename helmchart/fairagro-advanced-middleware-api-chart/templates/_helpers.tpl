@@ -54,23 +54,17 @@ app.kubernetes.io/instance: {{ .Release.Name }}
 Create the name of the service account to use
 */}}
 {{- define "fairagro-advanced-middleware-api-chart.serviceAccountName" -}}
-{{- if .Values.api.serviceAccount.create }}
 {{- default (include "fairagro-advanced-middleware-api-chart.fullname" .) .Values.api.serviceAccount.name }}
-{{- else }}
-{{- default "default" .Values.api.serviceAccount.name }}
-{{- end }}
 {{- end }}
 
 {{/*
 Create the name of the Celery worker service account to use
 */}}
 {{- define "fairagro-advanced-middleware-api-chart.celeryServiceAccountName" -}}
-{{- if .Values.celery.worker.serviceAccount.create }}
-{{- default (printf "%s-celery-worker" (include "fairagro-advanced-middleware-api-chart.fullname" .)) .Values.celery.worker.serviceAccount.name }}
-{{- else if .Values.celery.worker.serviceAccount.name }}
+{{- if .Values.celery.worker.serviceAccount.name }}
 {{- .Values.celery.worker.serviceAccount.name }}
 {{- else }}
-{{- include "fairagro-advanced-middleware-api-chart.serviceAccountName" . }}
+{{- printf "%s-celery-worker" (include "fairagro-advanced-middleware-api-chart.fullname" .) }}
 {{- end }}
 {{- end }}
 
