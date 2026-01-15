@@ -81,10 +81,18 @@ api:
     httpGet:
       path: /v1/liveness
       port: http
+    initialDelaySeconds: 10    # Container darf starten
+    timeoutSeconds: 3          # genug Zeit für HTTP-Request
+    periodSeconds: 10
+    failureThreshold: 3
   readinessProbe:
     httpGet:
       path: /v1/health
       port: http
+    initialDelaySeconds: 10    # Container darf starten
+    timeoutSeconds: 3          # genug Zeit für HTTP-Request
+    periodSeconds: 10
+    failureThreshold: 3
   resources: {}
   volumes: []
   volumeMounts: []
