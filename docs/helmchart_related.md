@@ -13,7 +13,7 @@ First we will need to create a temporary self-signed server certificate in this 
 ```bash
 FQDN=chart-example.local
 
-cat > helmchart/advanced-middleware-api/server.conf <<EOF
+cat > helmchart/fairagro-advanced-middleware-api-chart/server.conf <<EOF
 [req]
 FQDN=chart-example.local
 distinguished_name = req_distinguished_name
@@ -67,7 +67,7 @@ openssl x509 -req \
 Now we can execute the installation:
 
 ```bash
-docker build . -t fairagro-advanced-middleware-api:test
+docker build -f docker/Dockerfile.api . -t fairagro-advanced-middleware-api:test
 minikube delete --all --purge   # only if we have trouble starting minikube
 minikube start --driver=docker --cni=calico
 minikube addons enable ingress

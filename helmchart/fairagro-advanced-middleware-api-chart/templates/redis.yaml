@@ -1,7 +1,8 @@
 {{- if .Values.redis.enabled }}
-{{- $redisSecret := default (printf "%s-redis-auth" (include "fairagro-advanced-middleware-api-chart.fullname" .)) .Values.redis.auth.existingSecret }}
-{{- $redisPassword := default "" .Values.redis.auth.password }}
-{{- if and (not .Values.redis.auth.existingSecret) $redisPassword }}
+{{- $redisAuth := default (dict) .Values.redis.auth }}
+{{- $redisSecret := default (printf "%s-redis-auth" (include "fairagro-advanced-middleware-api-chart.fullname" .)) $redisAuth.existingSecret }}
+{{- $redisPassword := default "" $redisAuth.password }}
+{{- if and (not $redisAuth.existingSecret) $redisPassword }}
 apiVersion: v1
 kind: Secret
 metadata:
@@ -38,7 +39,7 @@ spec:
       containers:
         - name: redis
           image: {{ .Values.redis.image | quote }}
-{{- if or .Values.redis.auth.existingSecret $redisPassword }}
+{{- if or $redisAuth.existingSecret $redisPassword }}
           env:
             - name: REDIS_PASSWORD
               valueFrom:

@@ -114,8 +114,9 @@ Compute Celery result backend based on enabled Redis or provided override.
 {{- $fullname := include "fairagro-advanced-middleware-api-chart.fullname" . -}}
 {{- $backendOverride := default .Values.celery.resultBackend .Values.resultBackend -}}
 {{- if .Values.redis.enabled -}}
-	{{- $pass := default "" .Values.redis.auth.password -}}
-	{{- $existing := default "" .Values.redis.auth.existingSecret -}}
+	{{- $redisAuth := default (dict) .Values.redis.auth -}}
+	{{- $pass := default "" $redisAuth.password -}}
+	{{- $existing := default "" $redisAuth.existingSecret -}}
 	{{- if and $existing (eq $pass "") -}}
 		{{- required "Provide redis.auth.password when redis.auth.existingSecret is set, or set resultBackend" $backendOverride -}}
 	{{- else if $pass -}}
