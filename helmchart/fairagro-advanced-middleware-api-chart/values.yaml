@@ -132,10 +132,10 @@ celery:
         command:
           - /api/middleware-api/middleware-api
           - worker-health
-      # initialDelaySeconds: 5
-      # periodSeconds: 10
-      # timeoutSeconds: 10
-      # failureThreshold: 3
+      initialDelaySeconds: 10
+      timeoutSeconds: 3
+      periodSeconds: 10
+      failureThreshold: 3
     podAnnotations: {}
     podLabels: {}
     podSecurityContext: {}
