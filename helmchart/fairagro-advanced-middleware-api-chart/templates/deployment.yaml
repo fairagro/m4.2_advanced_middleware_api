@@ -48,7 +48,7 @@ spec:
               value: {{ include "fairagro-advanced-middleware-api-chart.celeryResultBackend" . | quote }}
           ports:
             - name: http
-              containerPort: {{ .Values.api.service.port }}
+              containerPort: {{ .Values.api.service.port | int }}
               protocol: TCP
           {{- with .Values.api.livenessProbe }}
           livenessProbe:
