@@ -127,11 +127,11 @@ celery:
       # periodSeconds: 20
       # timeoutSeconds: 30
       # failureThreshold: 3
-    readinessProbe:
-      exec:
-        command:
-          - /api/middleware-api/middleware-api
-          - worker-health
+    # readinessProbe:
+    #   exec:
+    #     command:
+    #       - /api/middleware-api/middleware-api
+    #       - worker-health
       # initialDelaySeconds: 5
       # periodSeconds: 10
       # timeoutSeconds: 10
