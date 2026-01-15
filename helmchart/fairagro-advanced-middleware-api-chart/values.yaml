@@ -80,11 +80,11 @@ api:
   livenessProbe:
     httpGet:
       path: /v1/liveness
-      port: http
+      port: "http"
   readinessProbe:
     httpGet:
       path: /v1/health
-      port: http
+      port: "http"
   resources: {}
   volumes: []
   volumeMounts: []
