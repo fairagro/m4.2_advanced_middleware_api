@@ -25,9 +25,9 @@ api:
           - chart-example.local
 
 celery:
+  image:
+    repository: fairagro-advanced-middleware-api
+    tag: test
+    imagePullPolicy: Never
   worker:
-    image:
-      repository: fairagro-advanced-middleware-api
-      tag: test
-      imagePullPolicy: Never
     concurrency: 1
