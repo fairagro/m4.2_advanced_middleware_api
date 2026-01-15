@@ -1,6 +1,7 @@
 {{- if .Values.rabbitmq.enabled }}
-{{- $secretName := default (printf "%s-rabbitmq-auth" (include "fairagro-advanced-middleware-api-chart.fullname" .)) .Values.rabbitmq.auth.existingSecret }}
-{{- if not .Values.rabbitmq.auth.existingSecret }}
+{{- $rabbitAuth := default (dict) .Values.rabbitmq.auth }}
+{{- $secretName := default (printf "%s-rabbitmq-auth" (include "fairagro-advanced-middleware-api-chart.fullname" .)) $rabbitAuth.existingSecret }}
+{{- if not $rabbitAuth.existingSecret }}
 apiVersion: v1
 kind: Secret
 metadata:
@@ -10,9 +11,9 @@ metadata:
     app.kubernetes.io/component: rabbitmq
 type: Opaque
 stringData:
-  username: {{ default "guest" .Values.rabbitmq.auth.username | quote }}
-  password: {{ default "guest" .Values.rabbitmq.auth.password | quote }}
-  erlang_cookie: {{ default "" .Values.rabbitmq.auth.erlang_cookie | quote }}
+  username: {{ default "guest" $rabbitAuth.username | quote }}
+  password: {{ default "guest" $rabbitAuth.password | quote }}
+  erlang_cookie: {{ default "" $rabbitAuth.erlang_cookie | quote }}
 ---
 {{- end }}
 apiVersion: apps/v1
