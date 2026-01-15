@@ -122,30 +122,20 @@ celery:
       name: ""
     livenessProbe:
       exec:
-        command:
-          - /api/middleware-api/middleware-api
-          - celery
-          - -A
-          - middleware.api.celery_app
-          - inspect
-          - ping
-          - -d
-          - celery@$HOSTNAME
-          - -t
-          - "5"
-      initialDelaySeconds: 25
-      periodSeconds: 20
-      timeoutSeconds: 30
-      failureThreshold: 3
+        command: ["true"]
+      # initialDelaySeconds: 25
+      # periodSeconds: 20
+      # timeoutSeconds: 30
+      # failureThreshold: 3
     readinessProbe:
       exec:
         command:
           - /api/middleware-api/middleware-api
           - worker-health
-      initialDelaySeconds: 5
-      periodSeconds: 10
-      timeoutSeconds: 10
-      failureThreshold: 3
+      # initialDelaySeconds: 5
+      # periodSeconds: 10
+      # timeoutSeconds: 10
+      # failureThreshold: 3
     podAnnotations: {}
     podLabels: {}
     podSecurityContext: {}
