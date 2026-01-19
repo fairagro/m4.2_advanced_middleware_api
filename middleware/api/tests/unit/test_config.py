@@ -7,6 +7,7 @@ Tests cover:
 - YAML configuration file loading
 """
 
+import textwrap
 from pathlib import Path
 from typing import Any
 
@@ -115,17 +116,21 @@ def test_config_from_yaml_file_not_found() -> None:
 def test_config_from_yaml_file_success(tmp_path: Path) -> None:
     """Test loading config from a valid file."""
     config_file = tmp_path / "config.yaml"
-    config_file.write_text(f"""
-log_level: DEBUG
-git_repo:
-    url: {tmp_path.as_uri()}
-  group: my-group
-celery:
-  broker_url: memory://
-  result_backend: cache+memory://
-        """)
+    config_yaml = textwrap.dedent(
+        f"""
+        log_level: DEBUG
+        git_repo:
+          url: {tmp_path.as_uri()}
+          group: my-group
+          path: {tmp_path}
+        celery:
+          broker_url: memory://
+          result_backend: cache+memory://
+        """
+    )
+    config_file.write_text(config_yaml)
 
     config = Config.from_yaml_file(config_file)
     assert config.log_level == "DEBUG"
     assert config.git_repo is not None
-    assert config.git_repo.url == "file:///tmp"
+    assert config.git_repo.url == tmp_path.as_uri()
