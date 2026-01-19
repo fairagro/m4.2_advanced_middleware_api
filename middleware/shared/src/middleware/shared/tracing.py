@@ -10,11 +10,13 @@ from collections.abc import Sequence
 from typing import TYPE_CHECKING
 
 from opentelemetry import trace
-from opentelemetry._logs import set_logger_provider
-from opentelemetry.exporter.otlp.proto.http._log_exporter import OTLPLogExporter
-from opentelemetry.exporter.otlp.proto.http.trace_exporter import OTLPSpanExporter
-from opentelemetry.sdk._logs import LoggerProvider, LoggingHandler
-from opentelemetry.sdk._logs.export import BatchLogRecordProcessor, ConsoleLogRecordExporter
+from opentelemetry.logs import set_logger_provider
+from opentelemetry.exporter.otlp.proto.http.log_exporter import OTLPLogExporter
+from opentelemetry.sdk.logs import LoggerProvider, LoggingHandler
+from opentelemetry.sdk.logs.export import (
+    BatchLogRecordProcessor,
+    ConsoleLogRecordExporter,
+)
 from opentelemetry.sdk.resources import Resource
 from opentelemetry.sdk.trace import ReadableSpan, TracerProvider
 from opentelemetry.sdk.trace.export import BatchSpanProcessor, SimpleSpanProcessor, SpanExporter, SpanExportResult
@@ -111,6 +113,7 @@ def initialize_tracing(
 
 def initialize_logging(
     service_name: str = "middleware-api",
+    service_version: str = "0.0.0",
     otlp_endpoint: str | None = None,
     log_console: bool = False,
 ) -> LoggerProvider:
@@ -119,10 +122,11 @@ def initialize_logging(
 
     Args:
         service_name: The service name for log records.
+        service_version: The service version for log records.
         otlp_endpoint: Optional OTLP endpoint URL (e.g. http://signoz:4318).
         log_console: Whether to also export logs to console via OTLP SDK exporter.
     """
-    resource = Resource.create({"service.name": service_name, "service.version": "0.0.0"})
+    resource = Resource.create({"service.name": service_name, "service.version": service_version})
     logger_provider = LoggerProvider(resource=resource)
 
     if otlp_endpoint:
