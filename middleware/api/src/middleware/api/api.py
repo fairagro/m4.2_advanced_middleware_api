@@ -20,6 +20,8 @@ from cryptography.x509.extensions import ExtensionNotFound
 from cryptography.x509.oid import NameOID
 from fastapi import Depends, FastAPI, HTTPException, Request, Response
 from fastapi.responses import JSONResponse
+from opentelemetry.sdk._logs import LoggerProvider
+from opentelemetry.sdk.trace import TracerProvider
 from pydantic import ValidationError
 
 from middleware.shared.api_models.models import (
@@ -104,6 +106,8 @@ class Api:
 
         """
         self._config = app_config
+        self._tracer_provider: TracerProvider | None = None
+        self._logger_provider: LoggerProvider | None = None
         logger.debug("API configuration: %s", self._config.model_dump())
 
         # Initialize OpenTelemetry tracing with optional OTLP endpoint
@@ -114,7 +118,7 @@ class Api:
             log_console_spans=self._config.otel_log_console_spans,
         )
         # Initialize OTEL log export if configured
-        initialize_logging(service_name="middleware-api", otlp_endpoint=otlp_endpoint)
+        self._logger_provider = initialize_logging(service_name="middleware-api", otlp_endpoint=otlp_endpoint)
 
         self._app = FastAPI(
             title="FAIR Middleware API",
@@ -124,6 +128,8 @@ class Api:
 
         # Instrument the FastAPI application with OpenTelemetry
         instrument_app(self._app)
+
+        self._register_shutdown_handlers()
 
         self._setup_routes()
         self._setup_exception_handlers()
@@ -137,6 +143,22 @@ class Api:
 
         """
         return self._app
+
+    def _register_shutdown_handlers(self) -> None:
+        """Register shutdown hook to flush telemetry providers."""
+
+        @self._app.on_event("shutdown")
+        async def _shutdown_event() -> None:  # pragma: no cover - lifecycle hook
+            if self._tracer_provider is not None:
+                try:
+                    self._tracer_provider.shutdown()
+                except Exception as exc:  # pragma: no cover - best-effort cleanup
+                    logger.warning("Failed to shutdown tracer provider: %s", exc)
+            if self._logger_provider is not None:
+                try:
+                    self._logger_provider.shutdown()
+                except Exception as exc:  # pragma: no cover - best-effort cleanup
+                    logger.warning("Failed to shutdown logger provider: %s", exc)
 
     def _validate_client_cert(self, request: Request) -> x509.Certificate | None:
         """Extract and parse client certificate from request headers.
