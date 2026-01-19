@@ -42,6 +42,21 @@ openssl req -x509 -nodes -days 365 -newkey rsa:2048 \
 We also need a CA certificate and a client key/certificate pair for mTLS:
 
 ```bash
+cat > helmchart/fairagro-advanced-middleware-api-chart/client_ext.conf <<EOF
+[ client_ext ]
+extendedKeyUsage = critical,clientAuth
+keyUsage = digitalSignature
+1.3.6.1.4.1.64609.1.1 = ASN1:SEQUENCE:custom_strings
+
+[ custom_strings ]
+s1 = UTF8:bonares
+s2 = UTF8:edal
+s3 = UTF8:edaphobase
+s4 = UTF8:openagrar
+s5 = UTF8:publisso
+s6 = UTF8:thunen_atlas
+EOF
+
 openssl genrsa -out helmchart/fairagro-advanced-middleware-api-chart/ca.key 2048
 openssl req -x509 -new -nodes \
     -key helmchart/fairagro-advanced-middleware-api-chart/ca.key \
@@ -59,7 +74,9 @@ openssl x509 -req \
     -CAkey helmchart/fairagro-advanced-middleware-api-chart/ca.key \
     -CAcreateserial \
     -out helmchart/fairagro-advanced-middleware-api-chart/client.crt \
-    -days 365 -sha256
+    -days 365 -sha256 \
+    -extfile helmchart/fairagro-advanced-middleware-api-chart/client_ext.conf \
+    -extensions client_ext
 ```
 
 ### Installation
