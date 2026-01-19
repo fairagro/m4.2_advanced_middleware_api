@@ -55,8 +55,8 @@ def config(oid: x509.ObjectIdentifier, known_rdis: list[str]) -> Config:
     """Provide a test Config instance with dummy values."""
     return Config(
         log_level="DEBUG",
-        known_rdis=known_rdis,
         client_auth_oid=oid,
+        known_rdis=known_rdis,
         gitlab_api=GitlabApiConfig(
             url=HttpUrl("http://localhost:8080"),
             token=SecretStr("test-token"),
