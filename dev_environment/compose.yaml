@@ -1,7 +1,7 @@
 services:
   postgres:
     image: postgres:15
-    restart: always
+    restart: unless-stopped
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-postgres}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
@@ -44,7 +44,7 @@ services:
           PGDATABASE=edaphobase psql
 
         echo "Database initialization complete."
-    restart: "no"
+    restart: unless-stopped
 
   sql_to_arc:
     image: sql_to_arc:latest
@@ -66,7 +66,7 @@ services:
       - ./config.yaml:/etc/sql_to_arc/config.yaml:ro
     command: ["/middleware/sql_to_arc/sql_to_arc", "-c", "/etc/sql_to_arc/config.yaml"]
     # command: sleep 3600
-    restart: "no"
+    restart: unless-stopped
 
   rabbitmq:
     image: rabbitmq:3-management
@@ -81,7 +81,7 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
-    restart: "no"
+    restart: unless-stopped
 
   redis:
     image: redis:7
@@ -92,7 +92,7 @@ services:
       interval: 5s
       timeout: 3s
       retries: 5
-    restart: "no"
+    restart: unless-stopped
 
   celery-worker:
     image: middleware-api:latest
@@ -122,7 +122,7 @@ services:
       "worker",
       "--loglevel=info",
       "--concurrency=8",]
-    restart: "no"
+    restart: unless-stopped
 
   middleware-api:
     image: middleware-api:latest
@@ -147,7 +147,7 @@ services:
     # Run uvicorn directly (default command of the binary runs uvicorn)
     command: ["/api/middleware-api/middleware-api", "--host", "0.0.0.0", "--port", "8000"]
     # command: sleep 3600
-    restart: "no"
+    restart: unless-stopped
 
 # secrets:
 #   client_key:
