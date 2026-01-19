@@ -30,7 +30,7 @@ from middleware.shared.api_models.models import (
     LivenessResponse,
     WhoamiResponse,
 )
-from middleware.shared.tracing import initialize_tracing
+from middleware.shared.tracing import initialize_logging, initialize_tracing
 
 from .celery_app import celery_app
 from .config import Config
@@ -113,6 +113,8 @@ class Api:
             otlp_endpoint=otlp_endpoint,
             log_console_spans=self._config.otel_log_console_spans,
         )
+        # Initialize OTEL log export if configured
+        initialize_logging(service_name="middleware-api", otlp_endpoint=otlp_endpoint)
 
         self._app = FastAPI(
             title="FAIR Middleware API",
