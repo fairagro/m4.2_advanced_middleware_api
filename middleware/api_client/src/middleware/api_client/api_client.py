@@ -1,5 +1,6 @@
 """Client for the FAIRagro Middleware API."""
 
+import asyncio
 import json
 import logging
 import ssl
@@ -165,6 +166,16 @@ class ApiClient:
             logger.error(error_msg)
             raise ApiClientError(error_msg) from e
 
+    async def _get(self, path: str) -> Any:
+        """Send a GET request to the API."""
+        client = self._get_client()
+        try:
+            resp = await client.get(path)
+            resp.raise_for_status()
+            return resp.json()
+        except httpx.HTTPError as e:
+            raise ApiClientError(f"GET request failed: {e}") from e
+
     async def create_or_update_arcs(
         self,
         rdi: str,
@@ -192,14 +203,37 @@ class ApiClient:
 
         request = CreateOrUpdateArcsRequest(rdi=rdi, arcs=serialized_arcs)
         logger.debug("Request payload: %s", json.dumps(request.model_dump(), indent=2))
+
+        # 1. Submit task
         result = await self._post("/v1/arcs", request)
-        response = CreateOrUpdateArcsResponse.model_validate(result)
-        logger.info(
-            "Successfully created/updated %d ARCs for RDI: %s",
-            len(response.arcs),
-            response.rdi,
-        )
-        return response
+
+        task_id = result.get("task_id")
+        if not task_id:
+            raise ApiClientError("No task_id returned from API")
+
+        logger.info("Task submitted, ID: %s. Polling for results...", task_id)
+
+        # 2. Poll for results
+        while True:
+            await asyncio.sleep(1.0)  # Poll every second
+            status_response = await self._get(f"/v1/tasks/{task_id}")
+            status = status_response.get("status")
+
+            if status == "SUCCESS":
+                result_data = status_response.get("result")
+                response = CreateOrUpdateArcsResponse.model_validate(result_data)
+                logger.info(
+                    "Successfully created/updated %d ARCs for RDI: %s",
+                    len(response.arcs),
+                    response.rdi,
+                )
+                return response
+
+            if status == "FAILURE":
+                error_msg = status_response.get("error", "Unknown error")
+                raise ApiClientError(f"Task failed: {error_msg}")
+
+            # continue polling if PENDING, STARTED, RETRY etc.
 
     async def aclose(self) -> None:
         """Close the underlying HTTP client connection.

@@ -1,7 +1,7 @@
 services:
   postgres:
     image: postgres:15
-    restart: always
+    restart: unless-stopped
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-postgres}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
@@ -44,7 +44,7 @@ services:
           PGDATABASE=edaphobase psql
 
         echo "Database initialization complete."
-    restart: "no"
+    restart: unless-stopped
 
   sql_to_arc:
     image: sql_to_arc:latest
@@ -66,7 +66,63 @@ services:
       - ./config.yaml:/etc/sql_to_arc/config.yaml:ro
     command: ["/middleware/sql_to_arc/sql_to_arc", "-c", "/etc/sql_to_arc/config.yaml"]
     # command: sleep 3600
-    restart: "no"
+    restart: unless-stopped
+
+  rabbitmq:
+    image: rabbitmq:3-management
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    environment:
+      - RABBITMQ_DEFAULT_USER
+      - RABBITMQ_DEFAULT_PASS
+    healthcheck:
+      test: ["CMD", "rabbitmqctl", "status"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  redis:
+    image: redis:7
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    restart: unless-stopped
+
+  celery-worker:
+    image: middleware-api:latest
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.api
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      middleware-api:
+        condition: service_started
+    environment:
+      - MIDDLEWARE_API_CONFIG=/run/secrets/middleware-api-config
+      - CELERY_BROKER_URL
+      - CELERY_RESULT_BACKEND
+      - GITLAB_API_TOKEN
+      - GIT_REPO_TOKEN
+    volumes:
+      - ./middleware-api-config.yaml:/run/secrets/middleware-api-config:ro
+    # Command to run celery worker
+    command: [
+      "/api/middleware-api/middleware-api",
+      "celery",
+      "-A", "middleware.api.celery_app",
+      "worker",
+      "--loglevel=info",
+      "--concurrency=8",]
+    restart: unless-stopped
 
   middleware-api:
     image: middleware-api:latest
@@ -76,17 +132,22 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
     ports:
       - "8000:8000"
     environment:
-      - GITLAB_API_TOKEN
-      - GIT_REPO_TOKEN
+      - CELERY_BROKER_URL
+      - CELERY_RESULT_BACKEND
       - MIDDLEWARE_API_CONFIG=/run/secrets/middleware-api-config
-      - GUNICORN_WORKERS=4  # Number of worker processes for parallel requests
-      - GUNICORN_LOG_LEVEL=info
     volumes:
       - ./middleware-api-config.yaml:/run/secrets/middleware-api-config:ro
-    restart: "no"
+    # Run uvicorn directly (default command of the binary runs uvicorn)
+    command: ["/api/middleware-api/middleware-api", "--host", "0.0.0.0", "--port", "8000"]
+    # command: sleep 3600
+    restart: unless-stopped
 
 # secrets:
 #   client_key:

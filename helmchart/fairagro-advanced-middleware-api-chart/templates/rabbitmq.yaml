@@ -1,0 +1,94 @@
+{{- if .Values.rabbitmq.enabled }}
+{{- $rabbitAuth := default (dict) .Values.rabbitmq.auth }}
+{{- $secretName := default (printf "%s-rabbitmq-auth" (include "fairagro-advanced-middleware-api-chart.fullname" .)) $rabbitAuth.existingSecret }}
+{{- if not $rabbitAuth.existingSecret }}
+apiVersion: v1
+kind: Secret
+metadata:
+  name: {{ $secretName }}
+  labels:
+    {{- include "fairagro-advanced-middleware-api-chart.labels" . | nindent 4 }}
+    app.kubernetes.io/component: rabbitmq
+type: Opaque
+stringData:
+  username: {{ default "guest" $rabbitAuth.username | quote }}
+  password: {{ default "guest" $rabbitAuth.password | quote }}
+  erlang_cookie: {{ default "" $rabbitAuth.erlang_cookie | quote }}
+---
+{{- end }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "fairagro-advanced-middleware-api-chart.fullname" . }}-rabbitmq
+  labels:
+    {{- include "fairagro-advanced-middleware-api-chart.labels" . | nindent 4 }}
+    app.kubernetes.io/component: rabbitmq
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: {{ include "fairagro-advanced-middleware-api-chart.name" . }}-rabbitmq
+      app.kubernetes.io/instance: {{ .Release.Name }}
+  template:
+    metadata:
+      labels:
+        {{- include "fairagro-advanced-middleware-api-chart.labels" . | nindent 8 }}
+        app.kubernetes.io/name: {{ include "fairagro-advanced-middleware-api-chart.name" . }}-rabbitmq
+        app.kubernetes.io/component: rabbitmq
+        app.kubernetes.io/instance: {{ .Release.Name }}
+    spec:
+      containers:
+        - name: rabbitmq
+          image: {{ .Values.rabbitmq.image | quote }}
+          ports:
+            - containerPort: {{ .Values.rabbitmq.service.port }}
+              name: amqp
+            - containerPort: {{ .Values.rabbitmq.service.managementPort }}
+              name: management
+          env:
+            - name: RABBITMQ_DEFAULT_USER
+              valueFrom:
+                secretKeyRef:
+                  name: {{ $secretName }}
+                  key: username
+            - name: RABBITMQ_DEFAULT_PASS
+              valueFrom:
+                secretKeyRef:
+                  name: {{ $secretName }}
+                  key: password
+            - name: RABBITMQ_ERLANG_COOKIE
+              valueFrom:
+                secretKeyRef:
+                  name: {{ $secretName }}
+                  key: erlang_cookie
+          readinessProbe:
+            tcpSocket:
+              port: amqp
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          livenessProbe:
+            tcpSocket:
+              port: amqp
+            initialDelaySeconds: 10
+            periodSeconds: 20
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "fairagro-advanced-middleware-api-chart.fullname" . }}-rabbitmq
+  labels:
+    {{- include "fairagro-advanced-middleware-api-chart.labels" . | nindent 4 }}
+    app.kubernetes.io/component: rabbitmq
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/name: {{ include "fairagro-advanced-middleware-api-chart.name" . }}-rabbitmq
+    app.kubernetes.io/instance: {{ .Release.Name }}
+  ports:
+    - name: amqp
+      port: {{ .Values.rabbitmq.service.port }}
+      targetPort: amqp
+    - name: management
+      port: {{ .Values.rabbitmq.service.managementPort }}
+      targetPort: management
+{{- end }}

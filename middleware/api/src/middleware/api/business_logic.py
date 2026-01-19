@@ -50,21 +50,6 @@ class BusinessLogic:
         self._store = store
         self._tracer = trace.get_tracer(__name__)
 
-    def check_health(self) -> bool:
-        """Check if the backend systems are healthy.
-
-        Returns:
-            bool: True if healthy, False otherwise.
-        """
-        with self._tracer.start_as_current_span("check_health") as span:
-            is_healthy = self._store.check_health()
-            span.set_attribute("is_healthy", is_healthy)
-            if is_healthy:
-                logger.debug("Health check passed.")
-            else:
-                logger.error("Health check failed.")
-            return is_healthy
-
     async def _create_arc_from_rocrate(self, rdi: str, arc_dict: dict) -> ArcResponse:
         """Create an ARC from RO-Crate JSON with tracing."""
         with self._tracer.start_as_current_span(

@@ -54,10 +54,17 @@ app.kubernetes.io/instance: {{ .Release.Name }}
 Create the name of the service account to use
 */}}
 {{- define "fairagro-advanced-middleware-api-chart.serviceAccountName" -}}
-{{- if .Values.serviceAccount.create }}
-{{- default (include "fairagro-advanced-middleware-api-chart.fullname" .) .Values.serviceAccount.name }}
+{{- default (include "fairagro-advanced-middleware-api-chart.fullname" .) .Values.api.serviceAccount.name }}
+{{- end }}
+
+{{/*
+Create the name of the Celery worker service account to use
+*/}}
+{{- define "fairagro-advanced-middleware-api-chart.celeryServiceAccountName" -}}
+{{- if .Values.celery.worker.serviceAccount.name }}
+{{- .Values.celery.worker.serviceAccount.name }}
 {{- else }}
-{{- default "default" .Values.serviceAccount.name }}
+{{- printf "%s-celery-worker" (include "fairagro-advanced-middleware-api-chart.fullname" .) }}
 {{- end }}
 {{- end }}
 
@@ -65,9 +72,54 @@ Create the name of the service account to use
 Create the name of the CA TLS secret
 */}}
 {{- define "fairagro-advanced-middleware-api-chart.caTlsSecretName" -}}
-{{- if .Values.tls.caTlsSecretName }}
-{{- .Values.tls.caTlsSecretName }}
+{{- if .Values.api.tls.caTlsSecretName }}
+{{- .Values.api.tls.caTlsSecretName }}
 {{- else }}
 {{- include "fairagro-advanced-middleware-api-chart.fullname" . }}-ca-secret
 {{- end }}
+{{- end }}
+
+{{/*
+Compute Celery broker URL based on enabled RabbitMQ or provided override.
+*/}}
+{{- define "fairagro-advanced-middleware-api-chart.celeryBrokerUrl" -}}
+{{- $fullname := include "fairagro-advanced-middleware-api-chart.fullname" . -}}
+{{- $brokerOverride := .Values.celery.brokerUrl -}}
+{{- if .Values.rabbitmq.enabled -}}
+	{{- $rabbitAuth := default (dict) .Values.rabbitmq.auth -}}
+	{{- $user := default "" $rabbitAuth.username -}}
+	{{- $pass := default "" $rabbitAuth.password -}}
+	{{- $existing := default "" $rabbitAuth.existingSecret -}}
+	{{- if and $existing (or (eq $user "") (eq $pass "")) -}}
+		{{- required "Provide rabbitmq.auth.username/password when rabbitmq.auth.existingSecret is set, or set celery.brokerUrl" $brokerOverride -}}
+	{{- else -}}
+		{{- $u := default "guest" $user -}}
+		{{- $p := default "guest" $pass -}}
+		{{- printf "amqp://%s:%s@%s-rabbitmq:5672//" $u $p $fullname -}}
+	{{- end -}}
+{{- else -}}
+{{- required "Set celery.brokerUrl when rabbitmq.enabled=false" $brokerOverride -}}
+{{- end -}}
+{{- end }}
+
+{{/*
+Compute Celery result backend based on enabled Redis or provided override.
+*/}}
+{{- define "fairagro-advanced-middleware-api-chart.celeryResultBackend" -}}
+{{- $fullname := include "fairagro-advanced-middleware-api-chart.fullname" . -}}
+{{- $backendOverride := default .Values.celery.resultBackend .Values.resultBackend -}}
+{{- if .Values.redis.enabled -}}
+	{{- $redisAuth := default (dict) .Values.redis.auth -}}
+	{{- $pass := default "" $redisAuth.password -}}
+	{{- $existing := default "" $redisAuth.existingSecret -}}
+	{{- if and $existing (eq $pass "") -}}
+		{{- required "Provide redis.auth.password when redis.auth.existingSecret is set, or set resultBackend" $backendOverride -}}
+	{{- else if $pass -}}
+		{{- printf "redis://:%s@%s-redis:6379/0" $pass $fullname -}}
+	{{- else -}}
+		{{- printf "redis://%s-redis:6379/0" $fullname -}}
+	{{- end -}}
+{{- else -}}
+{{- required "Set resultBackend when redis.enabled=false" $backendOverride -}}
+{{- end -}}
 {{- end }}

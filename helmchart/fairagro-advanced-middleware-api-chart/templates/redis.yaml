@@ -1,0 +1,85 @@
+{{- if .Values.redis.enabled }}
+{{- $redisAuth := default (dict) .Values.redis.auth }}
+{{- $redisSecret := default (printf "%s-redis-auth" (include "fairagro-advanced-middleware-api-chart.fullname" .)) $redisAuth.existingSecret }}
+{{- $redisPassword := default "" $redisAuth.password }}
+{{- if and (not $redisAuth.existingSecret) $redisPassword }}
+apiVersion: v1
+kind: Secret
+metadata:
+  name: {{ $redisSecret }}
+  labels:
+    {{- include "fairagro-advanced-middleware-api-chart.labels" . | nindent 4 }}
+    app.kubernetes.io/component: redis
+type: Opaque
+stringData:
+  password: {{ $redisPassword | quote }}
+---
+{{- end }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "fairagro-advanced-middleware-api-chart.fullname" . }}-redis
+  labels:
+    {{- include "fairagro-advanced-middleware-api-chart.labels" . | nindent 4 }}
+    app.kubernetes.io/component: redis
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: {{ include "fairagro-advanced-middleware-api-chart.name" . }}-redis
+      app.kubernetes.io/instance: {{ .Release.Name }}
+  template:
+    metadata:
+      labels:
+        {{- include "fairagro-advanced-middleware-api-chart.labels" . | nindent 8 }}
+        app.kubernetes.io/name: {{ include "fairagro-advanced-middleware-api-chart.name" . }}-redis
+        app.kubernetes.io/component: redis
+        app.kubernetes.io/instance: {{ .Release.Name }}
+    spec:
+      containers:
+        - name: redis
+          image: {{ .Values.redis.image | quote }}
+{{- if or $redisAuth.existingSecret $redisPassword }}
+          env:
+            - name: REDIS_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ $redisSecret }}
+                  key: password
+          command:
+            - /bin/sh
+          args:
+            - -c
+            - redis-server --requirepass "$REDIS_PASSWORD"
+{{- end }}
+          ports:
+            - containerPort: {{ .Values.redis.service.port }}
+              name: redis
+          readinessProbe:
+            tcpSocket:
+              port: redis
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          livenessProbe:
+            tcpSocket:
+              port: redis
+            initialDelaySeconds: 10
+            periodSeconds: 20
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "fairagro-advanced-middleware-api-chart.fullname" . }}-redis
+  labels:
+    {{- include "fairagro-advanced-middleware-api-chart.labels" . | nindent 4 }}
+    app.kubernetes.io/component: redis
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/name: {{ include "fairagro-advanced-middleware-api-chart.name" . }}-redis
+    app.kubernetes.io/instance: {{ .Release.Name }}
+  ports:
+    - name: redis
+      port: {{ .Values.redis.service.port }}
+      targetPort: redis
+{{- end }}

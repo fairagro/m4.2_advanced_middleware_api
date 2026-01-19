@@ -19,12 +19,13 @@ dev = [
   "pytest>=9.0.2",
   "pytest-asyncio>=1.1.0",
   "pytest-cov>=7.0.0",
+  "pytest-env>=1.2.0",
+  "pytest-mock>=3.10.0",
   "mypy>=1.19.0",
   "bandit>=1.7.0",
   "ruff>=0.14.8",
-  "types-pyyaml>=6.0.12.20250915",
   "pre-commit>=4.0.0",
-  "pytest-env>=1.2.0",
+  "respx>=0.20.0",
 ]
 
 [tool.uv.sources]

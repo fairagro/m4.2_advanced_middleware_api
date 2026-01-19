@@ -45,16 +45,33 @@ RUN uv pip install --system pyinstaller
 # Build standalone binary with PyInstaller
 RUN pyinstaller --onedir \
     --name middleware-api \
-    --hidden-import "gunicorn.glogging" \
+    --hidden-import "celery.app.amqp" \
+    --hidden-import "celery.app.control" \
+    --hidden-import "celery.app.events" \
+    --hidden-import "celery.app.log" \
+    --hidden-import "celery.apps.worker" \
+    --hidden-import "celery.backends.redis" \
+    --hidden-import "celery.concurrency.prefork" \
+    --hidden-import "celery.events.state" \
+    --hidden-import "celery.fixups" \
+    --hidden-import "celery.fixups.django" \
+    --hidden-import "celery.loaders.app" \
+    --hidden-import "celery.worker.autoscale" \
+    --hidden-import "celery.worker.components" \
+    --hidden-import "celery.worker.consumer" \
+    --hidden-import "celery.worker.consumer.delayed_delivery" \
+    --hidden-import "celery.worker.strategy" \
+    --hidden-import "kombu.transport.pyamqp" \
     --hidden-import "uvicorn.workers" \
-    --copy-metadata requests \
-    --copy-metadata opentelemetry-instrumentation-requests \
-    --copy-metadata opentelemetry-instrumentation-fastapi \
-    --copy-metadata opentelemetry-instrumentation \
+    --copy-metadata celery \
     --copy-metadata opentelemetry-api \
+    --copy-metadata opentelemetry-instrumentation \
+    --copy-metadata opentelemetry-instrumentation-fastapi \
+    --copy-metadata opentelemetry-instrumentation-requests \
     --copy-metadata opentelemetry-sdk \
-    --add-data "$(python -c "import middleware.api; import os; print(os.path.join(os.path.dirname(middleware.api.__file__), 'gunicorn_config.py'))"):." \
-    $(python -c "import middleware.api; print(middleware.api.__file__.replace('__init__.py', 'main_gunicorn.py'))")
+    --copy-metadata requests \
+    --copy-metadata starlette \
+    $(python -c "import middleware.api; print(middleware.api.__file__.replace('__init__.py', 'main.py'))")
 
 
 # ---- Runtime Stage ----
@@ -70,7 +87,7 @@ ENV GUNICORN_LOG_LEVEL=info
 COPY --from=binary-builder /build/dist/middleware-api /api/middleware-api
 
 # Create non-root user and group and fix permissions
-RUN apk add --no-cache curl=8.14.1-r2 git=2.49.1-r0 \
+RUN apk add --no-cache curl=8.14.1-r2 git=2.49.1-r0 tzdata \
     && addgroup -S middleware && adduser -S middleware -G middleware \
     && chown -R middleware:middleware /api
 

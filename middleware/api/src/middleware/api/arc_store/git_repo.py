@@ -6,10 +6,12 @@ import http
 import logging
 import shutil
 import tempfile
+import time
 import urllib.error
 import urllib.request
+from collections.abc import Callable
 from pathlib import Path
-from typing import Annotated
+from typing import Annotated, TypeVar
 from urllib.parse import quote
 
 import git.cmd
@@ -33,6 +35,9 @@ class GitRepoConfig(BaseModel):
     user_name: Annotated[str, Field(description="Git user.name")] = "Middleware API"
     user_email: Annotated[str, Field(description="Git user.email")] = "middleware@fairagro.net"
     max_workers: Annotated[int, Field(description="Max threads for git operations")] = 5
+    command_timeout: Annotated[float | None, Field(description="Timeout (s) for git commands")] = None
+    http_low_speed_limit: Annotated[int | None, Field(description="http.lowSpeedLimit in bytes/sec")] = None
+    http_low_speed_time: Annotated[int | None, Field(description="http.lowSpeedTime in seconds")] = None
     cache_dir: Annotated[
         Path,
         Field(
@@ -68,6 +73,12 @@ class GitContextConfig(BaseModel):
     user_name: str | None
     user_email: str | None
     local_path: Path
+    command_timeout: float | None = None
+    http_low_speed_limit: int | None = None
+    http_low_speed_time: int | None = None
+
+
+_T = TypeVar("_T")
 
 
 class GitContext:
@@ -77,6 +88,39 @@ class GitContext:
         """Initialize GitContext."""
         self.config = config
         self.repo: Repo | None = None
+
+    def _run_git_command(self, action: str, func: Callable[..., _T], *args: object, **kwargs: object) -> _T:
+        """Run a git command with optional timeout and duration logging."""
+        if self.config.command_timeout is not None:
+            kwargs.setdefault("kill_after_timeout", self.config.command_timeout)
+
+        start = time.perf_counter()
+        try:
+            result = func(*args, **kwargs)
+            duration = time.perf_counter() - start
+            logger.info("Git %s succeeded in %.2fs", action, duration)
+            return result
+        except GitCommandError as exc:  # pragma: no cover - behavior validated indirectly
+            duration = time.perf_counter() - start
+            status = getattr(exc, "status", None)
+            status_msg = f" (status {status})" if status is not None else ""
+            logger.warning("Git %s failed after %.2fs%s: %s", action, duration, status_msg, exc)
+            raise
+
+    def _apply_repo_config(self) -> None:
+        """Apply user and HTTP tuning to the repository config."""
+        if not self.repo:
+            return
+
+        with self.repo.config_writer() as cw:
+            if self.config.user_name:
+                cw.set_value("user", "name", self.config.user_name)
+            if self.config.user_email:
+                cw.set_value("user", "email", self.config.user_email)
+            if self.config.http_low_speed_limit is not None:
+                cw.set_value("http", "lowSpeedLimit", str(self.config.http_low_speed_limit))
+            if self.config.http_low_speed_time is not None:
+                cw.set_value("http", "lowSpeedTime", str(self.config.http_low_speed_time))
 
     def _ensure_path(self) -> Path:
         repo_path = self.config.local_path
@@ -92,9 +136,9 @@ class GitContext:
             self.repo.create_remote("origin", url)
 
         try:
-            self.repo.remotes.origin.fetch()
+            self._run_git_command("fetch", self.repo.remotes.origin.fetch)
             remote_ref = f"origin/{self.config.branch}"
-            self.repo.git.reset("--hard", remote_ref)
+            self._run_git_command("reset", self.repo.git.reset, "--hard", remote_ref)
         except GitCommandError:
             logger.warning("Failed to sync repo at %s. Assuming clean state needed.", repo_path)
 
@@ -125,17 +169,18 @@ class GitContext:
             if (repo_path / ".git").exists():
                 self._sync_existing_repo(repo_path, url)
             else:
-                self.repo = Repo.clone_from(url, repo_path, branch=self.config.branch)
+                self.repo = self._run_git_command(
+                    "clone",
+                    Repo.clone_from,
+                    url,
+                    repo_path,
+                    branch=self.config.branch,
+                )
         except GitCommandError:
             self._handle_repo_init_error(repo_path, url)
 
         # Configure user
-        if self.repo:
-            with self.repo.config_writer() as cw:
-                if self.config.user_name:
-                    cw.set_value("user", "name", self.config.user_name)
-                if self.config.user_email:
-                    cw.set_value("user", "email", self.config.user_email)
+        self._apply_repo_config()
 
         return self
 
@@ -163,7 +208,7 @@ class GitContext:
         self.repo.git.add(A=True)
         self.repo.index.commit(message)
         logger.info("Pushing changes to remote branch %s", self.config.branch)
-        self.repo.remotes.origin.push(self.config.branch)
+        self._run_git_command("push", self.repo.remotes.origin.push, self.config.branch)
 
 
 class GitRepo(ArcStore):
@@ -234,6 +279,9 @@ class GitRepo(ArcStore):
             user_name=self._config.user_name,
             user_email=self._config.user_email,
             local_path=local_path,
+            command_timeout=self._config.command_timeout,
+            http_low_speed_limit=self._config.http_low_speed_limit,
+            http_low_speed_time=self._config.http_low_speed_time,
         )
 
     async def _create_or_update(self, arc_id: str, arc: ARC) -> None:
@@ -317,8 +365,16 @@ class GitRepo(ArcStore):
 
         g = git.cmd.Git()
         try:
-            g.ls_remote(url)
+            start = time.perf_counter()
+            if self._config.command_timeout is not None:
+                g.ls_remote(url, kill_after_timeout=self._config.command_timeout)
+            else:
+                g.ls_remote(url)
+            duration = time.perf_counter() - start
+            logger.info("Git ls-remote for %s succeeded in %.2fs", arc_id, duration)
         except GitCommandError:
+            duration = time.perf_counter() - start
+            logger.warning("Git ls-remote for %s failed after %.2fs", arc_id, duration)
             return False
         else:
             return True

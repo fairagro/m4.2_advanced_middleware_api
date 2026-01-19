@@ -66,21 +66,33 @@ async def test_client_initialization_missing_ca_cert(test_config_dict: dict, tem
 async def test_create_or_update_arcs_success(client_config: Config) -> None:
     """Test successful create_or_update_arcs request."""
     # Mock the API response
-    mock_response = {
-        "client_id": "TestClient",
-        "message": "ARCs created successfully",
-        "rdi": "test-rdi",
-        "arcs": [
-            {
-                "id": "test-arc-123",
-                "status": "created",
-                "timestamp": "2024-01-01T12:00:00Z",
-            }
-        ],
+    # Mock the API response (Task submission)
+    task_response = {"task_id": "task-123", "status": "processing"}
+
+    # Mock the Task Status response
+    status_response = {
+        "task_id": "task-123",
+        "status": "SUCCESS",
+        "result": {
+            "client_id": "TestClient",
+            "message": "ARCs created successfully",
+            "rdi": "test-rdi",
+            "arcs": [
+                {
+                    "id": "test-arc-123",
+                    "status": "created",
+                    "timestamp": "2024-01-01T12:00:00Z",
+                }
+            ],
+        },
     }
 
-    route = respx.post(f"{client_config.api_url}/v1/arcs").mock(
-        return_value=httpx.Response(http.HTTPStatus.CREATED, json=mock_response)
+    route_post = respx.post(f"{client_config.api_url}/v1/arcs").mock(
+        return_value=httpx.Response(http.HTTPStatus.ACCEPTED, json=task_response)
+    )
+
+    route_get = respx.get(f"{client_config.api_url}/v1/tasks/task-123").mock(
+        return_value=httpx.Response(http.HTTPStatus.OK, json=status_response)
     )
 
     # Send request with ARC object
@@ -92,7 +104,8 @@ async def test_create_or_update_arcs_success(client_config: Config) -> None:
         )
 
     # Verify
-    assert route.called
+    assert route_post.called
+    assert route_get.called
     assert isinstance(response, CreateOrUpdateArcsResponse)
     assert response.rdi == "test-rdi"
     assert len(response.arcs) == 1
@@ -197,23 +210,31 @@ async def test_client_uses_certificates(test_config_dict: dict, test_cert_pem: t
 @respx.mock
 async def test_client_headers(client_config: Config) -> None:
     """Test that client sends correct headers."""
-    route = respx.post(f"{client_config.api_url}/v1/arcs").mock(
-        return_value=httpx.Response(
-            http.HTTPStatus.CREATED,
-            json={
-                "client_id": "test",
-                "message": "ok",
-                "rdi": "test",
-                "arcs": [],
-            },
-        )
+    task_response = {"task_id": "task-headers", "status": "processing"}
+    status_response = {
+        "task_id": "task-headers",
+        "status": "SUCCESS",
+        "result": {
+            "client_id": "test",
+            "message": "ok",
+            "rdi": "test",
+            "arcs": [],
+        },
+    }
+
+    route_post = respx.post(f"{client_config.api_url}/v1/arcs").mock(
+        return_value=httpx.Response(http.HTTPStatus.ACCEPTED, json=task_response)
+    )
+
+    respx.get(f"{client_config.api_url}/v1/tasks/task-headers").mock(
+        return_value=httpx.Response(http.HTTPStatus.OK, json=status_response)
     )
 
     async with ApiClient(client_config) as client:
         await client.create_or_update_arcs(rdi="test", arcs=[])
 
     # Verify headers
-    assert route.called
-    last_request = route.calls.last.request
+    assert route_post.called
+    last_request = route_post.calls.last.request
     assert last_request.headers["accept"] == "application/json"
     assert last_request.headers["content-type"] == "application/json"

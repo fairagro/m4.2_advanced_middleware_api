@@ -1,54 +1,21 @@
 """Unit tests for the FastAPI middleware API endpoints."""
 
 import http
+import unittest.mock
 from collections.abc import Callable
-from typing import Any
+from unittest.mock import MagicMock
 
 import pytest
+import redis
+import redis.exceptions
 from cryptography import x509
 from fastapi.testclient import TestClient
 
 from middleware.api.api import Api
-from middleware.api.business_logic import BusinessLogicError, InvalidJsonSemanticError
-from middleware.shared.api_models.models import ArcResponse, ArcStatus, CreateOrUpdateArcsResponse
-
-
-class SimpleBusinessLogicMock:
-    """Straight forward mock of BusinessLogic for testing purposes."""
-
-    def __init__(self, is_healthy: bool = True) -> None:
-        """Initialize the mock with a health status.
-
-        Args:
-            is_healthy: Whether the mock should report as healthy. Defaults to True.
-        """
-        self._is_healthy = is_healthy
-
-    def check_health(self) -> bool:
-        """Mock check_health."""
-        return self._is_healthy
-
-    async def create_or_update_arcs(self, rdi: str, _arcs: list[Any], client_id: str) -> CreateOrUpdateArcsResponse:
-        """Mock create_or_update_arcs that captures the RDI."""
-        return CreateOrUpdateArcsResponse(
-            client_id=client_id,
-            rdi=rdi,
-            message="ok",
-            arcs=[
-                ArcResponse(
-                    id="test-arc-id",
-                    status=ArcStatus.CREATED,
-                    timestamp="2025-01-01T00:00:00Z",
-                )
-            ],
-        )
 
 
 def test_whoami_success(client: TestClient, middleware_api: Api, cert: str) -> None:
     """Test the /v1/whoami endpoint with a valid certificate and accept header."""
-    # pylint: disable=protected-access
-    middleware_api.app.dependency_overrides[middleware_api._get_business_logic] = SimpleBusinessLogicMock
-
     r = client.get(
         "/v1/whoami",
         headers={"ssl-client-cert": cert, "ssl-client-verify": "SUCCESS", "accept": "application/json"},
@@ -80,9 +47,6 @@ def test_whoami_no_cert(client: TestClient) -> None:
 
 def test_whoami_invalid_cert(client: TestClient, middleware_api: Api) -> None:
     """Test the /v1/whoami endpoint with an invalid client certificate."""
-    # pylint: disable=protected-access
-    middleware_api.app.dependency_overrides[middleware_api._get_business_logic] = SimpleBusinessLogicMock
-
     r = client.get(
         "/v1/whoami",
         headers={"ssl-client-cert": "dummy cert", "ssl-client-verify": "SUCCESS", "accept": "application/json"},
@@ -102,48 +66,46 @@ def test_whoami_cert_verify_not_success(client: TestClient, cert: str, verify_st
     assert r.status_code == http.HTTPStatus.UNAUTHORIZED
 
 
-def test_health_check_success(client: TestClient, middleware_api: Api) -> None:
+def test_health_check_success(client: TestClient) -> None:
     """Test /v1/health success."""
-    # pylint: disable=protected-access
-    mock_logic = SimpleBusinessLogicMock(is_healthy=True)
-    middleware_api.app.dependency_overrides[middleware_api._get_business_logic] = lambda: mock_logic
+    # Mock Redis
+    mock_redis = MagicMock()
+    mock_redis.ping.return_value = True
 
-    r = client.get("/v1/health", headers={"accept": "application/json"})
-    assert r.status_code == http.HTTPStatus.OK
-    assert r.json() == {"status": "ok", "backend_reachable": True}
+    # Mock Celery connection
+    mock_conn = MagicMock()
 
-    middleware_api.app.dependency_overrides.clear()
+    with (
+        unittest.mock.patch("middleware.api.api.redis.from_url", return_value=mock_redis),
+        unittest.mock.patch("middleware.api.api.celery_app.connection_or_acquire") as mock_acquire,
+    ):
+        mock_acquire.return_value.__enter__.return_value = mock_conn
+
+        r = client.get("/v1/health", headers={"accept": "application/json"})
+        assert r.status_code == http.HTTPStatus.OK
+        assert r.json() == {
+            "status": "ok",
+            "redis_reachable": True,
+            "rabbitmq_reachable": True,
+        }
 
 
-def test_health_check_failure(client: TestClient, middleware_api: Api) -> None:
+def test_health_check_failure(client: TestClient) -> None:
     """Test /v1/health failure."""
-    # pylint: disable=protected-access
-    mock_logic = SimpleBusinessLogicMock(is_healthy=False)
-    middleware_api.app.dependency_overrides[middleware_api._get_business_logic] = lambda: mock_logic
-
-    r = client.get("/v1/health", headers={"accept": "application/json"})
-    assert r.status_code == http.HTTPStatus.SERVICE_UNAVAILABLE
-    assert r.json() == {"status": "error", "backend_reachable": False}
-
-    middleware_api.app.dependency_overrides.clear()
-
-
-def test_health_check_exception(client: TestClient, middleware_api: Api) -> None:
-    """Test /v1/health when logic raises exception."""
-
-    # pylint: disable=protected-access
-    class ExceptionMock(SimpleBusinessLogicMock):
-        def check_health(self) -> bool:
-            raise BusinessLogicError("Oops")
-
-    mock_logic = ExceptionMock()
-    middleware_api.app.dependency_overrides[middleware_api._get_business_logic] = lambda: mock_logic
-
-    r = client.get("/v1/health", headers={"accept": "application/json"})
-    assert r.status_code == http.HTTPStatus.SERVICE_UNAVAILABLE
-    assert r.json() == {"status": "error", "backend_reachable": False}
-
-    middleware_api.app.dependency_overrides.clear()
+    # Mock Redis failure
+    with (
+        unittest.mock.patch("middleware.api.api.redis.from_url", side_effect=redis.exceptions.RedisError("Redis down")),
+        unittest.mock.patch(
+            "middleware.api.api.celery_app.connection_or_acquire", side_effect=Exception("RabbitMQ down")
+        ),
+    ):
+        r = client.get("/v1/health", headers={"accept": "application/json"})
+        assert r.status_code == http.HTTPStatus.SERVICE_UNAVAILABLE
+        assert r.json() == {
+            "status": "error",
+            "redis_reachable": False,
+            "rabbitmq_reachable": False,
+        }
 
 
 # -------------------------------------------------------------------
@@ -152,91 +114,109 @@ def test_health_check_exception(client: TestClient, middleware_api: Api) -> None
 
 
 @pytest.mark.parametrize(
-    "arc_status, expected_http_status",
+    "expected_http_status",
     [
-        (ArcStatus.CREATED, http.HTTPStatus.CREATED),
-        (ArcStatus.UPDATED, http.HTTPStatus.OK),
+        (http.HTTPStatus.ACCEPTED),
     ],
 )
-def test_create_or_update_arcs_success(
-    client: TestClient, middleware_api: Api, cert: str, arc_status: ArcStatus, expected_http_status: int
-) -> None:
+def test_create_or_update_arcs_success(client: TestClient, cert: str, expected_http_status: int) -> None:
     """Test creating a new ARC via the /v1/arcs endpoint."""
+    # Mock the Celery task
+    mock_task = MagicMock()
+    mock_task.id = "task-123"
 
-    class BusinessLogicMock:  # pylint: disable=too-few-public-methods
-        """Service that always returns a created ARC."""
+    # Check where process_arc is imported in api.py. It is imported as: from .worker import process_arc
+    # We need to patch the one in api.py
+    with pytest.MonkeyPatch.context() as mp:
+        mock_process_arc = MagicMock()
+        mock_process_arc.delay.return_value = mock_task
+        mp.setattr("middleware.api.api.process_arc", mock_process_arc)
 
-        async def create_or_update_arcs(self, rdi: str, _arcs: list[Any], client_id: str) -> CreateOrUpdateArcsResponse:
-            """Mock create_or_update_arcs method."""
-            return CreateOrUpdateArcsResponse(
-                rdi=rdi,
-                client_id=client_id,
-                message="ok",
-                arcs=[
-                    ArcResponse(
-                        id="abc123",
-                        status=arc_status,
-                        timestamp="2025-01-01T00:00:00Z",
-                    )
-                ],
-            )
+        r = client.post(
+            "/v1/arcs",
+            headers={
+                "ssl-client-cert": cert,
+                "ssl-client-verify": "SUCCESS",
+                "content-type": "application/json",
+                "accept": "application/json",
+            },
+            json={"rdi": "rdi-1", "arcs": [{"dummy": "crate"}]},
+        )
+        assert r.status_code == expected_http_status
 
-    # pylint: disable=protected-access
-    middleware_api.app.dependency_overrides[middleware_api._get_business_logic] = BusinessLogicMock
 
+def test_create_or_update_arcs_invalid_cert_format(client: TestClient) -> None:
+    """Test error handling for invalid certificate format."""
     r = client.post(
         "/v1/arcs",
         headers={
-            "ssl-client-cert": cert,
+            "ssl-client-cert": "NOT%20A%20VALID%20CERT",  # Properly URL encoded but content invalid
             "ssl-client-verify": "SUCCESS",
             "content-type": "application/json",
             "accept": "application/json",
         },
         json={"rdi": "rdi-1", "arcs": [{"dummy": "crate"}]},
     )
-    assert r.status_code == expected_http_status
-    body = r.json()
-    assert body["client_id"] == "TestClient"
-    assert isinstance(body["arcs"], list)
-    assert body["arcs"][0]["status"] == arc_status.value
-    if arc_status == ArcStatus.CREATED:
-        assert r.headers.get("Location", "") != ""
-
-    middleware_api.app.dependency_overrides.clear()
+    assert r.status_code == http.HTTPStatus.BAD_REQUEST
+    assert "Certificate parsing error" in r.json()["detail"]
 
 
-def test_create_or_update_arcs_invalid_json_semantic(
-    client: TestClient,
-    cert: str,
-    middleware_api: Api,
-) -> None:
-    """Test error handling in the /v1/arcs endpoint."""
-
-    class BusinessLogicMock:  # pylint: disable=too-few-public-methods
-        """Service that always returns a created ARC."""
-
-        async def create_or_update_arcs(
-            self, _rdi: str, _arcs: list[Any], _client_id: str
-        ) -> CreateOrUpdateArcsResponse:
-            """Mock create_or_update_arcs method."""
-            raise InvalidJsonSemanticError("invalid JSON semantic")
-
+def test_create_or_update_arcs_no_cert_allowed(client: TestClient, middleware_api: Api) -> None:
+    """Test successful submission without cert when not required."""
     # pylint: disable=protected-access
-    middleware_api.app.dependency_overrides[middleware_api._get_business_logic] = BusinessLogicMock
+    # Disable client cert requirement
+    middleware_api._config.require_client_cert = False
 
-    r = client.post(
-        "/v1/arcs",
-        headers={
-            "ssl-client-cert": cert,
-            "ssl-client-verify": "SUCCESS",
-            "content-type": "application/json",
-            "accept": "application/json",
-        },
-        json={"rdi": "rdi-1", "arcs": [{"dummy": "crate"}]},
-    )
-    assert r.status_code == http.HTTPStatus.UNPROCESSABLE_ENTITY  # InvalidJSONSemantic by BusinessLogic
+    # Needs to be known RDI
+    middleware_api._config.known_rdis = ["rdi-1"]
 
-    middleware_api.app.dependency_overrides.clear()
+    # We must mock process_arc.delay since we expect success
+    mock_task = MagicMock()
+    mock_task.id = "task-no-cert"
+
+    with unittest.mock.patch("middleware.api.api.process_arc.delay", return_value=mock_task):
+        r = client.post(
+            "/v1/arcs",
+            headers={
+                "content-type": "application/json",
+                "accept": "application/json",
+            },
+            json={"rdi": "rdi-1", "arcs": [{"dummy": "crate"}]},
+        )
+        assert r.status_code == http.HTTPStatus.ACCEPTED
+        body = r.json()
+        assert body["task_id"] == "task-no-cert"
+
+    # Reset config
+    middleware_api._config.require_client_cert = True
+
+
+def test_get_task_status(client: TestClient) -> None:
+    """Test getting task status."""
+    mock_result = MagicMock()
+    mock_result.status = "SUCCESS"
+    mock_result.ready.return_value = True
+    mock_result.failed.return_value = False
+    mock_result.result = {"client_id": "test", "message": "ok", "rdi": "rdi-1", "arcs": []}
+
+    with pytest.MonkeyPatch.context() as mp:
+        mock_async_result = MagicMock(return_value=mock_result)
+        # Verify import path in api.py: from .celery_app import celery_app
+        mp.setattr("middleware.api.api.celery_app.AsyncResult", mock_async_result)
+
+        r = client.get(
+            "/v1/tasks/task-123",
+            headers={"accept": "application/json"},
+        )
+        assert r.status_code == http.HTTPStatus.OK
+        body = r.json()
+        assert body["task_id"] == "task-123"
+        assert body["status"] == "SUCCESS"
+        assert body["result"]["message"] == "ok"
+        assert body["result"]["client_id"] == "test"
+
+
+# Removed test_create_or_update_arcs_invalid_json_semantic as validation runs async now
 
 
 def test_create_or_update_arcs_invalid_body(client: TestClient, cert: str) -> None:
