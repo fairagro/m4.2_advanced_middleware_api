@@ -6,6 +6,7 @@ import pytest
 from pydantic import SecretStr, ValidationError
 
 from middleware.api_client.config import Config as ApiClientConfig
+from middleware.shared.config.config_base import OtelConfig
 from middleware.sql_to_arc.config import Config
 
 
@@ -15,6 +16,7 @@ def test_config_creation() -> None:
         api_url="https://api.example.com",
         client_cert_path=Path("/path/to/cert.pem"),
         client_key_path=Path("/path/to/key.pem"),
+        otel=OtelConfig(),
     )
 
     config = Config(
@@ -28,6 +30,7 @@ def test_config_creation() -> None:
         batch_size=10,
         api_client=api_client_config,
         log_level="INFO",
+        otel=OtelConfig(),
     )
 
     assert config.db_name == "test_db"
@@ -47,6 +50,7 @@ def test_config_with_defaults() -> None:
         api_url="https://api.example.com",
         client_cert_path=Path("/path/to/cert.pem"),
         client_key_path=Path("/path/to/key.pem"),
+        otel=OtelConfig(),
     )
 
     config = Config(
@@ -57,6 +61,7 @@ def test_config_with_defaults() -> None:
         rdi="edaphobase",
         rdi_url="https://edaphobase.org",
         api_client=api_client_config,
+        otel=OtelConfig(),
     )
 
     # Check defaults
@@ -70,6 +75,7 @@ def test_config_batch_size_validation() -> None:
         api_url="https://api.example.com",
         client_cert_path=Path("/path/to/cert.pem"),
         client_key_path=Path("/path/to/key.pem"),
+        otel=OtelConfig(),
     )
 
     with pytest.raises(ValidationError) as exc_info:
@@ -82,6 +88,7 @@ def test_config_batch_size_validation() -> None:
             rdi_url="https://edaphobase.org",
             batch_size=0,  # Invalid: must be > 0
             api_client=api_client_config,
+            otel=OtelConfig(),
         )
 
     # Verify the error message mentions batch_size
