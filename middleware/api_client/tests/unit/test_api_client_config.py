@@ -6,6 +6,7 @@ import pytest
 from pydantic import ValidationError
 
 from middleware.api_client.config import Config
+from middleware.shared.config.config_base import OtelConfig
 
 
 def test_config_creation_with_required_fields() -> None:
@@ -14,6 +15,7 @@ def test_config_creation_with_required_fields() -> None:
         api_url="https://api.example.com",
         client_cert_path=Path("/path/to/cert.pem"),
         client_key_path=Path("/path/to/key.pem"),
+        otel=OtelConfig(),
     )
 
     assert config.api_url == "https://api.example.com"
@@ -32,6 +34,7 @@ def test_config_with_all_fields() -> None:
         verify_ssl=False,
         follow_redirects=False,
         log_level="DEBUG",
+        otel=OtelConfig(),
     )
 
     assert config.api_url == "https://api.example.com"
@@ -48,6 +51,7 @@ def test_config_with_defaults() -> None:
         api_url="https://api.example.com",
         client_cert_path=Path("/path/to/cert.pem"),
         client_key_path=Path("/path/to/key.pem"),
+        otel=OtelConfig(),
     )
 
     # Check defaults
@@ -65,6 +69,7 @@ def test_config_timeout_validation() -> None:
             client_cert_path=Path("/path/to/cert.pem"),
             client_key_path=Path("/path/to/key.pem"),
             timeout=0,  # Invalid: must be > 0
+            otel=OtelConfig(),
         )
 
     assert "timeout" in str(exc_info.value)
@@ -78,6 +83,7 @@ def test_config_timeout_negative() -> None:
             client_cert_path=Path("/path/to/cert.pem"),
             client_key_path=Path("/path/to/key.pem"),
             timeout=-10.0,  # Invalid: must be > 0
+            otel=OtelConfig(),
         )
 
     assert "timeout" in str(exc_info.value)

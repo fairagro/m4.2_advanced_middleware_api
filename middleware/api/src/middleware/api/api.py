@@ -9,6 +9,8 @@ import logging
 import os
 import sys
 import tomllib
+from collections.abc import AsyncGenerator
+from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Annotated, cast
 from urllib.parse import unquote
@@ -20,6 +22,8 @@ from cryptography.x509.extensions import ExtensionNotFound
 from cryptography.x509.oid import NameOID
 from fastapi import Depends, FastAPI, HTTPException, Request, Response
 from fastapi.responses import JSONResponse
+from opentelemetry.sdk._logs import LoggerProvider
+from opentelemetry.sdk.trace import TracerProvider
 from pydantic import ValidationError
 
 from middleware.shared.api_models.models import (
@@ -30,7 +34,7 @@ from middleware.shared.api_models.models import (
     LivenessResponse,
     WhoamiResponse,
 )
-from middleware.shared.tracing import initialize_tracing
+from middleware.shared.tracing import initialize_logging, initialize_tracing
 
 from .celery_app import celery_app
 from .config import Config
@@ -104,20 +108,44 @@ class Api:
 
         """
         self._config = app_config
+        self._tracer_provider: TracerProvider | None = None
+        self._logger_provider: LoggerProvider | None = None
         logger.debug("API configuration: %s", self._config.model_dump())
 
         # Initialize OpenTelemetry tracing with optional OTLP endpoint
-        otlp_endpoint = str(self._config.otel_endpoint) if self._config.otel_endpoint else None
+        otlp_endpoint = str(self._config.otel.endpoint) if self._config.otel.endpoint else None
         self._tracer_provider, self._tracer = initialize_tracing(
             service_name="middleware-api",
             otlp_endpoint=otlp_endpoint,
-            log_console_spans=self._config.otel_log_console_spans,
+            log_console_spans=self._config.otel.log_console_spans,
         )
+        # Initialize OTEL log export if configured
+        self._logger_provider = initialize_logging(
+            service_name="middleware-api",
+            otlp_endpoint=otlp_endpoint,
+            log_level=getattr(logging, self._config.log_level),
+            otlp_log_level=getattr(logging, self._config.otel.log_level),
+        )
+
+        @asynccontextmanager
+        async def lifespan(_app: FastAPI) -> AsyncGenerator[None, None]:
+            yield
+            if self._tracer_provider is not None:
+                try:
+                    self._tracer_provider.shutdown()
+                except (RuntimeError, ValueError, OSError) as exc:
+                    logger.warning("Failed to shutdown tracer provider: %s", exc)
+            if self._logger_provider is not None:
+                try:
+                    self._logger_provider.shutdown()
+                except (RuntimeError, ValueError, OSError) as exc:
+                    logger.warning("Failed to shutdown logger provider: %s", exc)
 
         self._app = FastAPI(
             title="FAIR Middleware API",
             description="API for managing ARC (Advanced Research Context) objects",
             version=__version__,
+            lifespan=lifespan,
         )
 
         # Instrument the FastAPI application with OpenTelemetry

@@ -21,7 +21,10 @@ config:
     - publisso
     - thunen_atlas
   celery: {}  # all further celery config is set via environment variables
-  # otel_endpoint: http://signoz:4318  # Uncomment to enable Sign
+  otel:
+    # endpoint: http://signoz:4318  # Uncomment to enable Signoz tracing
+    # log_console_spans: false      # Set to true to log spans to console
+    # log_level: INFO
   # require_client_cert: false
 
 rabbitmq:

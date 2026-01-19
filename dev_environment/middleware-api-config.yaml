@@ -20,5 +20,7 @@ require_client_cert: false
 
 celery: {}
 
-# otel_endpoint: http://signoz:4318  # Uncomment to enable Signoz tracing
-# otel_log_console_spans: true     # Enable SPAN logging to console
+otel:
+  # endpoint: http://signoz:4318  # Uncomment to enable Signoz tracing
+  # log_console_spans: true       # Enable SPAN logging to console
+  # log_level: INFO
