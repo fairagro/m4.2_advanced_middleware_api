@@ -11,21 +11,34 @@ from .config_wrapper import ConfigWrapper
 LogLevel = Literal["CRITICAL", "ERROR", "WARNING", "INFO", "DEBUG", "NOTSET"]
 
 
-class ConfigBase(BaseModel):
-    """Configuration base class for the FAIRagro advanced Middleware."""
+class OtelConfig(BaseModel):
+    """OpenTelemetry logging and tracing configuration."""
 
-    log_level: Annotated[LogLevel, Field(description="Logging level")] = "INFO"
-    otel_endpoint: Annotated[
+    endpoint: Annotated[
         str | None,
         Field(
             description="OpenTelemetry collector endpoint URL",
             examples=["http://signoz:4318"],
         ),
     ] = None
-    otel_log_console_spans: Annotated[
+    log_console_spans: Annotated[
         bool,
         Field(description="Log OpenTelemetry spans to console"),
     ] = False
+    log_level: Annotated[
+        LogLevel,
+        Field(description="Logging level for OTLP log export"),
+    ] = "INFO"
+
+
+class ConfigBase(BaseModel):
+    """Configuration base class for the FAIRagro advanced Middleware."""
+
+    log_level: Annotated[LogLevel, Field(description="Logging level for console/stdout logging")] = "INFO"
+    otel: Annotated[
+        OtelConfig,
+        Field(default_factory=OtelConfig, description="OpenTelemetry configuration"),
+    ]
 
     @classmethod
     def from_config_wrapper(cls, wrapper: ConfigWrapper) -> Self:

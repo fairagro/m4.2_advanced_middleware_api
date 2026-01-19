@@ -9,6 +9,8 @@ import logging
 import os
 import sys
 import tomllib
+from collections.abc import AsyncGenerator
+from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Annotated, cast
 from urllib.parse import unquote
@@ -111,25 +113,43 @@ class Api:
         logger.debug("API configuration: %s", self._config.model_dump())
 
         # Initialize OpenTelemetry tracing with optional OTLP endpoint
-        otlp_endpoint = str(self._config.otel_endpoint) if self._config.otel_endpoint else None
+        otlp_endpoint = str(self._config.otel.endpoint) if self._config.otel.endpoint else None
         self._tracer_provider, self._tracer = initialize_tracing(
             service_name="middleware-api",
             otlp_endpoint=otlp_endpoint,
-            log_console_spans=self._config.otel_log_console_spans,
+            log_console_spans=self._config.otel.log_console_spans,
         )
         # Initialize OTEL log export if configured
-        self._logger_provider = initialize_logging(service_name="middleware-api", otlp_endpoint=otlp_endpoint)
+        self._logger_provider = initialize_logging(
+            service_name="middleware-api",
+            otlp_endpoint=otlp_endpoint,
+            log_level=getattr(logging, self._config.log_level),
+            otlp_log_level=getattr(logging, self._config.otel.log_level),
+        )
+
+        @asynccontextmanager
+        async def lifespan(_app: FastAPI) -> AsyncGenerator[None, None]:
+            yield
+            if self._tracer_provider is not None:
+                try:
+                    self._tracer_provider.shutdown()
+                except (RuntimeError, ValueError, OSError) as exc:
+                    logger.warning("Failed to shutdown tracer provider: %s", exc)
+            if self._logger_provider is not None:
+                try:
+                    self._logger_provider.shutdown()
+                except (RuntimeError, ValueError, OSError) as exc:
+                    logger.warning("Failed to shutdown logger provider: %s", exc)
 
         self._app = FastAPI(
             title="FAIR Middleware API",
             description="API for managing ARC (Advanced Research Context) objects",
             version=__version__,
+            lifespan=lifespan,
         )
 
         # Instrument the FastAPI application with OpenTelemetry
         instrument_app(self._app)
-
-        self._register_shutdown_handlers()
 
         self._setup_routes()
         self._setup_exception_handlers()
@@ -143,22 +163,6 @@ class Api:
 
         """
         return self._app
-
-    def _register_shutdown_handlers(self) -> None:
-        """Register shutdown hook to flush telemetry providers."""
-
-        @self._app.on_event("shutdown")
-        async def _shutdown_event() -> None:  # pragma: no cover - lifecycle hook
-            if self._tracer_provider is not None:
-                try:
-                    self._tracer_provider.shutdown()
-                except Exception as exc:  # pragma: no cover - best-effort cleanup
-                    logger.warning("Failed to shutdown tracer provider: %s", exc)
-            if self._logger_provider is not None:
-                try:
-                    self._logger_provider.shutdown()
-                except Exception as exc:  # pragma: no cover - best-effort cleanup
-                    logger.warning("Failed to shutdown logger provider: %s", exc)
 
     def _validate_client_cert(self, request: Request) -> x509.Certificate | None:
         """Extract and parse client certificate from request headers.

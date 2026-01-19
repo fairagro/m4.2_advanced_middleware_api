@@ -9,6 +9,7 @@ import pytest
 
 from middleware.api_client import ApiClient
 from middleware.shared.api_models.models import CreateOrUpdateArcsResponse
+from middleware.shared.config.config_base import OtelConfig
 from middleware.sql_to_arc.main import WorkerContext, main, process_worker_investigations
 
 
@@ -109,7 +110,7 @@ async def test_main_workflow(
     mock_config.max_concurrent_arc_builds = 5
     mock_config.api_client = MagicMock()
     mock_config.log_level = "INFO"
-    mock_config.otel_endpoint = None
+    mock_config.otel = OtelConfig(endpoint=None, log_console_spans=False, log_level="INFO")
 
     mock_wrapper = MagicMock()
     mocker.patch(

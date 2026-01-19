@@ -18,6 +18,7 @@ from middleware.api.business_logic import (
     BusinessLogic,
 )
 from middleware.api.config import CeleryConfig, Config
+from middleware.shared.config.config_base import OtelConfig
 
 
 @pytest.fixture(scope="session", autouse=True)
@@ -66,6 +67,7 @@ def config(oid: x509.ObjectIdentifier, known_rdis: list[str]) -> Config:
             broker_url=SecretStr("amqp://guest:guest@localhost:5672//"),
             result_backend=SecretStr("redis://localhost:6379/0"),
         ),
+        otel=OtelConfig(),
     )
 
 

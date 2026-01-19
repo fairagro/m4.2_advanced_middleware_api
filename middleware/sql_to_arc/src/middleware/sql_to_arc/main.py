@@ -555,11 +555,11 @@ async def main() -> None:
         return
 
     # Initialize OpenTelemetry tracing
-    otlp_endpoint = str(config.otel_endpoint) if config.otel_endpoint else None
+    otlp_endpoint = str(config.otel.endpoint) if config.otel.endpoint else None
     _tracer_provider, tracer = initialize_tracing(
         service_name="sql_to_arc",
         otlp_endpoint=otlp_endpoint,
-        log_console_spans=config.otel_log_console_spans,
+        log_console_spans=config.otel.log_console_spans,
     )
 
     with tracer.start_as_current_span("sql_to_arc.main"):
