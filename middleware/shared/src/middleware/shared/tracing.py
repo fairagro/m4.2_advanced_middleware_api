@@ -136,7 +136,7 @@ def initialize_logging(
             otlp_log_exporter = OTLPLogExporter(endpoint=f"{otlp_endpoint}/v1/logs")
             logger_provider.add_log_record_processor(BatchLogRecordProcessor(otlp_log_exporter))
             if log_console:
-                logger_provider.add_log_record_processor(BatchLogRecordProcessor(ConsoleLogRecordExporter()))
+                logger_provider.add_log_record_processor(SimpleLogRecordProcessor(ConsoleLogRecordExporter()))
             set_logger_provider(logger_provider)
             root_handler = LoggingHandler(level=otlp_log_level, logger_provider=logger_provider)
             root_logger = logging.getLogger()
