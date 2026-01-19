@@ -68,7 +68,7 @@ async def test_create_or_update_arcs_success(client_config: Config) -> None:
     # Mock the API response
     # Mock the API response (Task submission)
     task_response = {"task_id": "task-123", "status": "processing"}
-    
+
     # Mock the Task Status response
     status_response = {
         "task_id": "task-123",
@@ -84,14 +84,13 @@ async def test_create_or_update_arcs_success(client_config: Config) -> None:
                     "timestamp": "2024-01-01T12:00:00Z",
                 }
             ],
-        }
-
+        },
     }
 
     route_post = respx.post(f"{client_config.api_url}/v1/arcs").mock(
         return_value=httpx.Response(http.HTTPStatus.ACCEPTED, json=task_response)
     )
-    
+
     route_get = respx.get(f"{client_config.api_url}/v1/tasks/task-123").mock(
         return_value=httpx.Response(http.HTTPStatus.OK, json=status_response)
     )
@@ -220,13 +219,13 @@ async def test_client_headers(client_config: Config) -> None:
             "message": "ok",
             "rdi": "test",
             "arcs": [],
-        }
+        },
     }
 
     route_post = respx.post(f"{client_config.api_url}/v1/arcs").mock(
         return_value=httpx.Response(http.HTTPStatus.ACCEPTED, json=task_response)
     )
-    
+
     respx.get(f"{client_config.api_url}/v1/tasks/task-headers").mock(
         return_value=httpx.Response(http.HTTPStatus.OK, json=status_response)
     )
