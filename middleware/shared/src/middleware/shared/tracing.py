@@ -10,11 +10,13 @@ from collections.abc import Sequence
 from typing import TYPE_CHECKING
 
 from opentelemetry import trace
-from opentelemetry._logs import set_logger_provider
-from opentelemetry.exporter.otlp.proto.http._log_exporter import OTLPLogExporter
-from opentelemetry.exporter.otlp.proto.http.trace_exporter import OTLPSpanExporter
-from opentelemetry.sdk._logs import LoggerProvider, LoggingHandler
-from opentelemetry.sdk._logs.export import BatchLogRecordProcessor, ConsoleLogRecordExporter
+from opentelemetry.logs import set_logger_provider
+from opentelemetry.exporter.otlp.proto.http.log_exporter import OTLPLogExporter
+from opentelemetry.sdk.logs import LoggerProvider, LoggingHandler
+from opentelemetry.sdk.logs.export import (
+    BatchLogRecordProcessor,
+    ConsoleLogRecordExporter,
+)
 from opentelemetry.sdk.resources import Resource
 from opentelemetry.sdk.trace import ReadableSpan, TracerProvider
 from opentelemetry.sdk.trace.export import BatchSpanProcessor, SimpleSpanProcessor, SpanExporter, SpanExportResult
