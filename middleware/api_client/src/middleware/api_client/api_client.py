@@ -148,6 +148,7 @@ class ApiClient:
         client = self._get_client()
 
         try:
+            path = path.lstrip("/")
             logger.debug("Sending POST request to %s", path)
             resp = await client.post(
                 path,
@@ -170,6 +171,7 @@ class ApiClient:
         """Send a GET request to the API."""
         client = self._get_client()
         try:
+            path = path.lstrip("/")
             resp = await client.get(path)
             resp.raise_for_status()
             return resp.json()
@@ -205,7 +207,7 @@ class ApiClient:
         logger.debug("Request payload: %s", json.dumps(request.model_dump(), indent=2))
 
         # 1. Submit task
-        result = await self._post("/v1/arcs", request)
+        result = await self._post("v1/arcs", request)
 
         task_id = result.get("task_id")
         if not task_id:
@@ -216,7 +218,7 @@ class ApiClient:
         # 2. Poll for results
         while True:
             await asyncio.sleep(1.0)  # Poll every second
-            status_response = await self._get(f"/v1/tasks/{task_id}")
+            status_response = await self._get(f"v1/tasks/{task_id}")
             status = status_response.get("status")
 
             if status == "SUCCESS":

@@ -1,0 +1,23 @@
+log_level: DEBUG
+
+db_name: edaphobase
+db_user: postgres
+db_password: ~
+db_host: postgres  # Docker service name
+db_port: 5432
+
+rdi: edaphobase
+rdi_url: https://edaphobase.org
+batch_size: "1"
+max_concurrent_arc_builds: 4
+
+api_client:
+  # NOTE: Change this to the external Middleware API URL
+  api_url: "https://middleware-test.fairagro.net"
+  timeout: 600
+  client_cert_path: "/etc/sql_to_arc/client.crt"
+  client_key_path: "/run/secrets/client.key"
+  verify_ssl: true
+
+otel:
+  log_console_spans: false
