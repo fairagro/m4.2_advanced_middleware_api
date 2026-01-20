@@ -129,7 +129,7 @@ celery:
     persistence:
       enabled: false
       size: 5Gi
-      accessMode: ReadWriteOnce
+      accessMode: ReadWriteMany
       # storageClass: ""
       mountPath: /var/cache/middleware/arc-cache
     serviceAccount:
