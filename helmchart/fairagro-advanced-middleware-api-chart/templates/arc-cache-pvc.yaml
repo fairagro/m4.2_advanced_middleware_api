@@ -1,5 +1,4 @@
-{{- if .Values.celery.worker.persistence }}
-{{- if .Values.celery.worker.persistence.enabled }}
+{{- if and .Values.celery.worker.persistence .Values.celery.worker.persistence.enabled }}
 kind: PersistentVolumeClaim
 apiVersion: v1
 metadata:
@@ -15,5 +14,4 @@ spec:
   {{- if .Values.celery.worker.persistence.storageClass }}
   storageClassName: {{ .Values.celery.worker.persistence.storageClass | quote }}
   {{- end }}
-{{- end }}
 {{- end }}
