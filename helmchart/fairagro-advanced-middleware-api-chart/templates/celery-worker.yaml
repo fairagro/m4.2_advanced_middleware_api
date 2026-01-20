@@ -51,11 +51,19 @@ spec:
               value: {{ include "fairagro-advanced-middleware-api-chart.celeryResultBackend" . | quote }}
             - name: MIDDLEWARE_API_CONFIG
               value: /run/secrets/middleware-api-config
+            {{- if .Values.celery.worker.persistence.enabled }}
+            - name: GIT_REPO_CACHE_DIR
+              value: {{ .Values.celery.worker.persistence.mountPath | quote }}
+            {{- end }}
           volumeMounts:
             - name: config
               mountPath: /run/secrets/middleware-api-config
               readOnly: true
               subPath: middleware-api-config
+            {{- if .Values.celery.worker.persistence.enabled }}
+            - name: arc-cache
+              mountPath: {{ .Values.celery.worker.persistence.mountPath | quote }}
+            {{- end }}
             {{- with .Values.celery.worker.volumeMounts }}
             {{- toYaml . | nindent 12 }}
             {{- end }}
@@ -87,6 +95,11 @@ spec:
             items:
               - key: middleware-api-config
                 path: middleware-api-config
+        {{- if .Values.celery.worker.persistence.enabled }}
+        - name: arc-cache
+          persistentVolumeClaim:
+            claimName: {{ include "fairagro-advanced-middleware-api-chart.fullname" . }}-arc-cache
+        {{- end }}
         {{- with .Values.celery.worker.volumes }}
         {{- toYaml . | nindent 8 }}
         {{- end }}

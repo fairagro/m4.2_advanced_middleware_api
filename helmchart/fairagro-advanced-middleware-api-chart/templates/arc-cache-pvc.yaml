@@ -1,0 +1,19 @@
+{{- if .Values.celery.worker.persistence }}
+{{- if .Values.celery.worker.persistence.enabled }}
+kind: PersistentVolumeClaim
+apiVersion: v1
+metadata:
+  name: {{ include "fairagro-advanced-middleware-api-chart.fullname" . }}-arc-cache
+  labels:
+    {{- include "fairagro-advanced-middleware-api-chart.labels" . | nindent 4 }}
+spec:
+  accessModes:
+    - {{ .Values.celery.worker.persistence.accessMode | quote }}
+  resources:
+    requests:
+      storage: {{ .Values.celery.worker.persistence.size | quote }}
+  {{- if .Values.celery.worker.persistence.storageClass }}
+  storageClassName: {{ .Values.celery.worker.persistence.storageClass | quote }}
+  {{- end }}
+{{- end }}
+{{- end }}
