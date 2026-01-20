@@ -87,11 +87,11 @@ async def test_create_or_update_arcs_success(client_config: Config) -> None:
         },
     }
 
-    route_post = respx.post(f"{client_config.api_url}/v1/arcs").mock(
+    route_post = respx.post(f"{client_config.api_url}v1/arcs").mock(
         return_value=httpx.Response(http.HTTPStatus.ACCEPTED, json=task_response)
     )
 
-    route_get = respx.get(f"{client_config.api_url}/v1/tasks/task-123").mock(
+    route_get = respx.get(f"{client_config.api_url}v1/tasks/task-123").mock(
         return_value=httpx.Response(http.HTTPStatus.OK, json=status_response)
     )
 
@@ -118,7 +118,7 @@ async def test_create_or_update_arcs_success(client_config: Config) -> None:
 async def test_create_or_update_arcs_http_error(client_config: Config) -> None:
     """Test create_or_update_arcs with HTTP error response."""
     # Mock an error response
-    respx.post(f"{client_config.api_url}/v1/arcs").mock(
+    respx.post(f"{client_config.api_url}v1/arcs").mock(
         return_value=httpx.Response(http.HTTPStatus.FORBIDDEN, text="Forbidden")
     )
 
@@ -137,7 +137,7 @@ async def test_create_or_update_arcs_http_error(client_config: Config) -> None:
 async def test_create_or_update_arcs_network_error(client_config: Config) -> None:
     """Test create_or_update_arcs with network error."""
     # Mock a network error
-    respx.post(f"{client_config.api_url}/v1/arcs").mock(side_effect=httpx.ConnectError("Connection refused"))
+    respx.post(f"{client_config.api_url}v1/arcs").mock(side_effect=httpx.ConnectError("Connection refused"))
 
     # Should raise ApiClientError
     arc = ARC.from_arc_investigation(ArcInvestigation.create(identifier="test", title="Test"))
@@ -222,11 +222,11 @@ async def test_client_headers(client_config: Config) -> None:
         },
     }
 
-    route_post = respx.post(f"{client_config.api_url}/v1/arcs").mock(
+    route_post = respx.post(f"{client_config.api_url}v1/arcs").mock(
         return_value=httpx.Response(http.HTTPStatus.ACCEPTED, json=task_response)
     )
 
-    respx.get(f"{client_config.api_url}/v1/tasks/task-headers").mock(
+    respx.get(f"{client_config.api_url}v1/tasks/task-headers").mock(
         return_value=httpx.Response(http.HTTPStatus.OK, json=status_response)
     )
 

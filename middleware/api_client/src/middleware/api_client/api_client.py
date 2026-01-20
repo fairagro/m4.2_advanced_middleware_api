@@ -168,15 +168,33 @@ class ApiClient:
             raise ApiClientError(error_msg) from e
 
     async def _get(self, path: str) -> Any:
-        """Send a GET request to the API."""
+        """Send a GET request to the API.
+
+        Args:
+            path (str): API endpoint path.
+
+        Returns:
+            Any: JSON response data.
+
+        Raises:
+            ApiClientError: If the request fails.
+        """
         client = self._get_client()
         try:
             path = path.lstrip("/")
+            logger.debug("Sending GET request to %s", path)
             resp = await client.get(path)
             resp.raise_for_status()
+            logger.debug("GET request successful, status code: %s", resp.status_code)
             return resp.json()
-        except httpx.HTTPError as e:
-            raise ApiClientError(f"GET request failed: {e}") from e
+        except httpx.HTTPStatusError as e:
+            error_msg = f"HTTP error {e.response.status_code}: {e.response.text}"
+            logger.error(error_msg)
+            raise ApiClientError(error_msg) from e
+        except httpx.RequestError as e:
+            error_msg = f"Request error: {str(e)}"
+            logger.error(error_msg)
+            raise ApiClientError(error_msg) from e
 
     async def create_or_update_arcs(
         self,
