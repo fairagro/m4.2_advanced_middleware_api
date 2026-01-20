@@ -11,18 +11,11 @@ from collections import defaultdict
 from pathlib import Path
 from typing import Any, cast
 
-from arctrl import (
+from arctrl import (  # type: ignore[import-untyped]
     ARC,
-    ArcAssay,
-    ArcInvestigation,
-    ArcStudy,
-    OntologyAnnotation,
-    Person,
-    Publication,
 )
 from opentelemetry import trace
 from pydantic import BaseModel, ConfigDict, ValidationError
-from sqlalchemy.engine import RowMapping
 
 from middleware.api_client import ApiClient, ApiClientError
 from middleware.shared.config.config_wrapper import ConfigWrapper
@@ -37,6 +30,20 @@ from middleware.sql_to_arc.mapper import (
     map_publication,
     map_study,
 )
+
+
+class ArcBuildData(BaseModel):
+    """Data bundle for building a single ARC."""
+
+    investigation_row: dict[str, Any]
+    studies: list[dict[str, Any]]
+    assays: list[dict[str, Any]]
+    contacts: list[dict[str, Any]]
+    publications: list[dict[str, Any]]
+    annotations: list[dict[str, Any]]
+
+    model_config = ConfigDict(arbitrary_types_allowed=True)
+
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
@@ -129,126 +136,146 @@ def parse_args() -> argparse.Namespace:
     return args
 
 
-def build_single_arc_task(
-    investigation_row: dict[str, Any],
-    studies: list[dict[str, Any]],
-    assays: list[dict[str, Any]],
-    contacts: list[dict[str, Any]],
-    publications: list[dict[str, Any]],
-    annotations: list[dict[str, Any]],
-) -> ARC:
-    """Build a single ARC object from data.
-
-    This function is designed to run in a separate process.
-    """
-    inv_id = str(investigation_row["identifier"])
-    
-    # Map Investigation
-    arc_inv = map_investigation(investigation_row)
-    
-    # Identify Studies for this Investigation
-    relevant_studies = [s for s in studies if s.get("investigation_ref") == inv_id]
-    
-    # Identify Assays for this Investigation
-    relevant_assays = [a for a in assays if a.get("investigation_ref") == inv_id]
-    
-    # Create ARC
-    arc = ARC.from_arc_investigation(arc_inv)
-    
-    # Create and add Studies
+def _add_studies_to_arc(arc: ARC, study_rows: list[dict[str, Any]]) -> dict[str, Any]:
+    """Add studies to ARC and return study map."""
     study_map = {}
-    for s_row in relevant_studies:
+    for s_row in study_rows:
         study = map_study(s_row)
         arc.AddRegisteredStudy(study)
-        study_map[str(s_row["identifier"])] = study # assume identifier is unique
-        
-    # Create and add Assays
+        study_map[str(s_row["identifier"])] = study
+    return study_map
+
+
+def _add_assays_to_arc(arc: ARC, assay_rows: list[dict[str, Any]], study_map: dict[str, Any]) -> dict[str, Any]:
+    """Add assays to ARC, link to studies, and return assay map."""
     assay_map = {}
-    for a_row in relevant_assays:
+    for a_row in assay_rows:
         assay = map_assay(a_row)
         arc.AddAssay(assay)
         assay_map[str(a_row["identifier"])] = assay
-        
+
         # Link Assay to Studies
         study_ref_json = a_row.get("study_ref")
-        if study_ref_json:
-            try:
-                study_refs = json.loads(study_ref_json)
-                if isinstance(study_refs, list):
-                    for s_ref in study_refs:
-                        if s_ref in study_map:
-                            study_map[s_ref].RegisterAssay(assay.Identifier)
-            except json.JSONDecodeError:
-                pass
+        if not study_ref_json:
+            continue
 
-    # Add Contacts
+        try:
+            study_refs = json.loads(study_ref_json)
+            if isinstance(study_refs, list):
+                for s_ref in study_refs:
+                    if s_ref in study_map:
+                        study_map[s_ref].RegisterAssay(assay.Identifier)
+        except json.JSONDecodeError:
+            pass
+
+    return assay_map
+
+
+def _add_contacts_to_arc(
+    arc: ARC,
+    inv_id: str,
+    contacts: list[dict[str, Any]],
+    study_map: dict[str, Any],
+    assay_map: dict[str, Any],
+) -> None:
+    """Add contacts to investigation, studies, and assays."""
     # Investigation contacts
-    inv_contacts = [c for c in contacts if c.get("investigation_ref") == inv_id and c.get("target_type") == "investigation"]
+    inv_contacts = [
+        c for c in contacts if c.get("investigation_ref") == inv_id and c.get("target_type") == "investigation"
+    ]
     for c_row in inv_contacts:
-        person = map_contact(c_row)
-        arc.Contacts.append(person)
+        arc.Contacts.append(map_contact(c_row))
 
     # Study contacts
     for s_id, study in study_map.items():
-        stu_contacts = [c for c in contacts if c.get("investigation_ref") == inv_id and c.get("target_type") == "study" and c.get("target_ref") == s_id]
+        stu_contacts = [
+            c
+            for c in contacts
+            if c.get("investigation_ref") == inv_id and c.get("target_type") == "study" and c.get("target_ref") == s_id
+        ]
         for c_row in stu_contacts:
-            person = map_contact(c_row)
-            study.Contacts.append(person)
+            study.Contacts.append(map_contact(c_row))
 
     # Assay contacts
     for a_id, assay in assay_map.items():
-        ass_contacts = [c for c in contacts if c.get("investigation_ref") == inv_id and c.get("target_type") == "assay" and c.get("target_ref") == a_id]
+        ass_contacts = [
+            c
+            for c in contacts
+            if c.get("investigation_ref") == inv_id and c.get("target_type") == "assay" and c.get("target_ref") == a_id
+        ]
         for c_row in ass_contacts:
-            person = map_contact(c_row)
-            assay.Performers.append(person)
+            assay.Performers.append(map_contact(c_row))
 
-    # Add Publications
-    # Investigation pubs
-    inv_pubs = [p for p in publications if p.get("investigation_ref") == inv_id and p.get("target_type") == "investigation"]
+
+def _add_publications_to_arc(
+    arc: ARC, inv_id: str, publications: list[dict[str, Any]], study_map: dict[str, Any]
+) -> None:
+    """Add publications to investigation and studies."""
+    # Investigation publications
+    inv_pubs = [
+        p for p in publications if p.get("investigation_ref") == inv_id and p.get("target_type") == "investigation"
+    ]
     for p_row in inv_pubs:
-        pub = map_publication(p_row)
-        arc.Publications.append(pub)
-        
-    # Study pubs
-    for s_id, study in study_map.items():
-        stu_pubs = [p for p in publications if p.get("investigation_ref") == inv_id and p.get("target_type") == "study" and p.get("target_ref") == s_id]
-        for p_row in stu_pubs:
-            pub = map_publication(p_row)
-            study.Publications.append(pub)
+        arc.Publications.append(map_publication(p_row))
 
-    # Add Annotation Tables (TODO: Complex logic, simplified for now or omit if empty)
-    # This requires reconstructing tables from rows. 
-    # For now, skipping complex table reconstruction to focus on connectivity and main structure.
-    # If the user requires strict adherence right now, I might need more helper logic.
-    # Given requirements: "Achte darauf, dass alle Daten... auch ausgewertet werden... AnnotationTables angelegt werden".
-    # Ok, I must implement it.
-    
-    # Process Annotation Tables
-    # Group by (target_type, target_ref, table_name)
+    # Study publications
+    for s_id, study in study_map.items():
+        stu_pubs = [
+            p
+            for p in publications
+            if p.get("investigation_ref") == inv_id and p.get("target_type") == "study" and p.get("target_ref") == s_id
+        ]
+        for p_row in stu_pubs:
+            study.Publications.append(map_publication(p_row))
+
+
+def _process_annotation_tables(
+    inv_id: str, annotations: list[dict[str, Any]], study_map: dict[str, Any], assay_map: dict[str, Any]
+) -> None:
+    """Process and add annotation tables (placeholder for future implementation)."""
     tables_groups = defaultdict(list)
     for ann in annotations:
         if ann.get("investigation_ref") == inv_id:
             key = (ann.get("target_type"), ann.get("target_ref"), ann.get("table_name"))
             tables_groups[key].append(ann)
-            
-    for (t_type, t_ref, t_name), rows in tables_groups.items():
-        # TODO: Implement table reconstruction using arctrl.
-        # This is non-trivial without specific arctrl knowledge on programmatic table construction.
-        # Generally: study.InitTable(name) -> returns table -> add columns/rows.
-        
+
+    for (t_type, t_ref, _t_name), _rows in tables_groups.items():
         target = None
-        if t_type == "study" and t_ref in study_map:
-            target = study_map[t_ref]
-        elif t_type == "assay" and t_ref in assay_map:
-            target = assay_map[t_ref]
-            
+        if t_type == "study" and isinstance(t_ref, str):
+            target = study_map.get(t_ref)
+        elif t_type == "assay" and isinstance(t_ref, str):
+            target = assay_map.get(t_ref)
+
         if target:
-            # We assume for now we can somehow add a table.
-            # ARCtrl python bindings might support `target.InitTable(t_name)`
-            # Since I cannot verify the exact API right now easily, I will leave a placeholder comment or try best effort.
-            # Using standard ISA structure, tables are effectively the assays/studies themselves or separate files.
-            # In ARCtrl, metadata is often in "tables" (ProcessSequence).
+            # TODO: Implement table reconstruction using arctrl
             pass
+
+
+def build_single_arc_task(data: ArcBuildData) -> ARC:
+    """Build a single ARC object from data.
+
+    This function is designed to run in a separate process.
+    """
+    inv_id = str(data.investigation_row["identifier"])
+
+    # Map Investigation and create ARC
+    arc_inv = map_investigation(data.investigation_row)
+    arc = ARC.from_arc_investigation(arc_inv)
+
+    # Identify relevant studies and assays
+    relevant_studies = [s for s in data.studies if s.get("investigation_ref") == inv_id]
+    relevant_assays = [a for a in data.assays if a.get("investigation_ref") == inv_id]
+
+    # Add studies and assays
+    study_map = _add_studies_to_arc(arc, relevant_studies)
+    assay_map = _add_assays_to_arc(arc, relevant_assays, study_map)
+
+    # Add contacts and publications
+    _add_contacts_to_arc(arc, inv_id, data.contacts, study_map, assay_map)
+    _add_publications_to_arc(arc, inv_id, data.publications, study_map)
+
+    # Process annotation tables
+    _process_annotation_tables(inv_id, data.annotations, study_map, assay_map)
 
     return arc
 
@@ -342,24 +369,18 @@ async def process_batch(  # pylint: disable=too-many-locals
 
         for row in batch:
             inv_id = str(row["identifier"])
-            
-            # Prepare data slices for this investigation
-            studies = ctx.studies_by_inv.get(inv_id, [])
-            assays = ctx.assays_by_inv.get(inv_id, [])
-            contacts = ctx.contacts_by_inv.get(inv_id, [])
-            pubs = ctx.pubs_by_inv.get(inv_id, [])
-            anns = ctx.anns_by_inv.get(inv_id, [])
 
-            future = loop.run_in_executor(
-                ctx.executor,
-                build_single_arc_task,
-                row,
-                studies,
-                assays,
-                contacts,
-                pubs,
-                anns
+            # Prepare data bundle for this investigation
+            build_data = ArcBuildData(
+                investigation_row=row,
+                studies=ctx.studies_by_inv.get(inv_id, []),
+                assays=ctx.assays_by_inv.get(inv_id, []),
+                contacts=ctx.contacts_by_inv.get(inv_id, []),
+                publications=ctx.pubs_by_inv.get(inv_id, []),
+                annotations=ctx.anns_by_inv.get(inv_id, []),
             )
+
+            future = loop.run_in_executor(ctx.executor, build_single_arc_task, build_data)
             arc_build_futures.append(future)
 
         results = await asyncio.gather(*arc_build_futures, return_exceptions=True)
@@ -427,6 +448,75 @@ async def process_worker_investigations(
     return stats
 
 
+async def _fetch_and_group_related_data(
+    db: Database, investigation_ids: list[str]
+) -> tuple[dict, dict, dict, dict, dict, int, int]:
+    """Fetch related data in bulk and group by investigation ID."""
+    logger.info("Fetching related data (studies, assays, contacts, etc.)...")
+    study_rows = [dict(row) for row in await db.get_studies(investigation_ids)]
+    assay_rows = [dict(row) for row in await db.get_assays(investigation_ids)]
+    contact_rows = [dict(row) for row in await db.get_contacts(investigation_ids)]
+    pub_rows = [dict(row) for row in await db.get_publications(investigation_ids)]
+    ann_rows = [dict(row) for row in await db.get_annotation_tables(investigation_ids)]
+
+    def group(rows: list[dict[str, Any]]) -> dict[str, list[dict[str, Any]]]:
+        m = defaultdict(list)
+        for r in rows:
+            m[str(r["investigation_ref"])].append(r)
+        return dict(m)
+
+    return (
+        group(study_rows),
+        group(assay_rows),
+        group(contact_rows),
+        group(pub_rows),
+        group(ann_rows),
+        len(study_rows),
+        len(assay_rows),
+    )
+
+
+async def _execute_distributed_workers(
+    client: ApiClient,
+    config: Config,
+    investigation_rows: list[dict[str, Any]],
+    data_maps: tuple,
+) -> ProcessingStats:
+    """Distribute investigations to workers and collect results."""
+    stats = ProcessingStats()
+    num_workers = config.max_concurrent_arc_builds
+    worker_assignments: list[list[dict[str, Any]]] = [[] for _ in range(num_workers)]
+    for idx, investigation in enumerate(investigation_rows):
+        worker_assignments[idx % num_workers].append(investigation)
+
+    mp_context = multiprocessing.get_context("spawn")
+    with concurrent.futures.ProcessPoolExecutor(max_workers=num_workers, mp_context=mp_context) as executor:
+        tasks = []
+        for worker_id, assigned in enumerate(worker_assignments):
+            if not assigned:
+                continue
+            ctx = WorkerContext(
+                client=client,
+                rdi=config.rdi,
+                studies_by_inv=data_maps[0],
+                assays_by_inv=data_maps[1],
+                contacts_by_inv=data_maps[2],
+                pubs_by_inv=data_maps[3],
+                anns_by_inv=data_maps[4],
+                batch_size=config.batch_size,
+                worker_id=worker_id + 1,
+                total_workers=num_workers,
+                executor=executor,
+            )
+            tasks.append(process_worker_investigations(ctx, assigned))
+
+        results = await asyncio.gather(*tasks)
+        for res in results:
+            if isinstance(res, ProcessingStats):
+                stats.merge(res)
+    return stats
+
+
 async def process_investigations(
     db: Database,
     client: ApiClient,
@@ -436,15 +526,8 @@ async def process_investigations(
     tracer = trace.get_tracer(__name__)
     stats = ProcessingStats()
     with tracer.start_as_current_span("process_investigations"):
-        # Step 1: Fetch investigations
         logger.info("Fetching investigations (limit=%s)...", config.debug_limit)
-        async with db.connect(): # Just to test connection or warm up? Not needed if using helper methods.
-            pass
-            
-        investigation_rows = await db.get_investigations(limit=config.debug_limit)
-        # Convert to dicts
-        investigation_rows = [dict(row) for row in investigation_rows]
-        
+        investigation_rows = [dict(row) for row in await db.get_investigations(limit=config.debug_limit)]
         logger.info("Found %d investigations", len(investigation_rows))
         stats.found_datasets = len(investigation_rows)
 
@@ -452,89 +535,14 @@ async def process_investigations(
             logger.info("No investigations found, nothing to process")
             return stats
 
-        investigation_ids = [str(row["identifier"]) for row in investigation_rows]
-        
-        # Step 2: Fetch related data in bulk
-        # Studies
-        logger.info("Fetching studies...")
-        study_rows = await db.get_studies(investigation_ids)
-        study_rows = [dict(row) for row in study_rows]
-        stats.total_studies = len(study_rows)
-        
-        # Assays
-        logger.info("Fetching assays...")
-        assay_rows = await db.get_assays(investigation_ids)
-        assay_rows = [dict(row) for row in assay_rows]
-        stats.total_assays = len(assay_rows)
-        
-        # Contacts
-        logger.info("Fetching contacts...")
-        contact_rows = await db.get_contacts(investigation_ids)
-        contact_rows = [dict(row) for row in contact_rows]
-        
-        # Publications
-        logger.info("Fetching publications...")
-        pub_rows = await db.get_publications(investigation_ids)
-        pub_rows = [dict(row) for row in pub_rows]
-        
-        # Annotations
-        logger.info("Fetching annotation tables...")
-        ann_rows = await db.get_annotation_tables(investigation_ids)
-        ann_rows = [dict(row) for row in ann_rows]
+        inv_ids = [str(row["identifier"]) for row in investigation_rows]
+        maps_and_counts = await _fetch_and_group_related_data(db, inv_ids)
 
-        # Group data by investigation ID to pass to workers efficiently
-        # Actually, passing the whole dict is fine if not too huge. 
-        # But optimize by pre-grouping?
-        # Worker logic already filters from the context maps.
-        # Let's group here.
-        studies_by_inv = defaultdict(list)
-        for r in study_rows: studies_by_inv[str(r["investigation_ref"])].append(r)
-        
-        assays_by_inv = defaultdict(list)
-        for r in assay_rows: assays_by_inv[str(r["investigation_ref"])].append(r)
-        
-        contacts_by_inv = defaultdict(list)
-        for r in contact_rows: contacts_by_inv[str(r["investigation_ref"])].append(r)
-        
-        pubs_by_inv = defaultdict(list)
-        for r in pub_rows: pubs_by_inv[str(r["investigation_ref"])].append(r)
-        
-        anns_by_inv = defaultdict(list)
-        for r in ann_rows: anns_by_inv[str(r["investigation_ref"])].append(r)
+        stats.total_studies = maps_and_counts[5]
+        stats.total_assays = maps_and_counts[6]
 
-        # Distribute
-        num_workers = config.max_concurrent_arc_builds
-        worker_assignments: list[list[dict[str, Any]]] = [[] for _ in range(num_workers)]
-        for idx, investigation in enumerate(investigation_rows):
-            worker_id = idx % num_workers
-            worker_assignments[worker_id].append(investigation)
-
-        mp_context = multiprocessing.get_context("spawn")
-        with concurrent.futures.ProcessPoolExecutor(max_workers=num_workers, mp_context=mp_context) as executor:
-            tasks = []
-            for worker_id, assigned_investigations in enumerate(worker_assignments):
-                if not assigned_investigations:
-                    continue
-
-                ctx = WorkerContext(
-                    client=client,
-                    rdi=config.rdi,
-                    studies_by_inv=dict(studies_by_inv),
-                    assays_by_inv=dict(assays_by_inv),
-                    contacts_by_inv=dict(contacts_by_inv),
-                    pubs_by_inv=dict(pubs_by_inv),
-                    anns_by_inv=dict(anns_by_inv),
-                    batch_size=config.batch_size,
-                    worker_id=worker_id + 1,
-                    total_workers=num_workers,
-                    executor=executor,
-                )
-                tasks.append(process_worker_investigations(ctx, assigned_investigations))
-
-            results = await asyncio.gather(*tasks)
-            for res in results:
-                if isinstance(res, ProcessingStats):
-                    stats.merge(res)
+        worker_stats = await _execute_distributed_workers(client, config, investigation_rows, maps_and_counts[:5])
+        stats.merge(worker_stats)
 
     return stats
 
@@ -549,7 +557,7 @@ async def run_conversion(config: Config) -> ProcessingStats:
 
 
 async def main() -> None:
-    """Main entry point."""
+    """Execute the main entry point."""
     args = parse_args()
     try:
         wrapper = ConfigWrapper.from_yaml_file(args.config, prefix="SQL_TO_ARC")
@@ -586,7 +594,7 @@ async def main() -> None:
             else:
                 logger.info("Conversion finished successfully. %d datasets processed.", stats.found_datasets)
 
-        except Exception as e:
+        except Exception as e:  # pylint: disable=broad-exception-caught
             logger.critical("Fatal error during conversion process: %s", e, exc_info=True)
 
 

@@ -1,11 +1,16 @@
+"""Tests for the ARC builder unit which converts SQL data into ARC structures."""
+
+from typing import Any
 
 import pytest
-from typing import Any
-from arctrl import ARC, ArcInvestigation, ArcStudy, ArcAssay, Person, Publication
-from middleware.sql_to_arc.main import build_single_arc_task
+from arctrl import ARC  # type: ignore[import-untyped]
+
+from middleware.sql_to_arc.main import ArcBuildData, build_single_arc_task
+
 
 @pytest.fixture
 def sample_investigation() -> dict[str, Any]:
+    """Return a sample investigation dictionary."""
     return {
         "identifier": "inv1",
         "title": "Inv Title",
@@ -14,33 +19,43 @@ def sample_investigation() -> dict[str, Any]:
         "public_release_date": None,
     }
 
+
 @pytest.fixture
 def sample_studies() -> list[dict[str, Any]]:
-    return [{
-        "identifier": "sty1",
-        "investigation_ref": "inv1",
-        "title": "Study Title",
-        "description_text": "Study Desc",
-        "submission_date": None,
-        "public_release_date": None,
-    }]
+    """Return a list of sample study dictionaries."""
+    return [
+        {
+            "identifier": "sty1",
+            "investigation_ref": "inv1",
+            "title": "Study Title",
+            "description_text": "Study Desc",
+            "submission_date": None,
+            "public_release_date": None,
+        }
+    ]
+
 
 @pytest.fixture
 def sample_assays() -> list[dict[str, Any]]:
-    return [{
-        "identifier": "asy1",
-        "investigation_ref": "inv1",
-        "measurement_type_term": "MType",
-        "measurement_type_uri": "http://mtype",
-        "technology_type_term": "TType",
-        "technology_type_uri": "http://ttype",
-        # Link to study sty1
-        "study_ref": '["sty1"]', 
-        "technology_platform": "Platform",
-    }]
+    """Return a list of sample assay dictionaries."""
+    return [
+        {
+            "identifier": "asy1",
+            "investigation_ref": "inv1",
+            "measurement_type_term": "MType",
+            "measurement_type_uri": "http://mtype",
+            "technology_type_term": "TType",
+            "technology_type_uri": "http://ttype",
+            # Link to study sty1
+            "study_ref": '["sty1"]',
+            "technology_platform": "Platform",
+        }
+    ]
+
 
 @pytest.fixture
 def sample_contacts() -> list[dict[str, Any]]:
+    """Return a list of sample contact dictionaries."""
     return [
         {
             "last_name": "Doe",
@@ -55,11 +70,13 @@ def sample_contacts() -> list[dict[str, Any]]:
             "investigation_ref": "inv1",
             "target_type": "study",
             "target_ref": "sty1",
-        }
+        },
     ]
+
 
 @pytest.fixture
 def sample_publications() -> list[dict[str, Any]]:
+    """Return a list of sample publication dictionaries."""
     return [
         {
             "title": "Inv Pub",
@@ -72,82 +89,96 @@ def sample_publications() -> list[dict[str, Any]]:
             "investigation_ref": "inv1",
             "target_type": "study",
             "target_ref": "sty1",
-        }
+        },
     ]
 
+
 def test_build_simple_arc(sample_investigation: dict[str, Any]) -> None:
-    arc = build_single_arc_task(sample_investigation, [], [], [], [], [])
+    """Test building a basic ARC structure from investigation data."""
+    arc_data = ArcBuildData(
+        investigation_row=sample_investigation, studies=[], assays=[], contacts=[], publications=[], annotations=[]
+    )
+    arc = build_single_arc_task(arc_data)
     assert isinstance(arc, ARC)
     assert arc.Identifier == "inv1"
 
+
 def test_build_arc_with_study_and_assay(
-    sample_investigation: dict[str, Any],
-    sample_studies: list[dict[str, Any]],
-    sample_assays: list[dict[str, Any]]
+    sample_investigation: dict[str, Any], sample_studies: list[dict[str, Any]], sample_assays: list[dict[str, Any]]
 ) -> None:
-    arc = build_single_arc_task(
-        sample_investigation,
-        sample_studies,
-        sample_assays,
-        [], [], []
+    """Test building an ARC with nested study and assay structures."""
+    arc_data = ArcBuildData(
+        investigation_row=sample_investigation,
+        studies=sample_studies,
+        assays=sample_assays,
+        contacts=[],
+        publications=[],
+        annotations=[],
     )
-    
+    arc = build_single_arc_task(arc_data)
+
     assert len(arc.RegisteredStudies) == 1
     # Assays are linked to studies, or present in the ARC assays list if not linked?
     # ARCtrl logic: RegisteredAssays usually refers to assays in the ARC.
     # But let's check Assays count on ARC.
     assert len(arc.Assays) == 1
-    
+
     study = arc.RegisteredStudies[0]
     assert study.Identifier == "sty1"
-    
+
     # Check linkage: Assay should be registered in Study
     assert len(study.RegisteredAssays) == 1
     assert study.RegisteredAssays[0].Identifier == "asy1"
+
 
 def test_build_arc_with_contacts_and_pubs(
     sample_investigation: dict[str, Any],
     sample_studies: list[dict[str, Any]],
     sample_contacts: list[dict[str, Any]],
-    sample_publications: list[dict[str, Any]]
+    sample_publications: list[dict[str, Any]],
 ) -> None:
-    arc = build_single_arc_task(
-        sample_investigation,
-        sample_studies,
-        [],
-        sample_contacts,
-        sample_publications,
-        []
+    """Test building an ARC with contacts and publications at both investigation and study levels."""
+    arc_data = ArcBuildData(
+        investigation_row=sample_investigation,
+        studies=sample_studies,
+        assays=[],
+        contacts=sample_contacts,
+        publications=sample_publications,
+        annotations=[],
     )
-    
+    arc = build_single_arc_task(arc_data)
+
     # Inv contacts
     assert len(arc.Contacts) == 1
     assert arc.Contacts[0].LastName == "Doe"
-    
+
     # Study contacts
     study = arc.RegisteredStudies[0]
     assert len(study.Contacts) == 1
     assert study.Contacts[0].LastName == "Smith"
-    
+
     # Inv pubs
     assert len(arc.Publications) == 1
     assert arc.Publications[0].Title == "Inv Pub"
-    
+
     # Study pubs
     assert len(study.Publications) == 1
     assert study.Publications[0].Title == "Study Pub"
 
-def test_build_ignores_irrelevant_data(
-    sample_investigation: dict[str, Any]
-) -> None:
+
+def test_build_ignores_irrelevant_data(sample_investigation: dict[str, Any]) -> None:
+    """Test that data linked to other investigations is correctly filtered out."""
     # Data for other investigation
     other_study = {"identifier": "styX", "investigation_ref": "inv2"}
-    
-    arc = build_single_arc_task(
-        sample_investigation,
-        [other_study],
-        [], [], [], []
-    )
-    
-    assert len(arc.RegisteredStudies) == 0
 
+    arc_data = ArcBuildData(
+        investigation_row=sample_investigation,
+        studies=[other_study],
+        assays=[],
+        contacts=[],
+        publications=[],
+        annotations=[],
+    )
+    arc = build_single_arc_task(arc_data)
+
+    assert len(arc.RegisteredStudies) == 0

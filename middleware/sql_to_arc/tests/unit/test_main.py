@@ -1,3 +1,9 @@
+"""Unit tests for the sql_to_arc main module.
+
+This module contains tests for argument parsing, investigation processing,
+and worker investigation handling in the sql_to_arc pipeline.
+"""
+
 import asyncio
 from pathlib import Path
 from typing import Any
@@ -63,9 +69,7 @@ async def test_process_worker_investigations_builds_and_uploads(monkeypatch: pyt
     investigations = [
         {"identifier": "1", "title": "Inv", "description_text": "Desc"},
     ]
-    studies = {
-        "1": [{"identifier": "10", "investigation_ref": "1", "title": "Study"}]
-    }
+    studies = {"1": [{"identifier": "10", "investigation_ref": "1", "title": "Study"}]}
 
     # Mock the loop.run_in_executor to return an ARC directly
     loop_future: asyncio.Future[MagicMock] = asyncio.Future()
@@ -104,7 +108,7 @@ async def test_process_investigations(monkeypatch: pytest.MonkeyPatch) -> None:
     mock_db = MagicMock()
     mock_db.connect.return_value.__aenter__.return_value = AsyncMock()
     mock_db.connect.return_value.__aexit__.return_value = None
-    
+
     # Mock DB returns RowMapping-like dicts
     mock_db.get_investigations = AsyncMock(return_value=[{"identifier": "1"}, {"identifier": "2"}])
     mock_db.get_studies = AsyncMock(return_value=[{"identifier": "10", "investigation_ref": "1"}])
@@ -117,7 +121,7 @@ async def test_process_investigations(monkeypatch: pytest.MonkeyPatch) -> None:
     mock_config = MagicMock(max_concurrent_arc_builds=2, batch_size=2, rdi="test", debug_limit=10)
 
     # Mock process_worker_investigations to simplify
-    async def mock_process_worker_inv(_ctx: WorkerContext, invs: list[dict[str, Any]]) -> ProcessingStats:
+    async def mock_process_worker_inv(_ctx: WorkerContext, _invs: list[dict[str, Any]]) -> ProcessingStats:
         return ProcessingStats(found_datasets=0)
 
     monkeypatch.setattr("middleware.sql_to_arc.main.process_worker_investigations", mock_process_worker_inv)

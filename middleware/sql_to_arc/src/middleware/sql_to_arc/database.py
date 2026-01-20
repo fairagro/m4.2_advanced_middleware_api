@@ -5,13 +5,12 @@ from contextlib import asynccontextmanager
 from typing import Any
 
 from sqlalchemy import (
+    TIMESTAMP,
     Column,
     Integer,
     MetaData,
-    String,
     Table,
     Text,
-    TIMESTAMP,
 )
 from sqlalchemy.ext.asyncio import AsyncConnection, AsyncEngine, create_async_engine
 from sqlalchemy.sql import select
@@ -24,7 +23,7 @@ metadata = MetaData()
 # SQLAlchemy will treat them as tables for querying purposes.
 
 # vInvestigation
-vInvestigation = Table(
+v_investigation = Table(
     "vInvestigation",
     metadata,
     Column("identifier", Text, primary_key=True),
@@ -35,7 +34,7 @@ vInvestigation = Table(
 )
 
 # vStudy
-vStudy = Table(
+v_study = Table(
     "vStudy",
     metadata,
     Column("identifier", Text, primary_key=True),
@@ -47,7 +46,7 @@ vStudy = Table(
 )
 
 # vAssay
-vAssay = Table(
+v_assay = Table(
     "vAssay",
     metadata,
     Column("identifier", Text, primary_key=True),
@@ -65,7 +64,7 @@ vAssay = Table(
 )
 
 # vPublication
-vPublication = Table(
+v_publication = Table(
     "vPublication",
     metadata,
     Column("pubmed_id", Text),
@@ -81,7 +80,7 @@ vPublication = Table(
 )
 
 # vContact
-vContact = Table(
+v_contact = Table(
     "vContact",
     metadata,
     Column("last_name", Text),
@@ -99,7 +98,7 @@ vContact = Table(
 )
 
 # vAnnotationTable
-vAnnotationTable = Table(
+v_annotation_table = Table(
     "vAnnotationTable",
     metadata,
     Column("table_name", Text),
@@ -127,12 +126,10 @@ class Database:
         """Initialize database with connection string."""
         self.engine: AsyncEngine = create_async_engine(connection_string, echo=False)
 
-    async def get_investigations(
-        self, limit: int | None = None
-    ) -> Sequence[Any]:
+    async def get_investigations(self, limit: int | None = None) -> Sequence[Any]:
         """Fetch investigations."""
         async with self.engine.connect() as conn:
-            stmt = select(vInvestigation)
+            stmt = select(v_investigation)
             if limit:
                 stmt = stmt.limit(limit)
             result = await conn.execute(stmt)
@@ -143,7 +140,7 @@ class Database:
         if not investigation_ids:
             return []
         async with self.engine.connect() as conn:
-            stmt = select(vStudy).where(vStudy.c.investigation_ref.in_(investigation_ids))
+            stmt = select(v_study).where(v_study.c.investigation_ref.in_(investigation_ids))
             result = await conn.execute(stmt)
             return result.mappings().all()
 
@@ -152,7 +149,7 @@ class Database:
         if not investigation_ids:
             return []
         async with self.engine.connect() as conn:
-            stmt = select(vAssay).where(vAssay.c.investigation_ref.in_(investigation_ids))
+            stmt = select(v_assay).where(v_assay.c.investigation_ref.in_(investigation_ids))
             result = await conn.execute(stmt)
             return result.mappings().all()
 
@@ -161,7 +158,7 @@ class Database:
         if not investigation_ids:
             return []
         async with self.engine.connect() as conn:
-            stmt = select(vContact).where(vContact.c.investigation_ref.in_(investigation_ids))
+            stmt = select(v_contact).where(v_contact.c.investigation_ref.in_(investigation_ids))
             result = await conn.execute(stmt)
             return result.mappings().all()
 
@@ -170,7 +167,7 @@ class Database:
         if not investigation_ids:
             return []
         async with self.engine.connect() as conn:
-            stmt = select(vPublication).where(vPublication.c.investigation_ref.in_(investigation_ids))
+            stmt = select(v_publication).where(v_publication.c.investigation_ref.in_(investigation_ids))
             result = await conn.execute(stmt)
             return result.mappings().all()
 
@@ -179,7 +176,7 @@ class Database:
         if not investigation_ids:
             return []
         async with self.engine.connect() as conn:
-            stmt = select(vAnnotationTable).where(vAnnotationTable.c.investigation_ref.in_(investigation_ids))
+            stmt = select(v_annotation_table).where(v_annotation_table.c.investigation_ref.in_(investigation_ids))
             result = await conn.execute(stmt)
             return result.mappings().all()
 

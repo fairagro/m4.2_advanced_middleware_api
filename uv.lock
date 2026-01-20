@@ -2104,7 +2104,7 @@ requires-dist = [
     { name = "arctrl", specifier = ">=3.0.0b15" },
     { name = "pydantic", specifier = ">=2.12.5" },
     { name = "shared", editable = "middleware/shared" },
-    { name = "sqlalchemy", specifier = ">=2.0.0" },
+    { name = "sqlalchemy", specifier = ">=2.0.45" },
 ]
 
 [[package]]

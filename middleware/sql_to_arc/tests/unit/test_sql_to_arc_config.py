@@ -31,7 +31,7 @@ def test_config_creation() -> None:
     )
 
     assert config.connection_string.get_secret_value() == "postgresql+asyncpg://user:pass@localhost:5432/db"
-    assert config.debug_limit == 5
+    assert config.debug_limit == 5  # noqa: PLR2004
     assert config.rdi == "edaphobase"
     assert config.rdi_url == "https://edaphobase.org"
     assert config.batch_size == 10  # noqa: PLR2004

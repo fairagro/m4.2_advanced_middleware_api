@@ -3,9 +3,10 @@
 import datetime
 from typing import Any
 
-from arctrl import ArcAssay, ArcInvestigation, ArcStudy, Person, Publication
+from arctrl import ArcAssay, ArcInvestigation, ArcStudy, Person, Publication  # type: ignore[import-untyped]
 
 from middleware.sql_to_arc.mapper import (
+    map_annotation,
     map_assay,
     map_contact,
     map_investigation,
@@ -71,6 +72,18 @@ def test_map_study() -> None:
     assert study.PublicReleaseDate == now.isoformat()
 
 
+def test_map_investigation_string_dates() -> None:
+    """Test mapping of investigation data with string dates."""
+    row: dict[str, Any] = {
+        "identifier": "789",
+        "submission_date": "2023-01-01",
+        "public_release_date": "2023-12-31",
+    }
+    arc = map_investigation(row)
+    assert arc.SubmissionDate == "2023-01-01"
+    assert arc.PublicReleaseDate == "2023-12-31"
+
+
 def test_map_assay() -> None:
     """Test mapping of assay data."""
     row: dict[str, Any] = {
@@ -86,10 +99,24 @@ def test_map_assay() -> None:
     assert isinstance(assay, ArcAssay)
     assert assay.Identifier == "1"
     # Check OntologyAnnotations
+    assert assay.MeasurementType is not None
     assert assay.MeasurementType.Name == "Proteomics"
     assert assay.MeasurementType.TermAccessionNumber == "http://example.org/prot"
+    assert assay.TechnologyType is not None
     assert assay.TechnologyType.Name == "Mass Spectrometry"
     assert assay.TechnologyType.TermAccessionNumber == "http://example.org/ms"
+
+
+def test_map_assay_with_platform() -> None:
+    """Test mapping of assay data including technology platform."""
+    row: dict[str, Any] = {
+        "identifier": "2",
+        "technology_platform": "Orbitrap",
+    }
+    assay = map_assay(row)
+    assert assay.Identifier == "2"
+    assert assay.TechnologyPlatform is not None
+    assert assay.TechnologyPlatform.Name == "Orbitrap"
 
 
 def test_map_publication() -> None:
@@ -109,6 +136,7 @@ def test_map_publication() -> None:
     assert pub.DOI == "10.1234/5678"
     assert pub.Authors == "Doe J, Smith A"
     assert pub.Title == "A Great Paper"
+    assert pub.Status is not None
     assert pub.Status.Name == "Published"
 
 
@@ -128,5 +156,23 @@ def test_map_contact() -> None:
     assert person.FirstName == "John"
     assert person.EMail == "john@example.com"
     assert len(person.Roles) == 1
+    assert person.Roles[0] is not None
     assert person.Roles[0].Name == "Principal Investigator"
     assert person.Roles[0].TermAccessionNumber == "http://roles"
+
+
+def test_map_contact_invalid_roles() -> None:
+    """Test mapping of contact data with invalid roles JSON."""
+    row: dict[str, Any] = {
+        "last_name": "Smith",
+        "roles": "invalid json string",
+    }
+    person = map_contact(row)
+    assert person.LastName == "Smith"
+    assert person.Roles == []
+
+
+def test_map_annotation() -> None:
+    """Test the map_annotation helper function."""
+    row = {"data": "test_value"}
+    assert map_annotation(row) == row
