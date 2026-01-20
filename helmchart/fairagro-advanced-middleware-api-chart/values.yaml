@@ -126,6 +126,12 @@ celery:
     enabled: true
     replicaCount: 1
     concurrency: 4
+    persistence:
+      enabled: false
+      size: 5Gi
+      accessMode: ReadWriteMany
+      # storageClass: ""
+      mountPath: /var/cache/middleware/arc-cache
     serviceAccount:
       create: true
       automount: false
