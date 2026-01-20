@@ -143,8 +143,9 @@ def initialize_logging(
             root_logger = logging.getLogger()
             root_logger.addHandler(root_handler)
             root_logger.setLevel(min(root_logger.level or log_level, log_level))
-            # Prevent self-logging loops: OTEL internal logs at WARNING+ only
+            # Prevent self-logging loops: OTEL internal logs and urllib3/requests at WARNING+ only
             logging.getLogger("opentelemetry").setLevel(logging.WARNING)
+            logging.getLogger("urllib3").setLevel(logging.WARNING)
             logger.info("OpenTelemetry log exporter configured: %s", otlp_endpoint)
         except (ValueError, OSError) as e:  # pragma: no cover - defensive path
             logger.warning("Failed to configure OTLP log exporter: %s", e)
