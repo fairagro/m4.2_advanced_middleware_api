@@ -4,10 +4,10 @@ The `sql_to_arc` package converts data from a PostgreSQL database schema into FA
 
 ## Features
 
-- Async PostgreSQL access via `psycopg` (v3)
-- Mapping of Investigations, Studies, Assays to ARCtrl models
+- Async Database access via `sqlalchemy` (asyncio with asyncpg, aiosqlite, etc.)
+- SQL View-based mapping of data to ARCtrl models
 - Batch upload to the Middleware API using `ApiClient`
-- Pydantic-based configuration
+- Pydantic-based configuration with generic Connection String support
 
 ## Requirements
 
@@ -39,10 +39,7 @@ Configuration is defined by `middleware.sql_to_arc.config.Config` and can be pro
 
 ```python
 config = Config.from_data({
-  "db_name": "edaphobase",
-  "db_user": "postgres",
-  "db_password": "postgres",
-  "db_host": "localhost",
+  "connection_string": "postgresql+asyncpg://user:pass@localhost:5432/edaphobase",
   "rdi": "edaphobase",
   "api_client": {
     "api_url": "http://localhost:8000",

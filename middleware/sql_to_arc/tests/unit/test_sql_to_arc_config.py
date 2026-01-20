@@ -20,11 +20,8 @@ def test_config_creation() -> None:
     )
 
     config = Config(
-        db_name="test_db",
-        db_user="test_user",
-        db_password=SecretStr("test_password"),
-        db_host="localhost",
-        db_port=5432,
+        connection_string=SecretStr("postgresql+asyncpg://user:pass@localhost:5432/db"),
+        debug_limit=5,
         rdi="edaphobase",
         rdi_url="https://edaphobase.org",
         batch_size=10,
@@ -33,11 +30,8 @@ def test_config_creation() -> None:
         otel=OtelConfig(),
     )
 
-    assert config.db_name == "test_db"
-    assert config.db_user == "test_user"
-    assert config.db_password.get_secret_value() == "test_password"
-    assert config.db_host == "localhost"
-    assert config.db_port == 5432  # noqa: PLR2004
+    assert config.connection_string.get_secret_value() == "postgresql+asyncpg://user:pass@localhost:5432/db"
+    assert config.debug_limit == 5
     assert config.rdi == "edaphobase"
     assert config.rdi_url == "https://edaphobase.org"
     assert config.batch_size == 10  # noqa: PLR2004
@@ -54,10 +48,7 @@ def test_config_with_defaults() -> None:
     )
 
     config = Config(
-        db_name="test_db",
-        db_user="test_user",
-        db_password=SecretStr("secret"),
-        db_host="localhost",
+        connection_string=SecretStr("sqlite:///:memory:"),
         rdi="edaphobase",
         rdi_url="https://edaphobase.org",
         api_client=api_client_config,
@@ -65,8 +56,8 @@ def test_config_with_defaults() -> None:
     )
 
     # Check defaults
-    assert config.db_port == 5432  # Default port  # noqa: PLR2004
     assert config.batch_size == 10  # Default batch size  # noqa: PLR2004
+    assert config.debug_limit is None
 
 
 def test_config_batch_size_validation() -> None:
@@ -80,10 +71,7 @@ def test_config_batch_size_validation() -> None:
 
     with pytest.raises(ValidationError) as exc_info:
         Config(
-            db_name="test_db",
-            db_user="test_user",
-            db_password=SecretStr("secret"),
-            db_host="localhost",
+            connection_string=SecretStr("sqlite:///:memory:"),
             rdi="edaphobase",
             rdi_url="https://edaphobase.org",
             batch_size=0,  # Invalid: must be > 0
