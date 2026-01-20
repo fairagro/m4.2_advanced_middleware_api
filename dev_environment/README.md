@@ -68,6 +68,20 @@ With image rebuild:
 ./start.sh --build
 ```
 
+### Start with External Middleware API
+
+If you want to run `sql_to_arc` against an external API server (e.g. production or staging) that requires client certificates:
+
+1. Copy your client certificate and key to `dev_environment/client.crt` and `dev_environment/client.key`.
+2. Edit `dev_environment/config-external.yaml` and set the `api_url` to the external endpoint.
+3. Run the external start script:
+
+```bash
+./start-external.sh
+```
+
+This starts only `postgres`, `db-init`, and `sql_to_arc`.
+
 ### View Logs
 
 ```bash

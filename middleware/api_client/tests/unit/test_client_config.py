@@ -14,7 +14,7 @@ def test_config_from_yaml_file(test_config_yaml: Path) -> None:
     config = Config.from_yaml_file(test_config_yaml)
 
     assert config.log_level == "DEBUG"
-    assert config.api_url == "https://test-api.example.com"
+    assert config.api_url == "https://test-api.example.com/"
     assert config.timeout == 30.0  # noqa: PLR2004
     assert config.verify_ssl is True
 
@@ -24,7 +24,7 @@ def test_config_from_data(test_config_dict: dict) -> None:
     config = Config.from_data(test_config_dict)
 
     assert config.log_level == "DEBUG"
-    assert config.api_url == "https://test-api.example.com"
+    assert config.api_url == "https://test-api.example.com/"
     assert config.client_cert_path == Path(test_config_dict["client_cert_path"])
     assert config.client_key_path == Path(test_config_dict["client_key_path"])
 
@@ -123,7 +123,7 @@ def test_config_missing_required_fields() -> None:
             # client_cert_path and client_key_path are optional
         }
     )
-    assert config.api_url == "https://api.example.com"
+    assert config.api_url == "https://api.example.com/"
     assert config.client_cert_path is None
     assert config.client_key_path is None
 

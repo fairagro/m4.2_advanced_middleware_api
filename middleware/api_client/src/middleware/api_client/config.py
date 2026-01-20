@@ -3,7 +3,7 @@
 from pathlib import Path
 from typing import Annotated
 
-from pydantic import Field
+from pydantic import Field, field_validator
 
 from middleware.shared.config.config_base import ConfigBase
 
@@ -28,3 +28,11 @@ class Config(ConfigBase):
     timeout: Annotated[float, Field(description="Request timeout in seconds", gt=0)] = 30.0
     verify_ssl: Annotated[bool, Field(description="Enable SSL certificate verification")] = True
     follow_redirects: Annotated[bool, Field(description="Follow HTTP redirects for API requests")] = True
+
+    @field_validator("api_url")
+    @classmethod
+    def ensure_trailing_slash(cls, v: str) -> str:
+        """Ensure the API URL ends with a trailing slash."""
+        if not v.endswith("/"):
+            return v + "/"
+        return v

@@ -43,11 +43,11 @@ async def test_create_arcs_integration_mock_server(client_config: Config) -> Non
 
     status_response = {"task_id": "task-integr-001", "status": "SUCCESS", "result": final_result}
 
-    route_post = respx.post(f"{client_config.api_url}/v1/arcs").mock(
+    route_post = respx.post(f"{client_config.api_url}v1/arcs").mock(
         return_value=httpx.Response(http.HTTPStatus.ACCEPTED, json=task_response)
     )
 
-    route_get = respx.get(f"{client_config.api_url}/v1/tasks/task-integr-001").mock(
+    route_get = respx.get(f"{client_config.api_url}v1/tasks/task-integr-001").mock(
         return_value=httpx.Response(http.HTTPStatus.OK, json=status_response)
     )
 
@@ -83,7 +83,7 @@ async def test_create_arcs_integration_mock_server(client_config: Config) -> Non
 @respx.mock
 async def test_create_arcs_unauthorized(client_config: Config) -> None:
     """Test handling of 401 Unauthorized response."""
-    respx.post(f"{client_config.api_url}/v1/arcs").mock(
+    respx.post(f"{client_config.api_url}v1/arcs").mock(
         return_value=httpx.Response(http.HTTPStatus.UNAUTHORIZED, text="Unauthorized")
     )
 
@@ -100,7 +100,7 @@ async def test_create_arcs_unauthorized(client_config: Config) -> None:
 @respx.mock
 async def test_create_arcs_forbidden(client_config: Config) -> None:
     """Test handling of 403 Forbidden response."""
-    respx.post(f"{client_config.api_url}/v1/arcs").mock(
+    respx.post(f"{client_config.api_url}v1/arcs").mock(
         return_value=httpx.Response(http.HTTPStatus.FORBIDDEN, text="Forbidden - RDI not authorized")
     )
 
@@ -117,7 +117,7 @@ async def test_create_arcs_forbidden(client_config: Config) -> None:
 @respx.mock
 async def test_create_arcs_validation_error(client_config: Config) -> None:
     """Test handling of 422 Validation Error response."""
-    respx.post(f"{client_config.api_url}/v1/arcs").mock(
+    respx.post(f"{client_config.api_url}v1/arcs").mock(
         return_value=httpx.Response(http.HTTPStatus.UNPROCESSABLE_ENTITY, json={"detail": "Invalid ARC data"})
     )
 
@@ -137,7 +137,7 @@ async def test_create_multiple_arcs(client_config: Config) -> None:
     # Wait - I removed this test in unit/test_client.py, but here I should also update it
     # Test creating multiple ARCs in one request - should fail
 
-    respx.post(f"{client_config.api_url}/v1/arcs").mock(
+    respx.post(f"{client_config.api_url}v1/arcs").mock(
         return_value=httpx.Response(http.HTTPStatus.BAD_REQUEST, json={"detail": "Single ARC only"})
     )
 
@@ -159,7 +159,7 @@ async def test_timeout_error(client_config: Config) -> None:
     client_config.timeout = 0.1
 
     # Mock a slow response
-    respx.post(f"{client_config.api_url}/v1/arcs").mock(side_effect=httpx.TimeoutException("Request timeout"))
+    respx.post(f"{client_config.api_url}v1/arcs").mock(side_effect=httpx.TimeoutException("Request timeout"))
 
     arc = ARC.from_arc_investigation(ArcInvestigation.create(identifier="test", title="Test"))
     async with ApiClient(client_config) as client:

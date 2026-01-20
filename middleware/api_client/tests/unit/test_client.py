@@ -87,11 +87,11 @@ async def test_create_or_update_arcs_success(client_config: Config) -> None:
         },
     }
 
-    route_post = respx.post(f"{client_config.api_url}/v1/arcs").mock(
+    route_post = respx.post(f"{client_config.api_url}v1/arcs").mock(
         return_value=httpx.Response(http.HTTPStatus.ACCEPTED, json=task_response)
     )
 
-    route_get = respx.get(f"{client_config.api_url}/v1/tasks/task-123").mock(
+    route_get = respx.get(f"{client_config.api_url}v1/tasks/task-123").mock(
         return_value=httpx.Response(http.HTTPStatus.OK, json=status_response)
     )
 
@@ -118,7 +118,7 @@ async def test_create_or_update_arcs_success(client_config: Config) -> None:
 async def test_create_or_update_arcs_http_error(client_config: Config) -> None:
     """Test create_or_update_arcs with HTTP error response."""
     # Mock an error response
-    respx.post(f"{client_config.api_url}/v1/arcs").mock(
+    respx.post(f"{client_config.api_url}v1/arcs").mock(
         return_value=httpx.Response(http.HTTPStatus.FORBIDDEN, text="Forbidden")
     )
 
@@ -137,7 +137,7 @@ async def test_create_or_update_arcs_http_error(client_config: Config) -> None:
 async def test_create_or_update_arcs_network_error(client_config: Config) -> None:
     """Test create_or_update_arcs with network error."""
     # Mock a network error
-    respx.post(f"{client_config.api_url}/v1/arcs").mock(side_effect=httpx.ConnectError("Connection refused"))
+    respx.post(f"{client_config.api_url}v1/arcs").mock(side_effect=httpx.ConnectError("Connection refused"))
 
     # Should raise ApiClientError
     arc = ARC.from_arc_investigation(ArcInvestigation.create(identifier="test", title="Test"))
@@ -222,11 +222,11 @@ async def test_client_headers(client_config: Config) -> None:
         },
     }
 
-    route_post = respx.post(f"{client_config.api_url}/v1/arcs").mock(
+    route_post = respx.post(f"{client_config.api_url}v1/arcs").mock(
         return_value=httpx.Response(http.HTTPStatus.ACCEPTED, json=task_response)
     )
 
-    respx.get(f"{client_config.api_url}/v1/tasks/task-headers").mock(
+    respx.get(f"{client_config.api_url}v1/tasks/task-headers").mock(
         return_value=httpx.Response(http.HTTPStatus.OK, json=status_response)
     )
 
@@ -238,3 +238,116 @@ async def test_client_headers(client_config: Config) -> None:
     last_request = route_post.calls.last.request
     assert last_request.headers["accept"] == "application/json"
     assert last_request.headers["content-type"] == "application/json"
+
+
+@pytest.mark.asyncio
+async def test_client_verify_ssl_false(test_config_dict: dict) -> None:
+    """Test client initialization with verify_ssl=False."""
+    test_config_dict["verify_ssl"] = "false"
+    config = Config.from_data(test_config_dict)
+    client = ApiClient(config)
+
+    with patch("httpx.AsyncClient") as mock_client:
+        client._get_client()  # pylint: disable=protected-access
+        mock_client.assert_called_once()
+        _, kwargs = mock_client.call_args
+        assert kwargs["verify"] is False
+
+
+@pytest.mark.asyncio
+async def test_client_with_ca_cert(test_config_dict: dict, temp_dir: Path) -> None:
+    """Test client initialization with a CA certificate."""
+    ca_cert = temp_dir / "ca.pem"
+    ca_cert.write_text("fake-ca-cert")
+    test_config_dict["ca_cert_path"] = str(ca_cert)
+    config = Config.from_data(test_config_dict)
+    client = ApiClient(config)
+
+    with patch("httpx.AsyncClient") as mock_client, patch("ssl.create_default_context") as mock_ssl:
+        mock_ctx = mock_ssl.return_value
+        client._get_client()  # pylint: disable=protected-access
+        mock_ssl.assert_called_once_with(cafile=str(ca_cert))
+        _, kwargs = mock_client.call_args
+        assert kwargs["verify"] == mock_ctx
+
+
+@pytest.mark.asyncio
+async def test_client_with_ca_and_mtls_cert(test_config_dict: dict, temp_dir: Path) -> None:
+    """Test client initialization with both CA and mTLS certificates."""
+    ca_cert = temp_dir / "ca.pem"
+    ca_cert.write_text("fake-ca-cert")
+    cert_path = temp_dir / "client.crt"
+    cert_path.write_text("fake-cert")
+    key_path = temp_dir / "client.key"
+    key_path.write_text("fake-key")
+
+    test_config_dict["ca_cert_path"] = str(ca_cert)
+    test_config_dict["client_cert_path"] = str(cert_path)
+    test_config_dict["client_key_path"] = str(key_path)
+
+    config = Config.from_data(test_config_dict)
+    client = ApiClient(config)
+
+    with patch("httpx.AsyncClient") as mock_client, patch("ssl.create_default_context") as mock_ssl:
+        mock_ctx = mock_ssl.return_value
+        client._get_client()  # pylint: disable=protected-access
+        mock_ssl.assert_called_once_with(cafile=str(ca_cert))
+        mock_ctx.load_cert_chain.assert_called_once_with(str(cert_path), str(key_path))
+        _, kwargs = mock_client.call_args
+        assert kwargs["verify"] == mock_ctx
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_get_http_error(client_config: Config) -> None:
+    """Test _get with an HTTP error."""
+    respx.get(f"{client_config.api_url}v1/test").mock(return_value=httpx.Response(http.HTTPStatus.NOT_FOUND))
+    client = ApiClient(client_config)
+    with pytest.raises(ApiClientError, match="HTTP error 404"):
+        await client._get("v1/test")  # pylint: disable=protected-access
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_get_network_error(client_config: Config) -> None:
+    """Test _get with a network error."""
+    respx.get(f"{client_config.api_url}v1/test").mock(side_effect=httpx.RequestError("Network error"))
+    client = ApiClient(client_config)
+    with pytest.raises(ApiClientError, match="Request error: Network error"):
+        await client._get("v1/test")  # pylint: disable=protected-access
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_create_or_update_arcs_no_task_id(client_config: Config) -> None:
+    """Test create_or_update_arcs when API returns no task_id."""
+    respx.post(f"{client_config.api_url}v1/arcs").mock(return_value=httpx.Response(http.HTTPStatus.ACCEPTED, json={}))
+    client = ApiClient(client_config)
+    with pytest.raises(ApiClientError, match="No task_id returned from API"):
+        await client.create_or_update_arcs(rdi="test", arcs=[])
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_create_or_update_arcs_task_failure(client_config: Config) -> None:
+    """Test create_or_update_arcs when poll returns FAILURE."""
+    task_response = {"task_id": "failed-task"}
+    status_response = {
+        "task_id": "failed-task",
+        "status": "FAILURE",
+        "error": "Something went wrong",
+    }
+
+    respx.post(f"{client_config.api_url}v1/arcs").mock(
+        return_value=httpx.Response(http.HTTPStatus.ACCEPTED, json=task_response)
+    )
+    respx.get(f"{client_config.api_url}v1/tasks/failed-task").mock(
+        return_value=httpx.Response(http.HTTPStatus.OK, json=status_response)
+    )
+
+    client = ApiClient(client_config)
+    with (
+        patch("asyncio.sleep", return_value=None),
+        pytest.raises(ApiClientError, match="Task failed: Something went wrong"),
+    ):
+        await client.create_or_update_arcs(rdi="test", arcs=[])

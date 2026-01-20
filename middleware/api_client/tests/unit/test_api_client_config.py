@@ -18,7 +18,7 @@ def test_config_creation_with_required_fields() -> None:
         otel=OtelConfig(),
     )
 
-    assert config.api_url == "https://api.example.com"
+    assert config.api_url == "https://api.example.com/"
     assert config.client_cert_path == Path("/path/to/cert.pem")
     assert config.client_key_path == Path("/path/to/key.pem")
 
@@ -37,7 +37,7 @@ def test_config_with_all_fields() -> None:
         otel=OtelConfig(),
     )
 
-    assert config.api_url == "https://api.example.com"
+    assert config.api_url == "https://api.example.com/"
     assert config.ca_cert_path == Path("/path/to/ca.pem")
     assert config.timeout == 60.0  # noqa: PLR2004
     assert config.verify_ssl is False
@@ -59,6 +59,23 @@ def test_config_with_defaults() -> None:
     assert config.timeout == 30.0  # noqa: PLR2004
     assert config.verify_ssl is True
     assert config.follow_redirects is True
+
+
+def test_config_trailing_slash_validator() -> None:
+    """Test that api_url always ends with a trailing slash."""
+    # Case 1: No trailing slash provided
+    config1 = Config(
+        api_url="https://api.example.com",
+        otel=OtelConfig(),
+    )
+    assert config1.api_url == "https://api.example.com/"
+
+    # Case 2: Trailing slash already provided
+    config2 = Config(
+        api_url="https://api.example.com/",
+        otel=OtelConfig(),
+    )
+    assert config2.api_url == "https://api.example.com/"
 
 
 def test_config_timeout_validation() -> None:
