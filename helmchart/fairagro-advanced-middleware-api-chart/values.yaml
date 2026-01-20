@@ -127,7 +127,7 @@ celery:
     replicaCount: 1
     concurrency: 4
     persistence:
-      enabled: false
+      enabled: true
       size: 5Gi
       accessMode: ReadWriteMany
       # storageClass: ""
