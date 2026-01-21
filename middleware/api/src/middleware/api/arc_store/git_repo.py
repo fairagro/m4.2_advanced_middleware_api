@@ -389,21 +389,23 @@ class GitRepo(ArcStore):
             url = self._get_authenticated_url(repo_url)
 
             g = git.cmd.Git()
+            start = time.perf_counter()
+            exists_result = False
             try:
-                start = time.perf_counter()
                 if self._config.command_timeout is not None:
                     g.ls_remote(url, kill_after_timeout=self._config.command_timeout)
                 else:
                     g.ls_remote(url)
-                duration = time.perf_counter() - start
-                logger.info("Git ls-remote for %s succeeded in %.2fs", arc_id, duration)
-                span.set_attribute("git.duration_s", duration)
-                span.set_attribute("exists", True)
-                return True
+                exists_result = True
             except GitCommandError as e:
-                duration = time.perf_counter() - start
-                logger.warning("Git ls-remote for %s failed after %.2fs", arc_id, duration)
-                span.set_attribute("git.duration_s", duration)
-                span.set_attribute("exists", False)
                 span.record_exception(e)
-                return False
+            finally:
+                duration = time.perf_counter() - start
+                span.set_attribute("git.duration_s", duration)
+                span.set_attribute("exists", exists_result)
+                if exists_result:
+                    logger.info("Git ls-remote for %s succeeded in %.2fs", arc_id, duration)
+                else:
+                    logger.warning("Git ls-remote for %s failed after %.2fs", arc_id, duration)
+
+            return exists_result
