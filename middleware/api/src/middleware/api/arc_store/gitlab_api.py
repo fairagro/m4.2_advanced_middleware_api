@@ -312,22 +312,27 @@ class GitlabApi(ArcStore):
             await loop.run_in_executor(self._executor, self._commit_actions, project, actions, arc_id)
 
     # -------------------------- Get --------------------------
-    def _get(self, arc_id: str) -> ARC | None:
-        project = self._find_project(arc_id)
-        if not project:
-            return None
-        with tempfile.TemporaryDirectory() as tmp_root:
-            arc_path = Path(tmp_root) / arc_id
-            arc_path.mkdir(parents=True, exist_ok=True)
-            self._download_project_files(project, arc_path)
-            try:
-                return ARC.load(str(arc_path))
-            except FileNotFoundError as e:
-                logger.warning("ARC files for %s not found: %s", arc_id, e)
+    async def _get(self, arc_id: str) -> ARC | None:
+        loop = asyncio.get_running_loop()
+
+        def _task() -> ARC | None:
+            project = self._find_project(arc_id)
+            if not project:
                 return None
-            except Exception as e:
-                logger.error("Unexpected error loading ARC for %s: %s", arc_id, e, exc_info=True)
-                raise
+            with tempfile.TemporaryDirectory() as tmp_root:
+                arc_path = Path(tmp_root) / arc_id
+                arc_path.mkdir(parents=True, exist_ok=True)
+                self._download_project_files(project, arc_path)
+                try:
+                    return ARC.load(str(arc_path))
+                except FileNotFoundError as e:
+                    logger.warning("ARC files for %s not found: %s", arc_id, e)
+                    return None
+                except Exception as e:
+                    logger.error("Unexpected error loading ARC for %s: %s", arc_id, e, exc_info=True)
+                    raise
+
+        return await loop.run_in_executor(self._executor, _task)
 
     def _download_project_files(self, project: Project, arc_path: Path) -> None:
         tree = project.repository_tree(ref=self._config.branch, all=True, recursive=True)
@@ -351,14 +356,24 @@ class GitlabApi(ArcStore):
                 file_path.write_bytes(content_bytes)
 
     # -------------------------- Delete --------------------------
-    def _delete(self, arc_id: str) -> None:
-        project = self._find_project(arc_id)
-        if project:
-            project.delete()
-        else:
-            logger.warning("Project %s not found for deletion.", arc_id)
+    async def _delete(self, arc_id: str) -> None:
+        loop = asyncio.get_running_loop()
+
+        def _task() -> None:
+            project = self._find_project(arc_id)
+            if project:
+                project.delete()
+            else:
+                logger.warning("Project %s not found for deletion.", arc_id)
+
+        await loop.run_in_executor(self._executor, _task)
 
     # -------------------------- Exists --------------------------
-    def _exists(self, arc_id: str) -> bool:
-        project = self._find_project(arc_id)
-        return bool(project)
+    async def _exists(self, arc_id: str) -> bool:
+        loop = asyncio.get_running_loop()
+
+        def _task() -> bool:
+            project = self._find_project(arc_id)
+            return bool(project)
+
+        return await loop.run_in_executor(self._executor, _task)

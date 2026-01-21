@@ -58,8 +58,12 @@ class BusinessLogic:
         ) as span:
             logger.debug("Processing RO-Crate JSON for RDI: %s", rdi)
             try:
-                arc_json = json.dumps(arc_dict)
-                arc = ARC.from_rocrate_json_string(arc_json)
+                with self._tracer.start_as_current_span("json.serialize"):
+                    arc_json = json.dumps(arc_dict)
+
+                with self._tracer.start_as_current_span("arc.parse_rocrate"):
+                    arc = ARC.from_rocrate_json_string(arc_json)
+
                 logger.debug("Successfully parsed ARC from RO-Crate JSON")
             except Exception as e:
                 logger.error("Failed to parse RO-Crate JSON: %s", e, exc_info=True)
@@ -72,7 +76,7 @@ class BusinessLogic:
                 raise InvalidJsonSemanticError("RO-Crate JSON must contain an 'Identifier' in the ISA object.")
 
             arc_id = self._store.arc_id(identifier, rdi)
-            exists = self._store.exists(arc_id)
+            exists = await self._store.exists(arc_id)
             logger.debug("ARC identifier=%s, arc_id=%s, exists=%s", identifier, arc_id, exists)
 
             span.set_attribute("arc_id", arc_id)

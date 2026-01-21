@@ -35,17 +35,17 @@ class ArcStore(ABC):
         raise NotImplementedError("`ArcStore._create_or_update` is not implemented")
 
     @abstractmethod
-    def _get(self, arc_id: str) -> ARC:
+    async def _get(self, arc_id: str) -> ARC | None:
         """Return an ARC of a given id."""
         raise NotImplementedError("`ArcStore._get` is not implemented")
 
     @abstractmethod
-    def _delete(self, arc_id: str) -> None:
+    async def _delete(self, arc_id: str) -> None:
         """Delete an ARC of a given id."""
         raise NotImplementedError("`ArcStore._delete` is not implemented")
 
     @abstractmethod
-    def _exists(self, arc_id: str) -> bool:
+    async def _exists(self, arc_id: str) -> bool:
         """Check if an ARC of a given id already exists."""
         raise NotImplementedError("`ArcStore._exists` is not implemented")
 
@@ -86,7 +86,7 @@ class ArcStore(ABC):
                 span.record_exception(e)
                 raise ArcStoreError(f"General exception caught in `ArcStore.create_or_update`: {str(e)}") from e
 
-    def get(self, arc_id: str) -> ARC | None:
+    async def get(self, arc_id: str) -> ARC | None:
         """_Get an ARC by its ID.
 
         Args:
@@ -101,7 +101,7 @@ class ArcStore(ABC):
             attributes={"arc_id": arc_id},
         ) as span:
             try:
-                arc = self._get(arc_id)
+                arc = await self._get(arc_id)
                 span.set_attribute("found", arc is not None)
                 return arc
             except ArcStoreError as e:
@@ -112,7 +112,7 @@ class ArcStore(ABC):
                 span.record_exception(e)
                 raise ArcStoreError(f"General exception caught in `ArcStore.get`: {e!r}") from e
 
-    def delete(self, arc_id: str) -> None:
+    async def delete(self, arc_id: str) -> None:
         """_Delete an ARC by its ID.
 
         Args:
@@ -130,7 +130,7 @@ class ArcStore(ABC):
             attributes={"arc_id": arc_id},
         ) as span:
             try:
-                return self._delete(arc_id)
+                return await self._delete(arc_id)
             except ArcStoreError as e:
                 span.record_exception(e)
                 raise
@@ -139,7 +139,7 @@ class ArcStore(ABC):
                 span.record_exception(e)
                 raise ArcStoreError(f"General exception caught in `ArcStore.delete`: {e!r}") from e
 
-    def exists(self, arc_id: str) -> bool:
+    async def exists(self, arc_id: str) -> bool:
         """_Check if an ARC exists by its ID.
 
         Args:
@@ -157,7 +157,7 @@ class ArcStore(ABC):
             attributes={"arc_id": arc_id},
         ) as span:
             try:
-                exists = self._exists(arc_id)
+                exists = await self._exists(arc_id)
                 span.set_attribute("exists", exists)
                 return exists
             except ArcStoreError as e:

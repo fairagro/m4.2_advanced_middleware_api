@@ -97,7 +97,9 @@ def service() -> BusinessLogic:
     store.arc_id = MagicMock(
         side_effect=lambda identifier, rdi: hashlib.sha256(f"{identifier}:{rdi}".encode()).hexdigest()
     )
-    store.exists.return_value = False
+    store.exists = AsyncMock(return_value=False)
+    store.get = AsyncMock(return_value=None)
+    store.delete = AsyncMock()
     store.create_or_update = AsyncMock()
     return BusinessLogic(store)
 

@@ -209,14 +209,27 @@ async def test_create_or_update(git_repo: GitRepo, tmp_path: Path) -> None:
             mock_ctx_instance.commit_and_push.assert_called()
 
 
-def test_get_arc_success(git_repo: GitRepo) -> None:
+@pytest.mark.asyncio
+async def test_get_arc_success(git_repo: GitRepo) -> None:
     """Test _get successfully loads ARC."""
     arc_id = "test_arc"
 
     with (
         patch("middleware.api.arc_store.git_repo.GitContext") as mock_ctx,
         patch("middleware.api.arc_store.git_repo.ARC") as mock_arc,
+        patch("asyncio.get_running_loop") as mock_get_loop,
     ):
+        mock_loop = MagicMock()
+        mock_get_loop.return_value = mock_loop
+
+        def run_and_return_future(_executor: object, func: Callable[..., Any], *args: object) -> asyncio.Future[Any]:
+            res = func(*args)
+            f: asyncio.Future[Any] = asyncio.Future()
+            f.set_result(res)
+            return f
+
+        mock_loop.run_in_executor.side_effect = run_and_return_future
+
         mock_ctx_instance = mock_ctx.return_value
         mock_ctx_instance.__enter__.return_value = mock_ctx_instance
         mock_ctx_instance.path = "/tmp/fake/path"  # nosec B108
@@ -224,78 +237,148 @@ def test_get_arc_success(git_repo: GitRepo) -> None:
 
         mock_arc.load.return_value = "MyARC"
 
-        result = git_repo._get(arc_id)
+        result = await git_repo._get(arc_id)
 
         assert result == "MyARC"
         mock_arc.load.assert_called_once_with("/tmp/fake/path")  # nosec B108
 
 
-def test_get_arc_repo_fail(git_repo: GitRepo) -> None:
+@pytest.mark.asyncio
+async def test_get_arc_repo_fail(git_repo: GitRepo) -> None:
     """Test _get handles repo init failure."""
-    with patch("middleware.api.arc_store.git_repo.GitContext") as mock_ctx:  # , \
-        #  patch("middleware.api.arc_store.git_repo.logger"):
+    with (
+        patch("middleware.api.arc_store.git_repo.GitContext") as mock_ctx,
+        patch("asyncio.get_running_loop") as mock_get_loop,
+    ):
+        mock_loop = MagicMock()
+        mock_get_loop.return_value = mock_loop
+
+        def run_and_return_future(_executor: object, func: Callable[..., Any], *args: object) -> asyncio.Future[Any]:
+            res = func(*args)
+            f: asyncio.Future[Any] = asyncio.Future()
+            f.set_result(res)
+            return f
+
+        mock_loop.run_in_executor.side_effect = run_and_return_future
 
         mock_ctx_instance = mock_ctx.return_value
         mock_ctx_instance.__enter__.return_value = mock_ctx_instance
         # Simulate failure to init repo
         mock_ctx_instance.repo = None
 
-        result = git_repo._get("arc1")
+        result = await git_repo._get("arc1")
         assert result is None
 
 
-def test_get_arc_load_fail(git_repo: GitRepo) -> None:
+@pytest.mark.asyncio
+async def test_get_arc_load_fail(git_repo: GitRepo) -> None:
     """Test _get handles ARC load failure."""
     with (
         patch("middleware.api.arc_store.git_repo.GitContext") as mock_ctx,
         patch("middleware.api.arc_store.git_repo.ARC") as mock_arc,
+        patch("asyncio.get_running_loop") as mock_get_loop,
     ):
+        mock_loop = MagicMock()
+        mock_get_loop.return_value = mock_loop
+
+        def run_and_return_future(_executor: object, func: Callable[..., Any], *args: object) -> asyncio.Future[Any]:
+            res = func(*args)
+            f: asyncio.Future[Any] = asyncio.Future()
+            f.set_result(res)
+            return f
+
+        mock_loop.run_in_executor.side_effect = run_and_return_future
+
         mock_ctx_instance = mock_ctx.return_value
         mock_ctx_instance.__enter__.return_value = mock_ctx_instance
         mock_ctx_instance.repo = MagicMock()
 
         mock_arc.load.side_effect = Exception("Bad ARC")
 
-        result = git_repo._get("arc1")
+        result = await git_repo._get("arc1")
         assert result is None
 
 
-def test_exists_true(git_repo: GitRepo) -> None:
+@pytest.mark.asyncio
+async def test_exists_true(git_repo: GitRepo) -> None:
     """Test _exists returns True."""
-    with patch("git.cmd.Git") as mock_git:
+    with (
+        patch("git.cmd.Git") as mock_git,
+        patch("asyncio.get_running_loop") as mock_get_loop,
+    ):
+        mock_loop = MagicMock()
+        mock_get_loop.return_value = mock_loop
+
+        def run_and_return_future(_executor: object, func: Callable[..., Any], *args: object) -> asyncio.Future[Any]:
+            res = func(*args)
+            f: asyncio.Future[Any] = asyncio.Future()
+            f.set_result(res)
+            return f
+
+        mock_loop.run_in_executor.side_effect = run_and_return_future
+
         mock_git_instance = mock_git.return_value
         mock_git_instance.ls_remote.return_value = "hash ref"
 
-        assert git_repo._exists("arc1") is True
+        assert await git_repo._exists("arc1") is True
         mock_git_instance.ls_remote.assert_called()
 
 
-def test_exists_false(git_repo: GitRepo) -> None:
+@pytest.mark.asyncio
+async def test_exists_false(git_repo: GitRepo) -> None:
     """Test _exists returns False on error."""
-    with patch("git.cmd.Git") as mock_git:
+    with (
+        patch("git.cmd.Git") as mock_git,
+        patch("asyncio.get_running_loop") as mock_get_loop,
+    ):
+        mock_loop = MagicMock()
+        mock_get_loop.return_value = mock_loop
+
+        def run_and_return_future(_executor: object, func: Callable[..., Any], *args: object) -> asyncio.Future[Any]:
+            res = func(*args)
+            f: asyncio.Future[Any] = asyncio.Future()
+            f.set_result(res)
+            return f
+
+        mock_loop.run_in_executor.side_effect = run_and_return_future
+
         mock_git_instance = mock_git.return_value
         mock_git_instance.ls_remote.side_effect = GitCommandError("ls-remote", "fail")
 
-        assert git_repo._exists("arc1") is False
+        assert await git_repo._exists("arc1") is False
 
 
-def test_delete(git_repo: GitRepo) -> None:
+@pytest.mark.asyncio
+async def test_delete(git_repo: GitRepo) -> None:
     """Test _delete just logs warning."""
     # Just ensure it doesn't raise
-    git_repo._delete("arc1")
+    await git_repo._delete("arc1")
 
 
-def test_get_arc_load_os_error(git_repo: GitRepo) -> None:
+@pytest.mark.asyncio
+async def test_get_arc_load_os_error(git_repo: GitRepo) -> None:
     """Test _get handles ARC load OSError."""
     with (
         patch("middleware.api.arc_store.git_repo.GitContext") as mock_ctx,
         patch("middleware.api.arc_store.git_repo.ARC") as mock_arc,
+        patch("asyncio.get_running_loop") as mock_get_loop,
     ):
+        mock_loop = MagicMock()
+        mock_get_loop.return_value = mock_loop
+
+        def run_and_return_future(_executor: object, func: Callable[..., Any], *args: object) -> asyncio.Future[Any]:
+            res = func(*args)
+            f: asyncio.Future[Any] = asyncio.Future()
+            f.set_result(res)
+            return f
+
+        mock_loop.run_in_executor.side_effect = run_and_return_future
+
         mock_ctx_instance = mock_ctx.return_value
         mock_ctx_instance.__enter__.return_value = mock_ctx_instance
         mock_ctx_instance.repo = MagicMock()
 
         mock_arc.load.side_effect = FileNotFoundError("Missing file")
 
-        result = git_repo._get("arc1")
+        result = await git_repo._get("arc1")
         assert result is None

@@ -1,7 +1,7 @@
 """Unit tests for the create_or_update_arcs functionality in BusinessLogic."""
 
 from typing import Any
-from unittest.mock import patch
+from unittest.mock import AsyncMock
 
 import pytest
 
@@ -124,16 +124,16 @@ async def test_update_arc_success(service: BusinessLogic) -> None:
     ]
 
     # pylint: disable=protected-access
-    with patch.object(service._store, "exists", return_value=True):
-        result = await service.create_or_update_arcs(rdi="TestRDI", arcs=rocrate, client_id="TestClient")
+    service._store.exists = AsyncMock(return_value=True)  # type: ignore
+    result = await service.create_or_update_arcs(rdi="TestRDI", arcs=rocrate, client_id="TestClient")
 
-        assert isinstance(result, CreateOrUpdateArcsResponse)  # nosec
-        assert result.client_id == "TestClient"  # nosec
-        assert isinstance(result.arcs, list)  # nosec
-        assert all(isinstance(a, ArcResponse) for a in result.arcs)  # nosec
-        assert len(result.arcs) == len(rocrate)  # nosec
-        assert all(is_valid_sha256(a.id) for a in result.arcs)  # nosec
-        assert all(a.status == "updated" for a in result.arcs)  # nosec
+    assert isinstance(result, CreateOrUpdateArcsResponse)  # nosec
+    assert result.client_id == "TestClient"  # nosec
+    assert isinstance(result.arcs, list)  # nosec
+    assert all(isinstance(a, ArcResponse) for a in result.arcs)  # nosec
+    assert len(result.arcs) == len(rocrate)  # nosec
+    assert all(is_valid_sha256(a.id) for a in result.arcs)  # nosec
+    assert all(a.status == "updated" for a in result.arcs)  # nosec
 
 
 @pytest.mark.asyncio

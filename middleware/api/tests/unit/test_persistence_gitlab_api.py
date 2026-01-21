@@ -90,7 +90,8 @@ async def test_create_or_update_with_changes(gitlab_api: Any) -> None:
 # -------------------- Get --------------------
 
 
-def test_get_success(gitlab_api: Any, monkeypatch: Any) -> None:
+@pytest.mark.asyncio
+async def test_get_success(gitlab_api: Any, monkeypatch: Any) -> None:
     """Tests retrieving an ARC from GitLab."""
     project = MagicMock()
     project.path = "arc1"
@@ -109,32 +110,35 @@ def test_get_success(gitlab_api: Any, monkeypatch: Any) -> None:
     dummy_arc = MagicMock()
     monkeypatch.setattr("middleware.api.arc_store.gitlab_api.ARC.load", lambda _path: dummy_arc)
 
-    arc = gitlab_api.get("arc1")
+    arc = await gitlab_api.get("arc1")
     assert arc == dummy_arc  # nosec
     project.files.get.assert_any_call(file_path="f.txt", ref=gitlab_api._config.branch)
 
 
-def test_get_not_found(gitlab_api: Any) -> None:
+@pytest.mark.asyncio
+async def test_get_not_found(gitlab_api: Any) -> None:
     """Tests retrieving a non-existing ARC from GitLab."""
     gitlab_api._gitlab.projects.list.return_value = []
-    arc = gitlab_api.get("arcX")
+    arc = await gitlab_api.get("arcX")
     assert arc is None  # nosec
 
 
 # -------------------- Delete --------------------
 
 
-def test_delete_found(gitlab_api: Any) -> None:
+@pytest.mark.asyncio
+async def test_delete_found(gitlab_api: Any) -> None:
     """Tests deleting an existing ARC from GitLab."""
     project = MagicMock()
     project.path = "arc1"
     gitlab_api._gitlab.projects.list.return_value = [project]
-    gitlab_api.delete("arc1")
+    await gitlab_api.delete("arc1")
     project.delete.assert_called_once()
 
 
-def test_delete_not_found(gitlab_api: Any) -> None:
+@pytest.mark.asyncio
+async def test_delete_not_found(gitlab_api: Any) -> None:
     """Tests deleting a non-existing ARC from GitLab."""
     gitlab_api._gitlab.projects.list.return_value = []
     # Sollte einfach durchlaufen, kein Fehler
-    gitlab_api.delete("arcX")
+    await gitlab_api.delete("arcX")
