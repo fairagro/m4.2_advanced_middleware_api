@@ -6,7 +6,6 @@ import http
 import logging
 import shutil
 import tempfile
-import time
 import urllib.error
 import urllib.request
 from collections.abc import Callable
@@ -18,6 +17,7 @@ import git.cmd
 from arctrl import ARC  # type: ignore[import-untyped]
 from git import Repo
 from git.exc import GitCommandError
+from opentelemetry import trace
 from pydantic import BaseModel, Field, SecretStr, field_validator
 
 from . import ArcStore
@@ -88,24 +88,27 @@ class GitContext:
         """Initialize GitContext."""
         self.config = config
         self.repo: Repo | None = None
+        self._tracer = trace.get_tracer(__name__)
 
     def _run_git_command(self, action: str, func: Callable[..., _T], *args: object, **kwargs: object) -> _T:
         """Run a git command with optional timeout and duration logging."""
         if self.config.command_timeout is not None:
             kwargs.setdefault("kill_after_timeout", self.config.command_timeout)
 
-        start = time.perf_counter()
-        try:
-            result = func(*args, **kwargs)
-            duration = time.perf_counter() - start
-            logger.info("Git %s succeeded in %.2fs", action, duration)
-            return result
-        except GitCommandError as exc:  # pragma: no cover - behavior validated indirectly
-            duration = time.perf_counter() - start
-            status = getattr(exc, "status", None)
-            status_msg = f" (status {status})" if status is not None else ""
-            logger.warning("Git %s failed after %.2fs%s: %s", action, duration, status_msg, exc)
-            raise
+        with self._tracer.start_as_current_span(
+            f"git.{action}",
+            attributes={"git.action": action},
+        ) as span:
+            try:
+                result = func(*args, **kwargs)
+                logger.info("Git %s succeeded", action)
+                return result
+            except GitCommandError as exc:  # pragma: no cover - behavior validated indirectly
+                status = getattr(exc, "status", None)
+                status_msg = f" (status {status})" if status is not None else ""
+                logger.warning("Git %s failed%s: %s", action, status_msg, exc)
+                span.record_exception(exc)
+                raise
 
     def _apply_repo_config(self) -> None:
         """Apply user and HTTP tuning to the repository config."""
@@ -200,15 +203,23 @@ class GitContext:
             msg = "Repository not initialized"
             raise RuntimeError(msg)
 
-        # Check if dirty or untracked files exist
-        if not self.repo.is_dirty(untracked_files=True):
-            logger.info("No changes to commit.")
-            return
+        with self._tracer.start_as_current_span("git.commit_and_push") as span:
+            # Check if dirty or untracked files exist
+            if not self.repo.is_dirty(untracked_files=True):
+                logger.info("No changes to commit.")
+                span.set_attribute("git.dirty", False)
+                return
 
-        self.repo.git.add(A=True)
-        self.repo.index.commit(message)
-        logger.info("Pushing changes to remote branch %s", self.config.branch)
-        self._run_git_command("push", self.repo.remotes.origin.push, self.config.branch)
+            span.set_attribute("git.dirty", True)
+
+            with self._tracer.start_as_current_span("git.add"):
+                self.repo.git.add(A=True)
+
+            with self._tracer.start_as_current_span("git.commit"):
+                self.repo.index.commit(message)
+
+            logger.info("Pushing changes to remote branch %s", self.config.branch)
+            self._run_git_command("push", self.repo.remotes.origin.push, self.config.branch)
 
 
 class GitRepo(ArcStore):
@@ -314,7 +325,8 @@ class GitRepo(ArcStore):
                                 child.unlink()
 
                         # Write ARC to repo path
-                        arc.Write(str(repo_path))
+                        with self._tracer.start_as_current_span("arc.write"):
+                            arc.Write(str(repo_path))
 
                         # Commit and push
                         ctx.commit_and_push(f"Update ARC {arc_id}")
@@ -390,20 +402,15 @@ class GitRepo(ArcStore):
 
             g = git.cmd.Git()
             try:
-                start = time.perf_counter()
                 if self._config.command_timeout is not None:
                     g.ls_remote(url, kill_after_timeout=self._config.command_timeout)
                 else:
                     g.ls_remote(url)
-                duration = time.perf_counter() - start
-                logger.info("Git ls-remote for %s succeeded in %.2fs", arc_id, duration)
-                span.set_attribute("git.duration_s", duration)
+                logger.info("Git ls-remote for %s succeeded", arc_id)
                 span.set_attribute("exists", True)
                 return True
             except GitCommandError as e:
-                duration = time.perf_counter() - start
-                logger.warning("Git ls-remote for %s failed after %.2fs", arc_id, duration)
-                span.set_attribute("git.duration_s", duration)
+                logger.warning("Git ls-remote for %s failed", arc_id)
                 span.set_attribute("exists", False)
                 span.record_exception(e)
                 return False
