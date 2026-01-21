@@ -108,9 +108,9 @@ class ArcStore(ABC):
                 span.record_exception(e)
                 raise
             except Exception as e:
-                logger.exception("Caught exception when trying to retrieve ARC '%s': %s", arc_id, str(e))
+                logger.exception("Caught exception when trying to retrieve ARC '%s'", arc_id)
                 span.record_exception(e)
-                raise ArcStoreError(f"General exception caught in `ArcStore.get`: {str(e)}") from e
+                raise ArcStoreError(f"General exception caught in `ArcStore.get`: {e!r}") from e
 
     def delete(self, arc_id: str) -> None:
         """_Delete an ARC by its ID.
@@ -135,9 +135,9 @@ class ArcStore(ABC):
                 span.record_exception(e)
                 raise
             except Exception as e:
-                logger.exception("Caught exception when trying to delete ARC '%s': %s", arc_id, str(e))
+                logger.exception("Caught exception when trying to delete ARC '%s'", arc_id)
                 span.record_exception(e)
-                raise ArcStoreError(f"general exception caught in `ArcStore.delete`: '{str(e)}'") from e
+                raise ArcStoreError(f"General exception caught in `ArcStore.delete`: {e!r}") from e
 
     def exists(self, arc_id: str) -> bool:
         """_Check if an ARC exists by its ID.
@@ -164,10 +164,9 @@ class ArcStore(ABC):
                 span.record_exception(e)
                 raise
             except Exception as e:
-                msg = f"Caught exception when trying to check if ARC '{arc_id}' exists: {e!r}"
-                logger.exception(msg)
+                logger.exception("Caught exception when trying to check if ARC '%s' exists", arc_id)
                 span.record_exception(e)
-                raise ArcStoreError(msg) from e
+                raise ArcStoreError(f"Caught exception when trying to check if ARC '{arc_id}' exists: {e!r}") from e
 
     def check_health(self) -> bool:
         """Check connection to the storage backend.
