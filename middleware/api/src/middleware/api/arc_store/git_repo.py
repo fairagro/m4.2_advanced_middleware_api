@@ -357,7 +357,8 @@ class GitRepo(ArcStore):
                             return None
                         span.set_attribute("git.local_path", str(ctx.path))
                         try:
-                            arc = ARC.load(ctx.path)
+                            with self._tracer.start_as_current_span("arc.load"):
+                                arc = ARC.load(ctx.path)
                             span.set_attribute("found", arc is not None)
                             return arc
                         except (FileNotFoundError, OSError) as e:
