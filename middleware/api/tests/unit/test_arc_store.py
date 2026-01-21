@@ -64,15 +64,16 @@ class TestArcStoreWrapperMethods:
         with patch.object(store, "_get", side_effect=ArcStoreError("Test error")), pytest.raises(ArcStoreError):
             store.get("test_id")
 
-    def test_get_generic_exception_logged_and_reraised(self) -> None:
-        """Test get logs and re-raises generic exceptions."""
+    def test_get_generic_exception_logged_and_wrapped(self) -> None:
+        """Test get logs and wraps generic exceptions."""
         store = create_mock_arc_store()
         with (
             patch.object(store, "_get", side_effect=ValueError("Generic error")),
             patch("middleware.api.arc_store.logger") as mock_logger,
         ):
-            with pytest.raises(ValueError):
+            with pytest.raises(ArcStoreError) as exc_info:
                 store.get("test_id")
+            assert "general exception caught" in str(exc_info.value).lower()
             mock_logger.exception.assert_called_once()
 
     def test_delete_arc_store_error_passthrough(self) -> None:
