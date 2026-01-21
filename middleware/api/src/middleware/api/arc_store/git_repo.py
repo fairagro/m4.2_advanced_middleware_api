@@ -341,8 +341,9 @@ class GitRepo(ArcStore):
 
         await loop.run_in_executor(self._executor, _task)
 
-    def _get(self, arc_id: str) -> ARC | None:
+    async def _get(self, arc_id: str) -> ARC | None:
         """Get ARC from Git."""
+        loop = asyncio.get_running_loop()
 
         def _task() -> ARC | None:
             with self._tracer.start_as_current_span(
@@ -378,41 +379,45 @@ class GitRepo(ArcStore):
                     span.record_exception(e)
                     return None
 
-        # ArcStore._get is synchronous, so we run synchronously
-        return _task()
+        return await loop.run_in_executor(self._executor, _task)
 
-    def _delete(self, arc_id: str) -> None:
+    async def _delete(self, arc_id: str) -> None:
         """Delete ARC (Not supported via Git CLI easily without platform API)."""
         logger.warning(
             "Delete operation is not supported by GitRepo (CLI backend). Manual deletion required for %s",
             arc_id,
         )
 
-    def _exists(self, arc_id: str) -> bool:
+    async def _exists(self, arc_id: str) -> bool:
         """Check if ARC repo exists."""
-        with self._tracer.start_as_current_span(
-            "git_repo.exists",
-            attributes={"arc_id": arc_id},
-        ) as span:
-            # We can try to ls-remote
-            repo_url = self._get_repo_url(arc_id)
-            span.set_attribute("git.repo_url", repo_url)
+        loop = asyncio.get_running_loop()
 
-            # Inject token for ls-remote check
-            url = self._get_authenticated_url(repo_url)
+        def _task() -> bool:
+            with self._tracer.start_as_current_span(
+                "git_repo.exists",
+                attributes={"arc_id": arc_id},
+            ) as span:
+                # We can try to ls-remote
+                repo_url = self._get_repo_url(arc_id)
+                span.set_attribute("git.repo_url", repo_url)
 
-            g = git.cmd.Git()
-            try:
-                with self._tracer.start_as_current_span("git.ls-remote"):
-                    if self._config.command_timeout is not None:
-                        g.ls_remote(url, kill_after_timeout=self._config.command_timeout)
-                    else:
-                        g.ls_remote(url)
-                logger.info("Git ls-remote for %s succeeded", arc_id)
-                span.set_attribute("exists", True)
-                return True
-            except GitCommandError as e:
-                logger.warning("Git ls-remote for %s failed", arc_id)
-                span.set_attribute("exists", False)
-                span.record_exception(e)
-                return False
+                # Inject token for ls-remote check
+                url = self._get_authenticated_url(repo_url)
+
+                g = git.cmd.Git()
+                try:
+                    with self._tracer.start_as_current_span("git.ls-remote"):
+                        if self._config.command_timeout is not None:
+                            g.ls_remote(url, kill_after_timeout=self._config.command_timeout)
+                        else:
+                            g.ls_remote(url)
+                    logger.info("Git ls-remote for %s succeeded", arc_id)
+                    span.set_attribute("exists", True)
+                    return True
+                except GitCommandError as e:
+                    logger.warning("Git ls-remote for %s failed", arc_id)
+                    span.set_attribute("exists", False)
+                    span.record_exception(e)
+                    return False
+
+        return await loop.run_in_executor(self._executor, _task)

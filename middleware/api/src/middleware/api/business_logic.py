@@ -76,7 +76,7 @@ class BusinessLogic:
                 raise InvalidJsonSemanticError("RO-Crate JSON must contain an 'Identifier' in the ISA object.")
 
             arc_id = self._store.arc_id(identifier, rdi)
-            exists = self._store.exists(arc_id)
+            exists = await self._store.exists(arc_id)
             logger.debug("ARC identifier=%s, arc_id=%s, exists=%s", identifier, arc_id, exists)
 
             span.set_attribute("arc_id", arc_id)
