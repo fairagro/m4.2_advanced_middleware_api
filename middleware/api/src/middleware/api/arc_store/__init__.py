@@ -135,9 +135,9 @@ class ArcStore(ABC):
                 span.record_exception(e)
                 raise
             except Exception as e:
-                logger.exception("Caught exception when trying to delete ARC '%s': %s", arc_id, str(e))
+                logger.exception("Caught exception when trying to delete ARC '%s'", arc_id)
                 span.record_exception(e)
-                raise ArcStoreError(f"general exception caught in `ArcStore.delete`: '{str(e)}'") from e
+                raise ArcStoreError(f"General exception caught in `ArcStore.delete`: {e!r}") from e
 
     def exists(self, arc_id: str) -> bool:
         """_Check if an ARC exists by its ID.
