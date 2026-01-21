@@ -402,10 +402,11 @@ class GitRepo(ArcStore):
 
             g = git.cmd.Git()
             try:
-                if self._config.command_timeout is not None:
-                    g.ls_remote(url, kill_after_timeout=self._config.command_timeout)
-                else:
-                    g.ls_remote(url)
+                with self._tracer.start_as_current_span("git.ls-remote"):
+                    if self._config.command_timeout is not None:
+                        g.ls_remote(url, kill_after_timeout=self._config.command_timeout)
+                    else:
+                        g.ls_remote(url)
                 logger.info("Git ls-remote for %s succeeded", arc_id)
                 span.set_attribute("exists", True)
                 return True
