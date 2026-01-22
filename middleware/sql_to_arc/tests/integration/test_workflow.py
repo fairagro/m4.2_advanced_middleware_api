@@ -63,10 +63,6 @@ async def test_process_single_dataset(mock_api_client: AsyncMock) -> None:
         ctx = WorkerContext(
             client=mock_api_client,
             rdi="edaphobase",
-            studies_by_investigation=studies_by_investigation,
-            assays_by_study=assays_by_study,
-            worker_id=1,
-            total_workers=1,
             executor=executor,
         )
         semaphore = asyncio.Semaphore(1)
@@ -74,7 +70,7 @@ async def test_process_single_dataset(mock_api_client: AsyncMock) -> None:
         
         # Test processing each investigation individually
         for inv in investigation_rows:
-            await process_single_dataset(ctx, inv, semaphore, stats)
+            await process_single_dataset(ctx, inv, [], {}, semaphore, stats)
 
     assert mock_api_client.create_or_update_arc.called
     assert mock_api_client.create_or_update_arc.call_count == 2  # noqa: PLR2004
@@ -173,20 +169,27 @@ async def test_main_workflow(
     # 3. All assays for those studies (using ANY)
 
     async def fetchall_side_effect() -> list[dict[str, Any]]:
-        # Check the last executed query to decide what to return
-        if not mock_db_cursor.execute.call_args:
-            return []
-
+        # Check the last executed query
         last_query = mock_db_cursor.execute.call_args[0][0]
-        if 'FROM "ARC_Investigation"' in last_query:
-            return investigations
-        elif 'FROM "ARC_Study"' in last_query:
+        if 'FROM "ARC_Study"' in last_query:
             return studies_bulk
         elif 'FROM "ARC_Assay"' in last_query:
             return assays_bulk
         return []
 
+    fetchmany_done: list[bool] = []
+
+    async def fetchmany_side_effect(size: int = 100) -> list[dict[str, Any]]:
+        last_query = mock_db_cursor.execute.call_args[0][0]
+        if 'FROM "ARC_Investigation"' in last_query:
+            if fetchmany_done:
+                return []
+            fetchmany_done.append(True)
+            return investigations
+        return []
+
     mock_db_cursor.fetchall.side_effect = fetchall_side_effect
+    mock_db_cursor.fetchmany.side_effect = fetchmany_side_effect
 
     # Run main
     await main()

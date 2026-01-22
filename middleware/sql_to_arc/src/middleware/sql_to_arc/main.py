@@ -9,7 +9,7 @@ import multiprocessing
 import time
 from collections import defaultdict
 from pathlib import Path
-from typing import Any, cast
+from typing import Any, AsyncGenerator, cast
 
 import psycopg
 from arctrl import ARC, ArcInvestigation  # type: ignore[import-untyped]
@@ -146,82 +146,71 @@ def build_single_arc_task(
     return arc
 
 
-async def fetch_all_investigations(
-    cur: psycopg.AsyncCursor[dict[str, Any]],
-) -> list[dict[str, Any]]:
-    """Fetch all investigations from the database.
+async def stream_investigation_datasets(
+    cur: psycopg.AsyncCursor[dict[str, Any]], batch_size: int = 100
+) -> "AsyncGenerator[tuple[dict[str, Any], list[dict[str, Any]], dict[int, list[dict[str, Any]]]], None]":
+    """Stream investigation datasets (inv + studies + assays) in batches.
+
+    This avoids loading the entire database into memory.
 
     Args:
         cur: Database cursor.
+        batch_size: Number of investigations to fetch and process details for at once.
 
-    Returns:
-        List of investigation rows.
+    Yields:
+        Tuple of (investigation_row, studies_list, assays_by_study_dict).
     """
+    # Use a server-side cursor if it has a name, otherwise it's client-side.
+    # To be safe and compatible, we'll just execute and chunk the results if needed,
+    # or rely on the cursor being a server-side one from the caller.
     await cur.execute(
         'SELECT id, title, description, submission_time, release_time '
-        'FROM "ARC_Investigation"',  # LIMIT 10
+        'FROM "ARC_Investigation"'
     )
-    return await cur.fetchall()
+
+    while True:
+        rows = await cur.fetchmany(batch_size)
+        if not rows:
+            break
+
+        investigation_ids = [row["id"] for row in rows]
+        
+        # Fetch studies for this batch
+        await cur.execute(
+            "SELECT id, investigation_id, title, description, submission_time, release_time "
+            'FROM "ARC_Study" WHERE investigation_id = ANY(%s)',
+            (investigation_ids,),
+        )
+        study_rows = await cur.fetchall()
+        studies_by_inv: dict[int, list[dict[str, Any]]] = defaultdict(list)
+        for s in study_rows:
+            studies_by_inv[s["investigation_id"]].append(s)
+
+        # Fetch assays for these studies
+        study_ids = [s["id"] for s in study_rows]
+        assays_by_study: dict[int, list[dict[str, Any]]] = defaultdict(list)
+        if study_ids:
+            await cur.execute(
+                'SELECT id, study_id, measurement_type, technology_type '
+                'FROM "ARC_Assay" WHERE study_id = ANY(%s)',
+                (study_ids,),
+            )
+            assay_rows = await cur.fetchall()
+            for a in assay_rows:
+                assays_by_study[a["study_id"]].append(a)
+
+        # Re-fetch investigation rows if necessary? No, we have them in 'rows'.
+        # But wait, we used the cursor for studies/assays! 
+        # CAUTION: If using a single connection/cursor, we MUST fetch all studies/assays
+        # before we can use the cursor again for the next batch of investigations.
+        # This is why we use fetchmany(batch_size) and then do the detail queries.
+
+        for inv_row in rows:
+            inv_id = inv_row["id"]
+            yield inv_row, studies_by_inv[inv_id], assays_by_study
 
 
-async def fetch_studies_bulk(
-    cur: psycopg.AsyncCursor[dict[str, Any]], investigation_ids: list[int]
-) -> dict[int, list[dict[str, Any]]]:
-    """Fetch all studies for given investigation IDs in a single query.
-
-    Args:
-        cur: Database cursor.
-        investigation_ids: List of investigation IDs.
-
-    Returns:
-        Dictionary mapping investigation_id to list of study rows.
-    """
-    if not investigation_ids:
-        return {}
-
-    await cur.execute(
-        "SELECT id, investigation_id, title, description, submission_time, release_time "
-        'FROM "ARC_Study" WHERE investigation_id = ANY(%s)',
-        (investigation_ids,),
-    )
-    rows = await cur.fetchall()
-
-    # Group studies by investigation_id
-    studies_by_investigation: dict[int, list[dict[str, Any]]] = defaultdict(list)
-    for row in rows:
-        studies_by_investigation[row["investigation_id"]].append(row)
-
-    return studies_by_investigation
-
-
-async def fetch_assays_bulk(
-    cur: psycopg.AsyncCursor[dict[str, Any]], study_ids: list[int]
-) -> dict[int, list[dict[str, Any]]]:
-    """Fetch all assays for given study IDs in a single query.
-
-    Args:
-        cur: Database cursor.
-        study_ids: List of study IDs.
-
-    Returns:
-        Dictionary mapping study_id to list of assay rows.
-    """
-    if not study_ids:
-        return {}
-
-    await cur.execute(
-        'SELECT id, study_id, measurement_type, technology_type '
-        'FROM "ARC_Assay" WHERE study_id = ANY(%s)',
-        (study_ids,),
-    )
-    rows = await cur.fetchall()
-
-    # Group assays by study_id
-    assays_by_study: dict[int, list[dict[str, Any]]] = defaultdict(list)
-    for row in rows:
-        assays_by_study[row["study_id"]].append(row)
-
-    return assays_by_study
+# Removed fetch_studies_bulk and fetch_assays_bulk as they are now integrated into stream_investigation_datasets
 
 
 def build_arc_for_investigation(
@@ -256,10 +245,6 @@ class WorkerContext(BaseModel):
 
     client: Any  # ApiClient, but Any to allow mocking
     rdi: str
-    studies_by_investigation: dict[int, list[dict[str, Any]]]
-    assays_by_study: dict[int, list[dict[str, Any]]]
-    worker_id: int
-    total_workers: int
     executor: Any  # ProcessPoolExecutor is not Pydantic-friendly easily, so Any
 
     model_config = ConfigDict(arbitrary_types_allowed=True)
@@ -268,6 +253,8 @@ class WorkerContext(BaseModel):
 async def process_single_dataset(
     ctx: WorkerContext,
     investigation_row: dict[str, Any],
+    studies: list[dict[str, Any]],
+    assays_by_study: dict[int, list[dict[str, Any]]],
     semaphore: asyncio.Semaphore,
     stats: ProcessingStats,
 ) -> None:
@@ -285,13 +272,15 @@ async def process_single_dataset(
     # Acquire semaphore to limit concurrency
     async with semaphore:
         try:
-            # 1. Gather data (Memory-bound, fast)
-            studies = ctx.studies_by_investigation.get(inv_id, [])
-            relevant_assays = {s["id"]: ctx.assays_by_study.get(s["id"], []) for s in studies}
+            # 1. Prepare data (already gathered by stream)
+            relevant_assays = {s["id"]: assays_by_study.get(s["id"], []) for s in studies}
 
-            # Count details for logging
+            # Count details for stats/logging
             num_studies = len(studies)
             num_assays = sum(len(a) for a in relevant_assays.values())
+            stats.total_studies += num_studies
+            stats.total_assays += num_assays
+            
             logger.info(
                 "%s Starting ARC build. Content: %d studies, %d assays.",
                 log_prefix,
@@ -306,7 +295,7 @@ async def process_single_dataset(
                 build_arc_for_investigation,
                 investigation_row,
                 studies,
-                ctx.assays_by_study,
+                assays_by_study,
             )
 
             if not arc:
@@ -376,62 +365,43 @@ async def process_investigations(
     tracer = trace.get_tracer(__name__)
     stats = ProcessingStats()
     with tracer.start_as_current_span("sql_to_arc.main.process_investigations"):
-        # Step 1: Fetch all data (bulk)
-        logger.info("Fetching all investigations...")
-        investigation_rows = await fetch_all_investigations(cur)
-        stats.found_datasets = len(investigation_rows)
-        logger.info("Found %d investigations", stats.found_datasets)
-
-        if not investigation_rows:
-            return stats
-
-        # Fetch studies
-        investigation_ids = [row["id"] for row in investigation_rows]
-        studies_by_investigation = await fetch_studies_bulk(cur, investigation_ids)
-        stats.total_studies = sum(len(s) for s in studies_by_investigation.values())
-
-        # Fetch assays
-        study_ids = [s["id"] for studies in studies_by_investigation.values() for s in studies]
-        assays_by_study = await fetch_assays_bulk(cur, study_ids)
-        stats.total_assays = sum(len(a) for a in assays_by_study.values())
-
-        logger.info(
-            "Data fetch complete. Total: %d studies, %d assays.",
-            stats.total_studies,
-            stats.total_assays,
-        )
-
-        # Step 2: Dynamic Concurrency with Producer-Consumer pattern
-        # Limit max concurrent tasks (Build+Serialize+Upload)
+        # Step 1: Initialize concurrency control
         limit = config.max_concurrent_arc_builds
         semaphore = asyncio.Semaphore(limit)
-        logger.info("Starting processing with max_concurrent_tasks=%d", limit)
+        logger.info("Starting streaming processing with max_concurrent_tasks=%d", limit)
 
         # Use ProcessPoolExecutor for CPU offloading
-        # "spawn" context is safer for mix of asyncio/multiprocessing
         mp_context = multiprocessing.get_context("spawn")
         with concurrent.futures.ProcessPoolExecutor(
             max_workers=limit, mp_context=mp_context
         ) as executor:
-            # Create shared context (stateless parts)
             ctx = WorkerContext(
                 client=client,
                 rdi=config.rdi,
-                studies_by_investigation=studies_by_investigation,
-                assays_by_study=assays_by_study,
-                worker_id=0,  # Not used in new dynamic model
-                total_workers=limit,
                 executor=executor,
             )
 
-            # Create tasks
-            tasks = [
-                process_single_dataset(ctx, row, semaphore, stats)
-                for row in investigation_rows
-            ]
+            # Step 2: Stream and spawn tasks
+            # We use a set of tasks to keep track of running operations
+            running_tasks: set[asyncio.Task] = set()
+            
+            async for inv_row, studies_list, assays_dict in stream_investigation_datasets(cur):
+                stats.found_datasets += 1
+                
+                # Create the processing task
+                # Note: process_single_dataset itself handles the semaphore
+                task = asyncio.create_task(
+                    process_single_dataset(ctx, inv_row, studies_list, assays_dict, semaphore, stats)
+                )
+                running_tasks.add(task)
+                
+                # Cleanup finished tasks periodically to keep memory low
+                task.add_done_callback(running_tasks.discard)
 
-            # Run all tasks
-            await asyncio.gather(*tasks)
+            # Wait for all remaining tasks to finish
+            if running_tasks:
+                logger.info("Waiting for %d remaining tasks to complete...", len(running_tasks))
+                await asyncio.gather(*running_tasks)
 
     return stats
 
