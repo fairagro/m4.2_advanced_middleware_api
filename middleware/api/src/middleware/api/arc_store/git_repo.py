@@ -7,7 +7,7 @@ import shutil
 import tempfile
 from collections.abc import Callable
 from pathlib import Path
-from typing import Annotated, TypeVar
+from typing import Annotated, Any, TypeVar
 
 import git.cmd
 from arctrl import ARC  # type: ignore[import-untyped]
@@ -22,6 +22,8 @@ from .remote_git_provider import (
 )
 
 logger = logging.getLogger(__name__)
+
+T = TypeVar("T")
 
 
 class GitRepoConfig(BaseModel):
@@ -238,6 +240,19 @@ class GitRepo(ArcStore):
             token=token,
         )
 
+    async def _run_in_executor(self, func: Callable[..., T], *args: Any) -> T:
+        loop = asyncio.get_running_loop()
+        otel_ctx = context.get_current()
+
+        def _wrapper() -> T:
+            token = context.attach(otel_ctx)
+            try:
+                return func(*args)
+            finally:
+                context.detach(token)
+
+        return await loop.run_in_executor(self._executor, _wrapper)
+
     def _check_health(self) -> bool:
         """Check connection to the storage backend."""
         return self._remote_provider.check_health()
@@ -262,101 +277,89 @@ class GitRepo(ArcStore):
     async def _create_or_update(self, arc_id: str, arc: ARC) -> None:
         """Create or update ARC using Git CLI."""
         logger.debug("Creating/updating ARC %s via Git CLI", arc_id)
-        loop = asyncio.get_running_loop()
-        otel_ctx = context.get_current()
 
         def _task() -> None:
-            token = context.attach(otel_ctx)
-            try:
-                with self._tracer.start_as_current_span(
-                    "api.GitRepo._create_or_update",
-                    attributes={"arc_id": arc_id},
-                ) as span:
-                    # Ensure remote exists before doing anything else (if manager is configured)
-                    self._remote_provider.ensure_repo_exists(arc_id)
+            with self._tracer.start_as_current_span(
+                "api.GitRepo._create_or_update",
+                attributes={"arc_id": arc_id},
+            ) as span:
+                # Ensure remote exists before doing anything else (if manager is configured)
+                self._remote_provider.ensure_repo_exists(arc_id)
 
-                    ctx_config = self._get_context_config(arc_id)
-                    try:
-                        with GitContext(ctx_config) as ctx:
-                            if not ctx.repo:
-                                msg = "Failed to initialize git repo"
-                                raise RuntimeError(msg)
+                ctx_config = self._get_context_config(arc_id)
+                try:
+                    with GitContext(ctx_config) as ctx:
+                        if not ctx.repo:
+                            msg = "Failed to initialize git repo"
+                            raise RuntimeError(msg)
 
-                            repo_path = Path(ctx.path)
-                            span.set_attribute("git.local_path", str(repo_path))
+                        repo_path = Path(ctx.path)
+                        span.set_attribute("git.local_path", str(repo_path))
 
-                            # Cleanup existing files (except .git) to ensure sync with ARC object
-                            for child in repo_path.iterdir():
-                                if child.name == ".git":
-                                    continue
-                                if child.is_dir():
-                                    shutil.rmtree(child)
-                                else:
-                                    child.unlink()
+                        # Cleanup existing files (except .git) to ensure sync with ARC object
+                        for child in repo_path.iterdir():
+                            if child.name == ".git":
+                                continue
+                            if child.is_dir():
+                                shutil.rmtree(child)
+                            else:
+                                child.unlink()
 
-                            # Write ARC to repo path
-                            with self._tracer.start_as_current_span("api.GitRepo._create_or_update:arc_write"):
-                                arc.Write(str(repo_path))
+                        # Write ARC to repo path
+                        with self._tracer.start_as_current_span("api.GitRepo._create_or_update:arc_write"):
+                            arc.Write(str(repo_path))
 
-                            # Commit and push
-                            ctx.commit_and_push(f"Update ARC {arc_id}")
-                    except GitCommandError as e:
-                        span.record_exception(e)
-                        # Try to diagnose connection issues
-                        self._check_health()
-                        raise
-                    except Exception as e:
-                        span.record_exception(e)
-                        raise
-            finally:
-                context.detach(token)
+                        # Commit and push
+                        ctx.commit_and_push(f"Update ARC {arc_id}")
+                except GitCommandError as e:
+                    span.record_exception(e)
+                    # Try to diagnose connection issues
+                    self._check_health()
+                    raise
+                except Exception as e:
+                    span.record_exception(e)
+                    raise
 
-        await loop.run_in_executor(self._executor, _task)
+        await self._run_in_executor(_task)
 
     async def _get(self, arc_id: str) -> ARC | None:
         """Get ARC from Git."""
-        loop = asyncio.get_running_loop()
-        otel_ctx = context.get_current()
 
         def _task() -> ARC | None:
-            token = context.attach(otel_ctx)
-            try:
-                with self._tracer.start_as_current_span(
-                    "api.GitRepo._get",
-                    attributes={"arc_id": arc_id},
-                ) as span:
-                    ctx_config = self._get_context_config(arc_id)
-                    try:
-                        with GitContext(ctx_config) as ctx:
-                            if not ctx.repo:
-                                span.set_attribute("found", False)
-                                return None
-                            span.set_attribute("git.local_path", str(ctx.path))
-                            try:
-                                with self._tracer.start_as_current_span("api.GitRepo._get:arc_load"):
-                                    arc = ARC.load(ctx.path)
-                                span.set_attribute("found", arc is not None)
-                                return arc
-                            except (FileNotFoundError, OSError) as e:
-                                logger.warning("File system error loading ARC from repo %s: %s", arc_id, e)
-                                span.record_exception(e)
-                                return None
-                            except Exception as e:  # pylint: disable=broad-exception-caught # noqa: BLE001
-                                logger.warning(
-                                    "Failed to load ARC from repo %s (might not be an ARC or invalid): %s",
-                                    arc_id,
-                                    e,
-                                )
-                                span.record_exception(e)
-                                return None
-                    except GitCommandError as e:
-                        logger.debug("Failed to clone/access repo for %s: %s", arc_id, e)
-                        span.record_exception(e)
-                        return None
-            finally:
-                context.detach(token)
+            with self._tracer.start_as_current_span(
+                "api.GitRepo._get",
+                attributes={"arc_id": arc_id},
+            ) as span:
+                ctx_config = self._get_context_config(arc_id)
+                try:
+                    with GitContext(ctx_config) as ctx:
+                        if not ctx.repo:
+                            span.set_attribute("found", False)
+                            return None
+                        span.set_attribute("git.local_path", str(ctx.path))
+                        try:
+                            with self._tracer.start_as_current_span("api.GitRepo._get:arc_load"):
+                                arc = ARC.load(ctx.path)
+                            span.set_attribute("found", arc is not None)
+                            return arc
+                        except (FileNotFoundError, OSError) as e:
+                            logger.warning("File system error loading ARC from repo %s: %s", arc_id, e)
+                            span.record_exception(e)
+                            return None
+                        except Exception as e:  # pylint: disable=broad-exception-caught # noqa: BLE001
+                            logger.warning(
+                                "Failed to load ARC from repo %s (might not be an ARC or invalid): %s",
+                                arc_id,
+                                e,
+                            )
+                            span.record_exception(e)
+                            return None
+                except GitCommandError as e:
+                    logger.debug("Failed to clone/access repo for %s: %s", arc_id, e)
+                    span.record_exception(e)
+                    return None
 
-        return await loop.run_in_executor(self._executor, _task)
+        return await self._run_in_executor(_task)
 
     async def _delete(self, arc_id: str) -> None:
         """Delete ARC (Not supported via Git CLI easily without platform API)."""
@@ -367,36 +370,30 @@ class GitRepo(ArcStore):
 
     async def _exists(self, arc_id: str) -> bool:
         """Check if ARC repo exists."""
-        loop = asyncio.get_running_loop()
-        otel_ctx = context.get_current()
 
         def _task() -> bool:
-            token = context.attach(otel_ctx)
-            try:
-                with self._tracer.start_as_current_span(
-                    "api.GitRepo._exists",
-                    attributes={"arc_id": arc_id},
-                ) as span:
-                    # We can try to ls-remote using the authenticated URL
-                    url = self._remote_provider.get_repo_url(arc_id, authenticated=True)
-                    span.set_attribute("git.repo_url", url)
+            with self._tracer.start_as_current_span(
+                "api.GitRepo._exists",
+                attributes={"arc_id": arc_id},
+            ) as span:
+                # We can try to ls-remote using the authenticated URL
+                url = self._remote_provider.get_repo_url(arc_id, authenticated=True)
+                span.set_attribute("git.repo_url", url)
 
-                    g = git.cmd.Git()
-                    try:
-                        with self._tracer.start_as_current_span("api.GitRepo._exists:ls-remote"):
-                            if self._config.command_timeout is not None:
-                                g.ls_remote(url, kill_after_timeout=self._config.command_timeout)
-                            else:
-                                g.ls_remote(url)
-                        logger.info("Git ls-remote for %s succeeded", arc_id)
-                        span.set_attribute("exists", True)
-                        return True
-                    except GitCommandError as e:
-                        logger.warning("Git ls-remote for %s failed", arc_id)
-                        span.set_attribute("exists", False)
-                        span.record_exception(e)
-                        return False
-            finally:
-                context.detach(token)
+                g = git.cmd.Git()
+                try:
+                    with self._tracer.start_as_current_span("api.GitRepo._exists:ls-remote"):
+                        if self._config.command_timeout is not None:
+                            g.ls_remote(url, kill_after_timeout=self._config.command_timeout)
+                        else:
+                            g.ls_remote(url)
+                    logger.info("Git ls-remote for %s succeeded", arc_id)
+                    span.set_attribute("exists", True)
+                    return True
+                except GitCommandError as e:
+                    logger.warning("Git ls-remote for %s failed", arc_id)
+                    span.set_attribute("exists", False)
+                    span.record_exception(e)
+                    return False
 
-        return await loop.run_in_executor(self._executor, _task)
+        return await self._run_in_executor(_task)
