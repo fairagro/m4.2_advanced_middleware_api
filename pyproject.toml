@@ -1,6 +1,6 @@
 [project]
 name = "m4-2-advanced-middleware"
-version = "6.0.0"
+version = "7.4.0"
 description = "The FAIRagro advanced middleware"
 readme = "README.md"
 requires-python = ">=3.12"
