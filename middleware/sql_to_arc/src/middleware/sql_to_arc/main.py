@@ -317,6 +317,11 @@ async def _upload_and_update_stats(
             )
         logger.info("%s: Upload request finished. API reported %d successful ARCs.", batch_info, len(response.arcs))
 
+        # Log individual ARC results
+        successful_ids = {a.id for a in response.arcs}
+        for arc_response in response.arcs:
+            logger.info("API response for ARC: id=%s, status=success", arc_response.id)
+
         if len(response.arcs) < len(valid_arcs):
             logger.warning(
                 "%s: Only %d/%d ARCs were successfully processed by API.",
@@ -324,12 +329,12 @@ async def _upload_and_update_stats(
                 len(response.arcs),
                 len(valid_arcs),
             )
-            successful_ids = {a.id for a in response.arcs}
 
             for arc in valid_arcs:
                 identifier = getattr(arc, "Identifier", None)
                 if identifier:
                     if identifier not in successful_ids:
+                        logger.info("API response for ARC: id=%s, status=failed", identifier)
                         stats.failed_datasets += 1
                         stats.failed_ids.append(identifier)
                 else:
@@ -396,7 +401,18 @@ async def process_batch(  # pylint: disable=too-many-locals
                 stats.failed_datasets += 1
                 stats.failed_ids.append(row_id)
             else:
-                valid_arcs.append(cast(ARC, res))
+                arc = cast(ARC, res)
+                arc_id = getattr(arc, "Identifier", "unknown")
+                
+                # Serialize ARC to JSON and calculate size
+                try:
+                    arc_json = arc.ISA.ArcInvestigation.ToJsonString()
+                    json_size_kb = len(arc_json.encode('utf-8')) / 1024
+                    logger.info("ARC JSON created: id=%s, size=%.2fKB", arc_id, json_size_kb)
+                except Exception as e:  # pylint: disable=broad-exception-caught
+                    logger.warning("Failed to serialize ARC %s for size calculation: %s", arc_id, e)
+                
+                valid_arcs.append(arc)
                 valid_rows.append(batch[i])
 
     if valid_arcs:
