@@ -84,6 +84,6 @@ class GitlabRemoteManager(RemoteRepoManager):
                             "visibility": "private",
                         }
                     )
-            except Exception as e:
+            except gitlab.exceptions.GitlabError as e:
                 logger.error("Failed to ensure GitLab project exists: %s", e)
                 raise
