@@ -59,6 +59,8 @@ class RemoteGitProvider(ABC):
         if url_lower.startswith("file://"):
             return FileSystemGitProvider(url, group)
 
+        # TODO: any URL that is not file:// is assumed to be GitLab for now,
+        # but of course, this is a bold assumption. We should improve this later.
         if url_lower.startswith(("http://", "https://")):
             return GitlabGitProvider(url=url, group_name=group, token=token)
 
