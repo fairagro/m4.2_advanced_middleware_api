@@ -453,6 +453,7 @@ async def _fetch_and_group_related_data(
 ) -> tuple[dict, dict, dict, dict, dict, int, int]:
     """Fetch related data in bulk and group by investigation ID."""
     logger.info("Fetching related data (studies, assays, contacts, etc.)...")
+    # TODO: same as for investigations, we should use cursors here to avoid loading all into memory
     study_rows = [dict(row) for row in await db.get_studies(investigation_ids)]
     assay_rows = [dict(row) for row in await db.get_assays(investigation_ids)]
     contact_rows = [dict(row) for row in await db.get_contacts(investigation_ids)]
@@ -465,6 +466,7 @@ async def _fetch_and_group_related_data(
             m[str(r["investigation_ref"])].append(r)
         return dict(m)
 
+    # TODO: do not return such a big tuple, use a pydantic model instead
     return (
         group(study_rows),
         group(assay_rows),
@@ -527,6 +529,9 @@ async def process_investigations(
     stats = ProcessingStats()
     with tracer.start_as_current_span("process_investigations"):
         logger.info("Fetching investigations (limit=%s)...", config.debug_limit)
+        # TODO: This looks as if we load all investigations into memory at once,
+        # but I've requested to use database cursors to avoid that. Maybe it's as simple as
+        # replacing the list comprehension by an async generator?
         investigation_rows = [dict(row) for row in await db.get_investigations(limit=config.debug_limit)]
         logger.info("Found %d investigations", len(investigation_rows))
         stats.found_datasets = len(investigation_rows)
@@ -535,6 +540,7 @@ async def process_investigations(
             logger.info("No investigations found, nothing to process")
             return stats
 
+        # TODO: also this seems to contract a one investigation at a time pattern,
         inv_ids = [str(row["identifier"]) for row in investigation_rows]
         maps_and_counts = await _fetch_and_group_related_data(db, inv_ids)
 
