@@ -26,6 +26,9 @@ from middleware.sql_to_arc.mapper import map_assay, map_investigation, map_study
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
+# Suppress noisy library logs at INFO level
+logging.getLogger("httpx").setLevel(logging.WARNING)
+logging.getLogger("httpcore").setLevel(logging.WARNING)
 logger = logging.getLogger(__name__)
 
 
