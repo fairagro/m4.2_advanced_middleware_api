@@ -192,8 +192,8 @@ async def test_main_workflow(
     assert mock_db_cursor.execute.call_count == 3  # noqa: PLR2004
 
     # Should have uploaded ARCs (2 investigations distributed across workers)
-    # With max_concurrent_arc_builds=5, both investigations
-    # will be assigned to worker 1 and uploaded in a single batch
+    # With max_concurrent_arc_builds=5, the 2 investigations are distributed
+    # across workers and uploaded in separate API calls.
     assert mock_api_client.create_or_update_arcs.called
 
     # The new architecture may split into multiple batches depending on worker assignment
