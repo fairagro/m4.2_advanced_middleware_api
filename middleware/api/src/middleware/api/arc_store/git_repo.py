@@ -2,16 +2,12 @@
 
 import asyncio
 import concurrent.futures
-import http
 import logging
 import shutil
 import tempfile
-import urllib.error
-import urllib.request
 from collections.abc import Callable
 from pathlib import Path
 from typing import Annotated, TypeVar
-from urllib.parse import quote
 
 import git.cmd
 from arctrl import ARC  # type: ignore[import-untyped]
@@ -21,7 +17,9 @@ from opentelemetry import trace
 from pydantic import BaseModel, Field, SecretStr, field_validator
 
 from . import ArcStore
-from .remote_repo_manager import FileSystemRemoteManager, GitlabRemoteManager, RemoteRepoManager
+from .remote_git_provider import (
+    RemoteGitProvider,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -232,66 +230,20 @@ class GitRepo(ArcStore):
         self._config = config
         self._executor = concurrent.futures.ThreadPoolExecutor(max_workers=self._config.max_workers)
 
-        # Initialize RemoteRepoManager
-        self._remote_manager: RemoteRepoManager | None = None
-        if self._config.url.lower().startswith("file://"):
-            self._remote_manager = FileSystemRemoteManager(self._config.url, self._config.group)
-        elif self._config.url.lower().startswith(("http://", "https://")) and self._config.token:
-            self._remote_manager = GitlabRemoteManager(
-                url=self._config.url,
-                group_name=self._config.group,
-                token=self._config.token.get_secret_value(),
-            )
+        # Initialize RemoteGitProvider
+        token = self._config.token.get_secret_value() if self._config.token else None
+        self._remote_provider = RemoteGitProvider.from_url(
+            url=self._config.url,
+            group=self._config.group,
+            token=token,
+        )
 
     def _check_health(self) -> bool:
         """Check connection to the storage backend."""
-        url = self._config.url
-
-        # Check for file:// scheme used in integration tests
-        if url.lower().startswith("file://"):
-            logger.debug("Skipping health check for file:// URL: %s", url)
-            return True
-
-        try:
-            # Set a short timeout, disable bandit check, as we've already validated the URL
-            with urllib.request.urlopen(url, timeout=5) as response:  # nosec B310
-                if response.status >= http.HTTPStatus.BAD_REQUEST:
-                    logger.error("Git server check failed: %s returned status %s", url, response.status)
-                    return False
-                logger.debug("Git server check passed: %s returned status %s", url, response.status)
-                return True
-        except urllib.error.HTTPError as e:
-            logger.exception("Git server check failed: %s returned HTTP error %s: %s", url, e.code, e.reason)
-        except urllib.error.URLError as e:
-            logger.exception("Git server check failed: %s is unreachable. Reason: %s", url, e.reason)
-        except TimeoutError:
-            logger.exception("Git server check failed: %s timed out", url)
-        except Exception:  # pylint: disable=broad-exception-caught
-            logger.exception("Git server check failed: %s caused unexpected error", url)
-
-        return False
-
-    def _get_repo_url(self, arc_id: str) -> str:
-        # Construct URL: base/group/arc_id.git
-        base = self._config.url.rstrip("/")
-        group = self._config.group.strip("/")
-        return f"{base}/{group}/{arc_id}.git"
-
-    def _get_authenticated_url(self, repo_url: str) -> str:
-        """Inject auth token into URL if present."""
-        if self._config.token:
-            token = quote(self._config.token.get_secret_value())
-            if repo_url.startswith("https://"):
-                clean = repo_url.replace("https://", "")
-                return f"https://oauth2:{token}@{clean}"
-            if repo_url.startswith("http://"):
-                clean = repo_url.replace("http://", "")
-                return f"http://oauth2:{token}@{clean}"
-        return repo_url
+        return self._remote_provider.check_health()
 
     def _get_context_config(self, arc_id: str) -> GitContextConfig:
-        repo_url = self._get_repo_url(arc_id)
-        auth_url = self._get_authenticated_url(repo_url)
+        auth_url = self._remote_provider.get_repo_url(arc_id, authenticated=True)
 
         # cache_dir is guaranteed to be a Path by Pydantic validation
         local_path = self._config.cache_dir / arc_id
@@ -318,8 +270,7 @@ class GitRepo(ArcStore):
                 attributes={"arc_id": arc_id},
             ) as span:
                 # Ensure remote exists before doing anything else (if manager is configured)
-                if self._remote_manager:
-                    self._remote_manager.ensure_repo_exists(arc_id)
+                self._remote_provider.ensure_repo_exists(arc_id)
 
                 ctx_config = self._get_context_config(arc_id)
                 try:
@@ -349,7 +300,7 @@ class GitRepo(ArcStore):
                 except GitCommandError as e:
                     span.record_exception(e)
                     # Try to diagnose connection issues
-                    self.check_health()
+                    self._check_health()
                     raise
                 except Exception as e:
                     span.record_exception(e)
@@ -413,12 +364,9 @@ class GitRepo(ArcStore):
                 "git_repo.exists",
                 attributes={"arc_id": arc_id},
             ) as span:
-                # We can try to ls-remote
-                repo_url = self._get_repo_url(arc_id)
-                span.set_attribute("git.repo_url", repo_url)
-
-                # Inject token for ls-remote check
-                url = self._get_authenticated_url(repo_url)
+                # We can try to ls-remote using the authenticated URL
+                url = self._remote_provider.get_repo_url(arc_id, authenticated=True)
+                span.set_attribute("git.repo_url", url)
 
                 g = git.cmd.Git()
                 try:

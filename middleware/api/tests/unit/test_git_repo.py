@@ -39,7 +39,7 @@ def git_repo(repo_config: GitRepoConfig) -> GitRepo:
 
 def test_git_repo_url_generation(git_repo: GitRepo) -> None:
     """Test standard repo URL generation."""
-    url = git_repo._get_repo_url("arc123")
+    url = git_repo._remote_provider.get_repo_url("arc123", authenticated=False)
     assert url == "https://gitlab.example.com/mygroup/arc123.git"
 
 
