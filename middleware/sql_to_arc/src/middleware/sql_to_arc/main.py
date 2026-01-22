@@ -8,6 +8,7 @@ import logging
 import multiprocessing
 import time
 from collections import defaultdict
+from collections.abc import AsyncGenerator
 from pathlib import Path
 from typing import Any, cast
 
@@ -290,7 +291,6 @@ class WorkerContext(BaseModel):
     contacts_by_inv: dict[str, list[dict[str, Any]]]
     pubs_by_inv: dict[str, list[dict[str, Any]]]
     anns_by_inv: dict[str, list[dict[str, Any]]]
-    batch_size: int
     worker_id: int
     total_workers: int
     executor: Any  # ProcessPoolExecutor is not Pydantic-friendly easily, so Any
@@ -317,6 +317,11 @@ async def _upload_and_update_stats(
             )
         logger.info("%s: Upload request finished. API reported %d successful ARCs.", batch_info, len(response.arcs))
 
+        # Log individual ARC results
+        successful_ids = {a.id for a in response.arcs}
+        for arc_response in response.arcs:
+            logger.info("API response for ARC: id=%s, status=success", arc_response.id)
+
         if len(response.arcs) < len(valid_arcs):
             logger.warning(
                 "%s: Only %d/%d ARCs were successfully processed by API.",
@@ -324,12 +329,12 @@ async def _upload_and_update_stats(
                 len(response.arcs),
                 len(valid_arcs),
             )
-            successful_ids = {a.id for a in response.arcs}
 
             for arc in valid_arcs:
                 identifier = getattr(arc, "Identifier", None)
                 if identifier:
                     if identifier not in successful_ids:
+                        logger.info("API response for ARC: id=%s, status=failed", identifier)
                         stats.failed_datasets += 1
                         stats.failed_ids.append(identifier)
                 else:
@@ -344,63 +349,63 @@ async def _upload_and_update_stats(
             stats.failed_ids.append(str(row["identifier"]))
 
 
-async def process_batch(  # pylint: disable=too-many-locals
+async def process_investigation(
     ctx: WorkerContext,
-    batch: list[dict[str, Any]],
-    batch_idx: int,
-    total_batches: int,
+    investigation: dict[str, Any],
+    inv_idx: int,
+    total_investigations: int,
 ) -> ProcessingStats:
-    """Process a single batch of investigations."""
+    """Process a single investigation."""
     stats = ProcessingStats()
     tracer = trace.get_tracer(__name__)
-    batch_info = f"Worker {ctx.worker_id}/{ctx.total_workers}, Batch {batch_idx + 1}/{total_batches}"
-
-    valid_arcs: list[ARC] = []
-    valid_rows: list[dict[str, Any]] = []
+    inv_id = str(investigation["identifier"])
+    inv_info = f"Worker {ctx.worker_id}/{ctx.total_workers}, Investigation {inv_idx + 1}/{total_investigations}"
 
     with tracer.start_as_current_span(
-        "build_batch",
-        attributes={"batch_size": len(batch), "worker_id": ctx.worker_id, "batch_idx": batch_idx},
+        "build_investigation",
+        attributes={"investigation_id": inv_id, "worker_id": ctx.worker_id, "inv_idx": inv_idx},
     ):
-        logger.info("%s: Building %d ARCs in parallel...", batch_info, len(batch))
+        logger.info("%s: Building ARC for investigation %s...", inv_info, inv_id)
 
+        # Prepare data bundle for this investigation
+        build_data = ArcBuildData(
+            investigation_row=investigation,
+            studies=ctx.studies_by_inv.get(inv_id, []),
+            assays=ctx.assays_by_inv.get(inv_id, []),
+            contacts=ctx.contacts_by_inv.get(inv_id, []),
+            publications=ctx.pubs_by_inv.get(inv_id, []),
+            annotations=ctx.anns_by_inv.get(inv_id, []),
+        )
+
+        # Build ARC in executor
         loop = asyncio.get_event_loop()
-        arc_build_futures = []
+        try:
+            result = await loop.run_in_executor(ctx.executor, build_single_arc_task, build_data)
 
-        for row in batch:
-            inv_id = str(row["identifier"])
-
-            # Prepare data bundle for this investigation
-            build_data = ArcBuildData(
-                investigation_row=row,
-                studies=ctx.studies_by_inv.get(inv_id, []),
-                assays=ctx.assays_by_inv.get(inv_id, []),
-                contacts=ctx.contacts_by_inv.get(inv_id, []),
-                publications=ctx.pubs_by_inv.get(inv_id, []),
-                annotations=ctx.anns_by_inv.get(inv_id, []),
-            )
-
-            future = loop.run_in_executor(ctx.executor, build_single_arc_task, build_data)
-            arc_build_futures.append(future)
-
-        results = await asyncio.gather(*arc_build_futures, return_exceptions=True)
-
-        for i, res in enumerate(results):
-            row_id = str(batch[i]["identifier"])
-            if isinstance(res, Exception):
-                logger.error("%s: Failed to build ARC for investigation %s: %s", batch_info, row_id, res)
+            if result is None:
+                logger.error("%s: Build returned None for investigation %s", inv_info, inv_id)
                 stats.failed_datasets += 1
-                stats.failed_ids.append(row_id)
-            elif res is None:
-                logger.error("%s: Build returned None for investigation %s", batch_info, row_id)
-                stats.failed_datasets += 1
-                stats.failed_ids.append(row_id)
-            else:
-                valid_arcs.append(cast(ARC, res))
-                valid_rows.append(batch[i])
+                stats.failed_ids.append(inv_id)
+                return stats
 
-    if valid_arcs:
-        await _upload_and_update_stats(ctx, valid_arcs, valid_rows, stats, batch_info)
+            arc = cast(ARC, result)
+            arc_id = getattr(arc, "Identifier", "unknown")
+
+            # Serialize ARC to JSON and calculate size
+            try:
+                arc_json = arc.ISA.ArcInvestigation.ToJsonString()
+                json_size_kb = len(arc_json.encode("utf-8")) / 1024
+                logger.info("ARC JSON created: id=%s, size=%.2fKB", arc_id, json_size_kb)
+            except Exception as e:  # pylint: disable=broad-exception-caught
+                logger.warning("Failed to serialize ARC %s for size calculation: %s", arc_id, e)
+
+            # Upload single ARC
+            await _upload_and_update_stats(ctx, [arc], [investigation], stats, inv_info)
+
+        except Exception as e:  # pylint: disable=broad-exception-caught
+            logger.error("%s: Failed to build ARC for investigation %s: %s", inv_info, inv_id, e)
+            stats.failed_datasets += 1
+            stats.failed_ids.append(inv_id)
 
     return stats
 
@@ -427,23 +432,9 @@ async def process_worker_investigations(
             len(investigations),
         )
 
-        batches: list[list[dict[str, Any]]] = []
-        current_batch: list[dict[str, Any]] = []
-
-        for row in investigations:
-            current_batch.append(row)
-            if len(current_batch) >= ctx.batch_size:
-                batches.append(current_batch)
-                current_batch = []
-
-        if current_batch:
-            batches.append(current_batch)
-
-        logger.info("Worker %d/%d: Processing %d batches", ctx.worker_id, ctx.total_workers, len(batches))
-
-        for batch_idx, batch in enumerate(batches):
-            batch_stats = await process_batch(ctx, batch, batch_idx, len(batches))
-            stats.merge(batch_stats)
+        for idx, investigation in enumerate(investigations):
+            inv_stats = await process_investigation(ctx, investigation, idx, len(investigations))
+            stats.merge(inv_stats)
 
     return stats
 
@@ -453,12 +444,15 @@ async def _fetch_and_group_related_data(
 ) -> tuple[dict, dict, dict, dict, dict, int, int]:
     """Fetch related data in bulk and group by investigation ID."""
     logger.info("Fetching related data (studies, assays, contacts, etc.)...")
-    # TODO: same as for investigations, we should use cursors here to avoid loading all into memory
-    study_rows = [dict(row) for row in await db.get_studies(investigation_ids)]
-    assay_rows = [dict(row) for row in await db.get_assays(investigation_ids)]
-    contact_rows = [dict(row) for row in await db.get_contacts(investigation_ids)]
-    pub_rows = [dict(row) for row in await db.get_publications(investigation_ids)]
-    ann_rows = [dict(row) for row in await db.get_annotation_tables(investigation_ids)]
+
+    async def collect(gen: AsyncGenerator[dict[str, Any], None]) -> list[dict[str, Any]]:
+        return [row async for row in gen]
+
+    study_rows = await collect(db.stream_studies(investigation_ids))
+    assay_rows = await collect(db.stream_assays(investigation_ids))
+    contact_rows = await collect(db.stream_contacts(investigation_ids))
+    pub_rows = await collect(db.stream_publications(investigation_ids))
+    ann_rows = await collect(db.stream_annotation_tables(investigation_ids))
 
     def group(rows: list[dict[str, Any]]) -> dict[str, list[dict[str, Any]]]:
         m = defaultdict(list)
@@ -505,7 +499,6 @@ async def _execute_distributed_workers(
                 contacts_by_inv=data_maps[2],
                 pubs_by_inv=data_maps[3],
                 anns_by_inv=data_maps[4],
-                batch_size=config.batch_size,
                 worker_id=worker_id + 1,
                 total_workers=num_workers,
                 executor=executor,
@@ -529,10 +522,7 @@ async def process_investigations(
     stats = ProcessingStats()
     with tracer.start_as_current_span("process_investigations"):
         logger.info("Fetching investigations (limit=%s)...", config.debug_limit)
-        # TODO: This looks as if we load all investigations into memory at once,
-        # but I've requested to use database cursors to avoid that. Maybe it's as simple as
-        # replacing the list comprehension by an async generator?
-        investigation_rows = [dict(row) for row in await db.get_investigations(limit=config.debug_limit)]
+        investigation_rows = [row async for row in db.stream_investigations(limit=config.debug_limit)]
         logger.info("Found %d investigations", len(investigation_rows))
         stats.found_datasets = len(investigation_rows)
 
