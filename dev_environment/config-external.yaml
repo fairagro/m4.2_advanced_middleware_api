@@ -8,7 +8,6 @@ db_port: 5432
 
 rdi: edaphobase
 rdi_url: https://edaphobase.org
-batch_size: "1"
 max_concurrent_arc_builds: 8
 
 api_client:

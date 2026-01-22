@@ -173,7 +173,6 @@ async def test_process_worker_investigations_empty() -> None:
         rdi="test_rdi",
         studies_by_investigation={},  # studies_by_investigation
         assays_by_study={},  # assays_by_study
-        batch_size=2,
         worker_id=1,
         total_workers=1,
         executor=mock_executor,
@@ -221,7 +220,6 @@ async def test_process_worker_investigations_builds_and_uploads(monkeypatch: pyt
         rdi="test_rdi",
         studies_by_investigation=studies_by_investigation,
         assays_by_study=assays_by_study,
-        batch_size=2,
         worker_id=1,
         total_workers=1,
         executor=executor,
@@ -237,7 +235,7 @@ async def test_process_investigations(monkeypatch: pytest.MonkeyPatch) -> None:
     """Test full process_investigations flow."""
     mock_cursor = AsyncMock()
     mock_client = AsyncMock()
-    mock_config = MagicMock(max_concurrent_arc_builds=2, batch_size=2, rdi="test")
+    mock_config = MagicMock(max_concurrent_arc_builds=2, rdi="test")
 
     # Mock fetchers
     async def mock_fetch_inv(*_args: Any) -> list[dict[str, Any]]:

@@ -63,7 +63,8 @@ api:
     className: ""
     mtlsEnabled: false
     mtlsVerifyDepth: 1
-    annotations: {}
+    annotations:
+      nginx.ingress.kubernetes.io/client-max-body-size: "500m"
     hosts: []
     tls: []
   tls:

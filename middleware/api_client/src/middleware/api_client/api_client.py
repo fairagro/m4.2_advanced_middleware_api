@@ -25,6 +25,11 @@ logger = logging.getLogger(__name__)
 class ApiClientError(Exception):
     """Base exception for ApiClient errors."""
 
+    def __init__(self, message: str, status_code: int | None = None) -> None:
+        """Initialize with message and optional status code."""
+        super().__init__(message)
+        self.status_code = status_code
+
 
 class ApiClient:
     """Client for the FAIRagro Middleware API.
@@ -161,7 +166,7 @@ class ApiClient:
         except httpx.HTTPStatusError as e:
             error_msg = f"HTTP error {e.response.status_code}: {e.response.text}"
             logger.error(error_msg)
-            raise ApiClientError(error_msg) from e
+            raise ApiClientError(error_msg, status_code=e.response.status_code) from e
         except httpx.RequestError as e:
             error_msg = f"Request error: {str(e)}"
             logger.error(error_msg)
@@ -190,7 +195,7 @@ class ApiClient:
         except httpx.HTTPStatusError as e:
             error_msg = f"HTTP error {e.response.status_code}: {e.response.text}"
             logger.error(error_msg)
-            raise ApiClientError(error_msg) from e
+            raise ApiClientError(error_msg, status_code=e.response.status_code) from e
         except httpx.RequestError as e:
             error_msg = f"Request error: {str(e)}"
             logger.error(error_msg)
