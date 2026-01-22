@@ -66,7 +66,7 @@ def test_config_with_defaults() -> None:
 
     # Check defaults
     assert config.db_port == 5432  # Default port  # noqa: PLR2004
-    assert config.batch_size == 10  # Default batch size  # noqa: PLR2004
+    assert config.batch_size == 1  # Default batch size  # noqa: PLR2004
 
 
 def test_config_batch_size_validation() -> None:
