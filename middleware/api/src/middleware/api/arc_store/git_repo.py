@@ -21,6 +21,7 @@ from opentelemetry import trace
 from pydantic import BaseModel, Field, SecretStr, field_validator
 
 from . import ArcStore
+from .remote_repo_manager import FileSystemRemoteManager, GitlabRemoteManager, RemoteRepoManager
 
 logger = logging.getLogger(__name__)
 
@@ -231,6 +232,17 @@ class GitRepo(ArcStore):
         self._config = config
         self._executor = concurrent.futures.ThreadPoolExecutor(max_workers=self._config.max_workers)
 
+        # Initialize RemoteRepoManager
+        self._remote_manager: RemoteRepoManager | None = None
+        if self._config.url.lower().startswith("file://"):
+            self._remote_manager = FileSystemRemoteManager(self._config.url, self._config.group)
+        elif self._config.url.lower().startswith(("http://", "https://")) and self._config.token:
+            self._remote_manager = GitlabRemoteManager(
+                url=self._config.url,
+                group_name=self._config.group,
+                token=self._config.token.get_secret_value(),
+            )
+
     def _check_health(self) -> bool:
         """Check connection to the storage backend."""
         url = self._config.url
@@ -305,6 +317,10 @@ class GitRepo(ArcStore):
                 "git_repo.create_or_update",
                 attributes={"arc_id": arc_id},
             ) as span:
+                # Ensure remote exists before doing anything else (if manager is configured)
+                if self._remote_manager:
+                    self._remote_manager.ensure_repo_exists(arc_id)
+
                 ctx_config = self._get_context_config(arc_id)
                 try:
                     with GitContext(ctx_config) as ctx:
