@@ -35,8 +35,12 @@ class RemoteGitProvider(ABC):
         pass
 
     @staticmethod
-    def from_url(url: str, group: str, token: str | None = None) -> "RemoteGitProvider":
-        """Create a provider based on the URL.
+    def from_url(
+        url: str,
+        group: str,
+        token: str | None = None,
+    ) -> "RemoteGitProvider":
+        """Create a provider based on the URL protocol.
 
         Args:
             url (str): Base URL of the git server.
@@ -46,14 +50,20 @@ class RemoteGitProvider(ABC):
         Returns:
             RemoteGitProvider: An instance of a concrete provider.
 
+        Raises:
+            ValueError: If no suitable provider can be determined.
+
         """
         url_lower = url.lower()
+
         if url_lower.startswith("file://"):
             return FileSystemGitProvider(url, group)
-        if "gitlab" in url_lower:
+
+        if url_lower.startswith(("http://", "https://")):
             return GitlabGitProvider(url=url, group_name=group, token=token)
 
-        return StaticGitProvider(url, group)
+        msg = f"Could not determine git provider for URL '{url}'. Supported protocols: file://, http://, https://"
+        raise ValueError(msg)
 
 
 class FileSystemGitProvider(RemoteGitProvider):
@@ -164,28 +174,6 @@ class GitlabGitProvider(RemoteGitProvider):
                 return bool(response.status < http.HTTPStatus.BAD_REQUEST)
         except (urllib.error.URLError, TimeoutError):
             return False
-
-
-class StaticGitProvider(RemoteGitProvider):
-    """Provider for any other git remotes without automated project management."""
-
-    def __init__(self, base_url: str, group: str) -> None:
-        """Initialize with base URL and group."""
-        self.base_url = base_url.rstrip("/")
-        self.group = group.strip("/")
-
-    def ensure_repo_exists(self, arc_id: str) -> None:
-        """Do nothing for static remotes."""
-        pass
-
-    def get_repo_url(self, arc_id: str, _authenticated: bool = True) -> str:
-        """Construct the repository URL."""
-        return f"{self.base_url}/{self.group}/{arc_id}.git"
-
-    def check_health(self) -> bool:
-        """Check if the generic git server is reachable."""
-        try:
-            with urllib.request.urlopen(self.base_url, timeout=5) as response:  # nosec B310
-                return bool(response.status < http.HTTPStatus.BAD_REQUEST)
-        except (urllib.error.URLError, TimeoutError):
+        except Exception as e:  # pylint: disable=broad-exception-caught
+            logger.warning("Unexpected error during health check for %s: %s", self.url, e)
             return False
