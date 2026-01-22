@@ -380,6 +380,8 @@ async def process_investigation(
         # Build ARC in executor
         loop = asyncio.get_event_loop()
         try:
+            # TODO: why do we tun build_single_arc_task in an executor here? Isn't this already in a worker process?
+            # Why is build_single_arc_task not async?
             result = await loop.run_in_executor(ctx.executor, build_single_arc_task, build_data)
 
             if result is None:
@@ -393,7 +395,7 @@ async def process_investigation(
 
             # Serialize ARC to JSON and calculate size
             try:
-                arc_json = arc.ISA.ArcInvestigation.ToJsonString()
+                arc_json = arc.to_rocrate_json_string()
                 json_size_kb = len(arc_json.encode("utf-8")) / 1024
                 logger.info("ARC JSON created: id=%s, size=%.2fKB", arc_id, json_size_kb)
             except Exception as e:  # pylint: disable=broad-exception-caught
@@ -448,6 +450,7 @@ async def _fetch_and_group_related_data(
     async def collect(gen: AsyncGenerator[dict[str, Any], None]) -> list[dict[str, Any]]:
         return [row async for row in gen]
 
+    # TODO: also here we're using lists, so generators or cursors
     study_rows = await collect(db.stream_studies(investigation_ids))
     assay_rows = await collect(db.stream_assays(investigation_ids))
     contact_rows = await collect(db.stream_contacts(investigation_ids))
@@ -486,6 +489,9 @@ async def _execute_distributed_workers(
         worker_assignments[idx % num_workers].append(investigation)
 
     mp_context = multiprocessing.get_context("spawn")
+    # TODO: for me it seems as if all database objects are fetched in advanced an then
+    # distributed to the workers. I would prefer if each worker would fetch its own data.
+    # But the question is: is it possible to share a database connection across processes?
     with concurrent.futures.ProcessPoolExecutor(max_workers=num_workers, mp_context=mp_context) as executor:
         tasks = []
         for worker_id, assigned in enumerate(worker_assignments):
@@ -522,6 +528,8 @@ async def process_investigations(
     stats = ProcessingStats()
     with tracer.start_as_current_span("process_investigations"):
         logger.info("Fetching investigations (limit=%s)...", config.debug_limit)
+        # TODO: this looks like it fetches all investigations at once, although we've switched to database cursors
+        # Maybe it would be better to use an async generator here instead?
         investigation_rows = [row async for row in db.stream_investigations(limit=config.debug_limit)]
         logger.info("Found %d investigations", len(investigation_rows))
         stats.found_datasets = len(investigation_rows)

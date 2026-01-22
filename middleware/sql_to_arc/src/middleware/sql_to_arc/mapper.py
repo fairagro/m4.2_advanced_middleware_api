@@ -47,6 +47,8 @@ def map_investigation(row: dict[str, Any]) -> ArcInvestigation:
         # But we might start empty
         pass
 
+    # TODO: the database view spec requires title and description_text to be NOT NULL.
+    # But how would we validate that in general -- not necessarily here?
     inv = ArcInvestigation.create(
         identifier=identifier,
         title=row.get("title", ""),

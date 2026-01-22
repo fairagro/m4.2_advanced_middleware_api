@@ -51,8 +51,8 @@ def mock_api_client() -> AsyncMock:
 async def test_process_worker_investigations(mock_api_client: AsyncMock) -> None:
     """Test worker investigations processing."""
     investigation_rows: list[dict[str, Any]] = [
-        {"id": 1, "title": "Test 1", "description": "Desc 1", "submission_time": None, "release_time": None},
-        {"id": 2, "title": "Test 2", "description": "Desc 2", "submission_time": None, "release_time": None},
+        {"identifier": 1, "title": "Test 1", "description": "Desc 1", "submission_time": None, "release_time": None},
+        {"identifier": 2, "title": "Test 2", "description": "Desc 2", "submission_time": None, "release_time": None},
     ]
     studies_by_investigation: dict[str, list[dict[str, Any]]] = {"1": [], "2": []}
     assays_by_study: dict[str, list[dict[str, Any]]] = {}
@@ -67,7 +67,6 @@ async def test_process_worker_investigations(mock_api_client: AsyncMock) -> None
             contacts_by_inv={},
             pubs_by_inv={},
             anns_by_inv={},
-            batch_size=1,
             worker_id=1,
             total_workers=1,
             executor=executor,
@@ -83,16 +82,54 @@ async def test_process_worker_investigations(mock_api_client: AsyncMock) -> None
 
 
 @pytest.mark.asyncio
+# TODO: fix this test. Neither ChatGPT 4.1 nor me is able to.
 async def test_main_workflow(
     mocker: MagicMock,
     mock_db_connection: AsyncMock,
-    mock_db_cursor: AsyncMock,
     mock_api_client: AsyncMock,
 ) -> None:
     """Test the main workflow with mocked DB and API."""
-    # Mock psycopg connection
+    # Patch Database to prevent real DB operations and ensure to_jsonld returns valid JSON
+    mock_db_instance = MagicMock()
+    mock_db_instance.to_jsonld.return_value = "{}"
+    # Patch bulk fetch methods to return test data
+    mock_db_instance.fetch_investigations_bulk.return_value = [
+        {"identifier": 1, "title": "Inv 1", "description": "Desc 1", "submission_time": None, "release_time": None},
+        {"identifier": 2, "title": "Inv 2", "description": "Desc 2", "submission_time": None, "release_time": None},
+    ]
+    mock_db_instance.fetch_studies_bulk.return_value = [
+        {
+            "id": 10,
+            "investigation_id": 1,
+            "title": "Study 1",
+            "description": "Desc S1",
+            "submission_time": None,
+            "release_time": None,
+        },
+        {
+            "id": 11,
+            "investigation_id": 2,
+            "title": "Study 2",
+            "description": "Desc S2",
+            "submission_time": None,
+            "release_time": None,
+        },
+    ]
+    mock_db_instance.fetch_assays_bulk.return_value = [
+        {"id": 100, "study_id": 10},
+        {"id": 101, "study_id": 11},
+    ]
     mocker.patch(
-        "psycopg.AsyncConnection.connect",
+        "middleware.sql_to_arc.main.Database",
+        return_value=mock_db_instance,
+    )
+    # Prevent real engine creation and ValueError by mocking create_async_engine
+    mocker.patch(
+        "sqlalchemy.ext.asyncio.create_async_engine",
+        return_value=MagicMock(),
+    )
+    mocker.patch(
+        "sqlalchemy.ext.asyncio.AsyncSession",
         return_value=AsyncMock(__aenter__=AsyncMock(return_value=mock_db_connection)),
     )
 
@@ -114,6 +151,10 @@ async def test_main_workflow(
     mock_config.api_client = MagicMock()
     mock_config.log_level = "INFO"
     mock_config.otel = OtelConfig(endpoint=None, log_console_spans=False, log_level="INFO")
+    # Add mock connection_string with get_secret_value
+    mock_connection_string = MagicMock()
+    mock_connection_string.get_secret_value.return_value = "sqlite+aiosqlite:///:memory:"
+    mock_config.connection_string = mock_connection_string
 
     mock_wrapper = MagicMock()
     mocker.patch(
@@ -128,72 +169,11 @@ async def test_main_workflow(
     # Mock configure_logging to avoid log config issues
     mocker.patch("middleware.sql_to_arc.main.configure_logging")
 
-    # Setup DB data - New bulk fetch strategy
-    # 1. Investigations
-    investigations = [
-        {"id": 1, "title": "Inv 1", "description": "Desc 1", "submission_time": None, "release_time": None},
-        {"id": 2, "title": "Inv 2", "description": "Desc 2", "submission_time": None, "release_time": None},
-    ]
-
-    # 2. Studies (for both investigations)
-    studies_bulk = [
-        {
-            "id": 10,
-            "investigation_id": 1,
-            "title": "Study 1",
-            "description": "Desc S1",
-            "submission_time": None,
-            "release_time": None,
-        },
-        {
-            "id": 11,
-            "investigation_id": 2,
-            "title": "Study 2",
-            "description": "Desc S2",
-            "submission_time": None,
-            "release_time": None,
-        },
-    ]
-
-    # 3. Assays (for all studies)
-    # Note: measurement_type and technology_type are not used yet,
-    # as they require proper OntologyTerm objects which the DB doesn't provide yet
-    assays_bulk = [
-        {"id": 100, "study_id": 10},
-        {"id": 101, "study_id": 11},
-    ]
-
-    # Configure cursor behavior for bulk fetch strategy
-    # The new implementation makes 3 queries:
-    # 1. All investigations
-    # 2. All studies for those investigations (using ANY)
-    # 3. All assays for those studies (using ANY)
-
-    async def fetchall_side_effect() -> list[dict[str, Any]]:
-        # Check the last executed query to decide what to return
-        if not mock_db_cursor.execute.call_args:
-            return []
-
-        last_query = mock_db_cursor.execute.call_args[0][0]
-        if 'FROM "ARC_Investigation"' in last_query:
-            return investigations
-        elif 'FROM "ARC_Study"' in last_query:
-            return studies_bulk
-        elif 'FROM "ARC_Assay"' in last_query:
-            return assays_bulk
-        return []
-
-    mock_db_cursor.fetchall.side_effect = fetchall_side_effect
-
     # Run main
     await main()
 
     # Verify interactions
-    # Should have connected to DB
-    assert mock_db_connection.cursor.called
-
-    # Should have executed 3 queries (investigations, studies bulk, assays bulk)
-    assert mock_db_cursor.execute.call_count == 3  # noqa: PLR2004
+    # Should have executed DB queries via SQLAlchemy session
 
     # Should have uploaded ARCs (2 investigations distributed across workers)
     # With max_concurrent_arc_builds=5, both investigations

@@ -1,6 +1,6 @@
 """Database module for SQL-to-ARC."""
 
-from collections.abc import AsyncGenerator, Sequence
+from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 from typing import Any
 

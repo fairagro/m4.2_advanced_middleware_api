@@ -2,8 +2,7 @@
 
 from pathlib import Path
 
-import pytest
-from pydantic import SecretStr, ValidationError
+from pydantic import SecretStr
 
 from middleware.api_client.config import Config as ApiClientConfig
 from middleware.shared.config.config_base import OtelConfig
@@ -55,4 +54,3 @@ def test_config_with_defaults() -> None:
 
     # Check defaults
     assert config.debug_limit is None
-
