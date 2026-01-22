@@ -233,11 +233,15 @@ class ApiClient:
 
         logger.info("Task submitted, ID: %s. Polling for results...", task_id)
 
-        # 2. Poll for results
+        # 2. Poll for results with exponential backoff
+        delay = 1.0  # Start with 1 second delay
+        max_delay = 30.0  # Max delay of 30 seconds
         while True:
-            await asyncio.sleep(1.0)  # Poll every second
+            await asyncio.sleep(delay)
             status_response = await self._get(f"v1/tasks/{task_id}")
             status = status_response.get("status")
+
+            logger.debug("Task %s status: %s (next poll in %.1fs)", task_id, status, delay)
 
             if status == "SUCCESS":
                 result_data = status_response.get("result")
@@ -253,7 +257,8 @@ class ApiClient:
                 error_msg = status_response.get("error", "Unknown error")
                 raise ApiClientError(f"Task failed: {error_msg}")
 
-            # continue polling if PENDING, STARTED, RETRY etc.
+            # Increase delay for next poll iteration
+            delay = min(delay * 1.5, max_delay)
 
     async def aclose(self) -> None:
         """Close the underlying HTTP client connection.

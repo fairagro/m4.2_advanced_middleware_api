@@ -65,7 +65,7 @@ if "pytest" in sys.modules:
             "gitlab_api": {
                 "url": "https://localhost/",
                 "branch": "dummy",
-                "token": "dummy-token",
+                "token": "dummy-token",  # nosec B105
                 "group": "dummy-group",
             },
         }
@@ -86,6 +86,20 @@ logging.basicConfig(
 )
 
 logger = logging.getLogger("middleware_api")
+
+
+class PollingLogFilter(logging.Filter):
+    """Filter to suppress polling task status logs from uvicorn access logger."""
+
+    def filter(self, record: logging.LogRecord) -> bool:
+        """Suppress access logs for task status polling at INFO level.
+
+        These logs are shown if the 'middleware_api' logger is set to DEBUG.
+        """
+        msg = record.getMessage()
+        if "GET /v1/tasks/" in msg:
+            return logging.getLogger("middleware_api").isEnabledFor(logging.DEBUG)
+        return True
 
 
 class Api:
@@ -126,6 +140,9 @@ class Api:
             log_level=getattr(logging, self._config.log_level),
             otlp_log_level=getattr(logging, self._config.otel.log_level),
         )
+
+        # Apply polling log filter to uvicorn access logger
+        logging.getLogger("uvicorn.access").addFilter(PollingLogFilter())
 
         @asynccontextmanager
         async def lifespan(_app: FastAPI) -> AsyncGenerator[None, None]:
