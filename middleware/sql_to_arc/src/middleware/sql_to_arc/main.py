@@ -9,7 +9,7 @@ import multiprocessing
 import time
 from collections import defaultdict
 from pathlib import Path
-from typing import Any, cast
+from typing import Any, AsyncGenerator, cast
 
 from arctrl import (  # type: ignore[import-untyped]
     ARC,
@@ -453,11 +453,15 @@ async def _fetch_and_group_related_data(
 ) -> tuple[dict, dict, dict, dict, dict, int, int]:
     """Fetch related data in bulk and group by investigation ID."""
     logger.info("Fetching related data (studies, assays, contacts, etc.)...")
-    study_rows = [dict(row) for row in await db.get_studies(investigation_ids)]
-    assay_rows = [dict(row) for row in await db.get_assays(investigation_ids)]
-    contact_rows = [dict(row) for row in await db.get_contacts(investigation_ids)]
-    pub_rows = [dict(row) for row in await db.get_publications(investigation_ids)]
-    ann_rows = [dict(row) for row in await db.get_annotation_tables(investigation_ids)]
+
+    async def collect(gen: AsyncGenerator[dict[str, Any], None]) -> list[dict[str, Any]]:
+        return [row async for row in gen]
+
+    study_rows = await collect(db.stream_studies(investigation_ids))
+    assay_rows = await collect(db.stream_assays(investigation_ids))
+    contact_rows = await collect(db.stream_contacts(investigation_ids))
+    pub_rows = await collect(db.stream_publications(investigation_ids))
+    ann_rows = await collect(db.stream_annotation_tables(investigation_ids))
 
     def group(rows: list[dict[str, Any]]) -> dict[str, list[dict[str, Any]]]:
         m = defaultdict(list)
@@ -527,7 +531,9 @@ async def process_investigations(
     stats = ProcessingStats()
     with tracer.start_as_current_span("process_investigations"):
         logger.info("Fetching investigations (limit=%s)...", config.debug_limit)
-        investigation_rows = [dict(row) for row in await db.get_investigations(limit=config.debug_limit)]
+        investigation_rows = [
+            row async for row in db.stream_investigations(limit=config.debug_limit)
+        ]
         logger.info("Found %d investigations", len(investigation_rows))
         stats.found_datasets = len(investigation_rows)
 

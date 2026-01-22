@@ -126,59 +126,65 @@ class Database:
         """Initialize database with connection string."""
         self.engine: AsyncEngine = create_async_engine(connection_string, echo=False)
 
-    async def get_investigations(self, limit: int | None = None) -> Sequence[Any]:
-        """Fetch investigations."""
+    async def stream_investigations(self, limit: int | None = None) -> AsyncGenerator[dict[str, Any], None]:
+        """Stream investigations using a server-side cursor."""
         async with self.engine.connect() as conn:
             stmt = select(v_investigation)
             if limit:
                 stmt = stmt.limit(limit)
-            result = await conn.execute(stmt)
-            return result.mappings().all()
+            result = await conn.stream(stmt.execution_options(stream_results=True))
+            async for row in result.mappings():
+                yield dict(row)
 
-    async def get_studies(self, investigation_ids: list[str]) -> Sequence[Any]:
-        """Fetch studies for given investigations."""
+    async def stream_studies(self, investigation_ids: list[str]) -> AsyncGenerator[dict[str, Any], None]:
+        """Stream studies for given investigations."""
         if not investigation_ids:
-            return []
+            return
         async with self.engine.connect() as conn:
             stmt = select(v_study).where(v_study.c.investigation_ref.in_(investigation_ids))
-            result = await conn.execute(stmt)
-            return result.mappings().all()
+            result = await conn.stream(stmt.execution_options(stream_results=True))
+            async for row in result.mappings():
+                yield dict(row)
 
-    async def get_assays(self, investigation_ids: list[str]) -> Sequence[Any]:
-        """Fetch assays for given investigations."""
+    async def stream_assays(self, investigation_ids: list[str]) -> AsyncGenerator[dict[str, Any], None]:
+        """Stream assays for given investigations."""
         if not investigation_ids:
-            return []
+            return
         async with self.engine.connect() as conn:
             stmt = select(v_assay).where(v_assay.c.investigation_ref.in_(investigation_ids))
-            result = await conn.execute(stmt)
-            return result.mappings().all()
+            result = await conn.stream(stmt.execution_options(stream_results=True))
+            async for row in result.mappings():
+                yield dict(row)
 
-    async def get_contacts(self, investigation_ids: list[str]) -> Sequence[Any]:
-        """Fetch contacts for given investigations."""
+    async def stream_contacts(self, investigation_ids: list[str]) -> AsyncGenerator[dict[str, Any], None]:
+        """Stream contacts for given investigations."""
         if not investigation_ids:
-            return []
+            return
         async with self.engine.connect() as conn:
             stmt = select(v_contact).where(v_contact.c.investigation_ref.in_(investigation_ids))
-            result = await conn.execute(stmt)
-            return result.mappings().all()
+            result = await conn.stream(stmt.execution_options(stream_results=True))
+            async for row in result.mappings():
+                yield dict(row)
 
-    async def get_publications(self, investigation_ids: list[str]) -> Sequence[Any]:
-        """Fetch publications for given investigations."""
+    async def stream_publications(self, investigation_ids: list[str]) -> AsyncGenerator[dict[str, Any], None]:
+        """Stream publications for given investigations."""
         if not investigation_ids:
-            return []
+            return
         async with self.engine.connect() as conn:
             stmt = select(v_publication).where(v_publication.c.investigation_ref.in_(investigation_ids))
-            result = await conn.execute(stmt)
-            return result.mappings().all()
+            result = await conn.stream(stmt.execution_options(stream_results=True))
+            async for row in result.mappings():
+                yield dict(row)
 
-    async def get_annotation_tables(self, investigation_ids: list[str]) -> Sequence[Any]:
-        """Fetch annotation tables for given investigations."""
+    async def stream_annotation_tables(self, investigation_ids: list[str]) -> AsyncGenerator[dict[str, Any], None]:
+        """Stream annotation tables for given investigations."""
         if not investigation_ids:
-            return []
+            return
         async with self.engine.connect() as conn:
             stmt = select(v_annotation_table).where(v_annotation_table.c.investigation_ref.in_(investigation_ids))
-            result = await conn.execute(stmt)
-            return result.mappings().all()
+            result = await conn.stream(stmt.execution_options(stream_results=True))
+            async for row in result.mappings():
+                yield dict(row)
 
     @asynccontextmanager
     async def connect(self) -> AsyncGenerator[AsyncConnection, None]:
