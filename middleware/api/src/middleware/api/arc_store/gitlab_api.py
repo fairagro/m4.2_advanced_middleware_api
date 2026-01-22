@@ -6,18 +6,22 @@ import concurrent.futures
 import hashlib
 import logging
 import tempfile
+from collections.abc import Callable
 from pathlib import Path
-from typing import Annotated, Any
+from typing import Annotated, Any, TypeVar
 
 import gitlab
 from arctrl import ARC  # type: ignore[import-untyped]
 from gitlab.exceptions import GitlabGetError
 from gitlab.v4.objects import Project, ProjectFile
+from opentelemetry import context
 from pydantic import BaseModel, Field, HttpUrl, SecretStr, field_validator
 
 from . import ArcStore
 
 logger = logging.getLogger(__name__)
+
+T = TypeVar("T")
 
 
 class GitlabApiConfig(BaseModel):
@@ -83,6 +87,19 @@ class GitlabApi(ArcStore):
         self._config = config
         self._gitlab = gitlab.Gitlab(str(self._config.url), private_token=self._config.token.get_secret_value())
         self._executor = concurrent.futures.ThreadPoolExecutor(max_workers=self._config.max_workers)
+
+    async def _run_in_executor(self, func: Callable[..., T], *args: Any) -> T:
+        loop = asyncio.get_running_loop()
+        otel_ctx = context.get_current()
+
+        def _wrapper() -> T:
+            token = context.attach(otel_ctx)
+            try:
+                return func(*args)
+            finally:
+                context.detach(token)
+
+        return await loop.run_in_executor(self._executor, _wrapper)
 
     def _check_health(self) -> bool:
         """Check connection to the storage backend."""
@@ -282,9 +299,8 @@ class GitlabApi(ArcStore):
     # -------------------------- Create/Update --------------------------
     async def _create_or_update(self, arc_id: str, arc: ARC) -> None:
         logger.debug("Creating/updating ARC %s in GitLab", arc_id)
-        loop = asyncio.get_running_loop()
 
-        project = await loop.run_in_executor(self._executor, self._get_or_create_project, arc_id)
+        project = await self._run_in_executor(self._get_or_create_project, arc_id)
 
         with tempfile.TemporaryDirectory() as tmp_root:
             arc_path = Path(tmp_root) / arc_id
@@ -292,29 +308,25 @@ class GitlabApi(ArcStore):
 
             # arc.Write is not async, run in executor
             logger.debug("Writing ARC to temporary directory: %s", arc_path)
-            await loop.run_in_executor(self._executor, arc.Write, str(arc_path))
+            await self._run_in_executor(arc.Write, str(arc_path))
 
             # Compute hash once with tracing
             with self._tracer.start_as_current_span("api.GitlabApi._compute_arc_hash"):
-                new_hash = await loop.run_in_executor(self._executor, self._compute_arc_hash, arc_path)
+                new_hash = await self._run_in_executor(self._compute_arc_hash, arc_path)
             logger.debug("Computed ARC hash: %s", new_hash[:16])
 
-            old_hash = await loop.run_in_executor(self._executor, self._load_old_hash, project)
+            old_hash = await self._run_in_executor(self._load_old_hash, project)
 
             if new_hash == old_hash:
                 logger.info("ARC %s unchanged (hash: %s...), skipping commit", arc_id, new_hash[:16])
                 return
 
             logger.debug("ARC %s has changed, preparing commit", arc_id)
-            actions = await loop.run_in_executor(
-                self._executor, self._prepare_file_actions, project, arc_path, old_hash, new_hash
-            )
-            await loop.run_in_executor(self._executor, self._commit_actions, project, actions, arc_id)
+            actions = await self._run_in_executor(self._prepare_file_actions, project, arc_path, old_hash, new_hash)
+            await self._run_in_executor(self._commit_actions, project, actions, arc_id)
 
     # -------------------------- Get --------------------------
     async def _get(self, arc_id: str) -> ARC | None:
-        loop = asyncio.get_running_loop()
-
         def _task() -> ARC | None:
             project = self._find_project(arc_id)
             if not project:
@@ -332,7 +344,7 @@ class GitlabApi(ArcStore):
                     logger.error("Unexpected error loading ARC for %s: %s", arc_id, e, exc_info=True)
                     raise
 
-        return await loop.run_in_executor(self._executor, _task)
+        return await self._run_in_executor(_task)
 
     def _download_project_files(self, project: Project, arc_path: Path) -> None:
         tree = project.repository_tree(ref=self._config.branch, all=True, recursive=True)
@@ -357,8 +369,6 @@ class GitlabApi(ArcStore):
 
     # -------------------------- Delete --------------------------
     async def _delete(self, arc_id: str) -> None:
-        loop = asyncio.get_running_loop()
-
         def _task() -> None:
             project = self._find_project(arc_id)
             if project:
@@ -366,14 +376,12 @@ class GitlabApi(ArcStore):
             else:
                 logger.warning("Project %s not found for deletion.", arc_id)
 
-        await loop.run_in_executor(self._executor, _task)
+        await self._run_in_executor(_task)
 
     # -------------------------- Exists --------------------------
     async def _exists(self, arc_id: str) -> bool:
-        loop = asyncio.get_running_loop()
-
         def _task() -> bool:
             project = self._find_project(arc_id)
             return bool(project)
 
-        return await loop.run_in_executor(self._executor, _task)
+        return await self._run_in_executor(_task)

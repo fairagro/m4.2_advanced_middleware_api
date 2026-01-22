@@ -7,13 +7,13 @@ import shutil
 import tempfile
 from collections.abc import Callable
 from pathlib import Path
-from typing import Annotated, TypeVar
+from typing import Annotated, Any, TypeVar
 
 import git.cmd
 from arctrl import ARC  # type: ignore[import-untyped]
 from git import Repo
 from git.exc import GitCommandError
-from opentelemetry import trace
+from opentelemetry import context, trace
 from pydantic import BaseModel, Field, SecretStr, field_validator
 
 from . import ArcStore
@@ -22,6 +22,8 @@ from .remote_git_provider import (
 )
 
 logger = logging.getLogger(__name__)
+
+T = TypeVar("T")
 
 
 class GitRepoConfig(BaseModel):
@@ -238,6 +240,19 @@ class GitRepo(ArcStore):
             token=token,
         )
 
+    async def _run_in_executor(self, func: Callable[..., T], *args: Any) -> T:
+        loop = asyncio.get_running_loop()
+        otel_ctx = context.get_current()
+
+        def _wrapper() -> T:
+            token = context.attach(otel_ctx)
+            try:
+                return func(*args)
+            finally:
+                context.detach(token)
+
+        return await loop.run_in_executor(self._executor, _wrapper)
+
     def _check_health(self) -> bool:
         """Check connection to the storage backend."""
         return self._remote_provider.check_health()
@@ -262,7 +277,6 @@ class GitRepo(ArcStore):
     async def _create_or_update(self, arc_id: str, arc: ARC) -> None:
         """Create or update ARC using Git CLI."""
         logger.debug("Creating/updating ARC %s via Git CLI", arc_id)
-        loop = asyncio.get_running_loop()
 
         def _task() -> None:
             with self._tracer.start_as_current_span(
@@ -306,11 +320,10 @@ class GitRepo(ArcStore):
                     span.record_exception(e)
                     raise
 
-        await loop.run_in_executor(self._executor, _task)
+        await self._run_in_executor(_task)
 
     async def _get(self, arc_id: str) -> ARC | None:
         """Get ARC from Git."""
-        loop = asyncio.get_running_loop()
 
         def _task() -> ARC | None:
             with self._tracer.start_as_current_span(
@@ -346,7 +359,7 @@ class GitRepo(ArcStore):
                     span.record_exception(e)
                     return None
 
-        return await loop.run_in_executor(self._executor, _task)
+        return await self._run_in_executor(_task)
 
     async def _delete(self, arc_id: str) -> None:
         """Delete ARC (Not supported via Git CLI easily without platform API)."""
@@ -357,7 +370,6 @@ class GitRepo(ArcStore):
 
     async def _exists(self, arc_id: str) -> bool:
         """Check if ARC repo exists."""
-        loop = asyncio.get_running_loop()
 
         def _task() -> bool:
             with self._tracer.start_as_current_span(
@@ -384,4 +396,4 @@ class GitRepo(ArcStore):
                     span.record_exception(e)
                     return False
 
-        return await loop.run_in_executor(self._executor, _task)
+        return await self._run_in_executor(_task)
