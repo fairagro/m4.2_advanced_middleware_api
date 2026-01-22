@@ -53,15 +53,15 @@ class BusinessLogic:
     async def _create_arc_from_rocrate(self, rdi: str, arc_dict: dict) -> ArcResponse:
         """Create an ARC from RO-Crate JSON with tracing."""
         with self._tracer.start_as_current_span(
-            "create_arc_from_rocrate",
+            "api.BusinessLogic._create_arc_from_rocrate",
             attributes={"rdi": rdi, "arc_index": len(getattr(arc_dict, "__dict__", {}))},
         ) as span:
             logger.debug("Processing RO-Crate JSON for RDI: %s", rdi)
             try:
-                with self._tracer.start_as_current_span("json.serialize"):
+                with self._tracer.start_as_current_span("api.BusinessLogic._create_arc_from_rocrate:json_serialize"):
                     arc_json = json.dumps(arc_dict)
 
-                with self._tracer.start_as_current_span("arc.parse_rocrate"):
+                with self._tracer.start_as_current_span("api.BusinessLogic._create_arc_from_rocrate:arc_parse_rocrate"):
                     arc = ARC.from_rocrate_json_string(arc_json)
 
                 logger.debug("Successfully parsed ARC from RO-Crate JSON")
@@ -96,7 +96,7 @@ class BusinessLogic:
         """Process a batch of ARCs with span for batch timing."""
         logger.debug("Processing batch of %d ARCs for RDI: %s", len(arcs), rdi)
         with self._tracer.start_as_current_span(
-            "process_arcs_batch",
+            "api.BusinessLogic._process_arcs",
             attributes={"rdi": rdi, "batch_size": len(arcs)},
         ):
             tasks = [self._create_arc_from_rocrate(rdi, arc) for arc in arcs]
@@ -140,7 +140,7 @@ class BusinessLogic:
 
         """
         with self._tracer.start_as_current_span(
-            "create_or_update_arcs",
+            "api.BusinessLogic.create_or_update_arcs",
             attributes={"rdi": rdi, "num_arcs": len(arcs), "client_id": client_id or "none"},
         ) as span:
             logger.info(

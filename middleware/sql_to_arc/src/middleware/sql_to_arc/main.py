@@ -269,7 +269,8 @@ async def _upload_and_update_stats(
     tracer = trace.get_tracer(__name__)
     try:
         with tracer.start_as_current_span(
-            "upload_batch", attributes={"count": len(valid_arcs), "rdi": ctx.rdi, "worker_id": ctx.worker_id}
+            "sql_to_arc.main._upload_and_update_stats",
+            attributes={"count": len(valid_arcs), "rdi": ctx.rdi, "worker_id": ctx.worker_id},
         ):
             response = await ctx.client.create_or_update_arcs(
                 rdi=ctx.rdi,
@@ -321,7 +322,7 @@ async def process_batch(  # pylint: disable=too-many-locals
     valid_rows: list[dict[str, Any]] = []
 
     with tracer.start_as_current_span(
-        "build_batch",
+        "sql_to_arc.main.process_batch",
         attributes={"batch_size": len(batch), "worker_id": ctx.worker_id, "batch_idx": batch_idx},
     ):
         logger.info("%s: Building %d ARCs in parallel...", batch_info, len(batch))
@@ -379,7 +380,7 @@ async def process_worker_investigations(
     tracer = trace.get_tracer(__name__)
 
     with tracer.start_as_current_span(
-        "process_worker",
+        "sql_to_arc.main.process_worker_investigations",
         attributes={"worker_id": ctx.worker_id, "investigation_count": len(investigations), "rdi": ctx.rdi},
     ):
         logger.info(
@@ -438,10 +439,10 @@ async def process_investigations(  # pylint: disable=too-many-locals
     """
     tracer = trace.get_tracer(__name__)
     stats = ProcessingStats()
-    with tracer.start_as_current_span("process_investigations"):
+    with tracer.start_as_current_span("sql_to_arc.main.process_investigations"):
         # Step 1: Fetch all investigations
         logger.info("Fetching all investigations...")
-        with tracer.start_as_current_span("db.fetch_investigations"):
+        with tracer.start_as_current_span("sql_to_arc.main.process_investigations:db_fetch_investigations"):
             investigation_rows = await fetch_all_investigations(cur)
         logger.info("Found %d investigations", len(investigation_rows))
 
@@ -453,7 +454,8 @@ async def process_investigations(  # pylint: disable=too-many-locals
         investigation_ids = [row["id"] for row in investigation_rows]
         logger.info("Fetching studies for %d investigations...", len(investigation_ids))
         with tracer.start_as_current_span(
-            "db.fetch_studies", attributes={"investigation_count": len(investigation_ids)}
+            "sql_to_arc.main.process_investigations:db_fetch_studies",
+            attributes={"investigation_count": len(investigation_ids)},
         ):
             studies_by_investigation = await fetch_studies_bulk(cur, investigation_ids)
         total_studies = sum(len(studies) for studies in studies_by_investigation.values())
@@ -463,7 +465,9 @@ async def process_investigations(  # pylint: disable=too-many-locals
         # Step 3: Fetch all assays for these studies in bulk
         study_ids = [study["id"] for studies in studies_by_investigation.values() for study in studies]
         logger.info("Fetching assays for %d studies...", len(study_ids))
-        with tracer.start_as_current_span("db.fetch_assays", attributes={"study_count": len(study_ids)}):
+        with tracer.start_as_current_span(
+            "sql_to_arc.main.process_investigations:db_fetch_assays", attributes={"study_count": len(study_ids)}
+        ):
             assays_by_study = await fetch_assays_bulk(cur, study_ids)
         total_assays = sum(len(assays) for assays in assays_by_study.values())
         logger.info("Found %d assays", total_assays)
@@ -530,7 +534,7 @@ async def run_conversion(config: Config) -> ProcessingStats:
         ProcessingStats.
     """
     tracer = trace.get_tracer(__name__)
-    with tracer.start_as_current_span("run_conversion"):
+    with tracer.start_as_current_span("sql_to_arc.main.run_conversion"):
         async with (
             ApiClient(config.api_client) as client,
             await psycopg.AsyncConnection.connect(
@@ -565,7 +569,7 @@ async def main() -> None:
         log_console_spans=config.otel.log_console_spans,
     )
 
-    with tracer.start_as_current_span("sql_to_arc.main"):
+    with tracer.start_as_current_span("sql_to_arc.main.main"):
         logger.info("Starting SQL-to-ARC conversion with config: %s", args.config)
 
         try:

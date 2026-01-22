@@ -124,7 +124,7 @@ class GitlabGitProvider(RemoteGitProvider):
             return
 
         with self._tracer.start_as_current_span(
-            "remote_provider.gitlab.ensure_exists",
+            "api.GitlabGitProvider.ensure_repo_exists",
             attributes={"arc_id": arc_id, "group": self.group_name},
         ):
             try:
