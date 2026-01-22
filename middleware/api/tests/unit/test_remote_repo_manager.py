@@ -12,6 +12,7 @@ import git
 import pytest
 from gitlab.exceptions import GitlabAuthenticationError, GitlabGetError
 
+from middleware.api.arc_store import ArcStoreError
 from middleware.api.arc_store.remote_git_provider import (
     FileSystemGitProvider,
     GitlabGitProvider,
@@ -89,6 +90,21 @@ class TestGitlabGitProvider:
         args = mock_gl.projects.create.call_args[0][0]
         assert args["name"] == arc_id
         assert args["namespace_id"] == NAMESPACE_ID
+
+    @patch("middleware.api.arc_store.remote_git_provider.gitlab.Gitlab")
+    def test_ensure_repo_exists_401(self, mock_gitlab_class: MagicMock) -> None:
+        """Test that ensure_repo_exists handles 401 Unauthorized correctly."""
+        mock_gl = MagicMock()
+        mock_gitlab_class.return_value = mock_gl
+
+        # Simulate 401 on group retrieval
+        err = GitlabAuthenticationError("401 Unauthorized", response_code=401)
+        mock_gl.groups.get.side_effect = err
+
+        provider = GitlabGitProvider(url="https://gitlab.com", group_name="my-group", token="invalid")  # nosec
+
+        with pytest.raises(ArcStoreError, match="401 Unauthorized"):
+            provider.ensure_repo_exists("some-arc")
 
     def test_get_repo_url(self) -> None:
         """Test URL construction with and without auth."""
