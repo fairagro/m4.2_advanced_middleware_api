@@ -25,4 +25,11 @@ class Config(ConfigBase):
             ge=1,
         ),
     ] = 5
+    db_batch_size: Annotated[
+        int,
+        Field(
+            description="Number of investigations to fetch from DB at once for processing",
+            ge=1,
+        ),
+    ] = 100
     api_client: Annotated[ApiClientConfig, Field(description="API Client configuration")]

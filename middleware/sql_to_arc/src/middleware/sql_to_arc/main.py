@@ -385,7 +385,7 @@ async def process_investigations(
             # We use a set of tasks to keep track of running operations
             running_tasks: set[asyncio.Task] = set()
             
-            async for inv_row, studies_list, assays_dict in stream_investigation_datasets(cur):
+            async for inv_row, studies_list, assays_dict in stream_investigation_datasets(cur, batch_size=config.db_batch_size):
                 stats.found_datasets += 1
                 
                 # Create the processing task

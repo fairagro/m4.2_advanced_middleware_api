@@ -160,10 +160,10 @@ async def test_process_investigations(monkeypatch: pytest.MonkeyPatch) -> None:
     """Test full process_investigations flow."""
     mock_cursor = AsyncMock()
     mock_client = AsyncMock()
-    mock_config = MagicMock(max_concurrent_arc_builds=2, rdi="test")
+    mock_config = MagicMock(max_concurrent_arc_builds=2, rdi="test", db_batch_size=100)
 
     # Mock stream_investigation_datasets
-    async def mock_stream(*_args: Any) -> AsyncGenerator[tuple[dict, list, dict], None]:
+    async def mock_stream(*_args: Any, **_kwargs: Any) -> AsyncGenerator[tuple[dict, list, dict], None]:
         yield ({"id": 1}, [{"id": 10}], {10: []})
         yield ({"id": 2}, [], {})
         yield ({"id": 3}, [], {})
