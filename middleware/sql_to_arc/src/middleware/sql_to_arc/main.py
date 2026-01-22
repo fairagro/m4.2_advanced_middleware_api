@@ -82,7 +82,11 @@ class ProcessingStats(BaseModel):
                 "schema:name": "FAIRagro Middleware SQL-to-ARC",
             },
             # Process status
-            "status": "schema:CompletedActionStatus" if self.failed_datasets == 0 else "schema:FailedActionStatus",
+            "status": (
+                "schema:CompletedActionStatus"
+                if self.failed_datasets == 0
+                else "schema:FailedActionStatus"
+            ),
             # Metrics
             "duration": duration_iso,
             "duration_seconds": round(self.duration_seconds, 2),  # Keep raw float for easy parsing
@@ -142,7 +146,9 @@ def build_single_arc_task(
     return arc
 
 
-async def fetch_all_investigations(cur: psycopg.AsyncCursor[dict[str, Any]]) -> list[dict[str, Any]]:
+async def fetch_all_investigations(
+    cur: psycopg.AsyncCursor[dict[str, Any]],
+) -> list[dict[str, Any]]:
     """Fetch all investigations from the database.
 
     Args:
@@ -152,7 +158,8 @@ async def fetch_all_investigations(cur: psycopg.AsyncCursor[dict[str, Any]]) -> 
         List of investigation rows.
     """
     await cur.execute(
-        'SELECT id, title, description, submission_time, release_time FROM "ARC_Investigation"',  # LIMIT 10',
+        'SELECT id, title, description, submission_time, release_time '
+        'FROM "ARC_Investigation"',  # LIMIT 10
     )
     return await cur.fetchall()
 
@@ -203,7 +210,8 @@ async def fetch_assays_bulk(
         return {}
 
     await cur.execute(
-        'SELECT id, study_id, measurement_type, technology_type FROM "ARC_Assay" WHERE study_id = ANY(%s)',
+        'SELECT id, study_id, measurement_type, technology_type '
+        'FROM "ARC_Assay" WHERE study_id = ANY(%s)',
         (study_ids,),
     )
     rows = await cur.fetchall()
@@ -275,7 +283,11 @@ async def _upload_and_update_stats(
                 rdi=ctx.rdi,
                 arcs=valid_arcs,
             )
-        logger.info("%s: Upload request finished. API reported %d successful ARCs.", batch_info, len(response.arcs))
+        logger.info(
+            "%s: Upload request finished. API reported %d successful ARCs.",
+            batch_info,
+            len(response.arcs),
+        )
 
         if len(response.arcs) < len(valid_arcs):
             logger.warning(
@@ -315,7 +327,10 @@ async def process_batch(  # pylint: disable=too-many-locals
     """Process a single batch of investigations."""
     stats = ProcessingStats()
     tracer = trace.get_tracer(__name__)
-    batch_info = f"Worker {ctx.worker_id}/{ctx.total_workers}, Batch {batch_idx + 1}/{total_batches}"
+    batch_info = (
+        f"Worker {ctx.worker_id}/{ctx.total_workers}, "
+        f"Batch {batch_idx + 1}/{total_batches}"
+    )
 
     valid_arcs: list[ARC] = []
     valid_rows: list[dict[str, Any]] = []
@@ -350,7 +365,12 @@ async def process_batch(  # pylint: disable=too-many-locals
         for i, res in enumerate(results):
             row_id = str(batch[i]["id"])
             if isinstance(res, Exception):
-                logger.error("%s: Failed to build ARC for investigation %s: %s", batch_info, row_id, res)
+                logger.error(
+                    "%s: Failed to build ARC for investigation %s: %s",
+                    batch_info,
+                    row_id,
+                    res,
+                )
                 stats.failed_datasets += 1
                 stats.failed_ids.append(row_id)
             elif res is None:
@@ -380,7 +400,11 @@ async def process_worker_investigations(
 
     with tracer.start_as_current_span(
         "sql_to_arc.main.process_worker_investigations",
-        attributes={"worker_id": ctx.worker_id, "investigation_count": len(investigations), "rdi": ctx.rdi},
+        attributes={
+            "worker_id": ctx.worker_id,
+            "investigation_count": len(investigations),
+            "rdi": ctx.rdi,
+        },
     ):
         logger.info(
             "Worker %d/%d processing %d investigations...",
@@ -431,7 +455,9 @@ async def process_investigations(  # pylint: disable=too-many-locals
     with tracer.start_as_current_span("sql_to_arc.main.process_investigations"):
         # Step 1: Fetch all investigations
         logger.info("Fetching all investigations...")
-        with tracer.start_as_current_span("sql_to_arc.main.process_investigations:db_fetch_investigations"):
+        with tracer.start_as_current_span(
+            "sql_to_arc.main.process_investigations:db_fetch_investigations"
+        ):
             investigation_rows = await fetch_all_investigations(cur)
         logger.info("Found %d investigations", len(investigation_rows))
 
@@ -452,10 +478,15 @@ async def process_investigations(  # pylint: disable=too-many-locals
         stats.total_studies = total_studies
 
         # Step 3: Fetch all assays for these studies in bulk
-        study_ids = [study["id"] for studies in studies_by_investigation.values() for study in studies]
+        study_ids = [
+            study["id"]
+            for studies in studies_by_investigation.values()
+            for study in studies
+        ]
         logger.info("Fetching assays for %d studies...", len(study_ids))
         with tracer.start_as_current_span(
-            "sql_to_arc.main.process_investigations:db_fetch_assays", attributes={"study_count": len(study_ids)}
+            "sql_to_arc.main.process_investigations:db_fetch_assays",
+            attributes={"study_count": len(study_ids)},
         ):
             assays_by_study = await fetch_assays_bulk(cur, study_ids)
         total_assays = sum(len(assays) for assays in assays_by_study.values())
@@ -480,13 +511,20 @@ async def process_investigations(  # pylint: disable=too-many-locals
 
         # Log distribution
         for worker_id, assigned_investigations in enumerate(worker_assignments):
-            logger.info("Worker %d assigned %d investigations", worker_id + 1, len(assigned_investigations))
+            logger.info(
+                "Worker %d assigned %d investigations",
+                worker_id + 1,
+                len(assigned_investigations),
+            )
 
-        # Process workers concurrently with ProcessPoolExecutor for CPU-bound ARC building
-        # Each worker processes its assigned investigations in batches, building ARCs in parallel.
-        # Use "spawn" context to avoid deadlocks/warnings in multi-threaded environments (e.g. pytest).
+        # Process workers concurrently with ProcessPoolExecutor for CPU-bound
+        # ARC building. Each worker processes its assigned investigations in
+        # batches, building ARCs in parallel. Use "spawn" context to avoid
+        # deadlocks/warnings in multi-threaded environments (e.g. pytest).
         mp_context = multiprocessing.get_context("spawn")
-        with concurrent.futures.ProcessPoolExecutor(max_workers=num_workers, mp_context=mp_context) as executor:
+        with concurrent.futures.ProcessPoolExecutor(
+            max_workers=num_workers, mp_context=mp_context
+        ) as executor:
             tasks = []
             for worker_id, assigned_investigations in enumerate(worker_assignments):
                 if not assigned_investigations:
@@ -578,7 +616,10 @@ async def main() -> None:
                     stats.found_datasets,
                 )
             else:
-                logger.info("Conversion finished successfully. %d datasets processed.", stats.found_datasets)
+                logger.info(
+                    "Conversion finished successfully. %d datasets processed.",
+                    stats.found_datasets,
+                )
 
         except Exception as e:  # pylint: disable=broad-exception-caught
             logger.critical("Fatal error during conversion process: %s", e, exc_info=True)
