@@ -64,7 +64,6 @@ async def test_process_worker_investigations(mock_api_client: AsyncMock) -> None
             rdi="edaphobase",
             studies_by_investigation=studies_by_investigation,
             assays_by_study=assays_by_study,
-            batch_size=2,
             worker_id=1,
             total_workers=1,
             executor=executor,
@@ -72,10 +71,11 @@ async def test_process_worker_investigations(mock_api_client: AsyncMock) -> None
         await process_worker_investigations(ctx, investigation_rows)
 
     assert mock_api_client.create_or_update_arcs.called
-    call_args = mock_api_client.create_or_update_arcs.call_args
-    # Check keyword arguments
-    assert call_args.kwargs["rdi"] == "edaphobase"
-    assert len(call_args.kwargs["arcs"]) == 2  # noqa: PLR2004
+    # There should be two calls, each with one ARC (since batch size is always 1)
+    assert mock_api_client.create_or_update_arcs.call_count == 2  # noqa: PLR2004
+    for call in mock_api_client.create_or_update_arcs.call_args_list:
+        assert call.kwargs["rdi"] == "edaphobase"
+        assert len(call.kwargs["arcs"]) == 1
 
 
 @pytest.mark.asyncio
@@ -106,7 +106,6 @@ async def test_main_workflow(
     mock_config.db_host = "localhost"
     mock_config.db_port = 5432
     mock_config.rdi = "edaphobase"
-    mock_config.batch_size = 10
     mock_config.max_concurrent_arc_builds = 5
     mock_config.api_client = MagicMock()
     mock_config.log_level = "INFO"
@@ -193,7 +192,7 @@ async def test_main_workflow(
     assert mock_db_cursor.execute.call_count == 3  # noqa: PLR2004
 
     # Should have uploaded ARCs (2 investigations distributed across workers)
-    # With max_concurrent_arc_builds=5 and batch_size=10, both investigations
+    # With max_concurrent_arc_builds=5, both investigations
     # will be assigned to worker 1 and uploaded in a single batch
     assert mock_api_client.create_or_update_arcs.called
 

@@ -250,7 +250,6 @@ class WorkerContext(BaseModel):
     rdi: str
     studies_by_investigation: dict[int, list[dict[str, Any]]]
     assays_by_study: dict[int, list[dict[str, Any]]]
-    batch_size: int
     worker_id: int
     total_workers: int
     executor: Any  # ProcessPoolExecutor is not Pydantic-friendly easily, so Any
@@ -323,7 +322,7 @@ async def process_batch(  # pylint: disable=too-many-locals
 
     with tracer.start_as_current_span(
         "sql_to_arc.main.process_batch",
-        attributes={"batch_size": len(batch), "worker_id": ctx.worker_id, "batch_idx": batch_idx},
+        attributes={"worker_id": ctx.worker_id, "batch_idx": batch_idx},
     ):
         logger.info("%s: Building %d ARCs in parallel...", batch_info, len(batch))
 
@@ -390,25 +389,15 @@ async def process_worker_investigations(
             len(investigations),
         )
 
-        # Split investigations into batches
-        batches: list[list[dict[str, Any]]] = []
-        current_batch: list[dict[str, Any]] = []
-
-        for row in investigations:
-            current_batch.append(row)
-            if len(current_batch) >= ctx.batch_size:
-                batches.append(current_batch)
-                current_batch = []
-
-        # Add remaining batch
-        if current_batch:
-            batches.append(current_batch)
-
-        logger.info("Worker %d/%d: Processing %d batches", ctx.worker_id, ctx.total_workers, len(batches))
-
-        # Process each batch sequentially within this worker
-        for batch_idx, batch in enumerate(batches):
-            batch_stats = await process_batch(ctx, batch, batch_idx, len(batches))
+        # Each investigation is its own batch (batch size = 1)
+        logger.info(
+            "Worker %d/%d: Processing %d batches (batch size = 1)",
+            ctx.worker_id,
+            ctx.total_workers,
+            len(investigations),
+        )
+        for batch_idx, row in enumerate(investigations):
+            batch_stats = await process_batch(ctx, [row], batch_idx, len(investigations))
             stats.merge(batch_stats)
 
     return stats
@@ -478,13 +467,12 @@ async def process_investigations(  # pylint: disable=too-many-locals
         total_investigations = len(investigation_rows)
 
         logger.info(
-            "Distributing %d investigations across %d workers (batch_size=%d)",
+            "Distributing %d investigations across %d workers (batch size = 1)",
             total_investigations,
             num_workers,
-            config.batch_size,
         )
 
-        # Split investigations into chunks for each worker
+        # Split investigations into chunks for each worker (round robin)
         worker_assignments: list[list[dict[str, Any]]] = [[] for _ in range(num_workers)]
         for idx, investigation in enumerate(investigation_rows):
             worker_id = idx % num_workers
@@ -509,7 +497,6 @@ async def process_investigations(  # pylint: disable=too-many-locals
                     rdi=config.rdi,
                     studies_by_investigation=studies_by_investigation,
                     assays_by_study=assays_by_study,
-                    batch_size=config.batch_size,
                     worker_id=worker_id + 1,
                     total_workers=num_workers,
                     executor=executor,
