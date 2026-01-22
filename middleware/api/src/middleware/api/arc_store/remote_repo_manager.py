@@ -3,10 +3,11 @@
 import logging
 from abc import ABC, abstractmethod
 from pathlib import Path
+from urllib.parse import unquote, urlparse
 
 import gitlab
 from git import Repo
-from gitlab.exceptions import GitlabGetError
+from gitlab.exceptions import GitlabError, GitlabGetError
 from opentelemetry import trace
 
 logger = logging.getLogger(__name__)
@@ -31,8 +32,6 @@ class FileSystemRemoteManager(RemoteRepoManager):
 
     def ensure_repo_exists(self, arc_id: str) -> None:
         """Create a bare repository on the local filesystem if it doesn't exist."""
-        from urllib.parse import unquote, urlparse
-
         parsed_url = urlparse(self.base_url)
         if parsed_url.scheme.lower() != "file":
             return
@@ -84,6 +83,6 @@ class GitlabRemoteManager(RemoteRepoManager):
                             "visibility": "private",
                         }
                     )
-            except gitlab.exceptions.GitlabError as e:
+            except GitlabError as e:
                 logger.error("Failed to ensure GitLab project exists: %s", e)
                 raise
