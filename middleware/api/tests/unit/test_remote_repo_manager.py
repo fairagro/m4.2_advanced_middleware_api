@@ -3,7 +3,6 @@
 This module provides tests for:
 - FileSystemGitProvider: manages bare repositories in the local file system
 - GitlabGitProvider: manages repositories on GitLab using the GitLab API
-- StaticGitProvider: manages static git remotes
 """
 
 from pathlib import Path
@@ -16,7 +15,7 @@ from gitlab.exceptions import GitlabAuthenticationError, GitlabGetError
 from middleware.api.arc_store.remote_git_provider import (
     FileSystemGitProvider,
     GitlabGitProvider,
-    StaticGitProvider,
+    RemoteGitProvider,
 )
 
 
@@ -120,17 +119,25 @@ class TestGitlabGitProvider:
         assert provider.check_health() is False
 
 
-class TestStaticGitProvider:
-    """Tests for StaticGitProvider."""
+class TestRemoteGitProviderFactory:
+    """Tests for RemoteGitProvider factory method."""
 
-    def test_get_repo_url(self) -> None:
-        """Test that get_repo_url constructs the correct repository URL."""
-        provider = StaticGitProvider(base_url="https://github.com", group="my-org")
-        url = provider.get_repo_url("repo1")
-        assert url == "https://github.com/my-org/repo1.git"
+    def test_from_url_file(self) -> None:
+        """Test factory with file URL."""
+        provider = RemoteGitProvider.from_url("file:///tmp", "group")
+        assert isinstance(provider, FileSystemGitProvider)
 
-    def test_ensure_repo_exists_does_nothing(self) -> None:
-        """Test that ensure_repo_exists does nothing for StaticGitProvider."""
-        provider = StaticGitProvider(base_url="https://github.com", group="my-org")
-        # Should just run without error
-        provider.ensure_repo_exists("repo1")
+    def test_from_url_https_defaults_to_gitlab(self) -> None:
+        """Test factory with HTTPS URL defaults to GitLab."""
+        provider = RemoteGitProvider.from_url("https://git.something.com", "group")
+        assert isinstance(provider, GitlabGitProvider)
+
+    def test_from_url_http_defaults_to_gitlab(self) -> None:
+        """Test factory with HTTP URL defaults to GitLab."""
+        provider = RemoteGitProvider.from_url("http://localhost:8080", "group")
+        assert isinstance(provider, GitlabGitProvider)
+
+    def test_from_url_unknown_fails(self) -> None:
+        """Test that unknown protocols fail."""
+        with pytest.raises(ValueError, match="Could not determine git provider"):
+            RemoteGitProvider.from_url("ftp://server.local", "group")
