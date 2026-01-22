@@ -290,7 +290,6 @@ class WorkerContext(BaseModel):
     contacts_by_inv: dict[str, list[dict[str, Any]]]
     pubs_by_inv: dict[str, list[dict[str, Any]]]
     anns_by_inv: dict[str, list[dict[str, Any]]]
-    batch_size: int
     worker_id: int
     total_workers: int
     executor: Any  # ProcessPoolExecutor is not Pydantic-friendly easily, so Any
@@ -349,74 +348,63 @@ async def _upload_and_update_stats(
             stats.failed_ids.append(str(row["identifier"]))
 
 
-async def process_batch(  # pylint: disable=too-many-locals
+async def process_investigation(
     ctx: WorkerContext,
-    batch: list[dict[str, Any]],
-    batch_idx: int,
-    total_batches: int,
+    investigation: dict[str, Any],
+    inv_idx: int,
+    total_investigations: int,
 ) -> ProcessingStats:
-    """Process a single batch of investigations."""
+    """Process a single investigation."""
     stats = ProcessingStats()
     tracer = trace.get_tracer(__name__)
-    batch_info = f"Worker {ctx.worker_id}/{ctx.total_workers}, Batch {batch_idx + 1}/{total_batches}"
-
-    valid_arcs: list[ARC] = []
-    valid_rows: list[dict[str, Any]] = []
+    inv_id = str(investigation["identifier"])
+    inv_info = f"Worker {ctx.worker_id}/{ctx.total_workers}, Investigation {inv_idx + 1}/{total_investigations}"
 
     with tracer.start_as_current_span(
-        "build_batch",
-        attributes={"batch_size": len(batch), "worker_id": ctx.worker_id, "batch_idx": batch_idx},
+        "build_investigation",
+        attributes={"investigation_id": inv_id, "worker_id": ctx.worker_id, "inv_idx": inv_idx},
     ):
-        logger.info("%s: Building %d ARCs in parallel...", batch_info, len(batch))
+        logger.info("%s: Building ARC for investigation %s...", inv_info, inv_id)
 
+        # Prepare data bundle for this investigation
+        build_data = ArcBuildData(
+            investigation_row=investigation,
+            studies=ctx.studies_by_inv.get(inv_id, []),
+            assays=ctx.assays_by_inv.get(inv_id, []),
+            contacts=ctx.contacts_by_inv.get(inv_id, []),
+            publications=ctx.pubs_by_inv.get(inv_id, []),
+            annotations=ctx.anns_by_inv.get(inv_id, []),
+        )
+
+        # Build ARC in executor
         loop = asyncio.get_event_loop()
-        arc_build_futures = []
-
-        for row in batch:
-            inv_id = str(row["identifier"])
-
-            # Prepare data bundle for this investigation
-            build_data = ArcBuildData(
-                investigation_row=row,
-                studies=ctx.studies_by_inv.get(inv_id, []),
-                assays=ctx.assays_by_inv.get(inv_id, []),
-                contacts=ctx.contacts_by_inv.get(inv_id, []),
-                publications=ctx.pubs_by_inv.get(inv_id, []),
-                annotations=ctx.anns_by_inv.get(inv_id, []),
-            )
-
-            future = loop.run_in_executor(ctx.executor, build_single_arc_task, build_data)
-            arc_build_futures.append(future)
-
-        results = await asyncio.gather(*arc_build_futures, return_exceptions=True)
-
-        for i, res in enumerate(results):
-            row_id = str(batch[i]["identifier"])
-            if isinstance(res, Exception):
-                logger.error("%s: Failed to build ARC for investigation %s: %s", batch_info, row_id, res)
+        try:
+            result = await loop.run_in_executor(ctx.executor, build_single_arc_task, build_data)
+            
+            if result is None:
+                logger.error("%s: Build returned None for investigation %s", inv_info, inv_id)
                 stats.failed_datasets += 1
-                stats.failed_ids.append(row_id)
-            elif res is None:
-                logger.error("%s: Build returned None for investigation %s", batch_info, row_id)
-                stats.failed_datasets += 1
-                stats.failed_ids.append(row_id)
-            else:
-                arc = cast(ARC, res)
-                arc_id = getattr(arc, "Identifier", "unknown")
-                
-                # Serialize ARC to JSON and calculate size
-                try:
-                    arc_json = arc.ISA.ArcInvestigation.ToJsonString()
-                    json_size_kb = len(arc_json.encode('utf-8')) / 1024
-                    logger.info("ARC JSON created: id=%s, size=%.2fKB", arc_id, json_size_kb)
-                except Exception as e:  # pylint: disable=broad-exception-caught
-                    logger.warning("Failed to serialize ARC %s for size calculation: %s", arc_id, e)
-                
-                valid_arcs.append(arc)
-                valid_rows.append(batch[i])
-
-    if valid_arcs:
-        await _upload_and_update_stats(ctx, valid_arcs, valid_rows, stats, batch_info)
+                stats.failed_ids.append(inv_id)
+                return stats
+            
+            arc = cast(ARC, result)
+            arc_id = getattr(arc, "Identifier", "unknown")
+            
+            # Serialize ARC to JSON and calculate size
+            try:
+                arc_json = arc.ISA.ArcInvestigation.ToJsonString()
+                json_size_kb = len(arc_json.encode('utf-8')) / 1024
+                logger.info("ARC JSON created: id=%s, size=%.2fKB", arc_id, json_size_kb)
+            except Exception as e:  # pylint: disable=broad-exception-caught
+                logger.warning("Failed to serialize ARC %s for size calculation: %s", arc_id, e)
+            
+            # Upload single ARC
+            await _upload_and_update_stats(ctx, [arc], [investigation], stats, inv_info)
+            
+        except Exception as e:  # pylint: disable=broad-exception-caught
+            logger.error("%s: Failed to build ARC for investigation %s: %s", inv_info, inv_id, e)
+            stats.failed_datasets += 1
+            stats.failed_ids.append(inv_id)
 
     return stats
 
@@ -443,23 +431,9 @@ async def process_worker_investigations(
             len(investigations),
         )
 
-        batches: list[list[dict[str, Any]]] = []
-        current_batch: list[dict[str, Any]] = []
-
-        for row in investigations:
-            current_batch.append(row)
-            if len(current_batch) >= ctx.batch_size:
-                batches.append(current_batch)
-                current_batch = []
-
-        if current_batch:
-            batches.append(current_batch)
-
-        logger.info("Worker %d/%d: Processing %d batches", ctx.worker_id, ctx.total_workers, len(batches))
-
-        for batch_idx, batch in enumerate(batches):
-            batch_stats = await process_batch(ctx, batch, batch_idx, len(batches))
-            stats.merge(batch_stats)
+        for idx, investigation in enumerate(investigations):
+            inv_stats = await process_investigation(ctx, investigation, idx, len(investigations))
+            stats.merge(inv_stats)
 
     return stats
 
@@ -523,7 +497,6 @@ async def _execute_distributed_workers(
                 contacts_by_inv=data_maps[2],
                 pubs_by_inv=data_maps[3],
                 anns_by_inv=data_maps[4],
-                batch_size=config.batch_size,
                 worker_id=worker_id + 1,
                 total_workers=num_workers,
                 executor=executor,

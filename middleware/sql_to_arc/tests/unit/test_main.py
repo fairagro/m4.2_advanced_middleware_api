@@ -51,7 +51,6 @@ async def test_process_worker_investigations_empty() -> None:
         contacts_by_inv={},
         pubs_by_inv={},
         anns_by_inv={},
-        batch_size=2,
         worker_id=1,
         total_workers=1,
         executor=mock_executor,
@@ -91,7 +90,6 @@ async def test_process_worker_investigations_builds_and_uploads(monkeypatch: pyt
         contacts_by_inv={},
         pubs_by_inv={},
         anns_by_inv={},
-        batch_size=2,
         worker_id=1,
         total_workers=1,
         executor=executor,
@@ -120,7 +118,7 @@ async def test_process_investigations(monkeypatch: pytest.MonkeyPatch) -> None:
     mock_db.stream_annotation_tables.side_effect = lambda ids: mock_gen([])
 
     mock_client = AsyncMock()
-    mock_config = MagicMock(max_concurrent_arc_builds=2, batch_size=2, rdi="test", debug_limit=10)
+    mock_config = MagicMock(max_concurrent_arc_builds=2, rdi="test", debug_limit=10)
 
     # Mock process_worker_investigations to simplify
     async def mock_process_worker_inv(_ctx: WorkerContext, _invs: list[dict[str, Any]]) -> ProcessingStats:
