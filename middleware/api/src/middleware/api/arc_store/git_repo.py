@@ -95,7 +95,7 @@ class GitContext:
             kwargs.setdefault("kill_after_timeout", self.config.command_timeout)
 
         with self._tracer.start_as_current_span(
-            f"git.{action}",
+            f"api.GitContext._run_git_command:{action}",
             attributes={"git.action": action},
         ) as span:
             try:
@@ -202,7 +202,7 @@ class GitContext:
             msg = "Repository not initialized"
             raise RuntimeError(msg)
 
-        with self._tracer.start_as_current_span("git.commit_and_push") as span:
+        with self._tracer.start_as_current_span("api.GitContext.commit_and_push") as span:
             # Check if dirty or untracked files exist
             if not self.repo.is_dirty(untracked_files=True):
                 logger.info("No changes to commit.")
@@ -211,10 +211,10 @@ class GitContext:
 
             span.set_attribute("git.dirty", True)
 
-            with self._tracer.start_as_current_span("git.add"):
+            with self._tracer.start_as_current_span("api.GitContext.commit_and_push:add"):
                 self.repo.git.add(A=True)
 
-            with self._tracer.start_as_current_span("git.commit"):
+            with self._tracer.start_as_current_span("api.GitContext.commit_and_push:commit"):
                 self.repo.index.commit(message)
 
             logger.info("Pushing changes to remote branch %s", self.config.branch)
@@ -266,7 +266,7 @@ class GitRepo(ArcStore):
 
         def _task() -> None:
             with self._tracer.start_as_current_span(
-                "git_repo.create_or_update",
+                "api.GitRepo._create_or_update",
                 attributes={"arc_id": arc_id},
             ) as span:
                 # Ensure remote exists before doing anything else (if manager is configured)
@@ -292,7 +292,7 @@ class GitRepo(ArcStore):
                                 child.unlink()
 
                         # Write ARC to repo path
-                        with self._tracer.start_as_current_span("arc.write"):
+                        with self._tracer.start_as_current_span("api.GitRepo._create_or_update:arc_write"):
                             arc.Write(str(repo_path))
 
                         # Commit and push
@@ -314,7 +314,7 @@ class GitRepo(ArcStore):
 
         def _task() -> ARC | None:
             with self._tracer.start_as_current_span(
-                "git_repo.get",
+                "api.GitRepo._get",
                 attributes={"arc_id": arc_id},
             ) as span:
                 ctx_config = self._get_context_config(arc_id)
@@ -325,7 +325,7 @@ class GitRepo(ArcStore):
                             return None
                         span.set_attribute("git.local_path", str(ctx.path))
                         try:
-                            with self._tracer.start_as_current_span("arc.load"):
+                            with self._tracer.start_as_current_span("api.GitRepo._get:arc_load"):
                                 arc = ARC.load(ctx.path)
                             span.set_attribute("found", arc is not None)
                             return arc
@@ -361,7 +361,7 @@ class GitRepo(ArcStore):
 
         def _task() -> bool:
             with self._tracer.start_as_current_span(
-                "git_repo.exists",
+                "api.GitRepo._exists",
                 attributes={"arc_id": arc_id},
             ) as span:
                 # We can try to ls-remote using the authenticated URL
@@ -370,7 +370,7 @@ class GitRepo(ArcStore):
 
                 g = git.cmd.Git()
                 try:
-                    with self._tracer.start_as_current_span("git.ls-remote"):
+                    with self._tracer.start_as_current_span("api.GitRepo._exists:ls-remote"):
                         if self._config.command_timeout is not None:
                             g.ls_remote(url, kill_after_timeout=self._config.command_timeout)
                         else:

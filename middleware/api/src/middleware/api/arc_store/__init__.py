@@ -69,7 +69,7 @@ class ArcStore(ABC):
 
         """
         with self._tracer.start_as_current_span(
-            "arc_store.create_or_update",
+            "api.ArcStore.create_or_update",
             attributes={"arc_id": arc_id},
         ) as span:
             try:
@@ -97,7 +97,7 @@ class ArcStore(ABC):
 
         """
         with self._tracer.start_as_current_span(
-            "arc_store.get",
+            "api.ArcStore.get",
             attributes={"arc_id": arc_id},
         ) as span:
             try:
@@ -126,7 +126,7 @@ class ArcStore(ABC):
 
         """
         with self._tracer.start_as_current_span(
-            "arc_store.delete",
+            "api.ArcStore.delete",
             attributes={"arc_id": arc_id},
         ) as span:
             try:
@@ -153,7 +153,7 @@ class ArcStore(ABC):
 
         """
         with self._tracer.start_as_current_span(
-            "arc_store.exists",
+            "api.ArcStore.exists",
             attributes={"arc_id": arc_id},
         ) as span:
             try:

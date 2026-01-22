@@ -13,6 +13,8 @@ from git import Repo
 from gitlab.exceptions import GitlabError, GitlabGetError
 from opentelemetry import trace
 
+from . import ArcStoreError
+
 logger = logging.getLogger(__name__)
 
 
@@ -59,6 +61,9 @@ class RemoteGitProvider(ABC):
         if url_lower.startswith("file://"):
             return FileSystemGitProvider(url, group)
 
+        # TODO: any URL that is not file:// is assumed to be GitLab for now,
+        # but of course, this is a bold assumption. We should improve this later.
+        # Maybe there is a way to detect GitLab and bailout if not?
         if url_lower.startswith(("http://", "https://")):
             return GitlabGitProvider(url=url, group_name=group, token=token)
 
@@ -119,7 +124,7 @@ class GitlabGitProvider(RemoteGitProvider):
             return
 
         with self._tracer.start_as_current_span(
-            "remote_provider.gitlab.ensure_exists",
+            "api.GitlabGitProvider.ensure_repo_exists",
             attributes={"arc_id": arc_id, "group": self.group_name},
         ):
             try:
@@ -143,8 +148,15 @@ class GitlabGitProvider(RemoteGitProvider):
                         }
                     )
             except GitlabError as e:
-                logger.error("Failed to ensure GitLab project exists: %s", e)
-                raise
+                msg = f"GitLab API error: {e}"
+                # Handle 401 specifically to help users find the cause (wrong token)
+                if hasattr(e, "response_code") and e.response_code == http.HTTPStatus.UNAUTHORIZED:
+                    msg = (
+                        "GitLab API 401 Unauthorized: Please check your token and its permissions (API scope required)."
+                    )
+
+                logger.error("Failed to ensure GitLab project exists: %s", msg)
+                raise ArcStoreError(msg) from e
 
     def get_repo_url(self, arc_id: str, authenticated: bool = True) -> str:
         """Construct the GitLab repository URL, optionally with auth token."""

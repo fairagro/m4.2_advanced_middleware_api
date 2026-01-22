@@ -98,7 +98,7 @@ class GitlabApi(ArcStore):
     # -------------------------- Project Handling --------------------------
     def _get_or_create_project(self, arc_id: str) -> Project:
         with self._tracer.start_as_current_span(
-            "gitlab.get_or_create_project",
+            "api.GitlabApi._get_or_create_project",
             attributes={"arc_id": arc_id},
         ):
             logger.debug("Looking up GitLab project for ARC: %s", arc_id)
@@ -122,7 +122,7 @@ class GitlabApi(ArcStore):
 
     def _find_project(self, arc_id: str) -> Project | None:
         with self._tracer.start_as_current_span(
-            "gitlab.find_project",
+            "api.GitlabApi._find_project",
             attributes={"arc_id": arc_id},
         ):
             logger.debug("Searching for GitLab project: %s", arc_id)
@@ -145,7 +145,7 @@ class GitlabApi(ArcStore):
         return sha.hexdigest()
 
     def _load_old_hash(self, project: Project) -> str | None:
-        with self._tracer.start_as_current_span("gitlab.load_old_hash"):
+        with self._tracer.start_as_current_span("api.GitlabApi._load_old_hash"):
             try:
                 old_hash_file = project.files.get(file_path=".arc_hash", ref=self._config.branch)
                 old_hash = base64.b64decode(old_hash_file.content).decode("utf-8").strip()
@@ -159,7 +159,7 @@ class GitlabApi(ArcStore):
     def _get_existing_files(self, project: Project) -> set[str]:
         """Get all existing file paths in the project with a single API call."""
         with self._tracer.start_as_current_span(
-            "gitlab.get_existing_files",
+            "api.GitlabApi._get_existing_files",
             attributes={"project_id": project.id},
         ):
             try:
@@ -178,7 +178,7 @@ class GitlabApi(ArcStore):
     ) -> list[dict[str, Any]]:
         """Prepare file actions with optimized batch file existence check."""
         with self._tracer.start_as_current_span(
-            "gitlab.prepare_file_actions",
+            "api.GitlabApi._prepare_file_actions",
             attributes={"arc_path": str(arc_path)},
         ) as span:
             logger.debug("Preparing file actions for ARC at: %s", arc_path)
@@ -236,7 +236,7 @@ class GitlabApi(ArcStore):
     # -------------------------- Commit --------------------------
     def _commit_actions(self, project: Project, actions: list[dict[str, Any]], arc_id: str) -> None:
         with self._tracer.start_as_current_span(
-            "gitlab.commit_actions",
+            "api.GitlabApi._commit_actions",
             attributes={"arc_id": arc_id, "num_actions": len(actions)},
         ):
             logger.debug("Committing %d actions to GitLab for ARC: %s", len(actions), arc_id)
@@ -267,7 +267,7 @@ class GitlabApi(ArcStore):
                 }
 
                 with self._tracer.start_as_current_span(
-                    "gitlab.commit_chunk",
+                    "api.GitlabApi._commit_actions:chunk",
                     attributes={"arc_id": arc_id, "chunk_num": i + 1, "chunk_size": len(chunk)},
                 ):
                     commit = project.commits.create(commit_data)
@@ -295,7 +295,7 @@ class GitlabApi(ArcStore):
             await loop.run_in_executor(self._executor, arc.Write, str(arc_path))
 
             # Compute hash once with tracing
-            with self._tracer.start_as_current_span("gitlab.compute_arc_hash"):
+            with self._tracer.start_as_current_span("api.GitlabApi._compute_arc_hash"):
                 new_hash = await loop.run_in_executor(self._executor, self._compute_arc_hash, arc_path)
             logger.debug("Computed ARC hash: %s", new_hash[:16])
 
