@@ -31,12 +31,16 @@ class FileSystemRemoteManager(RemoteRepoManager):
 
     def ensure_repo_exists(self, arc_id: str) -> None:
         """Create a bare repository on the local filesystem if it doesn't exist."""
-        # Construct path from file://url/group/arc_id.git
-        if not self.base_url.lower().startswith("file://"):
+        from urllib.parse import unquote, urlparse
+
+        parsed_url = urlparse(self.base_url)
+        if parsed_url.scheme.lower() != "file":
             return
 
-        path_str = f"{self.base_url[7:]}/{self.group}/{arc_id}.git"
-        remote_path = Path(path_str)
+        # The path from a file URL might be URL-encoded (e.g. spaces as %20).
+        # We assume the path is local and can ignore the netloc part.
+        base_path = Path(unquote(parsed_url.path))
+        remote_path = base_path / self.group / f"{arc_id}.git"
 
         if not remote_path.exists():
             logger.info("Creating local 'remote' bare repository at %s", remote_path)
