@@ -265,182 +265,105 @@ class WorkerContext(BaseModel):
     model_config = ConfigDict(arbitrary_types_allowed=True)
 
 
-async def _upload_and_update_stats(
+async def process_single_dataset(
     ctx: WorkerContext,
-    valid_arcs: list[ARC],
-    valid_rows: list[dict[str, Any]],
+    investigation_row: dict[str, Any],
+    semaphore: asyncio.Semaphore,
     stats: ProcessingStats,
-    batch_info: str,
 ) -> None:
-    """Upload batch of ARCs and update statistics."""
-    tracer = trace.get_tracer(__name__)
-    try:
-        with tracer.start_as_current_span(
-            "sql_to_arc.main._upload_and_update_stats",
-            attributes={"count": len(valid_arcs), "rdi": ctx.rdi, "worker_id": ctx.worker_id},
-        ):
-            response = await ctx.client.create_or_update_arcs(
-                rdi=ctx.rdi,
-                arcs=valid_arcs,
-            )
-        logger.info(
-            "%s: Upload request finished. API reported %d successful ARCs.",
-            batch_info,
-            len(response.arcs),
-        )
+    """Process a single investigation: Build -> Serialize -> Log -> Upload.
 
-        if len(response.arcs) < len(valid_arcs):
-            logger.warning(
-                "%s: Only %d/%d ARCs were successfully processed by API.",
-                batch_info,
-                len(response.arcs),
-                len(valid_arcs),
-            )
-            # Identify exactly which ARCs failed by comparing sent ARCs with successful response IDs
-            successful_ids = {a.id for a in response.arcs}
+    Args:
+        ctx: Worker context (client, executor, etc).
+        investigation_row: The investigation data.
+        semaphore: Semaphore to limit concurrent active tasks.
+        stats: Stats object to update (mutable).
+    """
+    inv_id = investigation_row["id"]
+    log_prefix = f"[InvID: {inv_id}]"
 
-            for arc in valid_arcs:
-                identifier = getattr(arc, "Identifier", None)
-                if identifier:
-                    # Use identifier directly (no hashing)
-                    if identifier not in successful_ids:
-                        stats.failed_datasets += 1
-                        stats.failed_ids.append(identifier)
-                else:
-                    logger.error("%s: ARC with missing identifier failed upload", batch_info)
-                    stats.failed_datasets += 1
-                    stats.failed_ids.append("unknown_id")
-
-    except (psycopg.Error, ConnectionError, TimeoutError, ApiClientError) as e:
-        logger.error("%s: Failed to upload batch: %s", batch_info, e, exc_info=True)
-        stats.failed_datasets += len(valid_arcs)
-        for row in valid_rows:
-            stats.failed_ids.append(str(row["id"]))
-
-
-async def process_batch(  # pylint: disable=too-many-locals
-    ctx: WorkerContext,
-    batch: list[dict[str, Any]],
-    batch_idx: int,
-    total_batches: int,
-) -> ProcessingStats:
-    """Process a single batch of investigations."""
-    stats = ProcessingStats()
-    tracer = trace.get_tracer(__name__)
-    batch_info = (
-        f"Worker {ctx.worker_id}/{ctx.total_workers}, "
-        f"Batch {batch_idx + 1}/{total_batches}"
-    )
-
-    valid_arcs: list[ARC] = []
-    valid_rows: list[dict[str, Any]] = []
-
-    with tracer.start_as_current_span(
-        "sql_to_arc.main.process_batch",
-        attributes={"worker_id": ctx.worker_id, "batch_idx": batch_idx},
-    ):
-        logger.info("%s: Building %d ARCs in parallel...", batch_info, len(batch))
-
-        # Build ARCs in parallel using ProcessPoolExecutor (multi-core)
-        loop = asyncio.get_event_loop()
-        arc_build_futures = []
-
-        for row in batch:
-            inv_id = row["id"]
+    # Acquire semaphore to limit concurrency
+    async with semaphore:
+        try:
+            # 1. Gather data (Memory-bound, fast)
             studies = ctx.studies_by_investigation.get(inv_id, [])
+            relevant_assays = {s["id"]: ctx.assays_by_study.get(s["id"], []) for s in studies}
 
-            # Submit to ProcessPoolExecutor
-            future = loop.run_in_executor(
+            # Count details for logging
+            num_studies = len(studies)
+            num_assays = sum(len(a) for a in relevant_assays.values())
+            logger.info(
+                "%s Starting ARC build. Content: %d studies, %d assays.",
+                log_prefix,
+                num_studies,
+                num_assays,
+            )
+
+            # 2. Build ARC (CPU-bound) -> Offload to ProcessPool
+            loop = asyncio.get_event_loop()
+            arc = await loop.run_in_executor(
                 ctx.executor,
                 build_arc_for_investigation,
-                row,
+                investigation_row,
                 studies,
                 ctx.assays_by_study,
             )
-            arc_build_futures.append(future)
 
-        # Wait for all ARC builds to complete, gathering exceptions
-        results = await asyncio.gather(*arc_build_futures, return_exceptions=True)
-
-        for i, res in enumerate(results):
-            row_id = str(batch[i]["id"])
-            if isinstance(res, Exception):
-                logger.error(
-                    "%s: Failed to build ARC for investigation %s: %s",
-                    batch_info,
-                    row_id,
-                    res,
-                )
+            if not arc:
+                logger.error("%s ARC build returned None", log_prefix)
                 stats.failed_datasets += 1
-                stats.failed_ids.append(row_id)
-            elif res is None:
-                logger.error("%s: Build returned None for investigation %s", batch_info, row_id)
-                stats.failed_datasets += 1
-                stats.failed_ids.append(row_id)
-            else:
-                valid_arcs.append(cast(ARC, res))
-                valid_rows.append(batch[i])
+                stats.failed_ids.append(str(inv_id))
+                return
 
-    if valid_arcs:
-        await _upload_and_update_stats(ctx, valid_arcs, valid_rows, stats, batch_info)
+            # Retrieve Identifier from ARC for correlation
+            arc_identifier = getattr(arc, "Identifier", str(inv_id))
+            # Update prefix with real ARC ID if available
+            log_prefix = f"[ARC: {arc_identifier}]"
 
-    return stats
+            # 3. Serialize (CPU-bound) -> Offload to ProcessPool
+            # We serialize here to:
+            #   a) Get the size for logging
+            #   b) Pass dict to ApiClient (avoiding double serialization)
+            json_str = await loop.run_in_executor(None, arc.ToROCrateJsonString)
+            serialized_arc = json.loads(json_str)
 
+            # Calculate size in bytes
+            size_bytes = len(json_str.encode("utf-8"))
+            size_mb = size_bytes / (1024 * 1024)
+            logger.info(
+                "%s Serialization complete. Payload size: %.2f MB. Uploading...",
+                log_prefix,
+                size_mb,
+            )
 
-async def process_worker_investigations(
-    ctx: WorkerContext,
-    investigations: list[dict[str, Any]],
-) -> ProcessingStats:
-    """Process a list of investigations assigned to this worker."""
-    stats = ProcessingStats(found_datasets=len(investigations))
-    if not investigations:
-        return stats
+            # 4. Upload (IO-bound)
+            # Use new create_or_update_arc method
+            response = await ctx.client.create_or_update_arc(
+                rdi=ctx.rdi,
+                arc=serialized_arc,
+            )
+            logger.info(
+                "%s Upload successful. API confirmed %d ARC(s) processed.",
+                log_prefix,
+                len(response.arcs),
+            )
 
-    tracer = trace.get_tracer(__name__)
-
-    with tracer.start_as_current_span(
-        "sql_to_arc.main.process_worker_investigations",
-        attributes={
-            "worker_id": ctx.worker_id,
-            "investigation_count": len(investigations),
-            "rdi": ctx.rdi,
-        },
-    ):
-        logger.info(
-            "Worker %d/%d processing %d investigations...",
-            ctx.worker_id,
-            ctx.total_workers,
-            len(investigations),
-        )
-
-        # Each investigation is its own batch (batch size = 1)
-        logger.info(
-            "Worker %d/%d: Processing %d batches (batch size = 1)",
-            ctx.worker_id,
-            ctx.total_workers,
-            len(investigations),
-        )
-        for batch_idx, row in enumerate(investigations):
-            batch_stats = await process_batch(ctx, [row], batch_idx, len(investigations))
-            stats.merge(batch_stats)
-
-    return stats
+        except (ApiClientError, psycopg.Error, OSError) as e:
+            logger.error("%s Processing failed: %s", log_prefix, e)
+            stats.failed_datasets += 1
+            stats.failed_ids.append(str(inv_id))
+        except Exception as e:  # pylint: disable=broad-exception-caught
+            logger.error("%s Unexpected error: %s", log_prefix, e, exc_info=True)
+            stats.failed_datasets += 1
+            stats.failed_ids.append(str(inv_id))
 
 
-async def process_investigations(  # pylint: disable=too-many-locals
+async def process_investigations(
     cur: psycopg.AsyncCursor[dict[str, Any]],
     client: ApiClient,
     config: Config,
 ) -> ProcessingStats:
-    """Fetch investigations from DB and process them in batches.
-
-    This function optimizes database access by fetching all data in 3 queries:
-    1. Fetch all investigations
-    2. Fetch all studies for those investigations
-    3. Fetch all assays for those studies
-
-    ARCs within each batch are built concurrently (up to max_concurrent_arc_builds),
-    then uploaded together via a single API call.
+    """Fetch investigations from DB and process them concurrently.
 
     Args:
         cur: Database cursor.
@@ -453,98 +376,62 @@ async def process_investigations(  # pylint: disable=too-many-locals
     tracer = trace.get_tracer(__name__)
     stats = ProcessingStats()
     with tracer.start_as_current_span("sql_to_arc.main.process_investigations"):
-        # Step 1: Fetch all investigations
+        # Step 1: Fetch all data (bulk)
         logger.info("Fetching all investigations...")
-        with tracer.start_as_current_span(
-            "sql_to_arc.main.process_investigations:db_fetch_investigations"
-        ):
-            investigation_rows = await fetch_all_investigations(cur)
-        logger.info("Found %d investigations", len(investigation_rows))
+        investigation_rows = await fetch_all_investigations(cur)
+        stats.found_datasets = len(investigation_rows)
+        logger.info("Found %d investigations", stats.found_datasets)
 
         if not investigation_rows:
-            logger.info("No investigations found, nothing to process")
             return stats
 
-        # Step 2: Fetch all studies for these investigations in bulk
+        # Fetch studies
         investigation_ids = [row["id"] for row in investigation_rows]
-        logger.info("Fetching studies for %d investigations...", len(investigation_ids))
-        with tracer.start_as_current_span(
-            "sql_to_arc.main.process_investigations:db_fetch_studies",
-            attributes={"investigation_count": len(investigation_ids)},
-        ):
-            studies_by_investigation = await fetch_studies_bulk(cur, investigation_ids)
-        total_studies = sum(len(studies) for studies in studies_by_investigation.values())
-        logger.info("Found %d studies", total_studies)
-        stats.total_studies = total_studies
+        studies_by_investigation = await fetch_studies_bulk(cur, investigation_ids)
+        stats.total_studies = sum(len(s) for s in studies_by_investigation.values())
 
-        # Step 3: Fetch all assays for these studies in bulk
-        study_ids = [
-            study["id"]
-            for studies in studies_by_investigation.values()
-            for study in studies
-        ]
-        logger.info("Fetching assays for %d studies...", len(study_ids))
-        with tracer.start_as_current_span(
-            "sql_to_arc.main.process_investigations:db_fetch_assays",
-            attributes={"study_count": len(study_ids)},
-        ):
-            assays_by_study = await fetch_assays_bulk(cur, study_ids)
-        total_assays = sum(len(assays) for assays in assays_by_study.values())
-        logger.info("Found %d assays", total_assays)
-        stats.total_assays = total_assays
-
-        # Step 4: Distribute investigations evenly across workers
-        num_workers = config.max_concurrent_arc_builds
-        total_investigations = len(investigation_rows)
+        # Fetch assays
+        study_ids = [s["id"] for studies in studies_by_investigation.values() for s in studies]
+        assays_by_study = await fetch_assays_bulk(cur, study_ids)
+        stats.total_assays = sum(len(a) for a in assays_by_study.values())
 
         logger.info(
-            "Distributing %d investigations across %d workers (batch size = 1)",
-            total_investigations,
-            num_workers,
+            "Data fetch complete. Total: %d studies, %d assays.",
+            stats.total_studies,
+            stats.total_assays,
         )
 
-        # Split investigations into chunks for each worker (round robin)
-        worker_assignments: list[list[dict[str, Any]]] = [[] for _ in range(num_workers)]
-        for idx, investigation in enumerate(investigation_rows):
-            worker_id = idx % num_workers
-            worker_assignments[worker_id].append(investigation)
+        # Step 2: Dynamic Concurrency with Producer-Consumer pattern
+        # Limit max concurrent tasks (Build+Serialize+Upload)
+        limit = config.max_concurrent_arc_builds
+        semaphore = asyncio.Semaphore(limit)
+        logger.info("Starting processing with max_concurrent_tasks=%d", limit)
 
-        # Log distribution
-        for worker_id, assigned_investigations in enumerate(worker_assignments):
-            logger.info(
-                "Worker %d assigned %d investigations",
-                worker_id + 1,
-                len(assigned_investigations),
-            )
-
-        # Process workers concurrently with ProcessPoolExecutor for CPU-bound
-        # ARC building. Each worker processes its assigned investigations in
-        # batches, building ARCs in parallel. Use "spawn" context to avoid
-        # deadlocks/warnings in multi-threaded environments (e.g. pytest).
+        # Use ProcessPoolExecutor for CPU offloading
+        # "spawn" context is safer for mix of asyncio/multiprocessing
         mp_context = multiprocessing.get_context("spawn")
         with concurrent.futures.ProcessPoolExecutor(
-            max_workers=num_workers, mp_context=mp_context
+            max_workers=limit, mp_context=mp_context
         ) as executor:
-            tasks = []
-            for worker_id, assigned_investigations in enumerate(worker_assignments):
-                if not assigned_investigations:
-                    continue
+            # Create shared context (stateless parts)
+            ctx = WorkerContext(
+                client=client,
+                rdi=config.rdi,
+                studies_by_investigation=studies_by_investigation,
+                assays_by_study=assays_by_study,
+                worker_id=0,  # Not used in new dynamic model
+                total_workers=limit,
+                executor=executor,
+            )
 
-                ctx = WorkerContext(
-                    client=client,
-                    rdi=config.rdi,
-                    studies_by_investigation=studies_by_investigation,
-                    assays_by_study=assays_by_study,
-                    worker_id=worker_id + 1,
-                    total_workers=num_workers,
-                    executor=executor,
-                )
-                tasks.append(process_worker_investigations(ctx, assigned_investigations))
+            # Create tasks
+            tasks = [
+                process_single_dataset(ctx, row, semaphore, stats)
+                for row in investigation_rows
+            ]
 
-            results = await asyncio.gather(*tasks)
-            for res in results:
-                if isinstance(res, ProcessingStats):
-                    stats.merge(res)
+            # Run all tasks
+            await asyncio.gather(*tasks)
 
     return stats
 

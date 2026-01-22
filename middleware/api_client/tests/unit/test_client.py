@@ -3,7 +3,7 @@
 import http
 import ssl
 from pathlib import Path
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import httpx
 import pytest
@@ -63,8 +63,8 @@ async def test_client_initialization_missing_ca_cert(test_config_dict: dict, tem
 
 @pytest.mark.asyncio
 @respx.mock
-async def test_create_or_update_arcs_success(client_config: Config) -> None:
-    """Test successful create_or_update_arcs request."""
+async def test_create_or_update_arc_success(client_config: Config) -> None:
+    """Test successful create_or_update_arc request."""
     # Mock the API response
     # Mock the API response (Task submission)
     task_response = {"task_id": "task-123", "status": "processing"}
@@ -98,9 +98,9 @@ async def test_create_or_update_arcs_success(client_config: Config) -> None:
     # Send request with ARC object
     arc = ARC.from_arc_investigation(ArcInvestigation.create(identifier="test-arc", title="Test ARC"))
     async with ApiClient(client_config) as client:
-        response = await client.create_or_update_arcs(
+        response = await client.create_or_update_arc(
             rdi="test-rdi",
-            arcs=[arc],
+            arc=arc,
         )
 
     # Verify
@@ -115,8 +115,8 @@ async def test_create_or_update_arcs_success(client_config: Config) -> None:
 
 @pytest.mark.asyncio
 @respx.mock
-async def test_create_or_update_arcs_http_error(client_config: Config) -> None:
-    """Test create_or_update_arcs with HTTP error response."""
+async def test_create_or_update_arc_http_error(client_config: Config) -> None:
+    """Test create_or_update_arc with HTTP error response."""
     # Mock an error response
     respx.post(f"{client_config.api_url}v1/arcs").mock(
         return_value=httpx.Response(http.HTTPStatus.FORBIDDEN, text="Forbidden")
@@ -126,16 +126,16 @@ async def test_create_or_update_arcs_http_error(client_config: Config) -> None:
     arc = ARC.from_arc_investigation(ArcInvestigation.create(identifier="test", title="Test"))
     async with ApiClient(client_config) as client:
         with pytest.raises(ApiClientError, match=f"HTTP error {http.HTTPStatus.FORBIDDEN.value}"):
-            await client.create_or_update_arcs(
+            await client.create_or_update_arc(
                 rdi="test-rdi",
-                arcs=[arc],
+                arc=arc,
             )
 
 
 @pytest.mark.asyncio
 @respx.mock
-async def test_create_or_update_arcs_network_error(client_config: Config) -> None:
-    """Test create_or_update_arcs with network error."""
+async def test_create_or_update_arc_network_error(client_config: Config) -> None:
+    """Test create_or_update_arc with network error."""
     # Mock a network error
     respx.post(f"{client_config.api_url}v1/arcs").mock(side_effect=httpx.ConnectError("Connection refused"))
 
@@ -143,9 +143,9 @@ async def test_create_or_update_arcs_network_error(client_config: Config) -> Non
     arc = ARC.from_arc_investigation(ArcInvestigation.create(identifier="test", title="Test"))
     async with ApiClient(client_config) as client:
         with pytest.raises(ApiClientError, match="Request error"):
-            await client.create_or_update_arcs(
+            await client.create_or_update_arc(
                 rdi="test-rdi",
-                arcs=[arc],
+                arc=arc,
             )
 
 
@@ -231,7 +231,8 @@ async def test_client_headers(client_config: Config) -> None:
     )
 
     async with ApiClient(client_config) as client:
-        await client.create_or_update_arcs(rdi="test", arcs=[])
+        # Use a dict so it's treated as pre-serialized, avoiding JSON serialization issues with Mock
+        await client.create_or_update_arc(rdi="test", arc={"id": "mock-arc"})
 
     # Verify headers
     assert route_post.called
@@ -319,18 +320,18 @@ async def test_get_network_error(client_config: Config) -> None:
 
 @pytest.mark.asyncio
 @respx.mock
-async def test_create_or_update_arcs_no_task_id(client_config: Config) -> None:
-    """Test create_or_update_arcs when API returns no task_id."""
+async def test_create_or_update_arc_no_task_id(client_config: Config) -> None:
+    """Test create_or_update_arc when API returns no task_id."""
     respx.post(f"{client_config.api_url}v1/arcs").mock(return_value=httpx.Response(http.HTTPStatus.ACCEPTED, json={}))
     client = ApiClient(client_config)
     with pytest.raises(ApiClientError, match="No task_id returned from API"):
-        await client.create_or_update_arcs(rdi="test", arcs=[])
+        await client.create_or_update_arc(rdi="test", arc={"id": "mock-arc"})
 
 
 @pytest.mark.asyncio
 @respx.mock
-async def test_create_or_update_arcs_task_failure(client_config: Config) -> None:
-    """Test create_or_update_arcs when poll returns FAILURE."""
+async def test_create_or_update_arc_task_failure(client_config: Config) -> None:
+    """Test create_or_update_arc when poll returns FAILURE."""
     task_response = {"task_id": "failed-task"}
     status_response = {
         "task_id": "failed-task",
@@ -350,4 +351,4 @@ async def test_create_or_update_arcs_task_failure(client_config: Config) -> None
         patch("asyncio.sleep", return_value=None),
         pytest.raises(ApiClientError, match="Task failed: Something went wrong"),
     ):
-        await client.create_or_update_arcs(rdi="test", arcs=[])
+        await client.create_or_update_arc(rdi="test", arc={"id": "mock-arc"})
