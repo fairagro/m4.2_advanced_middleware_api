@@ -1,5 +1,6 @@
 """Integration tests for the SQL-to-ARC workflow."""
 
+import asyncio
 import multiprocessing
 from concurrent.futures import ProcessPoolExecutor
 from typing import Any
@@ -10,8 +11,7 @@ import pytest
 from middleware.api_client import ApiClient
 from middleware.shared.api_models.models import CreateOrUpdateArcsResponse
 from middleware.shared.config.config_base import OtelConfig
-from middleware.sql_to_arc.main import WorkerContext, main, process_single_dataset, ProcessingStats
-import asyncio
+from middleware.sql_to_arc.main import DatasetContext, ProcessingStats, WorkerContext, main, process_single_dataset
 
 
 @pytest.fixture
@@ -67,10 +67,16 @@ async def test_process_single_dataset(mock_api_client: AsyncMock) -> None:
         )
         semaphore = asyncio.Semaphore(1)
         stats = ProcessingStats()
-        
-        # Test processing each investigation individually
+
         for inv in investigation_rows:
-            await process_single_dataset(ctx, inv, [], {}, semaphore, stats)
+            # Build a minimal DatasetContext as expected by process_single_dataset
+            dataset_context = DatasetContext(
+                investigation_row=inv,
+                studies=studies_by_investigation.get(inv["id"], []),
+                assays_by_study=assays_by_study,
+            )
+            # Call with correct arguments: ctx, dataset_context, semaphore, stats
+            await process_single_dataset(ctx, dataset_context, semaphore, stats)
 
     assert mock_api_client.create_or_update_arc.called
     assert mock_api_client.create_or_update_arc.call_count == 2  # noqa: PLR2004
@@ -78,7 +84,6 @@ async def test_process_single_dataset(mock_api_client: AsyncMock) -> None:
         assert call.kwargs["rdi"] == "edaphobase"
         # Each call sends one ARC as dict or ARC object
         assert "arc" in call.kwargs
-
 
 
 @pytest.mark.asyncio
@@ -179,7 +184,7 @@ async def test_main_workflow(
 
     fetchmany_done: list[bool] = []
 
-    async def fetchmany_side_effect(size: int = 100) -> list[dict[str, Any]]:
+    async def fetchmany_side_effect(_size: int = 100) -> list[dict[str, Any]]:
         last_query = mock_db_cursor.execute.call_args[0][0]
         if 'FROM "ARC_Investigation"' in last_query:
             if fetchmany_done:
@@ -220,7 +225,7 @@ async def test_main_workflow(
 
     # Should have uploaded 2 ARCs in total
     assert len(all_arcs) == 2  # noqa: PLR2004
-    
+
     # Since we mocked everything, including the build process (indirectly via main execution),
     # we need to be careful what we assert about content.
     # Actually, in this integration test, `build_arc_for_investigation` is NOT mocked, it runs real logic?
@@ -228,6 +233,6 @@ async def test_main_workflow(
     # Wait, the test does NOT mock `build_arc_for_investigation`.
     # It mocks DB and API. So `build_arc_for_investigation` runs.
     # It requires `arctrl` to work.
-    
+
     # We can check that the calls were made.
     pass
