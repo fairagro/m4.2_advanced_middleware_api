@@ -168,14 +168,32 @@ async def test_main_workflow(
     # 2. All studies for those investigations (using ANY)
     # 3. All assays for those studies (using ANY)
 
+    # Create a separate mock cursor for detail queries
+    mock_detail_cursor = AsyncMock()
+    mock_detail_cursor.fetchall.return_value = []
+    
+    # Setup connection.cursor() to return an async context manager yielding mock_detail_cursor
+    # Important: The connection is accessed via mock_db_cursor.connection
+    mock_connection = MagicMock()
+    mock_db_cursor.connection = mock_connection
+    mock_connection.cursor.return_value.__aenter__.return_value = mock_detail_cursor
+    
     async def fetchall_side_effect() -> list[dict[str, Any]]:
-        # Check the last executed query
-        last_query = mock_db_cursor.execute.call_args[0][0]
+        # This cursor is only used for fetching investigations now
+        return []
+
+    async def detail_fetchall_side_effect() -> list[dict[str, Any]]:
+        # Check the last executed query on the detail cursor
+        if not mock_detail_cursor.execute.call_args:
+            return []
+        last_query = mock_detail_cursor.execute.call_args[0][0]
         if 'FROM "ARC_Study"' in last_query:
             return studies_bulk
         elif 'FROM "ARC_Assay"' in last_query:
             return assays_bulk
         return []
+        
+    mock_detail_cursor.fetchall.side_effect = detail_fetchall_side_effect
 
     fetchmany_done: list[bool] = []
 
@@ -198,8 +216,11 @@ async def test_main_workflow(
     # Should have connected to DB
     assert mock_db_connection.cursor.called
 
-    # Should have executed 3 queries (investigations, studies bulk, assays bulk)
-    assert mock_db_cursor.execute.call_count == 3  # noqa: PLR2004
+    # Should have executed 1 query on main cursor (investigations)
+    assert mock_db_cursor.execute.call_count == 1
+    
+    # Should have executed 2 detail queries (studies + assays) on detail cursor
+    assert mock_detail_cursor.execute.call_count == 2  # noqa: PLR2004
 
     # Should have uploaded ARCs (2 investigations distributed across workers)
     # With max_concurrent_arc_builds=5, the 2 investigations are distributed
