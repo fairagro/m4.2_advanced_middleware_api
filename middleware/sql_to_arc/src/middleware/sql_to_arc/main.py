@@ -370,8 +370,13 @@ async def process_investigations(
     stats = ProcessingStats()
     with trace.get_tracer(__name__).start_as_current_span("sql_to_arc.main.process_investigations"):
         # Step 1: Initialize concurrency control
-        semaphore = asyncio.Semaphore(config.max_concurrent_arc_builds)
-        logger.info("Starting streaming processing with max_concurrent_tasks=%d", config.max_concurrent_arc_builds)
+        max_tasks = config.max_concurrent_tasks if config.max_concurrent_tasks is not None else 50
+        semaphore = asyncio.Semaphore(max_tasks)
+        logger.info(
+            "Starting streaming processing: CPU_workers=%d, Max_tasks=%d",
+            config.max_concurrent_arc_builds,
+            max_tasks,
+        )
 
         # Use ProcessPoolExecutor for CPU offloading
         with concurrent.futures.ProcessPoolExecutor(
@@ -391,9 +396,9 @@ async def process_investigations(
                 stats.found_datasets += 1
 
                 # Backlog Flow Control: Prevent reading too much from DB if workers are busy.
-                # If we have more than double the workers in flight, wait for some to finish.
-                # This keeps the memory footprint low by stopping the stream producer.
-                if len(running_tasks) >= config.max_concurrent_arc_builds * 2:
+                # If we have reached the max number of concurrent tasks, wait for one to finish.
+                # This keeps the memory footprint under control by stopping the stream producer.
+                if len(running_tasks) >= max_tasks:
                     await asyncio.wait(running_tasks, return_when=asyncio.FIRST_COMPLETED)
 
                 dataset_ctx = DatasetContext(

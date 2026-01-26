@@ -39,6 +39,30 @@ def test_config_creation() -> None:
     assert config.rdi == "edaphobase"
     assert config.rdi_url == "https://edaphobase.org"
     assert config.log_level == "INFO"
+    # Default is 2x max_concurrent_arc_builds (5 * 2 = 10)
+    assert config.max_concurrent_tasks == 10  # noqa: PLR2004
+
+
+def test_config_max_concurrent_tasks_custom() -> None:
+    """Test creating a Config with custom max_concurrent_tasks."""
+    api_client_config = ApiClientConfig(
+        api_url="https://api.example.com",
+        otel=OtelConfig(),
+    )
+    config = Config(
+        db_name="test_db",
+        db_user="test_user",
+        db_password=SecretStr("test_password"),
+        db_host="localhost",
+        rdi="edaphobase",
+        rdi_url="https://edaphobase.org",
+        api_client=api_client_config,
+        max_concurrent_arc_builds=8,
+        max_concurrent_tasks=32,
+        otel=OtelConfig(),
+    )
+    assert config.max_concurrent_arc_builds == 8  # noqa: PLR2004
+    assert config.max_concurrent_tasks == 32  # noqa: PLR2004
 
 
 def test_config_with_defaults() -> None:

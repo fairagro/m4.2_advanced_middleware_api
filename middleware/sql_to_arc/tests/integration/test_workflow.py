@@ -97,6 +97,8 @@ def mock_main_config(mocker: MagicMock) -> MagicMock:
     config.db_port = 5432
     config.rdi = "edaphobase"
     config.max_concurrent_arc_builds = 5
+    config.max_concurrent_tasks = 10
+    config.db_batch_size = 100
     config.api_client = MagicMock()
     config.log_level = "INFO"
     config.otel = OtelConfig(endpoint=None, log_console_spans=False, log_level="INFO")
@@ -104,6 +106,7 @@ def mock_main_config(mocker: MagicMock) -> MagicMock:
     mocker.patch("middleware.sql_to_arc.main.ConfigWrapper.from_yaml_file")
     mocker.patch("middleware.sql_to_arc.main.Config.from_config_wrapper", return_value=config)
     mocker.patch("middleware.sql_to_arc.main.configure_logging")
+    mocker.patch("middleware.sql_to_arc.main.initialize_tracing", return_value=(MagicMock(), MagicMock()))
     return config
 
 

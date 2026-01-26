@@ -2,7 +2,7 @@
 
 from typing import Annotated
 
-from pydantic import Field, SecretStr
+from pydantic import Field, SecretStr, model_validator
 
 from middleware.api_client.config import Config as ApiClientConfig
 from middleware.shared.config.config_base import ConfigBase
@@ -25,6 +25,15 @@ class Config(ConfigBase):
             ge=1,
         ),
     ] = 5
+    max_concurrent_tasks: Annotated[
+        int | None,
+        Field(
+            description=(
+                "Maximum number of parallel tasks (IO + CPU). Defaults to 2x max_concurrent_arc_builds if None."
+            ),
+            ge=1,
+        ),
+    ] = None
     db_batch_size: Annotated[
         int,
         Field(
@@ -33,3 +42,10 @@ class Config(ConfigBase):
         ),
     ] = 100
     api_client: Annotated[ApiClientConfig, Field(description="API Client configuration")]
+
+    @model_validator(mode="after")
+    def set_default_max_concurrent_tasks(self) -> "Config":
+        """Set default max_concurrent_tasks if not provided."""
+        if self.max_concurrent_tasks is None:
+            self.max_concurrent_tasks = self.max_concurrent_arc_builds * 2
+        return self

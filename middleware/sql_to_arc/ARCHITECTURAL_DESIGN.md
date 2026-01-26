@@ -53,7 +53,7 @@ Bei der Verarbeitung von tausenden Investigations (ARC-Containern) kann der RAM-
 Der asynchrone Datenbank-Stream produziert Daten schneller, als der Prozess-Pool sie konvertieren kann.
 
 - **Problem:** Tausende `asyncio.Tasks` würden gleichzeitig im RAM auf ihre Ausführung warten, inklusive aller zugehörigen Datenbank-Zeilen.
-- **Lösung:** Eine Drosselung im Haupt-Loop: `if len(running_tasks) >= max_workers * 2: await asyncio.wait(...)`. Der Stream pausiert, bis wieder Kapazität frei ist.
+- **Lösung:** Eine Drosselung im Haupt-Loop: `if len(running_tasks) >= max_concurrent_tasks: await asyncio.wait(...)`. Der Stream pausiert, bis wieder Kapazität frei ist. Dies limitiert die Anzahl der Datensätze, die sich gleichzeitig im Speicher befinden.
 
 ### 4.2 Worker-Side Serialization & GC
 
@@ -65,6 +65,13 @@ Die ARC-Objekte der `arctrl` Bibliothek sind komplex und beanspruchen sowohl Pyt
 ### 4.3 JSON vs. Objekt-Transfer
 
 Zwischen dem Hauptprozess und den Workern werden keine komplexen ARC-Objekte übertragen, sondern lediglich primitive Python-Datentypen (Dicts) als Input und fertige JSON-Strings als Output. Dies minimiert den Overhead der Inter-Prozess-Kommunikation (IPC).
+
+### 4.4 Entkopplung von I/O und CPU (Workload Balancing)
+
+Um die CPU-Auslastung zu maximieren, wird die Anzahl der gleichzeitig aktiven Tasks (`max_concurrent_tasks`) unabhängig von der Anzahl der CPU-Worker (`max_concurrent_arc_builds`) gesteuert.
+
+- **Prinzip:** Während ein Teil der Tasks auf die Netzwerk-Antwort der API wartet (I/O), können die CPU-Worker bereits den nächsten ARC-Build aus der Warteschlange verarbeiten.
+- **Konfiguration:** Standardmäßig ist die Task-Kapazität doppelt so groß wie die Anzahl der CPU-Worker (einstellbar via `max_concurrent_tasks`), um Latenzen zu überbrücken, ohne den RAM zu überlasten.
 
 ---
 
@@ -92,6 +99,7 @@ Zwischen dem Hauptprozess und den Workern werden keine komplexen ARC-Objekte üb
 | Problem | Lösung | Grund |
 | :--- | :--- | :--- |
 | GIL / CPU-Limit | `ProcessPoolExecutor` | Echte Parallelität auf mehreren Kernen. |
+| Niedrige CPU Auslastung | I/O-CPU Entkopplung | `max_concurrent_tasks` erlaubt API-Uploads parallel zu neuen ARC-Builds. |
 | Memory Overflow (Backlog) | Producer Throttling | Verhindert, dass zu viele Datensätze gleichzeitig im RAM "warten". |
 | Memory Leak (Worker) | `gc.collect()` + JSON Return | Gibt Speicher im Worker sofort nach der Konvertierung frei. |
 | Datenbank-Last | `fetchmany` + `ANY()` | Optimale Balance zwischen Abfrage-Anzahl und Speicherlast. |
