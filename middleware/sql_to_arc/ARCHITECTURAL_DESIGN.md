@@ -22,6 +22,7 @@ Da die Generierung von ARCs (via `arctrl`) rechenintensiv ist und Python durch d
 
 - **Vorteil:** Jede ARC-Berechnung läuft auf einem eigenen CPU-Kern.
 - **Implementierung:** `loop.run_in_executor(executor, build_arc_for_investigation, ...)`
+- **Multiprocessing Support:** Der Aufruf von `multiprocessing.freeze_support()` stellt sicher, dass die Middleware auch in "eingefrorenen" Umgebungen (wie PyInstaller-Binaries unter Windows) korrekt neue Prozesse starten kann. Unter Linux ist dies primär eine Best-Practice für die Cross-Platform Kompatibilität.
 
 ### 3.2 Concurrency & Flow Control (Die Semaphore)
 
@@ -43,7 +44,31 @@ Die Middleware implementiert einen **Lazy-Loading** Ansatz für Datenbank-Entit�
 
 ---
 
-## 4. Datenfluss (Step-by-Step)
+## 4. Speicher-Management & Performance-Optimierung
+
+Bei der Verarbeitung von tausenden Investigations (ARC-Containern) kann der RAM-Verbrauch kritisch werden. Die Middleware implementiert hierfür drei Strategien:
+
+### 4.1 Backlog Flow Control (Produzenten-Pause)
+
+Der asynchrone Datenbank-Stream produziert Daten schneller, als der Prozess-Pool sie konvertieren kann.
+
+- **Problem:** Tausende `asyncio.Tasks` würden gleichzeitig im RAM auf ihre Ausführung warten, inklusive aller zugehörigen Datenbank-Zeilen.
+- **Lösung:** Eine Drosselung im Haupt-Loop: `if len(running_tasks) >= max_workers * 2: await asyncio.wait(...)`. Der Stream pausiert, bis wieder Kapazität frei ist.
+
+### 4.2 Worker-Side Serialization & GC
+
+Die ARC-Objekte der `arctrl` Bibliothek sind komplex und beanspruchen sowohl Python- als auch .NET-Speicher.
+
+- **Strategie:** Die Konvertierung zum JSON-String erfolgt direkt im Worker-Prozess.
+- **Memory Cleanup:** Nach der Serialisierung werden die ARC-Objekte im Worker explizit gelöscht (`del`) und der Garbage Collector (`gc.collect()`) aufgerufen, bevor der Prozess das Ergebnis an den Hauptprozess zurückgibt. Dies verhindert das "Anschwellen" der Worker-Prozesse.
+
+### 4.3 JSON vs. Objekt-Transfer
+
+Zwischen dem Hauptprozess und den Workern werden keine komplexen ARC-Objekte übertragen, sondern lediglich primitive Python-Datentypen (Dicts) als Input und fertige JSON-Strings als Output. Dies minimiert den Overhead der Inter-Prozess-Kommunikation (IPC).
+
+---
+
+## 5. Datenfluss (Step-by-Step)
 
 1. **Producer:** Der Hauptprozess startet den Streaming-Generator.
 2. **Throttle:** Der Loop wartet an der `Semaphore` auf einen freien Slot.
@@ -67,6 +92,7 @@ Die Middleware implementiert einen **Lazy-Loading** Ansatz für Datenbank-Entit�
 | Problem | Lösung | Grund |
 | :--- | :--- | :--- |
 | GIL / CPU-Limit | `ProcessPoolExecutor` | Echte Parallelität auf mehreren Kernen. |
-| Memory Overflow | `asyncio.Semaphore` | Begrenzt die Anzahl der Datensätze im RAM. |
+| Memory Overflow (Backlog) | Producer Throttling | Verhindert, dass zu viele Datensätze gleichzeitig im RAM "warten". |
+| Memory Leak (Worker) | `gc.collect()` + JSON Return | Gibt Speicher im Worker sofort nach der Konvertierung frei. |
 | Datenbank-Last | `fetchmany` + `ANY()` | Optimale Balance zwischen Abfrage-Anzahl und Speicherlast. |
 | Skalierbarkeit | Single ARC Processing | Früherer Erfolg/Fehler-Feedback pro Untersuchung statt nur pro Batch. |

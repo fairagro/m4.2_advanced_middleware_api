@@ -3,6 +3,7 @@
 import argparse
 import asyncio
 import concurrent.futures
+import gc
 import json
 import logging
 import multiprocessing
@@ -217,10 +218,11 @@ def build_arc_for_investigation(
     investigation_row: dict[str, Any],
     studies: list[dict[str, Any]],
     assays_by_study: dict[int, list[dict[str, Any]]],
-) -> ARC:
+) -> str:
     """Build a single ARC for an investigation (CPU-bound operation for ProcessPoolExecutor).
 
-    This function is designed to be called in a separate process.
+    This function is designed to be called in a separate process and returns
+     the JSON representation to minimize memory footprint in the main process.
 
     Args:
         investigation_row: Investigation database row.
@@ -228,16 +230,30 @@ def build_arc_for_investigation(
         assays_by_study: Dictionary mapping study_id to list of assays.
 
     Returns:
-        ARC object.
+        JSON string representation of the ARC.
     """
-    # Filter assays for these studies
-    relevant_assays = {s["id"]: assays_by_study.get(s["id"], []) for s in studies}
+    try:
+        # Filter assays for these studies
+        relevant_assays = {s["id"]: assays_by_study.get(s["id"], []) for s in studies}
 
-    # Build ArcInvestigation
-    arc_investigation = build_single_arc_task(investigation_row, studies, relevant_assays)
+        # Build ArcInvestigation
+        arc_investigation = build_single_arc_task(investigation_row, studies, relevant_assays)
 
-    # Wrap in ARC container
-    return ARC.from_arc_investigation(arc_investigation)
+        # Wrap in ARC container
+        arc = ARC.from_arc_investigation(arc_investigation)
+
+        # Serialize immediately in the worker process
+        json_str: str = arc.ToROCrateJsonString()
+
+        # Explicitly clean up memory before returning
+        del arc
+        del arc_investigation
+        gc.collect()
+
+        return json_str
+    except Exception:
+        gc.collect()
+        raise
 
 
 class WorkerContext(BaseModel):
@@ -293,8 +309,9 @@ async def process_single_dataset(
                 num_assays,
             )
 
-            # 2. Build ARC (CPU-bound) -> Offload to ProcessPool
-            arc = await asyncio.get_event_loop().run_in_executor(
+            # 2. Build & Serialize ARC (CPU-bound) -> Offload to ProcessPool
+            # We return the JSON string directly from the worker to allow early GC of ARC objects
+            json_str = await asyncio.get_event_loop().run_in_executor(
                 ctx.executor,
                 build_arc_for_investigation,
                 dataset_ctx.investigation_row,
@@ -302,21 +319,14 @@ async def process_single_dataset(
                 dataset_ctx.assays_by_study,
             )
 
-            if not arc:
-                logger.error("%s ARC build returned None", log_prefix)
+            if not json_str:
+                logger.error("%s ARC build/serialization failed", log_prefix)
                 stats.failed_datasets += 1
                 stats.failed_ids.append(str(dataset_ctx.investigation_row["id"]))
                 return
 
-            # Update prefix with real ARC ID if available
-            log_prefix = f"[ARC: {getattr(arc, 'Identifier', dataset_ctx.investigation_row['id'])}]"
-
-            # 3. Serialize (CPU-bound) -> Offload to ProcessPool
-            # We serialize here to get the size for logging and dict for API client
-            json_str = await asyncio.get_event_loop().run_in_executor(None, arc.ToROCrateJsonString)
-
             logger.info(
-                "%s Serialization complete. Payload size: %.2f MB. Uploading...",
+                "%s ARC build & serialization complete. Payload size: %.2f MB. Uploading...",
                 log_prefix,
                 len(json_str.encode("utf-8")) / (1024 * 1024),
             )
@@ -357,9 +367,8 @@ async def process_investigations(
     Returns:
         ProcessingStats.
     """
-    tracer = trace.get_tracer(__name__)
     stats = ProcessingStats()
-    with tracer.start_as_current_span("sql_to_arc.main.process_investigations"):
+    with trace.get_tracer(__name__).start_as_current_span("sql_to_arc.main.process_investigations"):
         # Step 1: Initialize concurrency control
         semaphore = asyncio.Semaphore(config.max_concurrent_arc_builds)
         logger.info("Starting streaming processing with max_concurrent_tasks=%d", config.max_concurrent_arc_builds)
@@ -378,15 +387,19 @@ async def process_investigations(
             # We use a set of tasks to keep track of running operations
             running_tasks: set[asyncio.Task] = set()
 
-            async for inv_row, studies_list, assays_dict in stream_investigation_datasets(
-                cur, batch_size=config.db_batch_size
-            ):
+            async for item in stream_investigation_datasets(cur, batch_size=config.db_batch_size):
                 stats.found_datasets += 1
 
+                # Backlog Flow Control: Prevent reading too much from DB if workers are busy.
+                # If we have more than double the workers in flight, wait for some to finish.
+                # This keeps the memory footprint low by stopping the stream producer.
+                if len(running_tasks) >= config.max_concurrent_arc_builds * 2:
+                    await asyncio.wait(running_tasks, return_when=asyncio.FIRST_COMPLETED)
+
                 dataset_ctx = DatasetContext(
-                    investigation_row=inv_row,
-                    studies=studies_list,
-                    assays_by_study=assays_dict,
+                    investigation_row=item[0],
+                    studies=item[1],
+                    assays_by_study=item[2],
                 )
 
                 # Create the processing task

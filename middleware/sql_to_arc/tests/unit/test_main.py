@@ -66,37 +66,13 @@ async def test_process_single_dataset_success(monkeypatch: pytest.MonkeyPatch) -
     mock_executor = MagicMock()
 
     # Mock loop and executor behavior
-    loop_future: asyncio.Future[MagicMock] = asyncio.Future()
-    arc_object = MagicMock()
-    arc_object.ToROCrateJsonString.return_value = '{"id": "arc-1", "Identifier": "1"}'
-    loop_future.set_result(arc_object)
-
-    # We need to mock serialization too (run_in_executor call 2)
-    # The first call builds ARC (returns arc_object)
-    # The second call serializes (returns string)
-
-    # Let's simplify by using side_effect for run_in_executor
-    async def side_effect(func: Any, *_args: Any) -> Any:
-        if func == arc_object.ToROCrateJsonString:
-            return '{"id": "arc-1", "Identifier": "1"}'
-        # Otherwise it's the build function
-        return arc_object
-
-    # But process_single_dataset calls `loop.run_in_executor(ctx.executor, ...)` for build
-    # and `loop.run_in_executor(None, ...)` for serialization.
-    # We need to mock the loop.
-
     loop_mock = MagicMock()
-    # Configure run_in_executor to handle both calls
-    # Call 1: build -> returns Future(arc_object)
-    # Call 2: serialize -> returns Future(json_str)
 
-    future1: asyncio.Future[MagicMock] = asyncio.Future()
-    future1.set_result(arc_object)
-    future2: asyncio.Future[str] = asyncio.Future()
-    future2.set_result('{"id": "arc-1", "Identifier": "1"}')
+    # Only ONE call now: build_arc_for_investigation returns JSON string directly
+    future: asyncio.Future[str] = asyncio.Future()
+    future.set_result('{"id": "arc-1", "Identifier": "1"}')
 
-    loop_mock.run_in_executor.side_effect = [future1, future2]
+    loop_mock.run_in_executor.return_value = future
 
     monkeypatch.setattr("asyncio.get_event_loop", lambda: loop_mock)
 
