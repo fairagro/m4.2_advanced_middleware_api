@@ -1,6 +1,7 @@
 """Integration tests for the SQL-to-ARC workflow."""
 
 import multiprocessing
+from collections.abc import AsyncGenerator
 from concurrent.futures import ProcessPoolExecutor
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock
@@ -92,33 +93,60 @@ async def test_main_workflow(
     # Patch Database to prevent real DB operations and ensure to_jsonld returns valid JSON
     mock_db_instance = MagicMock()
     mock_db_instance.to_jsonld.return_value = "{}"
-    # Patch bulk fetch methods to return test data
-    mock_db_instance.fetch_investigations_bulk.return_value = [
-        {"identifier": 1, "title": "Inv 1", "description": "Desc 1", "submission_time": None, "release_time": None},
-        {"identifier": 2, "title": "Inv 2", "description": "Desc 2", "submission_time": None, "release_time": None},
-    ]
-    mock_db_instance.fetch_studies_bulk.return_value = [
-        {
-            "id": 10,
-            "investigation_id": 1,
-            "title": "Study 1",
-            "description": "Desc S1",
-            "submission_time": None,
-            "release_time": None,
-        },
-        {
-            "id": 11,
-            "investigation_id": 2,
-            "title": "Study 2",
-            "description": "Desc S2",
-            "submission_time": None,
-            "release_time": None,
-        },
-    ]
-    mock_db_instance.fetch_assays_bulk.return_value = [
-        {"id": 100, "study_id": 10},
-        {"id": 101, "study_id": 11},
-    ]
+
+    # Mock DB stream methods
+    async def mock_gen(data: list[dict[str, Any]]) -> AsyncGenerator[dict[str, Any], None]:
+        for item in data:
+            yield item
+
+    mock_db_instance.stream_investigations.side_effect = lambda limit=None: mock_gen(  # noqa: ARG005
+        [
+            {
+                "identifier": "1",
+                "title": "Inv 1",
+                "description_text": "Desc 1",
+                "submission_date": None,
+                "public_release_date": None,
+            },
+            {
+                "identifier": "2",
+                "title": "Inv 2",
+                "description_text": "Desc 2",
+                "submission_date": None,
+                "public_release_date": None,
+            },
+        ]
+    )
+    mock_db_instance.stream_studies.side_effect = lambda investigation_ids: mock_gen(  # noqa: ARG005
+        [
+            {
+                "identifier": "10",
+                "investigation_ref": "1",
+                "title": "Study 1",
+                "description_text": "Desc S1",
+                "submission_date": None,
+                "public_release_date": None,
+            },
+            {
+                "identifier": "11",
+                "investigation_ref": "2",
+                "title": "Study 2",
+                "description_text": "Desc S2",
+                "submission_date": None,
+                "public_release_date": None,
+            },
+        ]
+    )
+    mock_db_instance.stream_assays.side_effect = lambda investigation_ids: mock_gen(  # noqa: ARG005
+        [
+            {"identifier": "100", "study_ref": "10", "investigation_ref": "1"},
+            {"identifier": "101", "study_ref": "11", "investigation_ref": "2"},
+        ]
+    )
+    mock_db_instance.stream_contacts.side_effect = lambda investigation_ids: mock_gen([])  # noqa: ARG005
+    mock_db_instance.stream_publications.side_effect = lambda investigation_ids: mock_gen([])  # noqa: ARG005
+    mock_db_instance.stream_annotation_tables.side_effect = lambda investigation_ids: mock_gen([])  # noqa: ARG005
+
     mocker.patch(
         "middleware.sql_to_arc.main.Database",
         return_value=mock_db_instance,
