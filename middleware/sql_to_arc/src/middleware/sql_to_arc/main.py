@@ -169,28 +169,35 @@ async def stream_investigation_datasets(
 
         investigation_ids = [row["id"] for row in rows]
 
-        # Fetch studies for this batch
-        await cur.execute(
-            "SELECT id, investigation_id, title, description, submission_time, release_time "
-            'FROM "ARC_Study" WHERE investigation_id = ANY(%s)',
-            (investigation_ids,),
-        )
-        study_rows = await cur.fetchall()
-        studies_by_inv: dict[int, list[dict[str, Any]]] = defaultdict(list)
-        for s in study_rows:
-            studies_by_inv[s["investigation_id"]].append(s)
+        if not cur.connection:
+            raise RuntimeError("Cursor has no connection attached")
 
-        # Fetch assays for these studies
-        study_ids = [s["id"] for s in study_rows]
-        assays_by_study: dict[int, list[dict[str, Any]]] = defaultdict(list)
-        if study_ids:
-            await cur.execute(
-                'SELECT id, study_id, measurement_type, technology_type FROM "ARC_Assay" WHERE study_id = ANY(%s)',
-                (study_ids,),
+        # Fetch studies for this batch using a separate cursor
+        # We MUST use a separate cursor because executing on 'cur' would Close
+        # the current result set (investigations) if it's not fully consumed/server-side.
+        # Even with server-side cursors, it's safer to use a dedicated cursor for nested queries.
+        async with cur.connection.cursor(row_factory=dict_row) as detail_cur:
+            await detail_cur.execute(
+                "SELECT id, investigation_id, title, description, submission_time, release_time "
+                'FROM "ARC_Study" WHERE investigation_id = ANY(%s)',
+                (investigation_ids,),
             )
-            assay_rows = await cur.fetchall()
-            for a in assay_rows:
-                assays_by_study[a["study_id"]].append(a)
+            study_rows = await detail_cur.fetchall()
+            studies_by_inv: dict[int, list[dict[str, Any]]] = defaultdict(list)
+            for s in study_rows:
+                studies_by_inv[s["investigation_id"]].append(s)
+
+            # Fetch assays for these studies
+            study_ids = [s["id"] for s in study_rows]
+            assays_by_study: dict[int, list[dict[str, Any]]] = defaultdict(list)
+            if study_ids:
+                await detail_cur.execute(
+                    'SELECT id, study_id, measurement_type, technology_type FROM "ARC_Assay" WHERE study_id = ANY(%s)',
+                    (study_ids,),
+                )
+                assay_rows = await detail_cur.fetchall()
+                for a in assay_rows:
+                    assays_by_study[a["study_id"]].append(a)
 
         # Re-fetch investigation rows if necessary? No, we have them in 'rows'.
         # But wait, we used the cursor for studies/assays!
