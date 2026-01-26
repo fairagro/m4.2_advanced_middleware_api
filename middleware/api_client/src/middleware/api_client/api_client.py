@@ -199,13 +199,13 @@ class ApiClient:
     async def create_or_update_arcs(
         self,
         rdi: str,
-        arcs: list["ARC"],
+        arcs: list["ARC | dict[str, Any]"],
     ) -> CreateOrUpdateArcsResponse:
         """Create or update ARCs in the FAIRagro Middleware API.
 
         Args:
             rdi (str): The RDI identifier.
-            arcs (list[ARC]): List of ARC objects from arctrl library.
+            arcs (list[ARC | dict[str, Any]]): List of ARC objects or serialized dicts.
 
         Returns:
             CreateOrUpdateArcsResponse: The response containing the result of the operation.
@@ -218,8 +218,11 @@ class ApiClient:
         # Serialize each ARC to RO-Crate JSON format
         serialized_arcs: list[dict[str, Any]] = []
         for arc in arcs:
-            json_str = arc.ToROCrateJsonString()
-            serialized_arcs.append(json.loads(json_str))
+            if isinstance(arc, dict):
+                serialized_arcs.append(arc)
+            else:
+                json_str = arc.ToROCrateJsonString()
+                serialized_arcs.append(json.loads(json_str))
 
         request = CreateOrUpdateArcsRequest(rdi=rdi, arcs=serialized_arcs)
         logger.debug("Request payload: %s", json.dumps(request.model_dump(), indent=2))
@@ -254,6 +257,35 @@ class ApiClient:
                 raise ApiClientError(f"Task failed: {error_msg}")
 
             # continue polling if PENDING, STARTED, RETRY etc.
+
+    async def create_or_update_arc(
+        self,
+        rdi: str,
+        arc: "ARC | dict[str, Any]",
+    ) -> CreateOrUpdateArcsResponse:
+        """Create or update a single ARC in the FAIRagro Middleware API.
+
+        This method is a wrapper around create_or_update_arcs for singular use cases.
+
+        Args:
+            rdi (str): The RDI identifier.
+            arc (ARC | dict[str, Any]): ARC object or already serialized ARC (as dict).
+
+        Returns:
+            CreateOrUpdateArcsResponse: The response containing the result of the operation.
+
+        Raises:
+            ApiClientError: If the request fails.
+        """
+        # Wrap the single ARC in a list and delegate to the plural method
+        # Note: create_or_update_arcs expects a list of ARC objects, but we need
+        # to support dicts too if we want to keep the optimization.
+        # The current implementation of create_or_update_arcs on this branch only
+        # supports ARC objects (type hint says list["ARC"]).
+        # We need to enhance create_or_update_arcs to support dicts first, or handle it here.
+        
+        # Let's enhance create_or_update_arcs to be more flexible, as per plan.
+        return await self.create_or_update_arcs(rdi=rdi, arcs=[arc])
 
     async def aclose(self) -> None:
         """Close the underlying HTTP client connection.

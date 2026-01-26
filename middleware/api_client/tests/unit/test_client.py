@@ -115,6 +115,54 @@ async def test_create_or_update_arcs_success(client_config: Config) -> None:
 
 @pytest.mark.asyncio
 @respx.mock
+async def test_create_or_update_arc_wrapper_success(client_config: Config) -> None:
+    """Test successful create_or_update_arc (singular wrapper) request."""
+    # Mock the API response
+    task_response = {"task_id": "task-123", "status": "processing"}
+    status_response = {
+        "task_id": "task-123",
+        "status": "SUCCESS",
+        "result": {
+            "client_id": "TestClient",
+            "message": "ARCs created successfully",
+            "rdi": "test-rdi",
+            "arcs": [
+                {
+                    "id": "test-arc-123",
+                    "status": "created",
+                    "timestamp": "2024-01-01T12:00:00Z",
+                }
+            ],
+        },
+    }
+
+    route_post = respx.post(f"{client_config.api_url}v1/arcs").mock(
+        return_value=httpx.Response(http.HTTPStatus.ACCEPTED, json=task_response)
+    )
+
+    respx.get(f"{client_config.api_url}v1/tasks/task-123").mock(
+        return_value=httpx.Response(http.HTTPStatus.OK, json=status_response)
+    )
+
+    # Send request with ARC object
+    arc = ARC.from_arc_investigation(ArcInvestigation.create(identifier="test-arc", title="Test ARC"))
+    async with ApiClient(client_config) as client:
+        response = await client.create_or_update_arc(
+            rdi="test-rdi",
+            arc=arc,
+        )
+
+    # Verify
+    assert route_post.called
+    assert isinstance(response, CreateOrUpdateArcsResponse)
+    assert response.rdi == "test-rdi"
+    assert len(response.arcs) == 1
+    assert response.arcs[0].id == "test-arc-123"
+    assert response.arcs[0].status == "created"
+
+
+@pytest.mark.asyncio
+@respx.mock
 async def test_create_or_update_arcs_http_error(client_config: Config) -> None:
     """Test create_or_update_arcs with HTTP error response."""
     # Mock an error response
