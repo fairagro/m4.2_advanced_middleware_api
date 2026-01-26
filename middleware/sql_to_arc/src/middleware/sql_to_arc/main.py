@@ -274,18 +274,15 @@ async def process_single_dataset(
         semaphore: Semaphore to limit concurrent active tasks.
         stats: Stats object to update (mutable).
     """
-    inv_id = dataset_ctx.investigation_row["id"]
-    log_prefix = f"[InvID: {inv_id}]"
+    log_prefix = f"[InvID: {dataset_ctx.investigation_row['id']}]"
 
     # Acquire semaphore to limit concurrency
     async with semaphore:
         try:
             # 1. Prepare data (already gathered by stream)
-            relevant_assays = {s["id"]: dataset_ctx.assays_by_study.get(s["id"], []) for s in dataset_ctx.studies}
-
             # Count details for stats/logging
             num_studies = len(dataset_ctx.studies)
-            num_assays = sum(len(a) for a in relevant_assays.values())
+            num_assays = sum(len(dataset_ctx.assays_by_study.get(s["id"], [])) for s in dataset_ctx.studies)
             stats.total_studies += num_studies
             stats.total_assays += num_assays
 
@@ -297,8 +294,7 @@ async def process_single_dataset(
             )
 
             # 2. Build ARC (CPU-bound) -> Offload to ProcessPool
-            loop = asyncio.get_event_loop()
-            arc = await loop.run_in_executor(
+            arc = await asyncio.get_event_loop().run_in_executor(
                 ctx.executor,
                 build_arc_for_investigation,
                 dataset_ctx.investigation_row,
@@ -309,35 +305,26 @@ async def process_single_dataset(
             if not arc:
                 logger.error("%s ARC build returned None", log_prefix)
                 stats.failed_datasets += 1
-                stats.failed_ids.append(str(inv_id))
+                stats.failed_ids.append(str(dataset_ctx.investigation_row["id"]))
                 return
 
-            # Retrieve Identifier from ARC for correlation
-            arc_identifier = getattr(arc, "Identifier", str(inv_id))
             # Update prefix with real ARC ID if available
-            log_prefix = f"[ARC: {arc_identifier}]"
+            log_prefix = f"[ARC: {getattr(arc, 'Identifier', dataset_ctx.investigation_row['id'])}]"
 
             # 3. Serialize (CPU-bound) -> Offload to ProcessPool
-            # We serialize here to:
-            #   a) Get the size for logging
-            #   b) Pass dict to ApiClient (avoiding double serialization)
-            json_str = await loop.run_in_executor(None, arc.ToROCrateJsonString)
-            serialized_arc = json.loads(json_str)
+            # We serialize here to get the size for logging and dict for API client
+            json_str = await asyncio.get_event_loop().run_in_executor(None, arc.ToROCrateJsonString)
 
-            # Calculate size in bytes
-            size_bytes = len(json_str.encode("utf-8"))
-            size_mb = size_bytes / (1024 * 1024)
             logger.info(
                 "%s Serialization complete. Payload size: %.2f MB. Uploading...",
                 log_prefix,
-                size_mb,
+                len(json_str.encode("utf-8")) / (1024 * 1024),
             )
 
             # 4. Upload (IO-bound)
-            # Use new create_or_update_arc method
             response = await ctx.client.create_or_update_arc(
                 rdi=ctx.rdi,
-                arc=serialized_arc,
+                arc=json.loads(json_str),
             )
             logger.info(
                 "%s Upload successful. API confirmed %d ARC(s) processed.",
@@ -348,11 +335,11 @@ async def process_single_dataset(
         except (ApiClientError, psycopg.Error, OSError) as e:
             logger.error("%s Processing failed: %s", log_prefix, e)
             stats.failed_datasets += 1
-            stats.failed_ids.append(str(inv_id))
+            stats.failed_ids.append(str(dataset_ctx.investigation_row["id"]))
         except Exception as e:  # pylint: disable=broad-exception-caught
             logger.error("%s Unexpected error: %s", log_prefix, e, exc_info=True)
             stats.failed_datasets += 1
-            stats.failed_ids.append(str(inv_id))
+            stats.failed_ids.append(str(dataset_ctx.investigation_row["id"]))
 
 
 async def process_investigations(
@@ -374,13 +361,13 @@ async def process_investigations(
     stats = ProcessingStats()
     with tracer.start_as_current_span("sql_to_arc.main.process_investigations"):
         # Step 1: Initialize concurrency control
-        limit = config.max_concurrent_arc_builds
-        semaphore = asyncio.Semaphore(limit)
-        logger.info("Starting streaming processing with max_concurrent_tasks=%d", limit)
+        semaphore = asyncio.Semaphore(config.max_concurrent_arc_builds)
+        logger.info("Starting streaming processing with max_concurrent_tasks=%d", config.max_concurrent_arc_builds)
 
         # Use ProcessPoolExecutor for CPU offloading
-        mp_context = multiprocessing.get_context("spawn")
-        with concurrent.futures.ProcessPoolExecutor(max_workers=limit, mp_context=mp_context) as executor:
+        with concurrent.futures.ProcessPoolExecutor(
+            max_workers=config.max_concurrent_arc_builds, mp_context=multiprocessing.get_context("spawn")
+        ) as executor:
             ctx = WorkerContext(
                 client=client,
                 rdi=config.rdi,
