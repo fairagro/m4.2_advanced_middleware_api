@@ -47,5 +47,5 @@ class Config(ConfigBase):
     def set_default_max_concurrent_tasks(self) -> "Config":
         """Set default max_concurrent_tasks if not provided."""
         if self.max_concurrent_tasks is None:
-            self.max_concurrent_tasks = self.max_concurrent_arc_builds * 2
+            self.max_concurrent_tasks = self.max_concurrent_arc_builds * 3
         return self
