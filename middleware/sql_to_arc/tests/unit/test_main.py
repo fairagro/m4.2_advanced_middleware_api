@@ -5,8 +5,9 @@ and worker investigation handling in the sql_to_arc pipeline.
 """
 
 import asyncio
+from collections.abc import AsyncGenerator
 from pathlib import Path
-from typing import Any, AsyncGenerator
+from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -110,12 +111,12 @@ async def test_process_investigations(monkeypatch: pytest.MonkeyPatch) -> None:
         for item in data:
             yield item
 
-    mock_db.stream_investigations.side_effect = lambda limit=None: mock_gen([{"identifier": "1"}, {"identifier": "2"}])
-    mock_db.stream_studies.side_effect = lambda ids: mock_gen([{"identifier": "10", "investigation_ref": "1"}])
-    mock_db.stream_assays.side_effect = lambda ids: mock_gen([])
-    mock_db.stream_contacts.side_effect = lambda ids: mock_gen([])
-    mock_db.stream_publications.side_effect = lambda ids: mock_gen([])
-    mock_db.stream_annotation_tables.side_effect = lambda ids: mock_gen([])
+    mock_db.stream_investigations.side_effect = lambda _limit=None: mock_gen([{"identifier": "1"}, {"identifier": "2"}])
+    mock_db.stream_studies.side_effect = lambda _ids: mock_gen([{"identifier": "10", "investigation_ref": "1"}])
+    mock_db.stream_assays.side_effect = lambda _ids: mock_gen([])
+    mock_db.stream_contacts.side_effect = lambda _ids: mock_gen([])
+    mock_db.stream_publications.side_effect = lambda _ids: mock_gen([])
+    mock_db.stream_annotation_tables.side_effect = lambda _ids: mock_gen([])
 
     mock_client = AsyncMock()
     mock_config = MagicMock(max_concurrent_arc_builds=2, rdi="test", debug_limit=10)
