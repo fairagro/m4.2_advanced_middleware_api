@@ -5,7 +5,8 @@ from typing import Any
 import pytest
 from arctrl import ARC  # type: ignore[import-untyped]
 
-from middleware.sql_to_arc.main import ArcBuildData, build_single_arc_task
+from middleware.sql_to_arc.builder import build_single_arc_task
+from middleware.sql_to_arc.models import ArcBuildData
 
 
 @pytest.fixture

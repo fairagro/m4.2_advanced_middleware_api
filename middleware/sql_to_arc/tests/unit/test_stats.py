@@ -3,7 +3,7 @@
 This module tests JSON-LD serialization and merging of ProcessingStats objects.
 """
 
-from middleware.sql_to_arc.main import ProcessingStats
+from middleware.sql_to_arc.stats import ProcessingStats
 
 
 def test_processing_stats_jsonld() -> None:

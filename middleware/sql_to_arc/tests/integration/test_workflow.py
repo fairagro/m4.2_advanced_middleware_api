@@ -19,7 +19,9 @@ from arctrl import ARC  # type: ignore[import-untyped]
 from middleware.api_client import ApiClient
 from middleware.shared.api_models.models import CreateOrUpdateArcsResponse
 from middleware.shared.config.config_base import OtelConfig
-from middleware.sql_to_arc.main import WorkerContext, main, process_worker_investigations
+from middleware.sql_to_arc.main import main
+from middleware.sql_to_arc.models import WorkerContext
+from middleware.sql_to_arc.processor import process_worker_investigations
 
 
 @pytest.fixture
@@ -139,7 +141,7 @@ class WorkflowTester:
             "sqlalchemy.ext.asyncio.AsyncSession",
             return_value=AsyncMock(__aenter__=AsyncMock(return_value=AsyncMock())),
         )
-        self.mocker.patch("middleware.sql_to_arc.main.concurrent.futures.ProcessPoolExecutor", MockExecutor)
+        self.mocker.patch("middleware.sql_to_arc.processor.concurrent.futures.ProcessPoolExecutor", MockExecutor)
 
         await main()
         return self.captured_arcs

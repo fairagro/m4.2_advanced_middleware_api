@@ -12,13 +12,13 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from middleware.sql_to_arc.main import (
-    ProcessingStats,
-    WorkerContext,
-    parse_args,
+from middleware.sql_to_arc.main import parse_args
+from middleware.sql_to_arc.models import WorkerContext
+from middleware.sql_to_arc.processor import (
     process_investigations,
     process_worker_investigations,
 )
+from middleware.sql_to_arc.stats import ProcessingStats
 
 
 class TestParseArgs:
@@ -127,7 +127,7 @@ async def test_process_investigations(monkeypatch: pytest.MonkeyPatch) -> None:
     async def mock_process_worker_inv(_ctx: WorkerContext, _invs: list[dict[str, Any]]) -> ProcessingStats:
         return ProcessingStats(found_datasets=0)
 
-    monkeypatch.setattr("middleware.sql_to_arc.main.process_worker_investigations", mock_process_worker_inv)
+    monkeypatch.setattr("middleware.sql_to_arc.processor.process_worker_investigations", mock_process_worker_inv)
 
     stats = await process_investigations(mock_db, mock_client, mock_config)
 
