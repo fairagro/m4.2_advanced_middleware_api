@@ -21,19 +21,20 @@ class Config(ConfigBase):
     max_concurrent_arc_builds: Annotated[
         int,
         Field(
-            description="Maximum number of ARCs to build concurrently within a batch",
+            description="Number of parallel worker processes in the CPU pool. Recommended: (CPU cores - 1).",
             ge=1,
         ),
     ] = 5
     max_concurrent_tasks: Annotated[
         int,
         Field(
+            default=None,  # Satisfy mypy, validator will set the 4x default
             description=(
-                "Maximum number of parallel tasks (IO + CPU). Defaults to 3x max_concurrent_arc_builds if not provided."
+                "Maximum number of parallel tasks (IO + CPU). Defaults to 4x max_concurrent_arc_builds if not provided."
             ),
             ge=1,
         ),
-    ]
+    ] = None  # type: ignore[assignment]
     db_batch_size: Annotated[
         int,
         Field(
@@ -70,5 +71,5 @@ class Config(ConfigBase):
         """Set default max_concurrent_tasks if not provided."""
         if isinstance(data, dict) and data.get("max_concurrent_tasks") is None:
             max_builds = data.get("max_concurrent_arc_builds", 5)
-            data["max_concurrent_tasks"] = int(max_builds) * 3
+            data["max_concurrent_tasks"] = int(max_builds) * 4
         return data

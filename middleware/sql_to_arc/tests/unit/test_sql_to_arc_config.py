@@ -83,9 +83,10 @@ def test_config_with_defaults() -> None:
         rdi="edaphobase",
         rdi_url="https://edaphobase.org",
         api_client=api_client_config,
-        max_concurrent_tasks=10,
         otel=OtelConfig(),
     )
 
     # Check defaults
     assert config.db_port == 5432  # Default port  # noqa: PLR2004
+    # Default is 4x max_concurrent_arc_builds (5 * 4 = 20)
+    assert config.max_concurrent_tasks == 20  # noqa: PLR2004
