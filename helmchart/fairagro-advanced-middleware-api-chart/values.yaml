@@ -127,9 +127,8 @@ celery:
     concurrency: 4
     persistence:
       enabled: true
-      size: 5Gi
-      accessMode: ReadWriteMany
-      # storageClass: ""
+      useEmptyDir: true
+      size: 100Mi
       mountPath: /var/cache/middleware/arc-cache
     serviceAccount:
       create: true
