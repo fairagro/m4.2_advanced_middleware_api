@@ -26,6 +26,16 @@ logger = logging.getLogger(__name__)
 T = TypeVar("T")
 
 
+def is_soft_git_error(exc: GitCommandError) -> bool:
+    """Check if a GitCommandError is an expected 'soft' error (e.g. repo/branch not found)."""
+    stderr = str(getattr(exc, "stderr", ""))
+    # Common messages for missing repo or branch
+    soft_patterns = [
+        "not found",
+    ]
+    return any(p in stderr.lower() for p in soft_patterns)
+
+
 class GitRepoConfig(BaseModel):
     """Configuration for Git CLI based ArcStore."""
 
@@ -99,16 +109,26 @@ class GitContext:
         with self._tracer.start_as_current_span(
             f"api.GitContext._run_git_command:{action}",
             attributes={"git.action": action},
+            set_status_on_exception=False,
         ) as span:
             try:
                 result = func(*args, **kwargs)
-                logger.info("Git %s succeeded", action)
+                logger.debug("Git %s succeeded", action)
                 return result
             except GitCommandError as exc:  # pragma: no cover - behavior validated indirectly
-                status = getattr(exc, "status", None)
-                status_msg = f" (status {status})" if status is not None else ""
-                logger.warning("Git %s failed%s: %s", action, status_msg, exc)
-                span.record_exception(exc)
+                if is_soft_git_error(exc):
+                    # Soft errors (like 404) are expected in some workflows
+                    # We log them at INFO (LS-remote) or DEBUG and don't mark span as error
+                    level = logging.DEBUG if action == "ls-remote" else logging.INFO
+                    logger.log(level, "Git %s failed as expected: %s", action, exc)
+                    span.add_event("git.expected_failure", attributes={"stderr": str(exc.stderr)})
+                    span.set_status(trace.Status(trace.StatusCode.OK))
+                else:
+                    status = getattr(exc, "status", None)
+                    status_msg = f" (status {status})" if status is not None else ""
+                    logger.warning("Git %s failed%s: %s", action, status_msg, exc)
+                    span.record_exception(exc)
+                    span.set_status(trace.Status(trace.StatusCode.ERROR, str(exc)))
                 raise
 
     def _apply_repo_config(self) -> None:
@@ -282,6 +302,7 @@ class GitRepo(ArcStore):
             with self._tracer.start_as_current_span(
                 "api.GitRepo._create_or_update",
                 attributes={"arc_id": arc_id},
+                set_status_on_exception=False,
             ) as span:
                 # Ensure remote exists before doing anything else (if manager is configured)
                 self._remote_provider.ensure_repo_exists(arc_id)
@@ -312,7 +333,12 @@ class GitRepo(ArcStore):
                         # Commit and push
                         ctx.commit_and_push(f"Update ARC {arc_id}")
                 except GitCommandError as e:
-                    span.record_exception(e)
+                    if is_soft_git_error(e):
+                        span.add_event("git.expected_failure", attributes={"stderr": str(e.stderr)})
+                        span.set_status(trace.Status(trace.StatusCode.OK))
+                    else:
+                        span.record_exception(e)
+                        span.set_status(trace.Status(trace.StatusCode.ERROR, str(e)))
                     # Try to diagnose connection issues
                     self._check_health()
                     raise
@@ -329,6 +355,7 @@ class GitRepo(ArcStore):
             with self._tracer.start_as_current_span(
                 "api.GitRepo._get",
                 attributes={"arc_id": arc_id},
+                set_status_on_exception=False,
             ) as span:
                 ctx_config = self._get_context_config(arc_id)
                 try:
@@ -355,8 +382,14 @@ class GitRepo(ArcStore):
                             span.record_exception(e)
                             return None
                 except GitCommandError as e:
-                    logger.debug("Failed to clone/access repo for %s: %s", arc_id, e)
-                    span.record_exception(e)
+                    if is_soft_git_error(e):
+                        logger.debug("Failed to clone/access repo for %s: %s", arc_id, e)
+                        span.add_event("git.expected_failure", attributes={"stderr": str(e.stderr)})
+                        span.set_status(trace.Status(trace.StatusCode.OK))
+                    else:
+                        logger.warning("Failed to clone/access repo for %s: %s", arc_id, e)
+                        span.record_exception(e)
+                        span.set_status(trace.Status(trace.StatusCode.ERROR, str(e)))
                     return None
 
         return await self._run_in_executor(_task)
@@ -375,6 +408,7 @@ class GitRepo(ArcStore):
             with self._tracer.start_as_current_span(
                 "api.GitRepo._exists",
                 attributes={"arc_id": arc_id},
+                set_status_on_exception=False,
             ) as span:
                 # We can try to ls-remote using the authenticated URL
                 url = self._remote_provider.get_repo_url(arc_id, authenticated=True)
@@ -382,18 +416,36 @@ class GitRepo(ArcStore):
 
                 g = git.cmd.Git()
                 try:
-                    with self._tracer.start_as_current_span("api.GitRepo._exists:ls-remote"):
-                        if self._config.command_timeout is not None:
-                            g.ls_remote(url, kill_after_timeout=self._config.command_timeout)
-                        else:
-                            g.ls_remote(url)
+                    with self._tracer.start_as_current_span(
+                        "api.GitRepo._exists:ls-remote",
+                        set_status_on_exception=False,
+                    ) as inner_span:
+                        try:
+                            if self._config.command_timeout is not None:
+                                g.ls_remote(url, kill_after_timeout=self._config.command_timeout)
+                            else:
+                                g.ls_remote(url)
+                            inner_span.set_status(trace.Status(trace.StatusCode.OK))
+                        except GitCommandError as e:
+                            if is_soft_git_error(e):
+                                inner_span.set_status(trace.Status(trace.StatusCode.OK))
+                                inner_span.add_event("git.expected_failure", attributes={"stderr": str(e.stderr)})
+                            else:
+                                inner_span.set_status(trace.Status(trace.StatusCode.ERROR, str(e)))
+                                inner_span.record_exception(e)
+                            raise
+
                     logger.info("Git ls-remote for %s succeeded", arc_id)
                     span.set_attribute("exists", True)
                     return True
                 except GitCommandError as e:
-                    logger.warning("Git ls-remote for %s failed", arc_id)
+                    if is_soft_git_error(e):
+                        logger.debug("Git ls-remote for %s failed (repo not found)", arc_id)
+                        span.set_status(trace.Status(trace.StatusCode.OK))
+                    else:
+                        logger.warning("Git ls-remote for %s failed: %s", arc_id, e)
+                        span.set_status(trace.Status(trace.StatusCode.ERROR, str(e)))
                     span.set_attribute("exists", False)
-                    span.record_exception(e)
                     return False
 
         return await self._run_in_executor(_task)

@@ -62,7 +62,7 @@ class Config(ConfigBase):
             description="Timeout in minutes for ARC generation. If exceeded, the investigation will be skipped.",
             ge=1,
         ),
-    ] = 60
+    ] = 30
 
     @model_validator(mode="before")
     @classmethod
