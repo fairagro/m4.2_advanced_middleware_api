@@ -3,11 +3,17 @@
 import json
 import multiprocessing
 from collections.abc import AsyncGenerator
-from concurrent.futures import ProcessPoolExecutor
+from concurrent.futures import ThreadPoolExecutor
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
+
+class MockExecutor(ThreadPoolExecutor):
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
+        kwargs.pop("mp_context", None)
+        super().__init__(*args, **kwargs)
+
 from arctrl import ARC  # type: ignore[import-untyped]
 
 from middleware.api_client import ApiClient
@@ -82,6 +88,7 @@ class WorkflowTester:
         # Patch configuration
         self.mock_config = MagicMock()
         self.mock_config.rdi = "test-rdi"
+        self.mock_config.rdi_url = "http://test.com"
         self.mock_config.max_concurrent_arc_builds = 1
         self.mock_config.log_level = "INFO"
         self.mock_config.otel = OtelConfig(endpoint=None, log_console_spans=False, log_level="INFO")
@@ -132,6 +139,7 @@ class WorkflowTester:
             "sqlalchemy.ext.asyncio.AsyncSession",
             return_value=AsyncMock(__aenter__=AsyncMock(return_value=AsyncMock())),
         )
+        self.mocker.patch("middleware.sql_to_arc.main.concurrent.futures.ProcessPoolExecutor", MockExecutor)
 
         await main()
         return self.captured_arcs
@@ -154,7 +162,7 @@ async def test_process_worker_investigations(mock_api_client: AsyncMock) -> None
     assays_by_study: dict[str, list[dict[str, Any]]] = {}
 
     mp_context = multiprocessing.get_context("spawn")
-    with ProcessPoolExecutor(max_workers=5, mp_context=mp_context) as executor:
+    with ThreadPoolExecutor(max_workers=5) as executor:
         ctx = WorkerContext(
             client=mock_api_client,
             rdi="edaphobase",
@@ -501,5 +509,79 @@ async def test_assay_with_complete_ontology_fields(workflow_tester: WorkflowTest
     assert assay.TechnologyPlatform.Name == "Illumina HiSeq 2500"
 
 
+@pytest.mark.asyncio
+async def test_assay_with_annotations(workflow_tester: WorkflowTester) -> None:
+    """
+    Test investigation with an assay and annotation table data.
 
+    Note: This is 'Neuland' because the reconstruction of tables from the flat
+    database view is still a TODO in main.py. This test ensures the workflow
+    runs and demonstrates how the data structure looks.
+    """
+    inv_id = "INV_ANN"
+    assay_id = "ASSAY_ANN"
+
+    investigations = [{"identifier": inv_id, "title": "Annotation Test"}]
+    assays = [{"identifier": assay_id, "investigation_ref": inv_id}]
+
+    # Example annotation rows representing a table
+    # These rows logically form a table 'Sample Metadata' with 2 rows and 2 columns
+    annotations = [
+        {
+            "investigation_ref": inv_id,
+            "target_type": "assay",
+            "target_ref": assay_id,
+            "table_name": "Sample Metadata",
+            "row_index": 0,
+            "column_name": "Source Name",
+            "value": "Sample 1",
+        },
+        {
+            "investigation_ref": inv_id,
+            "target_type": "assay",
+            "target_ref": assay_id,
+            "table_name": "Sample Metadata",
+            "row_index": 0,
+            "column_name": "Characteristics [Species]",
+            "value": "Homo sapiens",
+        },
+        {
+            "investigation_ref": inv_id,
+            "target_type": "assay",
+            "target_ref": assay_id,
+            "table_name": "Sample Metadata",
+            "row_index": 1,
+            "column_name": "Source Name",
+            "value": "Sample 2",
+        },
+        {
+            "investigation_ref": inv_id,
+            "target_type": "assay",
+            "target_ref": assay_id,
+            "table_name": "Sample Metadata",
+            "row_index": 1,
+            "column_name": "Characteristics [Species]",
+            "value": "Mus musculus",
+        },
+    ]
+
+    workflow_tester.set_db_content(
+        investigations=investigations,
+        assays=assays,
+        annotations=annotations,
+    )
+
+    # Currently, _process_annotation_tables in main.py is a placeholder.
+    # The test verifies that the pipeline handles the data gracefully.
+    arcs = await workflow_tester.run()
+
+    assert len(arcs) == 1
+    arc = arcs[0]
+    assert arc.Identifier == inv_id
+    assert arc.Assays[0].Identifier == assay_id
+
+    # For now, we expect no tables to be created because of the placeholder.
+    # When implemented, TableCount should be 1.
+    assert arc.Assays[0].TableCount == 1
+    assert arc.Assays[0].Tables[0].Name == "Sample Metadata"
 
