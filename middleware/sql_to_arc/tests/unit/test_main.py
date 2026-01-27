@@ -57,7 +57,9 @@ async def test_process_single_dataset_success(monkeypatch: pytest.MonkeyPatch) -
     """Test successful single dataset processing."""
     mock_client = AsyncMock()
     # Mock create_or_update_arc response
-    mock_client.create_or_update_arc.return_value = MagicMock(arcs=[MagicMock(id="arc-1")])
+    mock_arc_resp = MagicMock()
+    mock_arc_resp.status.value = "created"
+    mock_client.create_or_update_arc.return_value = MagicMock(arcs=[mock_arc_resp])
 
     investigation = {"id": 1, "title": "Inv", "description": "Desc"}
     studies_by_investigation: dict[int, list[dict[str, Any]]] = {1: [{"id": 10}]}

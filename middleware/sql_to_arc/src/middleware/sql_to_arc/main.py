@@ -375,9 +375,16 @@ async def process_single_dataset(
                 rdi=ctx.rdi,
                 arc=json.loads(json_str),
             )
+            # Use status from response if available (e.g., 'created', 'updated')
+            status_text = "processed"
+            if response.arcs:
+                status_text = response.arcs[0].status.value
+
             logger.info(
-                "%s ARC uploaded successfully.",
+                "%s ARC %s successfully (RDI: %s).",
                 log_prefix,
+                status_text,
+                ctx.rdi,
             )
 
         except (ApiClientError, psycopg.Error, OSError) as e:
