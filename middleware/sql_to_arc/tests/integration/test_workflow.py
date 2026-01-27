@@ -215,9 +215,7 @@ async def test_main_workflow(
     for arc in all_arcs:
         # Find the investigation node in @graph
         investigation_node = next(
-            (node for node in arc.get("@graph", []) 
-             if "Investigation" in node.get("additionalType", "")),
-            None
+            (node for node in arc.get("@graph", []) if "Investigation" in node.get("additionalType", "")), None
         )
         if investigation_node:
             identifiers.add(investigation_node.get("identifier"))
