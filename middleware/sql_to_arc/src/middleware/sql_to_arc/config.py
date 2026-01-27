@@ -42,6 +42,27 @@ class Config(ConfigBase):
         ),
     ] = 100
     api_client: Annotated[ApiClientConfig, Field(description="API Client configuration")]
+    max_studies: Annotated[
+        int,
+        Field(
+            description="Maximum number of studies per investigation. Investigations exceeding this will be skipped.",
+            ge=1,
+        ),
+    ] = 5000
+    max_assays: Annotated[
+        int,
+        Field(
+            description="Maximum number of assays per investigation. Investigations exceeding this will be skipped.",
+            ge=1,
+        ),
+    ] = 10000
+    arc_generation_timeout_minutes: Annotated[
+        int,
+        Field(
+            description="Timeout in minutes for ARC generation. If exceeded, the investigation will be skipped.",
+            ge=1,
+        ),
+    ] = 60
 
     @model_validator(mode="before")
     @classmethod

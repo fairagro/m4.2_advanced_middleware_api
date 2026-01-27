@@ -64,6 +64,9 @@ async def test_process_single_dataset(mock_api_client: AsyncMock) -> None:
             client=mock_api_client,
             rdi="edaphobase",
             executor=executor,
+            max_studies=5000,
+            max_assays=10000,
+            arc_generation_timeout_minutes=60,
         )
         semaphore = asyncio.Semaphore(1)
         stats = ProcessingStats()
@@ -102,6 +105,9 @@ def mock_main_config(mocker: MagicMock) -> MagicMock:
     config.api_client = MagicMock()
     config.log_level = "INFO"
     config.otel = OtelConfig(endpoint=None, log_console_spans=False, log_level="INFO")
+    config.max_studies = 5000
+    config.max_assays = 10000
+    config.arc_generation_timeout_minutes = 60
 
     mocker.patch("middleware.sql_to_arc.main.ConfigWrapper.from_yaml_file")
     mocker.patch("middleware.sql_to_arc.main.Config.from_config_wrapper", return_value=config)

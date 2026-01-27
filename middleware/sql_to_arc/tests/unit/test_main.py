@@ -80,6 +80,9 @@ async def test_process_single_dataset_success(monkeypatch: pytest.MonkeyPatch) -
         client=mock_client,
         rdi="test_rdi",
         executor=mock_executor,
+        max_studies=5000,
+        max_assays=10000,
+        arc_generation_timeout_minutes=60,
     )
 
     stats = ProcessingStats()
@@ -118,6 +121,9 @@ async def test_process_single_dataset_failure(monkeypatch: pytest.MonkeyPatch) -
         client=mock_client,
         rdi="test_rdi",
         executor=mock_executor,
+        max_studies=5000,
+        max_assays=10000,
+        arc_generation_timeout_minutes=60,
     )
 
     semaphore = asyncio.Semaphore(1)
@@ -137,7 +143,15 @@ async def test_process_investigations(monkeypatch: pytest.MonkeyPatch) -> None:
     """Test full process_investigations flow."""
     mock_cursor = AsyncMock()
     mock_client = AsyncMock()
-    mock_config = MagicMock(max_concurrent_arc_builds=2, max_concurrent_tasks=4, rdi="test", db_batch_size=100)
+    mock_config = MagicMock(
+        max_concurrent_arc_builds=2,
+        max_concurrent_tasks=4,
+        rdi="test",
+        db_batch_size=100,
+        max_studies=5000,
+        max_assays=10000,
+        arc_generation_timeout_minutes=60,
+    )
 
     # Mock stream_investigation_datasets
     async def mock_stream(*_args: Any, **_kwargs: Any) -> AsyncGenerator[tuple[dict, list, dict], None]:

@@ -262,6 +262,9 @@ class WorkerContext(BaseModel):
     client: Any  # ApiClient, but Any to allow mocking
     rdi: str
     executor: Any  # ProcessPoolExecutor is not Pydantic-friendly easily, so Any
+    max_studies: int
+    max_assays: int
+    arc_generation_timeout_minutes: int
 
     model_config = ConfigDict(arbitrary_types_allowed=True)
 
@@ -309,15 +312,51 @@ async def process_single_dataset(
                 num_assays,
             )
 
+            # Check size limits
+            if num_studies > ctx.max_studies:
+                logger.warning(
+                    "%s Skipping: study count (%d) exceeds limit (%d).",
+                    log_prefix,
+                    num_studies,
+                    ctx.max_studies,
+                )
+                stats.failed_datasets += 1
+                stats.failed_ids.append(str(dataset_ctx.investigation_row["id"]))
+                return
+
+            if num_assays > ctx.max_assays:
+                logger.warning(
+                    "%s Skipping: assay count (%d) exceeds limit (%d).",
+                    log_prefix,
+                    num_assays,
+                    ctx.max_assays,
+                )
+                stats.failed_datasets += 1
+                stats.failed_ids.append(str(dataset_ctx.investigation_row["id"]))
+                return
+
             # 2. Build & Serialize ARC (CPU-bound) -> Offload to ProcessPool
             # We return the JSON string directly from the worker to allow early GC of ARC objects
-            json_str = await asyncio.get_event_loop().run_in_executor(
-                ctx.executor,
-                build_arc_for_investigation,
-                dataset_ctx.investigation_row,
-                dataset_ctx.studies,
-                dataset_ctx.assays_by_study,
-            )
+            try:
+                json_str = await asyncio.wait_for(
+                    asyncio.get_event_loop().run_in_executor(
+                        ctx.executor,
+                        build_arc_for_investigation,
+                        dataset_ctx.investigation_row,
+                        dataset_ctx.studies,
+                        dataset_ctx.assays_by_study,
+                    ),
+                    timeout=ctx.arc_generation_timeout_minutes * 60,
+                )
+            except asyncio.TimeoutError:
+                logger.error(
+                    "%s ARC generation timed out after %d minutes.",
+                    log_prefix,
+                    ctx.arc_generation_timeout_minutes,
+                )
+                stats.failed_datasets += 1
+                stats.failed_ids.append(str(dataset_ctx.investigation_row["id"]))
+                return
 
             if not json_str:
                 logger.error("%s ARC build/serialization failed", log_prefix)
@@ -384,6 +423,9 @@ async def process_investigations(
                 client=client,
                 rdi=config.rdi,
                 executor=executor,
+                max_studies=config.max_studies,
+                max_assays=config.max_assays,
+                arc_generation_timeout_minutes=config.arc_generation_timeout_minutes,
             )
 
             # Step 2: Stream and spawn tasks
