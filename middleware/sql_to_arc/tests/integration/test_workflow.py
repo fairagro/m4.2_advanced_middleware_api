@@ -108,6 +108,7 @@ def mock_main_config(mocker: MagicMock) -> MagicMock:
     config.max_studies = 5000
     config.max_assays = 10000
     config.arc_generation_timeout_minutes = 60
+    config.rdi_url = "https://example.com"  # Real string for JSON serialization
 
     mocker.patch("middleware.sql_to_arc.main.ConfigWrapper.from_yaml_file")
     mocker.patch("middleware.sql_to_arc.main.Config.from_config_wrapper", return_value=config)
@@ -208,3 +209,17 @@ async def test_main_workflow(
 
     all_arcs = [call.kwargs["arc"] for call in mock_api_client.create_or_update_arc.call_args_list]
     assert len(all_arcs) == 2  # noqa: PLR2004
+
+    # Verify content of uploaded ARCs (Identifiers from invs list)
+    identifiers = set()
+    for arc in all_arcs:
+        # Find the investigation node in @graph
+        investigation_node = next(
+            (node for node in arc.get("@graph", []) 
+             if "Investigation" in node.get("additionalType", "")),
+            None
+        )
+        if investigation_node:
+            identifiers.add(investigation_node.get("identifier"))
+
+    assert identifiers == {"1", "2"}

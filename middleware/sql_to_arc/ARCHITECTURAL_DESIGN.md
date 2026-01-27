@@ -86,7 +86,7 @@ Um die CPU-Auslastung zu maximieren, wird die Anzahl der gleichzeitig aktiven Ta
 
 ---
 
-## 5. Fehlerbehandlung & Monitoring
+## 6. Fehlerbehandlung & Monitoring
 
 - **Gezieltes Exception Handling:** Fehler beim Upload oder beim Build führen nicht zum Abbruch des gesamten Laufs.
 - **ProcessingStats:** Jeder Erfolg und Fehler wird mit ID erfasst und am Ende als JSON-LD Report ausgegeben.
@@ -94,7 +94,7 @@ Um die CPU-Auslastung zu maximieren, wird die Anzahl der gleichzeitig aktiven Ta
 
 ---
 
-## 6. Zusammenfassung der Design-Entscheidungen
+## 7. Zusammenfassung der Design-Entscheidungen
 
 | Problem | Lösung | Grund |
 | :--- | :--- | :--- |

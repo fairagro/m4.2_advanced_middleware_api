@@ -200,12 +200,6 @@ async def stream_investigation_datasets(
                 for a in assay_rows:
                     assays_by_study[a["study_id"]].append(a)
 
-        # Re-fetch investigation rows if necessary? No, we have them in 'rows'.
-        # But wait, we used the cursor for studies/assays!
-        # CAUTION: If using a single connection/cursor, we MUST fetch all studies/assays
-        # before we can use the cursor again for the next batch of investigations.
-        # This is why we use fetchmany(batch_size) and then do the detail queries.
-
         for inv_row in rows:
             inv_id = inv_row["id"]
             yield inv_row, studies_by_inv[inv_id], assays_by_study
