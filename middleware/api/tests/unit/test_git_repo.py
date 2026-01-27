@@ -382,3 +382,38 @@ async def test_get_arc_load_os_error(git_repo: GitRepo) -> None:
 
         result = await git_repo._get("arc1")
         assert result is None
+
+
+@pytest.mark.asyncio
+async def test_get_arc_cleanup_os_error(git_repo: GitRepo) -> None:
+    """Test _get handles OSError during cleanup."""
+    with (
+        patch("middleware.api.arc_store.git_repo.GitContext") as mock_ctx,
+        patch("middleware.api.arc_store.git_repo.ARC") as mock_arc,
+        patch("middleware.api.arc_store.git_repo.shutil.rmtree") as mock_rmtree,
+        patch("asyncio.get_running_loop") as mock_get_loop,
+    ):
+        mock_loop = MagicMock()
+        mock_get_loop.return_value = mock_loop
+
+        def run_and_return_future(_executor: object, func: Callable[..., Any], *args: object) -> asyncio.Future[Any]:
+            res = func(*args)
+            f: asyncio.Future[Any] = asyncio.Future()
+            f.set_result(res)
+            return f
+
+        mock_loop.run_in_executor.side_effect = run_and_return_future
+
+        mock_ctx_instance = mock_ctx.return_value
+        mock_ctx_instance.__enter__.return_value = mock_ctx_instance
+        mock_ctx_instance.repo = MagicMock()
+
+        mock_arc.load.return_value = "MyARC"
+        mock_rmtree.side_effect = OSError("Cleanup failed")
+
+        # We need to make sure the path exists so rmtree is called
+        with patch("middleware.api.arc_store.git_repo.Path.exists", return_value=True):
+            result = await git_repo._get("arc1")
+
+        assert result == "MyARC"
+        mock_rmtree.assert_called_once()

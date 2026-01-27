@@ -342,9 +342,13 @@ class GitRepo(ArcStore):
                     # Try to diagnose connection issues
                     self._check_health()
                     raise
-                except Exception as e:
-                    span.record_exception(e)
-                    raise
+                finally:
+                    # Clean up local repository to prevent inode exhaustion
+                    if ctx_config.local_path.exists():
+                        try:
+                            shutil.rmtree(ctx_config.local_path)
+                        except OSError as e:
+                            logger.warning("Failed to clean up local path %s: %s", ctx_config.local_path, e)
 
         await self._run_in_executor(_task)
 
@@ -373,14 +377,6 @@ class GitRepo(ArcStore):
                             logger.warning("File system error loading ARC from repo %s: %s", arc_id, e)
                             span.record_exception(e)
                             return None
-                        except Exception as e:  # pylint: disable=broad-exception-caught # noqa: BLE001
-                            logger.warning(
-                                "Failed to load ARC from repo %s (might not be an ARC or invalid): %s",
-                                arc_id,
-                                e,
-                            )
-                            span.record_exception(e)
-                            return None
                 except GitCommandError as e:
                     if is_soft_git_error(e):
                         logger.debug("Failed to clone/access repo for %s: %s", arc_id, e)
@@ -391,6 +387,21 @@ class GitRepo(ArcStore):
                         span.record_exception(e)
                         span.set_status(trace.Status(trace.StatusCode.ERROR, str(e)))
                     return None
+                except Exception as e:  # pylint: disable=broad-exception-caught # noqa: BLE001
+                    logger.warning(
+                        "Failed to load ARC from repo %s (might not be an ARC or invalid): %s",
+                        arc_id,
+                        e,
+                    )
+                    span.record_exception(e)
+                    return None
+                finally:
+                    # Clean up local repository to prevent inode exhaustion
+                    if ctx_config.local_path.exists():
+                        try:
+                            shutil.rmtree(ctx_config.local_path)
+                        except OSError as e:
+                            logger.warning("Failed to clean up local path %s: %s", ctx_config.local_path, e)
 
         return await self._run_in_executor(_task)
 
