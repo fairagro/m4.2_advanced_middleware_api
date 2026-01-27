@@ -12,7 +12,7 @@ import pytest
 from git.exc import GitCommandError
 from pydantic import SecretStr
 
-from middleware.api.arc_store.git_repo import GitContext, GitContextConfig, GitRepo, GitRepoConfig
+from middleware.api.arc_store.git_repo import GitContext, GitContextConfig, GitRepo, GitRepoConfig, is_soft_git_error
 
 
 @pytest.fixture
@@ -417,3 +417,64 @@ async def test_get_arc_cleanup_os_error(git_repo: GitRepo) -> None:
 
         assert result == "MyARC"
         mock_rmtree.assert_called_once()
+
+
+def test_is_soft_git_error() -> None:
+    """Test is_soft_git_error helper."""
+    
+    # Positive case
+    err = GitCommandError("command", 1, "not found")
+    assert is_soft_git_error(err) is True
+    
+    # Negative case
+    err = GitCommandError("command", 1, "permission denied")
+    assert is_soft_git_error(err) is False
+
+
+@patch("middleware.api.arc_store.git_repo.Repo")
+def test_git_context_sync_fail(mock_repo: MagicMock, tmp_path: Path) -> None:
+    """Test GitContext._sync_existing_repo handles failures."""
+    target_path = tmp_path / "repo"
+    target_path.mkdir()
+    (target_path / ".git").mkdir()
+
+    config = GitContextConfig(
+        repo_url=SecretStr("https://example.com/repo.git"),
+        branch="main",
+        user_name=None,
+        user_email=None,
+        local_path=target_path,
+    )
+    
+    # Mock sync failure
+    mock_repo_instance = mock_repo.return_value
+    mock_repo_instance.remotes.origin.fetch.side_effect = GitCommandError("fetch", "fail")
+
+    with GitContext(config) as ctx:
+        assert ctx.repo is not None
+        # Should log warning and proceed (back to handles_init error logic if called from enter)
+
+
+@pytest.mark.asyncio
+async def test_exists_unexpected_error(git_repo: GitRepo) -> None:
+    """Test _exists handles unexpected (non-soft) git error."""
+    with (
+        patch("git.cmd.Git") as mock_git,
+        patch("asyncio.get_running_loop") as mock_get_loop,
+    ):
+        mock_loop = MagicMock()
+        mock_get_loop.return_value = mock_loop
+
+        def run_and_return_future(_executor: object, func: Callable[..., Any], *args: object) -> asyncio.Future[Any]:
+            res = func(*args)
+            f: asyncio.Future[Any] = asyncio.Future()
+            f.set_result(res)
+            return f
+
+        mock_loop.run_in_executor.side_effect = run_and_return_future
+
+        mock_git_instance = mock_git.return_value
+        # Unexpected error
+        mock_git_instance.ls_remote.side_effect = GitCommandError("ls-remote", "severe error")
+
+        assert await git_repo._exists("arc1") is False
