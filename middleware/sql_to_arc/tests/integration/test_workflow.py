@@ -282,3 +282,76 @@ async def test_investigation_with_publications_and_contacts(workflow_tester: Wor
     assert emails == {"john.doe@example.com", "jane.smith@example.com"}
     assert any(c.LastName == "Doe" for c in arc.Contacts)
     assert any(oa.Name == "Data Curator" for c in arc.Contacts for oa in c.Roles)
+    
+@pytest.mark.asyncio
+async def test_study_with_publications_and_contacts(workflow_tester: WorkflowTester) -> None:
+    """Test study with multiple publications and contacts at the study level."""
+    inv_id = "INV_S"
+    study_id = "STUDY_1"
+
+    investigations = [{"identifier": inv_id, "title": "Study Level Metadata Test"}]
+    studies = [{"identifier": study_id, "investigation_ref": inv_id, "title": "Target Study"}]
+
+    publications = [
+        {
+            "investigation_ref": inv_id,
+            "target_type": "study",
+            "target_ref": study_id,
+            "title": "Study Specific Paper 1",
+            "doi": "10.1234/study.1",
+        },
+        {
+            "investigation_ref": inv_id,
+            "target_type": "study",
+            "target_ref": study_id,
+            "title": "Study Specific Paper 2",
+            "doi": "10.1234/study.2",
+        },
+    ]
+
+    contacts = [
+        {
+            "investigation_ref": inv_id,
+            "target_type": "study",
+            "target_ref": study_id,
+            "last_name": "Scientist",
+            "first_name": "Alice",
+            "email": "alice@example.com",
+            "roles": json.dumps([{"term": "Collaborator"}]),
+        },
+        {
+            "investigation_ref": inv_id,
+            "target_type": "study",
+            "target_ref": study_id,
+            "last_name": "Researcher",
+            "first_name": "Bob",
+            "email": "bob@example.com",
+            "roles": json.dumps([{"term": "Lead Scientist"}]),
+        },
+    ]
+
+    workflow_tester.set_db_content(
+        investigations=investigations,
+        studies=studies,
+        publications=publications,
+        contacts=contacts,
+    )
+
+    arcs = await workflow_tester.run()
+
+    assert len(arcs) == 1
+    arc = arcs[0]
+    assert len(arc.Studies) == 1
+    study = arc.Studies[0]
+    assert study.Identifier == study_id
+
+    # Verify Study Publications
+    assert len(study.Publications) == 2  # noqa: PLR2004
+    titles = {p.Title for p in study.Publications}
+    assert titles == {"Study Specific Paper 1", "Study Specific Paper 2"}
+
+    # Verify Study Contacts
+    assert len(study.Contacts) == 2  # noqa: PLR2004
+    emails = {c.EMail for c in study.Contacts}
+    assert emails == {"alice@example.com", "bob@example.com"}
+
