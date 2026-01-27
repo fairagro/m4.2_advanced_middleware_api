@@ -136,19 +136,18 @@ async def test_create_multiple_arcs(client_config: Config) -> None:
     """Test that creating multiple ARCs (passing a list) raises a TypeError."""
     # Since the method signature expects a single ARC/dict, passing a list
     # generally won't work. We verify it actually fails.
-    
+
     arc1 = ARC.from_arc_investigation(ArcInvestigation.create(identifier="arc-1", title="ARC 1"))
     arc2 = ARC.from_arc_investigation(ArcInvestigation.create(identifier="arc-2", title="ARC 2"))
-    
+
     async with ApiClient(client_config) as client:
         # We expect a failure because we are passing a list where a single item is expected
         # This will likely fail in isinstance checks or attribute access inside the method
         with pytest.raises((AttributeError, TypeError, Exception)):
-             await client.create_or_update_arc(
+            await client.create_or_update_arc(
                 rdi="test-rdi",
                 arc=[arc1, arc2],  # type: ignore
             )
-
 
 
 @pytest.mark.asyncio
