@@ -8,6 +8,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
+from arctrl import ARC  # type: ignore[import-untyped]
 from middleware.api_client import ApiClient
 from middleware.shared.api_models.models import CreateOrUpdateArcsResponse
 from middleware.shared.config.config_base import OtelConfig
@@ -48,6 +49,92 @@ def mock_api_client() -> AsyncMock:
     return client
 
 
+class WorkflowTester:
+    """Helper class to simplify integration tests for sql_to_arc."""
+
+    def __init__(self, mocker: MagicMock, mock_api_client: AsyncMock) -> None:
+        self.mocker = mocker
+        self.api_client = mock_api_client
+        self.db = MagicMock()
+        self.db.to_jsonld.return_value = "{}"
+        self.captured_arcs: list[ARC] = []
+
+        # Default empty mocks
+        self.set_db_content()
+
+        # Patch Database class
+        mocker.patch("middleware.sql_to_arc.main.Database", return_value=self.db)
+
+        # Patch API Client context manager
+        mocker.patch(
+            "middleware.sql_to_arc.main.ApiClient",
+            return_value=AsyncMock(__aenter__=AsyncMock(return_value=self.api_client)),
+        )
+
+        # Patch configuration
+        self.mock_config = MagicMock()
+        self.mock_config.rdi = "test-rdi"
+        self.mock_config.max_concurrent_arc_builds = 1
+        self.mock_config.log_level = "INFO"
+        self.mock_config.otel = OtelConfig(endpoint=None, log_console_spans=False, log_level="INFO")
+        mock_conn = MagicMock()
+        mock_conn.get_secret_value.return_value = "sqlite+aiosqlite:///:memory:"
+        self.mock_config.connection_string = mock_conn
+
+        mocker.patch("middleware.sql_to_arc.main.ConfigWrapper.from_yaml_file")
+        mocker.patch("middleware.sql_to_arc.main.Config.from_config_wrapper", return_value=self.mock_config)
+        mocker.patch("middleware.sql_to_arc.main.configure_logging")
+
+        # Capture ARCs on API call
+        async def capture_arcs(rdi: str, arcs: list[ARC]) -> CreateOrUpdateArcsResponse:
+            self.captured_arcs.extend(arcs)
+            return CreateOrUpdateArcsResponse(client_id="test", message="success", rdi=rdi, arcs=[])
+
+        self.api_client.create_or_update_arcs.side_effect = capture_arcs
+
+    def _as_gen(self, data: list[dict[str, Any]]) -> AsyncGenerator[dict[str, Any], None]:
+        async def gen() -> AsyncGenerator[dict[str, Any], None]:
+            for item in data:
+                yield item
+
+        return gen()
+
+    def set_db_content(
+        self,
+        investigations: list[dict[str, Any]] | None = None,
+        studies: list[dict[str, Any]] | None = None,
+        assays: list[dict[str, Any]] | None = None,
+        contacts: list[dict[str, Any]] | None = None,
+        publications: list[dict[str, Any]] | None = None,
+        annotations: list[dict[str, Any]] | None = None,
+    ) -> None:
+        """Mock the database streaming methods with provided data."""
+        self.db.stream_investigations.side_effect = lambda limit=None: self._as_gen(investigations or [])
+        self.db.stream_studies.side_effect = lambda investigation_ids: self._as_gen(studies or [])
+        self.db.stream_assays.side_effect = lambda investigation_ids: self._as_gen(assays or [])
+        self.db.stream_contacts.side_effect = lambda investigation_ids: self._as_gen(contacts or [])
+        self.db.stream_publications.side_effect = lambda investigation_ids: self._as_gen(publications or [])
+        self.db.stream_annotation_tables.side_effect = lambda investigation_ids: self._as_gen(annotations or [])
+
+    async def run(self) -> list[ARC]:
+        """Execute the main workflow and return captured ARC objects."""
+        # Prevent real engine creation
+        self.mocker.patch("sqlalchemy.ext.asyncio.create_async_engine", return_value=MagicMock())
+        self.mocker.patch(
+            "sqlalchemy.ext.asyncio.AsyncSession",
+            return_value=AsyncMock(__aenter__=AsyncMock(return_value=AsyncMock())),
+        )
+
+        await main()
+        return self.captured_arcs
+
+
+@pytest.fixture
+def workflow_tester(mocker: MagicMock, mock_api_client: AsyncMock) -> WorkflowTester:
+    """Fixture providing a WorkflowTester instance."""
+    return WorkflowTester(mocker, mock_api_client)
+
+
 @pytest.mark.asyncio
 async def test_process_worker_investigations(mock_api_client: AsyncMock) -> None:
     """Test worker investigations processing."""
@@ -83,140 +170,49 @@ async def test_process_worker_investigations(mock_api_client: AsyncMock) -> None
 
 
 @pytest.mark.asyncio
-# TODO: fix this test. Neither ChatGPT 4.1 nor me is able to.
-async def test_main_workflow(
-    mocker: MagicMock,
-    mock_db_connection: AsyncMock,
-    mock_api_client: AsyncMock,
-) -> None:
-    """Test the main workflow with mocked DB and API."""
-    # Patch Database to prevent real DB operations and ensure to_jsonld returns valid JSON
-    mock_db_instance = MagicMock()
-    mock_db_instance.to_jsonld.return_value = "{}"
+async def test_main_workflow(workflow_tester: WorkflowTester) -> None:
+    """Test the main workflow with mocked DB and API using WorkflowTester."""
+    # Setup DB data
+    investigations = [
+        {"identifier": "1", "title": "Inv 1", "description_text": "Desc 1"},
+        {"identifier": "2", "title": "Inv 2", "description_text": "Desc 2"},
+    ]
+    studies = [
+        {"identifier": "10", "investigation_ref": "1", "title": "Study 1", "description_text": "Desc S1"},
+        {"identifier": "11", "investigation_ref": "2", "title": "Study 2", "description_text": "Desc S2"},
+    ]
+    assays = [
+        {"identifier": "100", "study_ref": '["10"]', "investigation_ref": "1"},
+        {"identifier": "101", "study_ref": '["11"]', "investigation_ref": "2"},
+    ]
 
-    # Mock DB stream methods
-    async def mock_gen(data: list[dict[str, Any]]) -> AsyncGenerator[dict[str, Any], None]:
-        for item in data:
-            yield item
-
-    mock_db_instance.stream_investigations.side_effect = lambda limit=None: mock_gen(  # noqa: ARG005
-        [
-            {
-                "identifier": "1",
-                "title": "Inv 1",
-                "description_text": "Desc 1",
-                "submission_date": None,
-                "public_release_date": None,
-            },
-            {
-                "identifier": "2",
-                "title": "Inv 2",
-                "description_text": "Desc 2",
-                "submission_date": None,
-                "public_release_date": None,
-            },
-        ]
-    )
-    mock_db_instance.stream_studies.side_effect = lambda investigation_ids: mock_gen(  # noqa: ARG005
-        [
-            {
-                "identifier": "10",
-                "investigation_ref": "1",
-                "title": "Study 1",
-                "description_text": "Desc S1",
-                "submission_date": None,
-                "public_release_date": None,
-            },
-            {
-                "identifier": "11",
-                "investigation_ref": "2",
-                "title": "Study 2",
-                "description_text": "Desc S2",
-                "submission_date": None,
-                "public_release_date": None,
-            },
-        ]
-    )
-    mock_db_instance.stream_assays.side_effect = lambda investigation_ids: mock_gen(  # noqa: ARG005
-        [
-            {"identifier": "100", "study_ref": "10", "investigation_ref": "1"},
-            {"identifier": "101", "study_ref": "11", "investigation_ref": "2"},
-        ]
-    )
-    mock_db_instance.stream_contacts.side_effect = lambda investigation_ids: mock_gen([])  # noqa: ARG005
-    mock_db_instance.stream_publications.side_effect = lambda investigation_ids: mock_gen([])  # noqa: ARG005
-    mock_db_instance.stream_annotation_tables.side_effect = lambda investigation_ids: mock_gen([])  # noqa: ARG005
-
-    mocker.patch(
-        "middleware.sql_to_arc.main.Database",
-        return_value=mock_db_instance,
-    )
-    # Prevent real engine creation and ValueError by mocking create_async_engine
-    mocker.patch(
-        "sqlalchemy.ext.asyncio.create_async_engine",
-        return_value=MagicMock(),
-    )
-    mocker.patch(
-        "sqlalchemy.ext.asyncio.AsyncSession",
-        return_value=AsyncMock(__aenter__=AsyncMock(return_value=mock_db_connection)),
-    )
-
-    # Mock ApiClient context manager
-    mocker.patch(
-        "middleware.sql_to_arc.main.ApiClient",
-        return_value=AsyncMock(__aenter__=AsyncMock(return_value=mock_api_client)),
-    )
-
-    # Mock ConfigWrapper and Config
-    mock_config = MagicMock()
-    mock_config.db_name = "test_db"
-    mock_config.db_user = "test_user"
-    mock_config.db_password.get_secret_value.return_value = "test_password"
-    mock_config.db_host = "localhost"
-    mock_config.db_port = 5432
-    mock_config.rdi = "edaphobase"
-    mock_config.max_concurrent_arc_builds = 5
-    mock_config.api_client = MagicMock()
-    mock_config.log_level = "INFO"
-    mock_config.otel = OtelConfig(endpoint=None, log_console_spans=False, log_level="INFO")
-    # Add mock connection_string with get_secret_value
-    mock_connection_string = MagicMock()
-    mock_connection_string.get_secret_value.return_value = "sqlite+aiosqlite:///:memory:"
-    mock_config.connection_string = mock_connection_string
-
-    mock_wrapper = MagicMock()
-    mocker.patch(
-        "middleware.sql_to_arc.main.ConfigWrapper.from_yaml_file",
-        return_value=mock_wrapper,
-    )
-    mocker.patch(
-        "middleware.sql_to_arc.main.Config.from_config_wrapper",
-        return_value=mock_config,
-    )
-
-    # Mock configure_logging to avoid log config issues
-    mocker.patch("middleware.sql_to_arc.main.configure_logging")
+    workflow_tester.set_db_content(investigations=investigations, studies=studies, assays=assays)
 
     # Run main
-    await main()
+    arcs = await workflow_tester.run()
 
-    # Verify interactions
-    # Should have executed DB queries via SQLAlchemy session
-
-    # Should have uploaded ARCs (2 investigations distributed across workers)
-    # With max_concurrent_arc_builds=5, both investigations
-    # will be assigned to worker 1 and uploaded in a single batch
-    assert mock_api_client.create_or_update_arcs.called
-
-    # The new architecture may split into multiple batches depending on worker assignment
-    # Collect all uploaded ARCs from all calls
-    all_arcs = []
-    for call in mock_api_client.create_or_update_arcs.call_args_list:
-        all_arcs.extend(call.kwargs["arcs"])
-
-    # Should have uploaded 2 ARCs in total
-    assert len(all_arcs) == 2  # noqa: PLR2004
-
-    # Verify content of uploaded ARCs
-    identifiers = {arc.Identifier for arc in all_arcs}
+    # Verify results
+    assert len(arcs) == 2  # noqa: PLR2004
+    identifiers = {arc.Identifier for arc in arcs}
     assert identifiers == {"1", "2"}
+
+    # Spot check deep property
+    arc1 = next(a for a in arcs if a.Identifier == "1")
+    assert arc1.Studies[0].Identifier == "10"
+    # In this version of arctrl, studies have RegisteredAssays
+    assert arc1.Studies[0].RegisteredAssays[0].Identifier == "100"
+
+
+@pytest.mark.asyncio
+async def test_concise_arc_verification(workflow_tester: WorkflowTester) -> None:
+    """Demonstrate a very concise integration test using the new tools."""
+    workflow_tester.set_db_content(
+        investigations=[{"identifier": "INV_ABC", "title": "Simplified Test"}],
+        studies=[{"identifier": "ST_1", "investigation_ref": "INV_ABC", "title": "Study A"}],
+    )
+
+    arcs = await workflow_tester.run()
+
+    assert len(arcs) == 1
+    assert arcs[0].Identifier == "INV_ABC"
+    assert arcs[0].Studies[0].Title == "Study A"
