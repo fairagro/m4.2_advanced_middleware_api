@@ -1,6 +1,6 @@
 """FAIRagro Middleware API configuration module."""
 
-from typing import Annotated
+from typing import Annotated, Any
 
 from pydantic import Field, SecretStr, model_validator
 
@@ -26,14 +26,14 @@ class Config(ConfigBase):
         ),
     ] = 5
     max_concurrent_tasks: Annotated[
-        int | None,
+        int,
         Field(
             description=(
-                "Maximum number of parallel tasks (IO + CPU). Defaults to 2x max_concurrent_arc_builds if None."
+                "Maximum number of parallel tasks (IO + CPU). Defaults to 3x max_concurrent_arc_builds if not provided."
             ),
             ge=1,
         ),
-    ] = None
+    ]
     db_batch_size: Annotated[
         int,
         Field(
@@ -43,9 +43,11 @@ class Config(ConfigBase):
     ] = 100
     api_client: Annotated[ApiClientConfig, Field(description="API Client configuration")]
 
-    @model_validator(mode="after")
-    def set_default_max_concurrent_tasks(self) -> "Config":
+    @model_validator(mode="before")
+    @classmethod
+    def set_default_max_concurrent_tasks(cls, data: Any) -> Any:
         """Set default max_concurrent_tasks if not provided."""
-        if self.max_concurrent_tasks is None:
-            self.max_concurrent_tasks = self.max_concurrent_arc_builds * 3
-        return self
+        if isinstance(data, dict) and data.get("max_concurrent_tasks") is None:
+            max_builds = data.get("max_concurrent_arc_builds", 5)
+            data["max_concurrent_tasks"] = int(max_builds) * 3
+        return data

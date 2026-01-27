@@ -28,6 +28,7 @@ def test_config_creation() -> None:
         rdi_url="https://edaphobase.org",
         api_client=api_client_config,
         log_level="INFO",
+        max_concurrent_tasks=10,
         otel=OtelConfig(),
     )
 
@@ -82,6 +83,7 @@ def test_config_with_defaults() -> None:
         rdi="edaphobase",
         rdi_url="https://edaphobase.org",
         api_client=api_client_config,
+        max_concurrent_tasks=10,
         otel=OtelConfig(),
     )
 
