@@ -348,7 +348,7 @@ async def process_single_dataset(
                     ),
                     timeout=ctx.arc_generation_timeout_minutes * 60,
                 )
-            except asyncio.TimeoutError:
+            except TimeoutError:
                 logger.error(
                     "%s ARC generation timed out after %d minutes.",
                     log_prefix,
