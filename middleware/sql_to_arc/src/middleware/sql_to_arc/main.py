@@ -387,6 +387,55 @@ async def _upload_and_update_stats(
             stats.failed_ids.append(str(row["identifier"]))
 
 
+async def _build_and_upload_single_arc(
+    ctx: WorkerContext,
+    investigation: dict[str, Any],
+    stats: ProcessingStats,
+    inv_id: str,
+    inv_info: str,
+) -> None:
+    """Build a single ARC and upload it."""
+    # Prepare data bundle for this investigation
+    build_data = ArcBuildData(
+        investigation_row=investigation,
+        studies=ctx.studies_by_inv.get(inv_id, []),
+        assays=ctx.assays_by_inv.get(inv_id, []),
+        contacts=ctx.contacts_by_inv.get(inv_id, []),
+        publications=ctx.pubs_by_inv.get(inv_id, []),
+        annotations=ctx.anns_by_inv.get(inv_id, []),
+    )
+
+    # Build ARC in executor
+    loop = asyncio.get_event_loop()
+    try:
+        result = await loop.run_in_executor(ctx.executor, build_single_arc_task, build_data)
+
+        if result is None:
+            logger.error("%s: Build returned None for investigation %s", inv_info, inv_id)
+            stats.failed_datasets += 1
+            stats.failed_ids.append(inv_id)
+            return
+
+        arc = cast(ARC, result)
+        arc_id = getattr(arc, "Identifier", "unknown")
+
+        # Serialize ARC to JSON and calculate size
+        try:
+            arc_json = arc.to_rocrate_json_string()
+            json_size_kb = len(arc_json.encode("utf-8")) / 1024
+            logger.info("ARC JSON created: id=%s, size=%.2fKB", arc_id, json_size_kb)
+        except Exception as e:  # pylint: disable=broad-exception-caught
+            logger.warning("Failed to serialize ARC %s for size calculation: %s", arc_id, e)
+
+        # Upload single ARC
+        await _upload_and_update_stats(ctx, [arc], [investigation], stats, inv_info)
+
+    except Exception as e:  # pylint: disable=broad-exception-caught
+        logger.error("%s: Failed to build ARC for investigation %s: %s", inv_info, inv_id, e)
+        stats.failed_datasets += 1
+        stats.failed_ids.append(inv_id)
+
+
 async def process_investigation(
     ctx: WorkerContext,
     investigation: dict[str, Any],
@@ -404,48 +453,7 @@ async def process_investigation(
         attributes={"investigation_id": inv_id, "worker_id": ctx.worker_id, "inv_idx": inv_idx},
     ):
         logger.info("%s: Building ARC for investigation %s...", inv_info, inv_id)
-
-        # Prepare data bundle for this investigation
-        build_data = ArcBuildData(
-            investigation_row=investigation,
-            studies=ctx.studies_by_inv.get(inv_id, []),
-            assays=ctx.assays_by_inv.get(inv_id, []),
-            contacts=ctx.contacts_by_inv.get(inv_id, []),
-            publications=ctx.pubs_by_inv.get(inv_id, []),
-            annotations=ctx.anns_by_inv.get(inv_id, []),
-        )
-
-        # Build ARC in executor
-        loop = asyncio.get_event_loop()
-        try:
-            # TODO: why do we tun build_single_arc_task in an executor here? Isn't this already in a worker process?
-            # Why is build_single_arc_task not async?
-            result = await loop.run_in_executor(ctx.executor, build_single_arc_task, build_data)
-
-            if result is None:
-                logger.error("%s: Build returned None for investigation %s", inv_info, inv_id)
-                stats.failed_datasets += 1
-                stats.failed_ids.append(inv_id)
-                return stats
-
-            arc = cast(ARC, result)
-            arc_id = getattr(arc, "Identifier", "unknown")
-
-            # Serialize ARC to JSON and calculate size
-            try:
-                arc_json = arc.to_rocrate_json_string()
-                json_size_kb = len(arc_json.encode("utf-8")) / 1024
-                logger.info("ARC JSON created: id=%s, size=%.2fKB", arc_id, json_size_kb)
-            except Exception as e:  # pylint: disable=broad-exception-caught
-                logger.warning("Failed to serialize ARC %s for size calculation: %s", arc_id, e)
-
-            # Upload single ARC
-            await _upload_and_update_stats(ctx, [arc], [investigation], stats, inv_info)
-
-        except Exception as e:  # pylint: disable=broad-exception-caught
-            logger.error("%s: Failed to build ARC for investigation %s: %s", inv_info, inv_id, e)
-            stats.failed_datasets += 1
-            stats.failed_ids.append(inv_id)
+        await _build_and_upload_single_arc(ctx, investigation, stats, inv_id, inv_info)
 
     return stats
 
@@ -513,6 +521,43 @@ async def _fetch_and_group_related_data(
     )
 
 
+def _prepare_worker_assignments(num_workers: int, rows: list[dict[str, Any]]) -> list[list[dict[str, Any]]]:
+    """Split investigations into buckets for workers."""
+    assignments: list[list[dict[str, Any]]] = [[] for _ in range(num_workers)]
+    for idx, investigation in enumerate(rows):
+        assignments[idx % num_workers].append(investigation)
+    return assignments
+
+
+async def _create_worker_tasks(
+    executor: concurrent.futures.ProcessPoolExecutor,
+    client: ApiClient,
+    config: Config,
+    worker_assignments: list[list[dict[str, Any]]],
+    data_maps: tuple,
+) -> list[Any]:
+    """Create tasks for each worker."""
+    tasks = []
+    num_workers = len(worker_assignments)
+    for worker_id, assigned in enumerate(worker_assignments):
+        if not assigned:
+            continue
+        ctx = WorkerContext(
+            client=client,
+            rdi=config.rdi,
+            studies_by_inv=data_maps[0],
+            assays_by_inv=data_maps[1],
+            contacts_by_inv=data_maps[2],
+            pubs_by_inv=data_maps[3],
+            anns_by_inv=data_maps[4],
+            worker_id=worker_id + 1,
+            total_workers=num_workers,
+            executor=executor,
+        )
+        tasks.append(process_worker_investigations(ctx, assigned))
+    return tasks
+
+
 async def _execute_distributed_workers(
     client: ApiClient,
     config: Config,
@@ -522,33 +567,11 @@ async def _execute_distributed_workers(
     """Distribute investigations to workers and collect results."""
     stats = ProcessingStats()
     num_workers = config.max_concurrent_arc_builds
-    worker_assignments: list[list[dict[str, Any]]] = [[] for _ in range(num_workers)]
-    for idx, investigation in enumerate(investigation_rows):
-        worker_assignments[idx % num_workers].append(investigation)
+    worker_assignments = _prepare_worker_assignments(num_workers, investigation_rows)
 
     mp_context = multiprocessing.get_context("spawn")
-    # TODO: for me it seems as if all database objects are fetched in advanced an then
-    # distributed to the workers. I would prefer if each worker would fetch its own data.
-    # But the question is: is it possible to share a database connection across processes?
     with concurrent.futures.ProcessPoolExecutor(max_workers=num_workers, mp_context=mp_context) as executor:
-        tasks = []
-        for worker_id, assigned in enumerate(worker_assignments):
-            if not assigned:
-                continue
-            ctx = WorkerContext(
-                client=client,
-                rdi=config.rdi,
-                studies_by_inv=data_maps[0],
-                assays_by_inv=data_maps[1],
-                contacts_by_inv=data_maps[2],
-                pubs_by_inv=data_maps[3],
-                anns_by_inv=data_maps[4],
-                worker_id=worker_id + 1,
-                total_workers=num_workers,
-                executor=executor,
-            )
-            tasks.append(process_worker_investigations(ctx, assigned))
-
+        tasks = await _create_worker_tasks(executor, client, config, worker_assignments, data_maps)
         results = await asyncio.gather(*tasks)
         for res in results:
             if isinstance(res, ProcessingStats):
