@@ -64,7 +64,7 @@ services:
     command: >
       sh -c "printf '%s' \"$$CLIENT_KEY_DATA\" > /run/secrets/client.key &&
              /middleware/sql_to_arc/sql_to_arc -c /etc/sql_to_arc/config.yaml"
-    restart: unless-stopped
+    restart: no
 
 volumes:
   postgres_data_external:
