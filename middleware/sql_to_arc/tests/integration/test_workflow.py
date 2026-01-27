@@ -1,5 +1,6 @@
 """Integration tests for the SQL-to-ARC workflow."""
 
+import json
 import multiprocessing
 from collections.abc import AsyncGenerator
 from concurrent.futures import ProcessPoolExecutor
@@ -209,17 +210,75 @@ async def test_main_workflow(workflow_tester: WorkflowTester) -> None:
     # In this version of arctrl, studies have RegisteredAssays
     assert arc1.Studies[0].RegisteredAssays[0].Identifier == "100"
 
-
 @pytest.mark.asyncio
-async def test_concise_arc_verification(workflow_tester: WorkflowTester) -> None:
-    """Demonstrate a very concise integration test using the new tools."""
+async def test_investigation_with_publications_and_contacts(workflow_tester: WorkflowTester) -> None:
+    """Test investigation with multiple publications and contacts at the investigation level."""
+    inv_id = "INV_PUBLICATION_TEST"
+    investigations = [{"identifier": inv_id, "title": "Publication and Contact Test"}]
+
+    publications = [
+        {
+            "investigation_ref": inv_id,
+            "target_type": "investigation",
+            "title": "First Paper",
+            "doi": "10.1234/1",
+            "pubmed_id": "123456",
+            "authors": "Author A, Author B",
+            "status_term": "published",
+        },
+        {
+            "investigation_ref": inv_id,
+            "target_type": "investigation",
+            "title": "Second Paper",
+            "doi": "10.1234/2",
+            "pubmed_id": "654321",
+            "authors": "Author C",
+            "status_term": "in review",
+        },
+    ]
+
+    contacts = [
+        {
+            "investigation_ref": inv_id,
+            "target_type": "investigation",
+            "last_name": "Doe",
+            "first_name": "John",
+            "email": "john.doe@example.com",
+            "affiliation": "Institute A",
+            "roles": json.dumps([{"term": "Principal Investigator"}]),
+        },
+        {
+            "investigation_ref": inv_id,
+            "target_type": "investigation",
+            "last_name": "Smith",
+            "first_name": "Jane",
+            "email": "jane.smith@example.com",
+            "affiliation": "Institute B",
+            "roles": json.dumps([{"term": "Data Curator"}]),
+        },
+    ]
+
     workflow_tester.set_db_content(
-        investigations=[{"identifier": "INV_ABC", "title": "Simplified Test"}],
-        studies=[{"identifier": "ST_1", "investigation_ref": "INV_ABC", "title": "Study A"}],
+        investigations=investigations,
+        publications=publications,
+        contacts=contacts,
     )
 
     arcs = await workflow_tester.run()
 
     assert len(arcs) == 1
-    assert arcs[0].Identifier == "INV_ABC"
-    assert arcs[0].Studies[0].Title == "Study A"
+    arc = arcs[0]
+    assert arc.Identifier == inv_id
+
+    # Verify Publications
+    assert len(arc.Publications) == 2  # noqa: PLR2004
+    titles = {p.Title for p in arc.Publications}
+    assert titles == {"First Paper", "Second Paper"}
+    assert any(p.DOI == "10.1234/1" for p in arc.Publications)
+
+    # Verify Contacts
+    assert len(arc.Contacts) == 2  # noqa: PLR2004
+    emails = {c.EMail for c in arc.Contacts}
+    assert emails == {"john.doe@example.com", "jane.smith@example.com"}
+    assert any(c.LastName == "Doe" for c in arc.Contacts)
+    assert any(oa.Name == "Data Curator" for c in arc.Contacts for oa in c.Roles)
