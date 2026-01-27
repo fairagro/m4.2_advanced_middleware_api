@@ -7,8 +7,8 @@ from typing import Any
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
-
 from arctrl import ARC  # type: ignore[import-untyped]
+
 from middleware.api_client import ApiClient
 from middleware.shared.api_models.models import CreateOrUpdateArcsResponse
 from middleware.shared.config.config_base import OtelConfig
@@ -53,6 +53,13 @@ class WorkflowTester:
     """Helper class to simplify integration tests for sql_to_arc."""
 
     def __init__(self, mocker: MagicMock, mock_api_client: AsyncMock) -> None:
+        """
+        Initialize the WorkflowTester with mock dependencies.
+
+        Args:
+            mocker (MagicMock): Mocking utility for patching dependencies.
+            mock_api_client (AsyncMock): Mocked API client for simulating API interactions.
+        """
         self.mocker = mocker
         self.api_client = mock_api_client
         self.db = MagicMock()
@@ -99,7 +106,7 @@ class WorkflowTester:
 
         return gen()
 
-    def set_db_content(
+    def set_db_content(  # noqa: PLR0913
         self,
         investigations: list[dict[str, Any]] | None = None,
         studies: list[dict[str, Any]] | None = None,
@@ -109,12 +116,12 @@ class WorkflowTester:
         annotations: list[dict[str, Any]] | None = None,
     ) -> None:
         """Mock the database streaming methods with provided data."""
-        self.db.stream_investigations.side_effect = lambda limit=None: self._as_gen(investigations or [])
-        self.db.stream_studies.side_effect = lambda investigation_ids: self._as_gen(studies or [])
-        self.db.stream_assays.side_effect = lambda investigation_ids: self._as_gen(assays or [])
-        self.db.stream_contacts.side_effect = lambda investigation_ids: self._as_gen(contacts or [])
-        self.db.stream_publications.side_effect = lambda investigation_ids: self._as_gen(publications or [])
-        self.db.stream_annotation_tables.side_effect = lambda investigation_ids: self._as_gen(annotations or [])
+        self.db.stream_investigations.side_effect = lambda limit=None: self._as_gen(investigations or [])  # noqa: ARG005
+        self.db.stream_studies.side_effect = lambda investigation_ids: self._as_gen(studies or [])  # noqa: ARG005
+        self.db.stream_assays.side_effect = lambda investigation_ids: self._as_gen(assays or [])  # noqa: ARG005
+        self.db.stream_contacts.side_effect = lambda investigation_ids: self._as_gen(contacts or [])  # noqa: ARG005
+        self.db.stream_publications.side_effect = lambda investigation_ids: self._as_gen(publications or [])  # noqa: ARG005
+        self.db.stream_annotation_tables.side_effect = lambda investigation_ids: self._as_gen(annotations or [])  # noqa: ARG005
 
     async def run(self) -> list[ARC]:
         """Execute the main workflow and return captured ARC objects."""
