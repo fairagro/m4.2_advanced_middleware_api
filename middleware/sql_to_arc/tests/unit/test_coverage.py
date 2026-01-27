@@ -5,7 +5,6 @@ import json
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
-from arctrl import ARC # type: ignore[import-untyped]
 
 from middleware.sql_to_arc.main import (
     DatasetContext,
@@ -31,7 +30,7 @@ def test_processing_stats_to_jsonld() -> None:
     data = json.loads(jsonld_str)
 
     assert data["@type"] == ["prov:Activity", "schema:CreateAction"]
-    assert data["found_datasets"] == 2
+    assert data["found_datasets"] == 2  # noqa: PLR2004
     assert data["status"] == "schema:FailedActionStatus"
     assert data["duration"] == "PT12.50S"
     assert data["prov:used"]["schema:identifier"] == "test-rdi"
@@ -43,24 +42,24 @@ async def test_stream_investigation_datasets() -> None:
     mock_cur = AsyncMock()
     mock_cur.fetchmany.side_effect = [
         [{"id": 1, "title": "Inv 1"}],
-        []  # End of stream
+        [],  # End of stream
     ]
-    
+
     # Mock studies and assays
     mock_detail_cur = AsyncMock()
     mock_cursor_cm = MagicMock()
     mock_cursor_cm.__aenter__.return_value = mock_detail_cur
     mock_cursor_cm.__aexit__.return_value = False
-    
+
     # mock_conn.cursor() should return the context manager
     mock_conn = MagicMock()
     mock_conn.cursor.return_value = mock_cursor_cm
     mock_cur.connection = mock_conn
-    
+
     # Detail fetches (Studies, then Assays)
     mock_detail_cur.fetchall.side_effect = [
-        [{"id": 10, "investigation_id": 1, "title": "Study 1"}], # Studies
-        [{"id": 100, "study_id": 10, "measurement_type": "MT"}] # Assays
+        [{"id": 10, "investigation_id": 1, "title": "Study 1"}],  # Studies
+        [{"id": 100, "study_id": 10, "measurement_type": "MT"}],  # Assays
     ]
 
     results = []
@@ -71,8 +70,8 @@ async def test_stream_investigation_datasets() -> None:
     inv_row, studies, assays = results[0]
     assert inv_row["id"] == 1
     assert len(studies) == 1
-    assert studies[0]["id"] == 10
-    assert 10 in assays
+    assert studies[0]["id"] == 10  # noqa: PLR2004
+    assert 10 in assays  # noqa: PLR2004
 
 
 def test_build_arc_for_investigation() -> None:
@@ -81,18 +80,19 @@ def test_build_arc_for_investigation() -> None:
     studies = [{"id": 10, "title": "Study"}]
     assays_by_study = {10: [{"id": 100, "measurement_type": "M"}]}
 
-    with patch("middleware.sql_to_arc.main.map_investigation") as mock_map_inv, \
-         patch("middleware.sql_to_arc.main.map_study") as mock_map_study, \
-         patch("middleware.sql_to_arc.main.map_assay") as mock_map_assay, \
-         patch("arctrl.ARC.from_arc_investigation") as mock_arc_from_inv:
-        
+    with (
+        patch("middleware.sql_to_arc.main.map_investigation") as mock_map_inv,
+        patch("middleware.sql_to_arc.main.map_study") as mock_map_study,
+        patch("middleware.sql_to_arc.main.map_assay") as mock_map_assay,
+        patch("arctrl.ARC.from_arc_investigation") as mock_arc_from_inv,
+    ):
         mock_inv = MagicMock()
         mock_map_inv.return_value = mock_inv
         mock_study = MagicMock()
         mock_map_study.return_value = mock_study
         mock_assay = MagicMock()
         mock_map_assay.return_value = mock_assay
-        
+
         mock_arc = MagicMock()
         mock_arc.ToROCrateJsonString.return_value = '{"fake": "arc"}'
         mock_arc_from_inv.return_value = mock_arc
@@ -112,17 +112,13 @@ async def test_process_single_dataset_limits_exceeded() -> None:
         max_assays=1,
         arc_generation_timeout_minutes=1,
     )
-    
+
     # 2 studies exceeds limit of 1
-    dataset_ctx = DatasetContext(
-        investigation_row={"id": "err1"},
-        studies=[{"id": 1}, {"id": 2}],
-        assays_by_study={}
-    )
-    
+    dataset_ctx = DatasetContext(investigation_row={"id": "err1"}, studies=[{"id": 1}, {"id": 2}], assays_by_study={})
+
     stats = ProcessingStats()
     semaphore = asyncio.Semaphore(1)
-    
+
     await process_single_dataset(ctx, dataset_ctx, semaphore, stats)
     assert stats.failed_datasets == 1
     assert "err1" in stats.failed_ids
@@ -139,18 +135,14 @@ async def test_process_single_dataset_timeout() -> None:
         max_assays=10,
         arc_generation_timeout_minutes=1,
     )
-    
-    dataset_ctx = DatasetContext(
-        investigation_row={"id": "timeout1"},
-        studies=[],
-        assays_by_study={}
-    )
-    
+
+    dataset_ctx = DatasetContext(investigation_row={"id": "timeout1"}, studies=[], assays_by_study={})
+
     stats = ProcessingStats()
     semaphore = asyncio.Semaphore(1)
-    
+
     with patch("asyncio.wait_for", side_effect=asyncio.TimeoutError):
         await process_single_dataset(ctx, dataset_ctx, semaphore, stats)
-    
+
     assert stats.failed_datasets == 1
     assert "timeout1" in stats.failed_ids

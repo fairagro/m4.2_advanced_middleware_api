@@ -421,11 +421,10 @@ async def test_get_arc_cleanup_os_error(git_repo: GitRepo) -> None:
 
 def test_is_soft_git_error() -> None:
     """Test is_soft_git_error helper."""
-    
     # Positive case
     err = GitCommandError("command", 1, "not found")
     assert is_soft_git_error(err) is True
-    
+
     # Negative case
     err = GitCommandError("command", 1, "permission denied")
     assert is_soft_git_error(err) is False
@@ -445,7 +444,7 @@ def test_git_context_sync_fail(mock_repo: MagicMock, tmp_path: Path) -> None:
         user_email=None,
         local_path=target_path,
     )
-    
+
     # Mock sync failure
     mock_repo_instance = mock_repo.return_value
     mock_repo_instance.remotes.origin.fetch.side_effect = GitCommandError("fetch", "fail")
