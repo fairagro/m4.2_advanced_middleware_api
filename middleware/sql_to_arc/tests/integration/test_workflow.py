@@ -1,5 +1,6 @@
 """Integration tests for the SQL-to-ARC workflow."""
 
+import asyncio
 import multiprocessing
 from concurrent.futures import ProcessPoolExecutor
 from typing import Any
@@ -10,7 +11,7 @@ import pytest
 from middleware.api_client import ApiClient
 from middleware.shared.api_models.models import CreateOrUpdateArcsResponse
 from middleware.shared.config.config_base import OtelConfig
-from middleware.sql_to_arc.main import WorkerContext, main, process_worker_investigations
+from middleware.sql_to_arc.main import DatasetContext, ProcessingStats, WorkerContext, main, process_single_dataset
 
 
 @pytest.fixture
@@ -38,7 +39,7 @@ def mock_db_connection(mock_db_cursor: AsyncMock) -> AsyncMock:
 def mock_api_client() -> AsyncMock:
     """Mock API client."""
     client = AsyncMock(spec=ApiClient)
-    client.create_or_update_arcs.return_value = CreateOrUpdateArcsResponse(
+    client.create_or_update_arc.return_value = CreateOrUpdateArcsResponse(
         client_id="test",
         message="success",
         rdi="test",
@@ -48,8 +49,8 @@ def mock_api_client() -> AsyncMock:
 
 
 @pytest.mark.asyncio
-async def test_process_worker_investigations(mock_api_client: AsyncMock) -> None:
-    """Test worker investigations processing."""
+async def test_process_single_dataset(mock_api_client: AsyncMock) -> None:
+    """Test single dataset processing."""
     investigation_rows: list[dict[str, Any]] = [
         {"id": 1, "title": "Test 1", "description": "Desc 1", "submission_time": None, "release_time": None},
         {"id": 2, "title": "Test 2", "description": "Desc 2", "submission_time": None, "release_time": None},
@@ -62,20 +63,93 @@ async def test_process_worker_investigations(mock_api_client: AsyncMock) -> None
         ctx = WorkerContext(
             client=mock_api_client,
             rdi="edaphobase",
-            studies_by_investigation=studies_by_investigation,
-            assays_by_study=assays_by_study,
-            worker_id=1,
-            total_workers=1,
             executor=executor,
+            max_studies=5000,
+            max_assays=10000,
+            arc_generation_timeout_minutes=60,
         )
-        await process_worker_investigations(ctx, investigation_rows)
+        semaphore = asyncio.Semaphore(1)
+        stats = ProcessingStats()
 
-    assert mock_api_client.create_or_update_arcs.called
-    # There should be two calls, each with one ARC (since batch size is always 1)
-    assert mock_api_client.create_or_update_arcs.call_count == 2  # noqa: PLR2004
-    for call in mock_api_client.create_or_update_arcs.call_args_list:
+        for inv in investigation_rows:
+            # Build a minimal DatasetContext as expected by process_single_dataset
+            dataset_context = DatasetContext(
+                investigation_row=inv,
+                studies=studies_by_investigation.get(inv["id"], []),
+                assays_by_study=assays_by_study,
+            )
+            # Call with correct arguments: ctx, dataset_context, semaphore, stats
+            await process_single_dataset(ctx, dataset_context, semaphore, stats)
+
+    assert mock_api_client.create_or_update_arc.called
+    assert mock_api_client.create_or_update_arc.call_count == 2  # noqa: PLR2004
+    for call in mock_api_client.create_or_update_arc.call_args_list:
         assert call.kwargs["rdi"] == "edaphobase"
-        assert len(call.kwargs["arcs"]) == 1
+        # Each call sends one ARC as dict or ARC object
+        assert "arc" in call.kwargs
+
+
+@pytest.fixture
+def mock_main_config(mocker: MagicMock) -> MagicMock:
+    """Mock configuration for main workflow."""
+    config = MagicMock()
+    config.db_name = "test_db"
+    config.db_user = "test_user"
+    config.db_password.get_secret_value.return_value = "test_password"
+    config.db_host = "localhost"
+    config.db_port = 5432
+    config.rdi = "edaphobase"
+    config.max_concurrent_arc_builds = 5
+    config.max_concurrent_tasks = 10
+    config.db_batch_size = 100
+    config.api_client = MagicMock()
+    config.log_level = "INFO"
+    config.otel = OtelConfig(endpoint=None, log_console_spans=False, log_level="INFO")
+    config.max_studies = 5000
+    config.max_assays = 10000
+    config.arc_generation_timeout_minutes = 60
+    config.rdi_url = "https://example.com"  # Real string for JSON serialization
+
+    mocker.patch("middleware.sql_to_arc.main.ConfigWrapper.from_yaml_file")
+    mocker.patch("middleware.sql_to_arc.main.Config.from_config_wrapper", return_value=config)
+    mocker.patch("middleware.sql_to_arc.main.configure_logging")
+    mocker.patch("middleware.sql_to_arc.main.initialize_tracing", return_value=(MagicMock(), MagicMock()))
+    return config
+
+
+def _setup_cursor_side_effects(
+    mock_db_cursor: AsyncMock, investigations: list[dict], studies: list[dict], assays: list[dict]
+) -> AsyncMock:
+    """Set up cursor behavior for bulk fetch strategy."""
+    mock_detail_cursor = AsyncMock()
+    mock_detail_cursor.fetchall.return_value = []
+    mock_db_cursor.connection = MagicMock()
+    mock_db_cursor.connection.cursor.return_value.__aenter__.return_value = mock_detail_cursor
+
+    async def detail_fetchall_side_effect() -> list[dict[str, Any]]:
+        if not mock_detail_cursor.execute.call_args:
+            return []
+        last_query = mock_detail_cursor.execute.call_args[0][0]
+        if 'FROM "ARC_Study"' in last_query:
+            return studies
+        if 'FROM "ARC_Assay"' in last_query:
+            return assays
+        return []
+
+    mock_detail_cursor.fetchall.side_effect = detail_fetchall_side_effect
+    fetchmany_done: list[bool] = []
+
+    async def fetchmany_side_effect(_size: int = 100) -> list[dict[str, Any]]:
+        _ = _size
+        last_query = mock_db_cursor.execute.call_args[0][0]
+        if 'FROM "ARC_Investigation"' in last_query and not fetchmany_done:
+            fetchmany_done.append(True)
+            return investigations
+        return []
+
+    mock_db_cursor.fetchall.side_effect = AsyncMock(return_value=[])
+    mock_db_cursor.fetchmany.side_effect = fetchmany_side_effect
+    return mock_detail_cursor
 
 
 @pytest.mark.asyncio
@@ -84,127 +158,66 @@ async def test_main_workflow(
     mock_db_connection: AsyncMock,
     mock_db_cursor: AsyncMock,
     mock_api_client: AsyncMock,
+    mock_main_config: MagicMock,
 ) -> None:
     """Test the main workflow with mocked DB and API."""
-    # Mock psycopg connection
+    _ = mock_main_config
     mocker.patch(
         "psycopg.AsyncConnection.connect",
         return_value=AsyncMock(__aenter__=AsyncMock(return_value=mock_db_connection)),
     )
-
-    # Mock ApiClient context manager
     mocker.patch(
         "middleware.sql_to_arc.main.ApiClient",
         return_value=AsyncMock(__aenter__=AsyncMock(return_value=mock_api_client)),
     )
 
-    # Mock ConfigWrapper and Config
-    mock_config = MagicMock()
-    mock_config.db_name = "test_db"
-    mock_config.db_user = "test_user"
-    mock_config.db_password.get_secret_value.return_value = "test_password"
-    mock_config.db_host = "localhost"
-    mock_config.db_port = 5432
-    mock_config.rdi = "edaphobase"
-    mock_config.max_concurrent_arc_builds = 5
-    mock_config.api_client = MagicMock()
-    mock_config.log_level = "INFO"
-    mock_config.otel = OtelConfig(endpoint=None, log_console_spans=False, log_level="INFO")
-
-    mock_wrapper = MagicMock()
-    mocker.patch(
-        "middleware.sql_to_arc.main.ConfigWrapper.from_yaml_file",
-        return_value=mock_wrapper,
-    )
-    mocker.patch(
-        "middleware.sql_to_arc.main.Config.from_config_wrapper",
-        return_value=mock_config,
-    )
-
-    # Mock configure_logging to avoid log config issues
-    mocker.patch("middleware.sql_to_arc.main.configure_logging")
-
-    # Setup DB data - New bulk fetch strategy
-    # 1. Investigations
-    investigations = [
-        {"id": 1, "title": "Inv 1", "description": "Desc 1", "submission_time": None, "release_time": None},
-        {"id": 2, "title": "Inv 2", "description": "Desc 2", "submission_time": None, "release_time": None},
+    # Setup DB data
+    invs = [
+        {"id": 1, "title": "I1", "description": "D1", "submission_time": None, "release_time": None},
+        {"id": 2, "title": "I2", "description": "D2", "submission_time": None, "release_time": None},
     ]
-
-    # 2. Studies (for both investigations)
-    studies_bulk = [
+    sts = [
         {
             "id": 10,
             "investigation_id": 1,
-            "title": "Study 1",
-            "description": "Desc S1",
+            "title": "S1",
+            "description": "D1",
             "submission_time": None,
             "release_time": None,
         },
         {
             "id": 11,
             "investigation_id": 2,
-            "title": "Study 2",
-            "description": "Desc S2",
+            "title": "S2",
+            "description": "D2",
             "submission_time": None,
             "release_time": None,
         },
     ]
+    ass = [{"id": 100, "study_id": 10}, {"id": 101, "study_id": 11}]
 
-    # 3. Assays (for all studies)
-    # Note: measurement_type and technology_type are not used yet,
-    # as they require proper OntologyTerm objects which the DB doesn't provide yet
-    assays_bulk = [
-        {"id": 100, "study_id": 10},
-        {"id": 101, "study_id": 11},
-    ]
+    # Configure cursor behavior using helper
+    mock_detail_cursor = _setup_cursor_side_effects(mock_db_cursor, invs, sts, ass)
 
-    # Configure cursor behavior for bulk fetch strategy
-    # The new implementation makes 3 queries:
-    # 1. All investigations
-    # 2. All studies for those investigations (using ANY)
-    # 3. All assays for those studies (using ANY)
-
-    async def fetchall_side_effect() -> list[dict[str, Any]]:
-        # Check the last executed query to decide what to return
-        if not mock_db_cursor.execute.call_args:
-            return []
-
-        last_query = mock_db_cursor.execute.call_args[0][0]
-        if 'FROM "ARC_Investigation"' in last_query:
-            return investigations
-        elif 'FROM "ARC_Study"' in last_query:
-            return studies_bulk
-        elif 'FROM "ARC_Assay"' in last_query:
-            return assays_bulk
-        return []
-
-    mock_db_cursor.fetchall.side_effect = fetchall_side_effect
-
-    # Run main
     await main()
 
     # Verify interactions
-    # Should have connected to DB
     assert mock_db_connection.cursor.called
+    assert mock_db_cursor.execute.call_count == 1
+    assert mock_detail_cursor.execute.call_count == 2  # noqa: PLR2004
+    assert mock_api_client.create_or_update_arc.called
 
-    # Should have executed 3 queries (investigations, studies bulk, assays bulk)
-    assert mock_db_cursor.execute.call_count == 3  # noqa: PLR2004
-
-    # Should have uploaded ARCs (2 investigations distributed across workers)
-    # With max_concurrent_arc_builds=5, the 2 investigations are distributed
-    # across workers and uploaded in separate API calls.
-    assert mock_api_client.create_or_update_arcs.called
-
-    # The new architecture may split into multiple batches depending on worker assignment
-    # Collect all uploaded ARCs from all calls
-    all_arcs = []
-    for call in mock_api_client.create_or_update_arcs.call_args_list:
-        all_arcs.extend(call.kwargs["arcs"])
-
-    # Should have uploaded 2 ARCs in total
+    all_arcs = [call.kwargs["arc"] for call in mock_api_client.create_or_update_arc.call_args_list]
     assert len(all_arcs) == 2  # noqa: PLR2004
 
-    # Verify content of uploaded ARCs
-    identifiers = {arc.Identifier for arc in all_arcs}
+    # Verify content of uploaded ARCs (Identifiers from invs list)
+    identifiers = set()
+    for arc in all_arcs:
+        # Find the investigation node in @graph
+        investigation_node = next(
+            (node for node in arc.get("@graph", []) if "Investigation" in node.get("additionalType", "")), None
+        )
+        if investigation_node:
+            identifiers.add(investigation_node.get("identifier"))
+
     assert identifiers == {"1", "2"}

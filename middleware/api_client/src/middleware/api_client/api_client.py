@@ -201,16 +201,16 @@ class ApiClient:
             logger.error(error_msg)
             raise ApiClientError(error_msg) from e
 
-    async def create_or_update_arcs(
+    async def create_or_update_arc(
         self,
         rdi: str,
-        arcs: list["ARC"],
+        arc: "ARC | dict[str, Any]",
     ) -> CreateOrUpdateArcsResponse:
-        """Create or update ARCs in the FAIRagro Middleware API.
+        """Create or update a single ARC in the FAIRagro Middleware API.
 
         Args:
             rdi (str): The RDI identifier.
-            arcs (list[ARC]): List of ARC objects from arctrl library.
+            arc (ARC | dict[str, Any]): ARC object or already serialized ARC (as dict).
 
         Returns:
             CreateOrUpdateArcsResponse: The response containing the result of the operation.
@@ -218,15 +218,21 @@ class ApiClient:
         Raises:
             ApiClientError: If the request fails.
         """
-        logger.info("Creating/updating %d ARCs for RDI: %s", len(arcs), rdi)
-
-        # Serialize each ARC to RO-Crate JSON format
-        serialized_arcs: list[dict[str, Any]] = []
-        for arc in arcs:
+        # Determine if arc is an ARC object or dict
+        if isinstance(arc, dict):
+            # Already serialized
+            serialized_arc = arc
+            # If serialized, we might need to extract ID for logging if not provided separately
+            # But the caller logs it, so we just log a summary here
+            logger.info("Creating/updating 1 ARC (pre-serialized) for RDI: %s", rdi)
+        else:
+            # ARC object, needs serialization
+            logger.info("Creating/updating 1 ARC for RDI: %s", rdi)
             json_str = arc.ToROCrateJsonString()
-            serialized_arcs.append(json.loads(json_str))
+            serialized_arc = json.loads(json_str)
 
-        request = CreateOrUpdateArcsRequest(rdi=rdi, arcs=serialized_arcs)
+        # The API currently expects a list of ARCs, so we wrap the single ARC
+        request = CreateOrUpdateArcsRequest(rdi=rdi, arcs=[serialized_arc])
         logger.debug("Request payload: %s", json.dumps(request.model_dump(), indent=2))
 
         # 1. Submit task

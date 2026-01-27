@@ -1,4 +1,4 @@
-{{- if and .Values.celery.worker.persistence .Values.celery.worker.persistence.enabled }}
+{{- if and .Values.celery.worker.persistence .Values.celery.worker.persistence.enabled (not .Values.celery.worker.persistence.useEmptyDir) }}
 kind: PersistentVolumeClaim
 apiVersion: v1
 metadata:
