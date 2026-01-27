@@ -8,7 +8,7 @@ db_port: 5432
 
 rdi: edaphobase
 rdi_url: https://edaphobase.org
-max_concurrent_arc_builds: 8
+max_concurrent_arc_builds: 12
 
 api_client:
   # NOTE: Change this to the external Middleware API URL

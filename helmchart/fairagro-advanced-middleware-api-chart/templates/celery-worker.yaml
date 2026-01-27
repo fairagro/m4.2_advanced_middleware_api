@@ -97,8 +97,14 @@ spec:
                 path: middleware-api-config
         {{- if and .Values.celery.worker.persistence .Values.celery.worker.persistence.enabled }}
         - name: arc-cache
+          {{- if .Values.celery.worker.persistence.useEmptyDir }}
+          emptyDir:
+            medium: Memory
+            sizeLimit: {{ .Values.celery.worker.persistence.size }}
+          {{- else }}
           persistentVolumeClaim:
             claimName: {{ include "fairagro-advanced-middleware-api-chart.fullname" . }}-arc-cache
+          {{- end }}
         {{- end }}
         {{- with .Values.celery.worker.volumes }}
         {{- toYaml . | nindent 8 }}
