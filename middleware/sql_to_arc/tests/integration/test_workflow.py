@@ -355,3 +355,105 @@ async def test_study_with_publications_and_contacts(workflow_tester: WorkflowTes
     emails = {c.EMail for c in study.Contacts}
     assert emails == {"alice@example.com", "bob@example.com"}
 
+
+@pytest.mark.asyncio
+async def test_assay_with_contacts(workflow_tester: WorkflowTester) -> None:
+    """Test assay with multiple contacts (performers) at the assay level."""
+    inv_id = "INV_A"
+    assay_id = "ASSAY_1"
+
+    investigations = [{"identifier": inv_id, "title": "Assay Metadata Test"}]
+    # Assays need to be linked to studies in the DB row via study_ref if we want them registered in studies,
+    # but the mapper/main logic also adds them to the ARC level.
+    assays = [{"identifier": assay_id, "investigation_ref": inv_id}]
+
+    contacts = [
+        {
+            "investigation_ref": inv_id,
+            "target_type": "assay",
+            "target_ref": assay_id,
+            "last_name": "Technician",
+            "first_name": "Tom",
+            "email": "tom@example.com",
+            "roles": json.dumps([{"term": "Operator"}]),
+        },
+        {
+            "investigation_ref": inv_id,
+            "target_type": "assay",
+            "target_ref": assay_id,
+            "last_name": "Analyst",
+            "first_name": "Anna",
+            "email": "anna@example.com",
+            "roles": json.dumps([{"term": "Data Analyst"}]),
+        },
+    ]
+
+    workflow_tester.set_db_content(
+        investigations=investigations,
+        assays=assays,
+        contacts=contacts,
+    )
+
+    arcs = await workflow_tester.run()
+
+    assert len(arcs) == 1
+    arc = arcs[0]
+    assert len(arc.Assays) == 1
+    assay = arc.Assays[0]
+    assert assay.Identifier == assay_id
+
+    # Verify Assay Performers (contacts mapped to performers in assays)
+    assert len(assay.Performers) == 2  # noqa: PLR2004
+    emails = {p.EMail for p in assay.Performers}
+    assert emails == {"tom@example.com", "anna@example.com"}
+    assert any(p.LastName == "Technician" for p in assay.Performers)
+
+
+@pytest.mark.asyncio
+async def test_complex_hierarchy(workflow_tester: WorkflowTester) -> None:
+    """Test investigation with multiple studies and assays linked to them."""
+    inv_id = "INV_COMPLEX"
+    s1_id = "S1"
+    s2_id = "S2"
+    a1_id = "A1"
+    a2_id = "A2"
+    a3_id = "A3"
+
+    investigations = [{"identifier": inv_id, "title": "Complex Hierarchy Test"}]
+    studies = [
+        {"identifier": s1_id, "investigation_ref": inv_id, "title": "Study 1"},
+        {"identifier": s2_id, "investigation_ref": inv_id, "title": "Study 2"},
+    ]
+    # Assays link to studies via 'study_ref' which is a JSON list of identifiers
+    assays = [
+        {"identifier": a1_id, "investigation_ref": inv_id, "study_ref": json.dumps([s1_id])},
+        {"identifier": a2_id, "investigation_ref": inv_id, "study_ref": json.dumps([s1_id])},
+        {"identifier": a3_id, "investigation_ref": inv_id, "study_ref": json.dumps([s2_id])},
+    ]
+
+    workflow_tester.set_db_content(
+        investigations=investigations,
+        studies=studies,
+        assays=assays,
+    )
+
+    arcs = await workflow_tester.run()
+
+    assert len(arcs) == 1
+    arc = arcs[0]
+    assert arc.Identifier == inv_id
+
+    # Verify studies
+    assert len(arc.Studies) == 2  # noqa: PLR2004
+    s1 = next(s for s in arc.Studies if s.Identifier == s1_id)
+    s2 = next(s for s in arc.Studies if s.Identifier == s2_id)
+
+    # Verify assays in studies
+    assert len(s1.RegisteredAssays) == 2  # noqa: PLR2004
+    assert {a.Identifier for a in s1.RegisteredAssays} == {a1_id, a2_id}
+
+    assert len(s2.RegisteredAssays) == 1
+    assert s2.RegisteredAssays[0].Identifier == a3_id
+
+
+
