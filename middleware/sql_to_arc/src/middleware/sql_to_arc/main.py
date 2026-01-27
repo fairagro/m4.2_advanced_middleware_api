@@ -17,6 +17,8 @@ from arctrl import (  # type: ignore[import-untyped]
     ArcTable,
     CompositeCell,
     CompositeHeader,
+    IOType,
+    OntologyAnnotation,
 )
 from opentelemetry import trace
 from pydantic import BaseModel, ConfigDict, ValidationError
@@ -235,30 +237,108 @@ def _add_publications_to_arc(
 
 def _build_arc_table(t_name: str, rows: list[dict[str, Any]]) -> ArcTable | None:
     """Build an ArcTable from flat database rows."""
+    if not rows:
+        return None
+
     table = ArcTable.init(t_name)
 
-    # Determine columns and max row index
-    col_names = sorted({cast(str, r.get("column_name")) for r in rows if r.get("column_name")})
+    # Determine max row index
     max_row_idx = max((cast(int, r.get("row_index", 0)) for r in rows), default=-1)
-
     if max_row_idx < 0:
         return None
 
-    # Map values for quick lookup
-    row_col_map = {}
-    for r in rows:
-        row_col_map[(r.get("row_index"), r.get("column_name"))] = str(r.get("value", ""))
+    # Group cells by column definition
+    def get_col_key(r: dict[str, Any]) -> tuple:
+        return (
+            r.get("column_type"),
+            r.get("column_io_type"),
+            r.get("column_value"),
+            r.get("column_annotation_term"),
+            r.get("column_annotation_uri"),
+            r.get("column_annotation_version"),
+            r.get("column_name"),  # Fallback for simple tests
+        )
 
-    # Add columns with their cells
-    for col_name in col_names:
-        header = CompositeHeader.OfHeaderString(col_name)
+    col_keys: list[tuple] = []
+    seen_keys = set()
+    col_to_rows: dict[tuple, dict[int, dict[str, Any]]] = defaultdict(dict)
+
+    for r in rows:
+        key = get_col_key(r)
+        if key not in seen_keys:
+            col_keys.append(key)
+            seen_keys.add(key)
+        col_to_rows[key][cast(int, r.get("row_index", 0))] = r
+
+    for key in col_keys:
+        c_type, c_io, c_val, c_ann_term, c_ann_uri, c_ann_ver, c_name = key
+
+        # Build Header
+        header = None
+        oa = OntologyAnnotation(c_ann_term or "", c_ann_uri or "", c_ann_ver or "")
+
+        try:
+            if c_type == "input":
+                header = CompositeHeader.input(IOType.of_string(c_io or "source_name"))
+            elif c_type == "output":
+                header = CompositeHeader.output(IOType.of_string(c_io or "sample_name"))
+            elif c_type == "characteristic":
+                header = CompositeHeader.characteristic(oa)
+            elif c_type == "factor":
+                header = CompositeHeader.factor(oa)
+            elif c_type == "parameter":
+                header = CompositeHeader.parameter(oa)
+            elif c_type == "component":
+                header = CompositeHeader.component(oa)
+            elif c_type == "comment":
+                header = CompositeHeader.comment(c_val or "")
+            elif c_type == "performer":
+                header = CompositeHeader.performer()
+            elif c_type == "date":
+                header = CompositeHeader.date()
+            elif c_name:
+                # Fallback
+                header = CompositeHeader.OfHeaderString(c_name)
+        except Exception as e:  # pylint: disable=broad-exception-caught
+            logger.warning("Failed to create header for type %s: %s", c_type, e)
+            continue
+
+        if not header:
+            continue
+
+        # Build Cells for this column
         col_cells = []
+        rows_map = col_to_rows[key]
         for idx in range(max_row_idx + 1):
-            val = row_col_map.get((idx, col_name), "")
-            if header.IsTermColumn:
-                col_cells.append(CompositeCell.create_term_from_string(val))
+            cell_row = rows_map.get(idx)
+            if not cell_row:
+                col_cells.append(CompositeCell.free_text(""))
+                continue
+
+            cv = cell_row.get("cell_value")
+            cat = cell_row.get("cell_annotation_term")
+            cau = cell_row.get("cell_annotation_uri")
+            cav = cell_row.get("cell_annotation_version")
+            v = cell_row.get("value")  # Fallback for old/simple tests
+
+            # Unitized cell?
+            if cv is not None and cat is not None:
+                col_cells.append(CompositeCell.unitized(str(cv), OntologyAnnotation(cat, cau or "", cav or "")))
+            elif cat is not None:
+                col_cells.append(CompositeCell.term(OntologyAnnotation(cat, cau or "", cav or "")))
+            elif cv is not None:
+                if header.IsTermColumn:
+                    col_cells.append(CompositeCell.term(OntologyAnnotation(str(cv), "", "")))
+                else:
+                    col_cells.append(CompositeCell.free_text(str(cv)))
+            elif v is not None:
+                if header.IsTermColumn:
+                    col_cells.append(CompositeCell.term(OntologyAnnotation(str(v), "", "")))
+                else:
+                    col_cells.append(CompositeCell.free_text(str(v)))
             else:
-                col_cells.append(CompositeCell.free_text(val))
+                col_cells.append(CompositeCell.free_text(""))
+
         table.AddColumn(header, col_cells)
 
     return table

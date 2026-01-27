@@ -587,3 +587,167 @@ async def test_assay_with_annotations(workflow_tester: WorkflowTester) -> None:
     assert arc.Assays[0].Tables[0].RowCount == 2
     assert arc.Assays[0].Tables[0].ColumnCount == 2
 
+
+@pytest.mark.asyncio
+async def test_comprehensive_annotation_flow(workflow_tester: WorkflowTester) -> None:
+    """
+    Test a complete flow with multiple linked annotation tables.
+    Study: Sources -> Samples (with Characteristics and Factors)
+    Assay Table 1: Samples -> Extracts (with Parameters)
+    Assay Table 2: Extracts -> Data (with Parameters and Unitized Cells)
+    """
+    inv_id = "INV_FLOW"
+    study_id = "STUDY_FLOW"
+    assay_id = "ASSAY_FLOW"
+
+    investigations = [{"identifier": inv_id, "title": "Comprehensive Flow Test"}]
+    studies = [{"identifier": study_id, "investigation_ref": inv_id, "title": "Study Flow"}]
+    assays = [{"identifier": assay_id, "investigation_ref": inv_id, "study_ref": json.dumps([study_id])}]
+
+    annotations = [
+        # --- Study Table: "Samples" ---
+        {
+            "investigation_ref": inv_id,
+            "target_type": "study",
+            "target_ref": study_id,
+            "table_name": "Samples",
+            "row_index": 0,
+            "column_type": "input",
+            "column_io_type": "source_name",
+            "cell_value": "Source_A",
+        },
+        {
+            "investigation_ref": inv_id,
+            "target_type": "study",
+            "target_ref": study_id,
+            "table_name": "Samples",
+            "row_index": 0,
+            "column_type": "characteristic",
+            "column_annotation_term": "Species",
+            "cell_annotation_term": "Arabidopsis thaliana",
+            "cell_annotation_uri": "http://purl.obolibrary.org/obo/NCBITaxon_3702",
+        },
+        {
+            "investigation_ref": inv_id,
+            "target_type": "study",
+            "target_ref": study_id,
+            "table_name": "Samples",
+            "row_index": 0,
+            "column_type": "factor",
+            "column_annotation_term": "Treatment",
+            "cell_annotation_term": "Drought",
+        },
+        {
+            "investigation_ref": inv_id,
+            "target_type": "study",
+            "target_ref": study_id,
+            "table_name": "Samples",
+            "row_index": 0,
+            "column_type": "output",
+            "column_io_type": "sample_name",
+            "cell_value": "Sample_1",
+        },
+        # --- Assay Table 1: "Extraction" ---
+        {
+            "investigation_ref": inv_id,
+            "target_type": "assay",
+            "target_ref": assay_id,
+            "table_name": "Extraction",
+            "row_index": 0,
+            "column_type": "input",
+            "column_io_type": "sample_name",
+            "cell_value": "Sample_1",
+        },
+        {
+            "investigation_ref": inv_id,
+            "target_type": "assay",
+            "target_ref": assay_id,
+            "table_name": "Extraction",
+            "row_index": 0,
+            "column_type": "parameter",
+            "column_annotation_term": "Method",
+            "cell_value": "Phenol-Chloroform",
+        },
+        {
+            "investigation_ref": inv_id,
+            "target_type": "assay",
+            "target_ref": assay_id,
+            "table_name": "Extraction",
+            "row_index": 0,
+            "column_type": "output",
+            "column_io_type": "sample_name",  # ISA uses sample_name for extracts often
+            "cell_value": "Extract_1",
+        },
+        # --- Assay Table 2: "Sequencing" ---
+        {
+            "investigation_ref": inv_id,
+            "target_type": "assay",
+            "target_ref": assay_id,
+            "table_name": "Sequencing",
+            "row_index": 0,
+            "column_type": "input",
+            "column_io_type": "sample_name",
+            "cell_value": "Extract_1",
+        },
+        {
+            "investigation_ref": inv_id,
+            "target_type": "assay",
+            "target_ref": assay_id,
+            "table_name": "Sequencing",
+            "row_index": 0,
+            "column_type": "parameter",
+            "column_annotation_term": "Concentration",
+            "cell_value": "50.5",
+            "cell_annotation_term": "ng/ul",  # Unitized cell
+        },
+        {
+            "investigation_ref": inv_id,
+            "target_type": "assay",
+            "target_ref": assay_id,
+            "table_name": "Sequencing",
+            "row_index": 0,
+            "column_type": "output",
+            "column_io_type": "data",
+            "cell_value": "raw_data.fastq.gz",
+        },
+    ]
+
+    workflow_tester.set_db_content(
+        investigations=investigations,
+        studies=studies,
+        assays=assays,
+        annotations=annotations,
+    )
+
+    arcs = await workflow_tester.run()
+    arc = arcs[0]
+
+    # Verify Study Table "Samples"
+    study = arc.Studies[0]
+    assert study.TableCount == 1
+    sample_table = study.Tables[0]
+    assert sample_table.Name == "Samples"
+    assert sample_table.ColumnCount == 4
+    # Check Header types (order preserved by implementation)
+    assert sample_table.Headers[0].is_input
+    assert sample_table.Headers[1].is_characteristic
+    assert sample_table.Headers[2].is_factor
+    assert sample_table.Headers[3].is_output
+
+    # Verify Assay Tables
+    assay = arc.Assays[0]
+    assert assay.TableCount == 2
+
+    extraction_table = next(t for t in assay.Tables if t.Name == "Extraction")
+    assert extraction_table.ColumnCount == 3
+    assert extraction_table.Headers[1].is_parameter
+
+    sequencing_table = next(t for t in assay.Tables if t.Name == "Sequencing")
+    assert sequencing_table.ColumnCount == 3
+    # Check unitized cell
+    conc_col_idx = 1
+    cell = sequencing_table.GetCellAt(conc_col_idx, 0)
+    assert cell.is_unitized
+    assert cell.GetContent()[0] == "50.5"
+    assert cell.GetContent()[1] == "ng/ul"
+
