@@ -456,4 +456,50 @@ async def test_complex_hierarchy(workflow_tester: WorkflowTester) -> None:
     assert s2.RegisteredAssays[0].Identifier == a3_id
 
 
+@pytest.mark.asyncio
+async def test_assay_with_complete_ontology_fields(workflow_tester: WorkflowTester) -> None:
+    """Test assay with all ontology-related fields filled (measurement, technology, platform)."""
+    inv_id = "INV_ONTOLOGY"
+    assay_id = "ASSAY_ONT"
+
+    investigations = [{"identifier": inv_id, "title": "Ontology Test"}]
+    assays = [
+        {
+            "identifier": assay_id,
+            "investigation_ref": inv_id,
+            "measurement_type_term": "gene expression profiling",
+            "measurement_type_uri": "http://purl.obolibrary.org/obo/OBI_0001271",
+            "measurement_type_version": "v1",
+            "technology_type_term": "nucleotide sequencing",
+            "technology_type_uri": "http://purl.obolibrary.org/obo/OBI_0000626",
+            "technology_type_version": "v1",
+            "technology_platform": "Illumina HiSeq 2500",
+        }
+    ]
+
+    workflow_tester.set_db_content(
+        investigations=investigations,
+        assays=assays,
+    )
+
+    arcs = await workflow_tester.run()
+
+    assert len(arcs) == 1
+    arc = arcs[0]
+    assert len(arc.Assays) == 1
+    assay = arc.Assays[0]
+
+    # Verify Measurement Type
+    assert assay.MeasurementType.Name == "gene expression profiling"
+    assert assay.MeasurementType.TermAccessionNumber == "http://purl.obolibrary.org/obo/OBI_0001271"
+
+    # Verify Technology Type
+    assert assay.TechnologyType.Name == "nucleotide sequencing"
+    assert assay.TechnologyType.TermAccessionNumber == "http://purl.obolibrary.org/obo/OBI_0000626"
+
+    # Verify Technology Platform
+    assert assay.TechnologyPlatform.Name == "Illumina HiSeq 2500"
+
+
+
 
