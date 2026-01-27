@@ -233,10 +233,41 @@ def _add_publications_to_arc(
             study.Publications.append(map_publication(p_row))
 
 
+def _build_arc_table(t_name: str, rows: list[dict[str, Any]]) -> ArcTable | None:
+    """Build an ArcTable from flat database rows."""
+    table = ArcTable.init(t_name)
+
+    # Determine columns and max row index
+    col_names = sorted({cast(str, r.get("column_name")) for r in rows if r.get("column_name")})
+    max_row_idx = max((cast(int, r.get("row_index", 0)) for r in rows), default=-1)
+
+    if max_row_idx < 0:
+        return None
+
+    # Map values for quick lookup
+    row_col_map = {}
+    for r in rows:
+        row_col_map[(r.get("row_index"), r.get("column_name"))] = str(r.get("value", ""))
+
+    # Add columns with their cells
+    for col_name in col_names:
+        header = CompositeHeader.OfHeaderString(col_name)
+        col_cells = []
+        for idx in range(max_row_idx + 1):
+            val = row_col_map.get((idx, col_name), "")
+            if header.IsTermColumn:
+                col_cells.append(CompositeCell.create_term_from_string(val))
+            else:
+                col_cells.append(CompositeCell.free_text(val))
+        table.AddColumn(header, col_cells)
+
+    return table
+
+
 def _process_annotation_tables(
     inv_id: str, annotations: list[dict[str, Any]], study_map: dict[str, Any], assay_map: dict[str, Any]
 ) -> None:
-    """Process and add annotation tables (placeholder for future implementation)."""
+    """Process and add annotation tables."""
     tables_groups = defaultdict(list)
     for ann in annotations:
         if ann.get("investigation_ref") == inv_id:
@@ -254,34 +285,9 @@ def _process_annotation_tables(
             target = assay_map.get(t_ref)
 
         if target:
-            # Build table
-            table = ArcTable.init(t_name)
-
-            # Determine columns and max row index
-            col_names = sorted({cast(str, r.get("column_name")) for r in rows if r.get("column_name")})
-            max_row_idx = max((cast(int, r.get("row_index", 0)) for r in rows), default=-1)
-
-            if max_row_idx < 0:
-                continue
-
-            # Map values for quick lookup
-            row_col_map = {}
-            for r in rows:
-                row_col_map[(r.get("row_index"), r.get("column_name"))] = str(r.get("value", ""))
-
-            # Add columns with their cells
-            for col_name in col_names:
-                header = CompositeHeader.OfHeaderString(col_name)
-                col_cells = []
-                for idx in range(max_row_idx + 1):
-                    val = row_col_map.get((idx, col_name), "")
-                    if header.IsTermColumn:
-                        col_cells.append(CompositeCell.create_term_from_string(val))
-                    else:
-                        col_cells.append(CompositeCell.free_text(val))
-                table.AddColumn(header, col_cells)
-
-            target.AddTable(table)
+            table = _build_arc_table(t_name, rows)
+            if table:
+                target.AddTable(table)
 
 
 def build_single_arc_task(data: ArcBuildData) -> ARC:
