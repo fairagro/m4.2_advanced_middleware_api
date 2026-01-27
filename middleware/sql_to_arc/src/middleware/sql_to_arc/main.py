@@ -337,9 +337,8 @@ async def process_single_dataset(
                 arc=json.loads(json_str),
             )
             logger.info(
-                "%s Upload successful. API confirmed %d ARC(s) processed.",
+                "%s ARC uploaded successfully.",
                 log_prefix,
-                len(response.arcs),
             )
 
         except (ApiClientError, psycopg.Error, OSError) as e:
