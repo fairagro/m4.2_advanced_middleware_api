@@ -421,7 +421,7 @@ async def _build_and_upload_single_arc(
 
         # Serialize ARC to JSON and calculate size
         try:
-            arc_json = arc.to_rocrate_json_string()
+            arc_json = arc.ToROCrateJsonString()
             json_size_kb = len(arc_json.encode("utf-8")) / 1024
             logger.info("ARC JSON created: id=%s, size=%.2fKB", arc_id, json_size_kb)
         except Exception as e:  # pylint: disable=broad-exception-caught

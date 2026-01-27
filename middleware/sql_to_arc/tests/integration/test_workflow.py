@@ -584,4 +584,6 @@ async def test_assay_with_annotations(workflow_tester: WorkflowTester) -> None:
     # When implemented, TableCount should be 1.
     assert arc.Assays[0].TableCount == 1
     assert arc.Assays[0].Tables[0].Name == "Sample Metadata"
+    assert arc.Assays[0].Tables[0].RowCount == 2
+    assert arc.Assays[0].Tables[0].ColumnCount == 2
 
