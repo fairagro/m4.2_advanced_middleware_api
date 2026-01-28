@@ -83,6 +83,7 @@ def test_config_with_defaults() -> None:
         rdi="edaphobase",
         rdi_url="https://edaphobase.org",
         api_client=api_client_config,
+        max_concurrent_tasks=20,
         otel=OtelConfig(),
     )
 
