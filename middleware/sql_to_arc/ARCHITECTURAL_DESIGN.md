@@ -104,3 +104,39 @@ Um die CPU-Auslastung zu maximieren, wird die Anzahl der gleichzeitig aktiven Ta
 | Memory Leak (Worker) | `gc.collect()` + JSON Return | Gibt Speicher im Worker sofort nach der Konvertierung frei. |
 | Datenbank-Last | `fetchmany` + `ANY()` | Optimale Balance zwischen Abfrage-Anzahl und Speicherlast. |
 | Skalierbarkeit | Single ARC Processing | Früherer Erfolg/Fehler-Feedback pro Untersuchung statt nur pro Batch. |
+
+---
+
+## 8. Performance Tuning Guide
+
+Um die Middleware optimal an die vorhandene Hardware und die Datenstruktur der Datenbank anzupassen, können folgende Parameter in der Konfigurationsdatei (`config.yaml`) optimiert werden:
+
+### 8.1 CPU & Parallelisierung
+
+- **`max_concurrent_arc_builds`**: Bestimmt die Anzahl der Worker-Prozesse im `ProcessPoolExecutor`.
+  - **Empfehlung**: Setzen Sie diesen Wert auf die Anzahl der verfügbaren CPU-Kerne minus 1 (um Reserven für den Hauptprozess und das Betriebssystem zu lassen).
+  - **Effekt**: Höhere CPU-Last, aber schnellere Verarbeitung der ARC-Generierung.
+
+### 8.2 Durchsatz & I/O Balancing
+
+- **`max_concurrent_tasks`**: Limitiert die Anzahl der gleichzeitig aktiven asynchronen Workflows (Datenfetch + Build + Upload).
+  - **Faustformel**: `4 * max_concurrent_arc_builds`.
+  - **Warum?**: Während z.B. 4 Kerne ARCs berechnen, können die restlichen Tasks auf die Netzwerk-Antwort der API warten (I/O). Ein zu hoher Wert führt zu erhöhtem RAM-Verbrauch; ein zu niedriger Wert lässt die CPU leerlaufen ("Stop-and-Go").
+  - **Tuning**: Wenn die CPU-Auslastung trotz Arbeit stark schwankt, erhöhen Sie diesen Wert leicht (z.B. auf `5 * builds`).
+
+### 8.3 Datenbank-Effizienz
+
+- **`db_batch_size`**: Anzahl der Investigations, die pro Datenbank-Chunk geladen werden.
+  - **Standard**: 100.
+  - **Tuning**: Erhöhen Sie diesen Wert bei sehr vielen kleinen Investigations (wenige Studies/Assays), um die Anzahl der SQL-Roundtrips zu senken. Senken Sie ihn, wenn einzelne Investigations extrem groß sind, um den RAM-Verbrauch des Hauptprozesses zu limitieren.
+
+### 8.4 Stabilität & Timeouts
+
+- **`arc_generation_timeout_minutes`**: Maximalzeit für einen einzelnen `build_arc_for_investigation` Aufruf im Worker.
+  - **Tuning**: Erhöhen Sie diesen Wert, falls Sie im Log "Timeout" Fehler bei sehr großen Datensätzen (z.B. Tausende Assays) sehen.
+
+### 8.5 Zusammenfassung: Das optimale Setup finden
+
+1. **CPU-Limit finden**: Erhöhen Sie `max_concurrent_arc_builds` bis die CPU-Kerne ausgelastet sind.
+2. **I/O-Löcher füllen**: Erhöhen Sie `max_concurrent_tasks`, wenn die CPU-Last zwischen den Builds auf 0% sinkt (Anzeichen für Warten auf API-Uploads).
+3. **RAM-Check**: Überwachen Sie den Speicherverbrauch. Der RAM-Bedarf steigt linear mit `max_concurrent_tasks` und der Größe der Investigations im Batch.

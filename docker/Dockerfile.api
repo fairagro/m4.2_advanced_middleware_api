@@ -1,5 +1,5 @@
 # ---- Package Build Stage ----
-FROM python:3.12.12-alpine3.22 AS package-builder
+FROM python:3.12.12-alpine3.23 AS package-builder
 
 WORKDIR /build
 
@@ -8,7 +8,7 @@ COPY pyproject.toml uv.lock ./
 COPY middleware ./middleware
 
 # Upgrade pip and install uv
-RUN pip install --no-cache-dir --upgrade pip==25.0.1 uv==0.9.10
+RUN pip install --no-cache-dir --upgrade pip==25.3 uv==0.9.27
 
 # Build shared package first (dependency of api)
 RUN uv build --package shared --wheel
@@ -18,20 +18,20 @@ RUN uv build --package api --wheel
 
 
 # ---- Binary Build Stage ----
-FROM python:3.12.12-alpine3.22 AS binary-builder
+FROM python:3.12.12-alpine3.23 AS binary-builder
 
 # Install build tools for PyInstaller
 RUN apk add --no-cache \
     build-base=0.5-r3 \
     python3-dev=3.12.12-r0 \
-    libffi-dev=3.4.8-r0 \
-    openssl-dev=3.5.4-r0 \
-    cargo=1.87.0-r0
+    libffi-dev=3.5.2-r0 \
+    openssl-dev=3.5.5-r0 \
+    cargo=1.91.1-r0
 
 WORKDIR /build
 
 # Install uv and PyInstaller
-RUN pip install --no-cache-dir --upgrade pip==25.0.1 uv==0.9.10
+RUN pip install --no-cache-dir --upgrade pip==25.3 uv==0.9.27
 
 # Copy built wheel from package-builder stage
 COPY --from=package-builder /build/dist/*.whl /tmp/wheels/
@@ -75,7 +75,7 @@ RUN pyinstaller --onedir \
 
 
 # ---- Runtime Stage ----
-FROM alpine:3.22.2
+FROM alpine:3.23.3
 
 WORKDIR /api
 
@@ -87,7 +87,7 @@ ENV GUNICORN_LOG_LEVEL=info
 COPY --from=binary-builder /build/dist/middleware-api /api/middleware-api
 
 # Create non-root user and group and fix permissions
-RUN apk add --no-cache curl=8.14.1-r2 git=2.49.1-r0 tzdata \
+RUN apk add --no-cache curl=8.17.0-r1 git=2.52.0-r0 tzdata \
     && addgroup -S middleware && adduser -S middleware -G middleware \
     && chown -R middleware:middleware /api
 
