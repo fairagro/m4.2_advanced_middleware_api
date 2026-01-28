@@ -33,7 +33,7 @@ fi
 # Use sops exec-env to pass the decrypted key as an environment variable
 # without writing it to a physical disk file.
 sops exec-env "${script_dir}/client.key" \
-  "docker compose -f compose-external.yaml up $BUILD_FLAG"
+  "docker compose -f compose-external.yaml up --abort-on-container-exit sql_to_arc $BUILD_FLAG"
 
 echo ""
 echo "==> Services finished!"

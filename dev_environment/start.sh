@@ -39,7 +39,7 @@ echo ""
 # We need to preserve TERM and PATH for proper terminal support
 # Use exec-env without --pristine but ensure minimal env pollution
 sops exec-env "${script_dir}/secrets.enc.yaml" \
-  "docker compose up $BUILD_FLAG"
+  "docker compose up --abort-on-container-exit sql_to_arc $BUILD_FLAG"
 
 echo ""
 echo "==> Services finished!"
