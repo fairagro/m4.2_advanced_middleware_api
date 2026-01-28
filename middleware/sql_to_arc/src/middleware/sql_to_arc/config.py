@@ -3,6 +3,7 @@
 from typing import Annotated, Any
 
 from pydantic import Field, SecretStr, model_validator
+from pydantic_core import PydanticUndefined
 
 from middleware.api_client.config import Config as ApiClientConfig
 from middleware.shared.config.config_base import ConfigBase
@@ -28,13 +29,13 @@ class Config(ConfigBase):
     max_concurrent_tasks: Annotated[
         int,
         Field(
-            default=None,  # Satisfy mypy, validator will set the 4x default
+            default=PydanticUndefined,  # Satisfy mypy, validator will set the 4x default
             description=(
                 "Maximum number of parallel tasks (IO + CPU). Defaults to 4x max_concurrent_arc_builds if not provided."
             ),
             ge=1,
         ),
-    ] = None  # type: ignore[assignment]
+    ]
     db_batch_size: Annotated[
         int,
         Field(
@@ -69,7 +70,9 @@ class Config(ConfigBase):
     @classmethod
     def set_default_max_concurrent_tasks(cls, data: Any) -> Any:
         """Set default max_concurrent_tasks if not provided."""
-        if isinstance(data, dict) and data.get("max_concurrent_tasks") is None:
-            max_builds = data.get("max_concurrent_arc_builds", 5)
+        if isinstance(data, dict) and "max_concurrent_tasks" not in data:
+            field_info = cls.model_fields.get("max_concurrent_arc_builds")
+            default_max_builds = getattr(field_info, "default", 5)  # A default for the default value.
+            max_builds = data.get("max_concurrent_arc_builds", default_max_builds)
             data["max_concurrent_tasks"] = int(max_builds) * 4
         return data
