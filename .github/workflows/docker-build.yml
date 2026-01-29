@@ -149,10 +149,6 @@ jobs:
               echo "title=FairAgro Advanced Middleware API" >> $GITHUB_OUTPUT
               echo "description=Advanced middleware API for FairAgro platform" >> $GITHUB_OUTPUT
               ;;
-            sql_to_arc)
-              echo "title=FairAgro SQL to ARC Converter" >> $GITHUB_OUTPUT
-              echo "description=Converts SQL database metadata to ARC format for FairAgro platform" >> $GITHUB_OUTPUT
-              ;;
             *)
               echo "title=FairAgro Advanced Middleware Component: ${{ matrix.component }}" >> $GITHUB_OUTPUT
               echo "description=Middleware component for FairAgro platform" >> $GITHUB_OUTPUT
