@@ -1,6 +1,6 @@
 [project]
 name = "api_client"
-version = "0.0.0" # currently we disregard the version of this subpackage
+version = "0.0.1" # currently we disregard the version of this subpackage
 description = "The FAIRagro advanced middleware API client"
 readme = "README.md"
 requires-python = ">=3.12"
