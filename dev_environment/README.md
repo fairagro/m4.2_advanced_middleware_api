@@ -30,7 +30,7 @@ The FAIRagro Middleware API service that:
 - Runs on port `8000`
 - Provides REST API for ARC management
 - No mTLS validation in dev mode (HTTP without client certs)
-- Health check via `/v1/health` endpoint
+- Health check via `/v1/liveness` endpoint
 
 ## Quick Start
 
