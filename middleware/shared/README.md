@@ -30,7 +30,6 @@ This package is used as a dependency by other middleware components:
 
 - `api`: The main REST API
 - `api_client`: Client library for API interaction
-- `sql_to_arc`: SQL to ARC conversion
 - `inspire_to_arc`: INSPIRE metadata to ARC conversion
 
 ## Dependencies

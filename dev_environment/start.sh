@@ -21,7 +21,6 @@ fi
 echo "==> Starting development environment..."
 echo "    - PostgreSQL will be started"
 echo "    - Database will be initialized with Edaphobase dump"
-echo "    - SQL-to-ARC converter will run after initialization"
 echo ""
 
 # Check if sops is available

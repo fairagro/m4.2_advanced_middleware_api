@@ -39,7 +39,7 @@ jobs:
     with:
       push_to_registry: true
       version_bump: ${{ startsWith(github.ref_name, 'feature/') && 'patch' || (github.event.inputs.version_bump || 'patch') }}
-      components: '["api", "sql_to_arc"]' # Add other components here in the future, e.g., '["api", "worker"]'
+      components: '["api"]' # Add other components here in the future, e.g., '["api", "worker"]'
     secrets: inherit
 
   security-scan-release:

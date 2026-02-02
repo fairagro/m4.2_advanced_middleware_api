@@ -1,6 +1,6 @@
 # Development Environment
 
-Complete Docker Compose setup for local development and testing of the SQL-to-ARC middleware.
+Complete Docker Compose setup for local development and testing of the FAIRagro Advanced Middleware.
 
 ## Services
 
@@ -22,17 +22,7 @@ One-time initialization container that:
 - Downloads and imports the Edaphobase dump from <https://repo.edaphobase.org/rep/dumps/FAIRagro.sql>
 - Exits after completion
 
-### 3. sql_to_arc
-
-The SQL-to-ARC converter that:
-
-- Builds from `../docker/Dockerfile.sql_to_arc`
-- Waits for db-init to complete
-- Connects to PostgreSQL and Middleware API
-- Mounts encrypted secrets via sops
-- Currently set to `sleep 3600` (modify compose.yaml to enable converter)
-
-### 4. middleware-api
+### 3. middleware-api
 
 The FAIRagro Middleware API service that:
 
@@ -40,7 +30,7 @@ The FAIRagro Middleware API service that:
 - Runs on port `8000`
 - Provides REST API for ARC management
 - No mTLS validation in dev mode (HTTP without client certs)
-- Health check via `/live` endpoint
+- Health check via `/v1/liveness` endpoint
 
 ## Quick Start
 
@@ -60,7 +50,7 @@ This will:
 
 1. Start PostgreSQL
 2. Initialize the database with Edaphobase data
-3. Run the SQL-to-ARC converter
+3. Start the Middleware API and Celery worker
 
 With image rebuild:
 
@@ -68,26 +58,12 @@ With image rebuild:
 ./start.sh --build
 ```
 
-### Start with External Middleware API
-
-If you want to run `sql_to_arc` against an external API server (e.g. production or staging) that requires client certificates:
-
-1. Copy your client certificate and key to `dev_environment/client.crt` and `dev_environment/client.key`.
-2. Edit `dev_environment/config-external.yaml` and set the `api_url` to the external endpoint.
-3. Run the external start script:
-
-```bash
-./start-external.sh
-```
-
-This starts only `postgres`, `db-init`, and `sql_to_arc`.
-
 ### View Logs
 
 ```bash
 docker compose logs -f
 docker compose logs -f postgres
-docker compose logs -f sql_to_arc
+docker compose logs -f middleware-api
 ```
 
 ### Stop Services
@@ -126,25 +102,7 @@ sops client.key
 sops -d client.key
 ```
 
-The `start.sh` script uses `sops exec-file` to temporarily decrypt `client.key` during container startup.
-
-### config.yaml
-
-Application configuration for sql_to_arc:
-
-- `db_host`: Set to `postgres` (Docker service name)
-- `api_client.client_cert_path`: `/run/secrets/client.crt`
-- `api_client.client_key_path`: `/run/secrets/client.key`
-
-## Service Dependencies
-
-```text
-postgres (healthcheck)
-  ↓
-db-init (waits for healthy postgres)
-  ↓
-sql_to_arc (waits for db-init completion)
-```
+The `start.sh` script uses `sops exec-env` with `secrets.enc.yaml` during container startup.
 
 ## Troubleshooting
 
@@ -161,55 +119,29 @@ Common issues:
 - Network timeout downloading dump → retry with `docker compose up db-init`
 - PostgreSQL not ready → check postgres healthcheck
 
-### sql_to_arc fails
+### API unreachable
 
 Check logs:
 
 ```bash
-docker compose logs sql_to_arc
+docker compose logs middleware-api
 ```
 
 Common issues:
 
-- Secrets not mounted → verify sops decryption works: `sops -d client.key`
-- API unreachable → check `api_url` in config.yaml
 - Database connection → verify db-init completed successfully
-
-### Rebuild specific service
-
-```bash
-docker compose build sql_to_arc
-docker compose up sql_to_arc
-```
-
-## Manual Usage (without start.sh)
-
-If you don't want to use sops or the start script:
-
-```bash
-# Start postgres and db-init only
-docker compose up -d postgres db-init
-
-# Wait for initialization
-docker compose logs -f db-init
-
-# Run sql_to_arc manually (after decrypting secrets)
-sops exec-file client.key \
-  'docker compose run --rm sql_to_arc'
-```
 
 ## Development Workflow
 
-1. Make changes to sql_to_arc code
+1. Make changes to API code
 2. Rebuild image: `./start.sh --build`
-3. View logs: `docker compose logs -f sql_to_arc`
+3. View logs: `docker compose logs -f middleware-api`
 4. Iterate
 
 ## Files
 
 - `compose.yaml` - Docker Compose service definitions
-- `config.yaml` - Application configuration
+- `middleware-api-config.yaml` - API application configuration
 - `client.crt` - Client certificate (plain)
 - `client.key` - Client private key (encrypted with sops)
 - `start.sh` - Startup script with sops integration
-- `run.sh` - **DEPRECATED** - Old script (kept for reference)

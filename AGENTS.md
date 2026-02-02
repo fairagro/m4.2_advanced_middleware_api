@@ -25,8 +25,6 @@ middleware/
 │   └── src/middleware/api/
 ├── api_client/            # Client library for API
 │   └── config.py          # Optional certificate support (26 tests)
-├── sql_to_arc/            # SQL to ARC converter
-│   └── config.py          # Uses ApiClientConfig
 
 scripts/
 ├── load-env.sh           # Environment setup (MAIN ENTRY POINT for hooks)
@@ -58,20 +56,6 @@ uv run mypy middleware/
 
 # Install all dependecies
 uv sync --dev --all-packages
-```
-
-### Development Environment for sql_to_arc
-
-```bash
-# Start dev environment
-cd dev_environment
-./start.sh --build
-
-# View logs
-docker compose logs -f
-
-# Cleanup
-docker compose down
 ```
 
 ## 📝 Key Implementation Details
@@ -142,7 +126,6 @@ services:
   postgres:           # PostgreSQL database
   db-init:            # Database initialization with Edaphobase dump
   middleware-api:     # FastAPI REST API
-  sql_to_arc:         # SQL to ARC converter
 ```
 
 **Configuration**: `dev_environment/config.yaml`
@@ -226,5 +209,5 @@ Before making changes, consider:
 ---
 
 **Last Updated**: 2025-12-10
-**Current Branch**: feature/introduce_sql_to_arc
+**Current Branch**: main
 **Maintainer Notes**: Keep this file updated when architectural decisions change
