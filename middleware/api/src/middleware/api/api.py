@@ -53,7 +53,7 @@ except (PackageNotFoundError, ImportError):
         with pyproject_path.open("rb") as f:
             data = tomllib.load(f)
         __version__ = data["project"]["version"]
-    except (FileNotFoundError, KeyError, ImportError):
+    except (FileNotFoundError, KeyError):
         __version__ = "0.0.0"
 
 
