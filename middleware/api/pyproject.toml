@@ -1,6 +1,6 @@
 [project]
 name = "api"
-version = "0.0.0" # currently we disrehgard the version of this subpackage
+dynamic = ["version"]
 description = "The FAIRagro advanced middleware API"
 readme = "README.md"
 requires-python = ">=3.12"
@@ -31,6 +31,10 @@ shared = { workspace = true }
 [tool.hatch.build.targets.wheel]
 packages = ["src/middleware"]
 
+[tool.hatch.version]
+source = "vcs"
+raw-options = { root = "../.." }
+
 [build-system]
-requires = ["hatchling"]
+requires = ["hatchling", "hatch-vcs"]
 build-backend = "hatchling.build"

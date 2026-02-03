@@ -1,6 +1,6 @@
 [project]
 name = "tools"
-version = "0.0.0"
+dynamic = ["version"]
 description = "ARC conversion tools"
 readme = "README.md"
 requires-python = ">=3.12"
@@ -11,6 +11,10 @@ dependencies = [
 [tool.hatch.build.targets.wheel]
 packages = ["src/middleware"]
 
+[tool.hatch.version]
+source = "vcs"
+raw-options = { root = "../.." }
+
 [build-system]
-requires = ["hatchling"]
+requires = ["hatchling", "hatch-vcs"]
 build-backend = "hatchling.build"
