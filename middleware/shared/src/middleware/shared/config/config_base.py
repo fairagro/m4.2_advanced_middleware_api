@@ -2,9 +2,9 @@
 
 import logging
 from pathlib import Path
-from typing import Annotated, Literal, Self, cast
+from typing import Annotated, Any, Literal, Self, cast
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 from .config_wrapper import ConfigWrapper
 
@@ -39,6 +39,14 @@ class ConfigBase(BaseModel):
         OtelConfig,
         Field(default_factory=OtelConfig, description="OpenTelemetry configuration"),
     ]
+
+    @field_validator("otel", mode="before")
+    @classmethod
+    def validate_otel(cls, v: Any) -> Any:
+        """Allow None for otel and convert to empty dict for default factory."""
+        if v is None:
+            return {}
+        return v
 
     @classmethod
     def from_config_wrapper(cls, wrapper: ConfigWrapper) -> Self:
