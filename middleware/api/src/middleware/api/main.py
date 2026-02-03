@@ -2,12 +2,6 @@
 
 import sys
 
-import uvicorn
-from celery.__main__ import main as celery_main
-
-from middleware.api.api import middleware_api
-from middleware.api.worker_health import check_worker_health
-
 
 def main() -> None:
     """Call uvicorn.main() or celery.main() to pass control.
@@ -18,12 +12,19 @@ def main() -> None:
     # Handle --version flag
     if len(sys.argv) > 1 and sys.argv[1] in ("--version", "-v"):
         try:
-            from importlib.metadata import PackageNotFoundError, version
+            from importlib.metadata import PackageNotFoundError, version  # pylint: disable=import-outside-toplevel
 
             print(f"middleware-api version {version('api')}")
         except (PackageNotFoundError, Exception):  # pylint: disable=broad-exception-caught
             print("middleware-api version unknown")
         sys.exit(0)
+
+    # Late imports to avoid side effects (like config loading) when just checking version or help
+    import uvicorn  # pylint: disable=import-outside-toplevel
+    from celery.__main__ import main as celery_main  # pylint: disable=import-outside-toplevel
+
+    from middleware.api.api import middleware_api  # pylint: disable=import-outside-toplevel
+    from middleware.api.worker_health import check_worker_health  # pylint: disable=import-outside-toplevel
 
     if len(sys.argv) > 1 and sys.argv[1] == "worker-health":
         sys.exit(0 if check_worker_health() else 1)

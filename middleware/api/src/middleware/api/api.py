@@ -8,7 +8,6 @@ and content type validation.
 import logging
 import os
 import sys
-import tomllib
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 from pathlib import Path
@@ -42,13 +41,20 @@ from .tracing import instrument_app
 from .worker import process_arc
 
 try:
-    pyproject_path = Path(__file__).parent.parent / "pyproject.toml"
-    with pyproject_path.open("rb") as f:
-        data = tomllib.load(f)
-    __version__ = data["project"]["version"]
-except (FileNotFoundError, KeyError):
-    # Fallback, falls die Datei nicht gefunden wird oder die Struktur fehlt
-    __version__ = "0.0.0"
+    from importlib.metadata import PackageNotFoundError, version
+
+    __version__ = version("api")
+except (PackageNotFoundError, ImportError):
+    # Try to read from pyproject.toml as fallback (e.g. in development if not installed)
+    try:
+        import tomllib
+
+        pyproject_path = Path(__file__).parent.parent / "pyproject.toml"
+        with pyproject_path.open("rb") as f:
+            data = tomllib.load(f)
+        __version__ = data["project"]["version"]
+    except (FileNotFoundError, KeyError):
+        __version__ = "0.0.0"
 
 
 loaded_config = None
