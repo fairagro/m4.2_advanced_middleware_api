@@ -21,7 +21,7 @@ def main() -> None:
             from importlib.metadata import PackageNotFoundError, version
 
             print(f"middleware-api version {version('api')}")
-        except PackageNotFoundError:
+        except (PackageNotFoundError, Exception):  # pylint: disable=broad-exception-caught
             print("middleware-api version unknown")
         sys.exit(0)
 
