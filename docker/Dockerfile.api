@@ -1,6 +1,10 @@
 # ---- Package Build Stage ----
 FROM python:3.12.12-alpine3.23 AS package-builder
 
+# Accept version as build argument
+ARG APP_VERSION=0.0.0
+ENV SETUPTOOLS_SCM_PRETEND_VERSION=${APP_VERSION}
+
 WORKDIR /build
 
 # Copy project files needed for package build

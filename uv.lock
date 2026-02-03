@@ -60,7 +60,6 @@ wheels = [
 
 [[package]]
 name = "api"
-version = "0.0.0"
 source = { editable = "middleware/api" }
 dependencies = [
     { name = "arctrl" },
@@ -107,7 +106,6 @@ requires-dist = [
 
 [[package]]
 name = "api-client"
-version = "0.0.1"
 source = { editable = "middleware/api_client" }
 dependencies = [
     { name = "httpx" },
@@ -1998,7 +1996,6 @@ wheels = [
 
 [[package]]
 name = "shared"
-version = "0.0.1"
 source = { editable = "middleware/shared" }
 dependencies = [
     { name = "opentelemetry-api" },
@@ -2090,7 +2087,6 @@ wheels = [
 
 [[package]]
 name = "tools"
-version = "0.0.0"
 source = { editable = "middleware/tools" }
 dependencies = [
     { name = "arctrl" },

@@ -84,7 +84,8 @@ async def test_create_arc_via_git_repo(
     }
 
     # Load minimal.json
-    arc_json_path = Path("/workspaces/m4.2_advanced_middleware_api/ro_crates/minimal.json")
+    root_dir = Path(__file__).parents[4]
+    arc_json_path = root_dir / "ro_crates" / "minimal.json"
     with arc_json_path.open("r", encoding="utf-8") as f:
         json_content = json.load(f)
 

@@ -15,6 +15,16 @@ def main() -> None:
     If the first argument is 'celery', we pass control to celery.
     Otherwise we default to uvicorn with the hardcoded app path.
     """
+    # Handle --version flag
+    if len(sys.argv) > 1 and sys.argv[1] in ("--version", "-v"):
+        try:
+            from importlib.metadata import PackageNotFoundError, version
+
+            print(f"middleware-api version {version('api')}")
+        except (PackageNotFoundError, Exception):  # pylint: disable=broad-exception-caught
+            print("middleware-api version unknown")
+        sys.exit(0)
+
     if len(sys.argv) > 1 and sys.argv[1] == "worker-health":
         sys.exit(0 if check_worker_health() else 1)
 

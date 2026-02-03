@@ -79,7 +79,8 @@
 	},
 
 	"containerEnv": {
-		"UV_LINK_MODE": "copy"
+		"UV_LINK_MODE": "copy",
+		"DEVCONTAINER_TYPE": "vscode"
 	},
 
 	// Configure tool-specific properties.
