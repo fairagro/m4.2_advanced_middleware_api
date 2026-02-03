@@ -115,7 +115,7 @@
 
 	// Load encrypted environment variables automatically (with error tolerance)
 	"postCreateCommand": {
-		"setup bashrc": "grep -qF 'source \\${containerWorkspaceFolder}/scripts/load-env.siner h' ~/.bashrc || echo 'source \\${containerWorkspaceFolder}/scripts/load-env.sh' >> ~/.bashrc"
+        "setup bashrc": "grep -qF 'source \\${containerWorkspaceFolder}/scripts/load-env.sh' ~/.bashrc || echo 'source \\${containerWorkspaceFolder}/scripts/load-env.sh' >> ~/.bashrc"
 	},
 	"postStartCommand": {
 		"install ggshield": "sudo /usr/local/py-utils/bin/pipx install --global ggshield"
