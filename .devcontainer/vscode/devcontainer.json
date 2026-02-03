@@ -1,7 +1,7 @@
 // For format details, see https://aka.ms/devcontainer.json. For config options, see the
 // README at: https://github.com/devcontainers/templates/tree/main/src/debian
 {
-	"name": "Debian",
+	"name": "Debian (VS Code - DinD)",
 	// Or use a Dockerfile or Docker Compose file. More info: https://containers.dev/guide/dockerfile
 	"image": "mcr.microsoft.com/devcontainers/base:bookworm",
 	"features": {
@@ -12,13 +12,11 @@
 			"disableIp6tables": true,
 			"version": "28.5.1"
 		},
-		// NOTE: this conflicts with out own pre-push git hook.
-		// Currently we do not need git-lfs in this project, anyway.
-		// "ghcr.io/devcontainers/features/git-lfs:1": {
-		// 	"autoPull": true,
-		// 	"installDirectlyFromGitHubRelease": true,
-		// 	"version": "3.7.1"
-		// },
+		"ghcr.io/devcontainers/features/git-lfs:1": {
+			"autoPull": true,
+			"installDirectlyFromGitHubRelease": true,
+			"version": "3.7.1"
+		},
 		"ghcr.io/devcontainers/features/github-cli:1": {
 			"installDirectlyFromGitHubRelease": true,
 			"version": "2.82.1"
@@ -56,8 +54,7 @@
 		"ghcr.io/devcontainers-extra/features/apt-packages:1": {
 			"clean_ppas": true,
 			"preserve_apt_list": true,
-			"packages": "curl,ca-certificates",
-			"ppas": "ppa:deadsnakes/ppa"
+			"packages": "curl,ca-certificates"
 		},
 		"ghcr.io/devcontainers-extra/features/curl-apt-get:1": {},
 		"ghcr.io/devcontainers-extra/features/pre-commit:2": {
@@ -118,16 +115,10 @@
 
 	// Load encrypted environment variables automatically (with error tolerance)
 	"postCreateCommand": {
-		"install ggshield": [
-			"bash",
-			"-c",
-			"sudo /usr/local/py-utils/bin/pipx install --global ggshield"
-		],
-		"setup bashrc": [
-			"bash",
-			"-c",
-"grep -qF 'source /workspaces/m4.2_advanced_middleware_api/scripts/load-env.sh' /home/vscode/.bashrc || echo 'source /workspaces/m4.2_advanced_middleware_api/scripts/load-env.sh' >> /home/vscode/.bashrc"
-		]
+		"setup bashrc": "grep -qF 'source \\${containerWorkspaceFolder}/scripts/load-env.siner h' ~/.bashrc || echo 'source \\${containerWorkspaceFolder}/scripts/load-env.sh' >> ~/.bashrc"
+	},
+	"postStartCommand": {
+		"install ggshield": "sudo /usr/local/py-utils/bin/pipx install --global ggshield"
 	},
 
 	// Uncomment to connect as root instead. More info: https://aka.ms/dev-containers-non-root.
