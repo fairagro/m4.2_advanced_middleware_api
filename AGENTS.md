@@ -5,11 +5,10 @@ This file contains critical context about the FAIRagro Advanced Middleware API p
 ## 📋 Tech Stack
 
 | Component | Version | Details |
-|-----------|---------|---------|
+| --------- | ------- | ------- |
 | Python | 3.12.12 | Primary language |
 | FastAPI | Latest | REST API framework |
 | Pydantic | V2 | Configuration validation |
-| PostgreSQL | 15.15 | Database |
 | Docker | Latest | Containerization |
 | Git LFS | 3.3.0+ | Large file storage |
 | uv | Latest | Python package manager |
@@ -165,6 +164,15 @@ uv run pytest middleware/shared/tests/unit/test_config_wrapper.py::test_parse_pr
 - Empty environment variables are converted to `None`, not empty strings
 - SSL verification is enabled by default
 - CA certificates can be optionally provided
+
+## ✨ Code Quality Standards
+
+Agents are expected to maintain high code quality by addressing issues reported by the project's configured tools: **Ruff, Pylance, MyPy, Pylint, and Bandit**.
+
+- **Automatic Fixes**: Actively check for and fix code smells, warnings, and notices.
+- **Real Fixes vs. Suppression**: Issues must be resolved with actual code changes. Using comments to suppress warnings (e.g., `# noqa`, `# type: ignore`, `# pylint: disable`) is an **option of last resort**.
+- **When to Suppress**: Only suppress if a fix is technically impossible or would result in unnecessarily complex or unreadable code.
+- **Comprehensive Coverage**: Fix all reported issues, including low-severity notices and warnings, not just critical errors.
 
 ## 📚 File Modifications Pattern
 
