@@ -1,0 +1,135 @@
+// For format details, see https://aka.ms/devcontainer.json. For config options, see the
+// README at: https://github.com/devcontainers/templates/tree/main/src/debian
+{
+	"name": "Debian",
+	// Or use a Dockerfile or Docker Compose file. More info: https://containers.dev/guide/dockerfile
+	"image": "mcr.microsoft.com/devcontainers/base:bookworm",
+	"features": {
+		"ghcr.io/devcontainers/features/docker-in-docker:2": {
+			"moby": true,
+			"installDockerBuildx": true,
+			"installDockerComposeSwitch": true,
+			"disableIp6tables": true,
+			"version": "28.5.1"
+		},
+		// NOTE: this conflicts with out own pre-push git hook.
+		// Currently we do not need git-lfs in this project, anyway.
+		// "ghcr.io/devcontainers/features/git-lfs:1": {
+		// 	"autoPull": true,
+		// 	"installDirectlyFromGitHubRelease": true,
+		// 	"version": "3.7.1"
+		// },
+		"ghcr.io/devcontainers/features/github-cli:1": {
+			"installDirectlyFromGitHubRelease": true,
+			"version": "2.82.1"
+		},
+		"ghcr.io/devcontainers/features/python:1": {
+			"installTools": true,
+			"version": "3.12.12"
+		},
+		"ghcr.io/eitsupi/devcontainer-features/jq-likes:2": {
+			"jqVersion": "1.8.1",
+			"yqVersion": "4.48.1",
+			"gojqVersion": "none",
+			"xqVersion": "0.4.1",
+			"jaqVersion": "none"
+		},
+		"ghcr.io/dhoeric/features/hadolint:1": {},
+		"ghcr.io/stuartleeks/dev-container-features/shell-history:0": {},
+		"ghcr.io/lentzi90/features/yamlfmt:0": {
+			"version": "v0.14.0"
+		},
+		"ghcr.io/va-h/devcontainers-features/difftastic:1": {
+			"version": "0.65.0"
+		},
+		"ghcr.io/va-h/devcontainers-features/uv:1": {
+			"shellautocompletion": true,
+			"version": "0.9.5"
+		},
+		"ghcr.io/devcontainers-extra/features/actions-runner:1": {
+			"version": "latest",
+			"dotnetVersion": "latest"
+		},
+		"ghcr.io/devcontainers-extra/features/age:1": {
+			"version": "1.2.1"
+		},
+		"ghcr.io/devcontainers-extra/features/apt-packages:1": {
+			"clean_ppas": true,
+			"preserve_apt_list": true,
+			"packages": "curl,ca-certificates",
+			"ppas": "ppa:deadsnakes/ppa"
+		},
+		"ghcr.io/devcontainers-extra/features/curl-apt-get:1": {},
+		"ghcr.io/devcontainers-extra/features/pre-commit:2": {
+			"version": "4.3.0"
+		},
+		"ghcr.io/devcontainers-extra/features/sops:1": {
+			"version": "3.11.0"
+		},
+		"ghcr.io/devcontainers-extra/features/starship:1": {
+			"version": "1.23.0"
+		},
+		"ghcr.io/devcontainers-extra/features/wget-apt-get:1": {},
+		"ghcr.io/jungaretti/features/vim:1": {},
+		"ghcr.io/schlich/cst-devcontainer-feature/container-structure-test:1": {
+			"addAlias": true
+		},
+		"ghcr.io/devcontainers/features/kubectl-helm-minikube:1": {
+			"version": "1.34.1",
+			"helm": "3.19.0",
+			"minikube": "1.37.0"
+		}
+	},
+
+	"containerEnv": {
+		"UV_LINK_MODE": "copy"
+	},
+
+	// Configure tool-specific properties.
+	"customizations": {
+		"vscode": {
+			// Add the IDs of extensions you want installed when the container is created.
+			"extensions": [
+				"jeff-hykin.better-dockerfile-syntax",
+				"ms-azuretools.vscode-docker",
+				"formulahendry.docker-explorer",
+				"shipitsmarter.sops-edit",
+				"davidanson.vscode-markdownlint",
+				"samuelcolvin.jinjahtml",
+				"tamasfe.even-better-toml",
+				"ms-python.python",
+				"ms-python.vscode-pylance",
+				"ms-python.debugpy",
+				"ms-python.autopep8",
+				"ms-python.vscode-python-envs",
+				"ms-python.pylint",
+				"mhutchie.git-graph",
+				"donjayamanne.githistory",
+				"codezombiech.gitignore",
+				"github.copilot",
+				"github.copilot-chat",
+				"matangover.mypy",
+				"charliermarsh.ruff",
+				"tim-koehler.helm-intellisense",
+				"vadzimnestsiarenka.helm-template-preview-and-more"
+			]
+		}
+	},
+
+	// Load encrypted environment variables automatically (with error tolerance)
+	"postCreateCommand": {
+		"install ggshield": [
+			"bash",
+			"-c",
+			"sudo /usr/local/py-utils/bin/pipx install --global ggshield"
+		],
+		"setup bashrc": [
+			"bash",
+			"-c",
+"grep -qF 'source /workspaces/m4.2_advanced_middleware_api/scripts/load-env.sh' /home/vscode/.bashrc || echo 'source /workspaces/m4.2_advanced_middleware_api/scripts/load-env.sh' >> /home/vscode/.bashrc"
+		]
+	},
+
+	// Uncomment to connect as root instead. More info: https://aka.ms/dev-containers-non-root.
+	"remoteUser": "vscode"
+}
