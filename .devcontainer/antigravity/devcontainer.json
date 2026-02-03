@@ -73,7 +73,8 @@
 	},
 
 	"containerEnv": {
-		"UV_LINK_MODE": "copy"
+		"UV_LINK_MODE": "copy",
+		"DEVCONTAINER_TYPE": "antigravity"
 	},
 
 	// Configure tool-specific properties.

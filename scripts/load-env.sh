@@ -76,7 +76,15 @@ if command -v pre-commit &> /dev/null; then
             echo ""
             echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
             echo ""
-            ggshield auth login || echo "⚠️ ggshield authentication failed or was cancelled."
+            
+            # Detect environment: Antigravity uses token-based auth, VSCode uses browser-based auth
+            if [ "$DEVCONTAINER_TYPE" = "antigravity" ]; then
+                echo "🔐 Using token-based authentication (Antigravity environment)"
+                ggshield auth login --method token || echo "⚠️ ggshield authentication failed or was cancelled."
+            else
+                echo "🔐 Using browser-based authentication (VSCode environment)"
+                ggshield auth login || echo "⚠️ ggshield authentication failed or was cancelled."
+            fi
         fi
     fi
 else
