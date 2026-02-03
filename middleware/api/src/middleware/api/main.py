@@ -18,10 +18,10 @@ def main() -> None:
     # Handle --version flag
     if len(sys.argv) > 1 and sys.argv[1] in ("--version", "-v"):
         try:
-            from importlib.metadata import version
+            from importlib.metadata import PackageNotFoundError, version
 
             print(f"middleware-api version {version('api')}")
-        except Exception:
+        except PackageNotFoundError:
             print("middleware-api version unknown")
         sys.exit(0)
 
