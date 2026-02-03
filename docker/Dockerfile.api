@@ -75,6 +75,7 @@ RUN pyinstaller --onedir \
     --copy-metadata opentelemetry-sdk \
     --copy-metadata requests \
     --copy-metadata starlette \
+    --copy-metadata api \
     $(python -c "import middleware.api; print(middleware.api.__file__.replace('__init__.py', 'main.py'))")
 
 

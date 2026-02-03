@@ -2,9 +2,6 @@
 
 import sys
 
-import uvicorn
-from celery.__main__ import main as celery_main
-
 
 def main() -> None:
     """Call uvicorn.main() or celery.main() to pass control.
@@ -22,7 +19,10 @@ def main() -> None:
             print("middleware-api version unknown")
         sys.exit(0)
 
-    # Late imports to avoid side effects (like config loading) when just checking version
+    # Late imports to avoid side effects (like config loading) when just checking version or help
+    import uvicorn  # pylint: disable=import-outside-toplevel
+    from celery.__main__ import main as celery_main  # pylint: disable=import-outside-toplevel
+
     from middleware.api.api import middleware_api  # pylint: disable=import-outside-toplevel
     from middleware.api.worker_health import check_worker_health  # pylint: disable=import-outside-toplevel
 
