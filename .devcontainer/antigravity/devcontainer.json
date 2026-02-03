@@ -108,10 +108,11 @@
 	},
 
 	// Load encrypted environment variables automatically (with error tolerance)
+	// TODO: check if ggshield is installed automatically, when the devcontainer is created
+	// NOTE: it does not work when trying to install via postStartCommand, because of permission issues,
+	// although it works when running the command manually.
 	"postCreateCommand": {
-		"setup bashrc": "grep -qF 'source \\${containerWorkspaceFolder}/scripts/load-env.sh' ~/.bashrc || echo 'source \\${containerWorkspaceFolder}/scripts/load-env.sh' >> ~/.bashrc"
-	},
-	"postStartCommand": {
+		"setup bashrc": "grep -qF 'source \\${containerWorkspaceFolder}/scripts/load-env.sh' ~/.bashrc || echo 'source \\${containerWorkspaceFolder}/scripts/load-env.sh' >> ~/.bashrc",
 		"install ggshield": "sudo /usr/local/py-utils/bin/pipx install --global ggshield"
 	},
 
