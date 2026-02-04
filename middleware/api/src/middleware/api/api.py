@@ -26,6 +26,7 @@ from opentelemetry.sdk.trace import TracerProvider
 from pydantic import ValidationError
 
 from middleware.shared.api_models.models import (
+    CreateOrUpdateArcRequest,
     CreateOrUpdateArcsRequest,
     CreateOrUpdateArcsResponse,
     GetTaskStatusResponse,
@@ -333,14 +334,16 @@ class Api:
     def _get_known_rdis(self) -> list[str]:
         return self._config.known_rdis
 
-    def _validate_rdi_known(self, request_body: CreateOrUpdateArcsRequest) -> str:
+    def _validate_rdi_known(self, request_body: CreateOrUpdateArcsRequest | CreateOrUpdateArcRequest) -> str:
         known_rdis = self._get_known_rdis()
         rdi = request_body.rdi
         if rdi not in known_rdis:
             raise HTTPException(status_code=400, detail=f"RDI '{rdi}' is not recognized.")
         return cast(str, rdi)
 
-    def _validate_rdi_authorized(self, request: Request, request_body: CreateOrUpdateArcsRequest) -> str:
+    def _validate_rdi_authorized(
+        self, request: Request, request_body: CreateOrUpdateArcsRequest | CreateOrUpdateArcRequest
+    ) -> str:
         rdi = self._validate_rdi_known(request_body)
 
         # If client certificates are required, check authorized RDIs from certificate
@@ -368,6 +371,7 @@ class Api:
         self._setup_liveness_route()
         self._setup_health_route()
         self._setup_create_or_update_arcs_route()
+        self._setup_create_or_update_arc_route_v2()
         self._setup_task_status_route()
 
     def _setup_whoami_route(self) -> None:
@@ -472,6 +476,31 @@ class Api:
             # Use rate limiting config if available
             # Note: rate limit is usually applied at task definition or globally,
             # here we just dispatch.
+
+            task = process_arc.delay(rdi, arc_data, client_id)
+
+            logger.info("Enqueued task %s for ARC processing", task.id)
+
+            return CreateOrUpdateArcsResponse(task_id=task.id, status="processing")
+
+    def _setup_create_or_update_arc_route_v2(self) -> None:
+        @self._app.post("/v2/arcs", status_code=202)
+        async def create_or_update_arc(
+            request_body: CreateOrUpdateArcRequest,
+            client_id: Annotated[str | None, Depends(self._validate_client_id)],
+            _content_type_validated: Annotated[None, Depends(self._validate_content_type)],
+            _accept_validated: Annotated[None, Depends(self._validate_accept_type)],
+            rdi: Annotated[str, Depends(self._validate_rdi_authorized)],
+        ) -> CreateOrUpdateArcsResponse:
+            """Submit a single ARC for processing asynchronously."""
+            logger.info(
+                "Received POST /v2/arcs request: rdi=%s, client_id=%s",
+                rdi,
+                client_id or "none",
+            )
+
+            # Submit task to Celery
+            arc_data = request_body.arc
 
             task = process_arc.delay(rdi, arc_data, client_id)
 
