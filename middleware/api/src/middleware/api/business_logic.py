@@ -6,7 +6,6 @@ This module provides:
 - Business logic for creating, updating, and managing ARCs
 """
 
-import asyncio
 import json
 import logging
 from datetime import UTC, datetime
@@ -16,10 +15,9 @@ from arctrl import ARC  # type: ignore[import-untyped]
 from opentelemetry import trace
 
 from middleware.shared.api_models.models import (
+    ArcOperationResult,
     ArcResponse,
     ArcStatus,
-    ArcOperationResult,
-    CreateOrUpdateArcsResponse,
 )
 
 from .arc_store import ArcStore
@@ -93,16 +91,12 @@ class BusinessLogic:
                 timestamp=datetime.now(UTC).isoformat() + "Z",
             )
 
-
-
     # -------------------------- Create or Update ARCs --------------------------
     # TODO: in the first implementation, we accepted string data for ARC JSON,
     # now we accept list[Any] that is already validated using Pydantic in the API layer.
     # The question is: do we need validation on the BusinessLogic layer as well?
     # Depending on the answer, we need to refactor the current validation approach.
-    async def create_or_update_arc(
-        self, rdi: str, arc: Any, client_id: str | None
-    ) -> ArcOperationResult:
+    async def create_or_update_arc(self, rdi: str, arc: Any, client_id: str | None) -> ArcOperationResult:
         """Create or update a single ARC based on the provided RO-Crate JSON data.
 
         Args:
@@ -122,9 +116,7 @@ class BusinessLogic:
             "api.BusinessLogic.create_or_update_arc",
             attributes={"rdi": rdi, "client_id": client_id or "none"},
         ) as span:
-            logger.info(
-                "Starting ARC creation/update: rdi=%s, client_id=%s", rdi, client_id or "none"
-            )
+            logger.info("Starting ARC creation/update: rdi=%s, client_id=%s", rdi, client_id or "none")
             try:
                 result = await self._create_arc_from_rocrate(rdi, arc)
 

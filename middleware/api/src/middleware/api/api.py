@@ -11,7 +11,7 @@ import sys
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 from pathlib import Path
-from typing import Annotated, Any, cast
+from typing import Annotated, cast
 from urllib.parse import unquote
 
 import redis
@@ -27,8 +27,6 @@ from pydantic import ValidationError
 
 from middleware.shared.api_models.models import (
     ArcOperationResult,
-    ArcResponse,
-    ArcStatus,
     CreateOrUpdateArcRequest,
     CreateOrUpdateArcResponse,
     CreateOrUpdateArcsRequest,
@@ -586,11 +584,7 @@ class Api:
                 status = TaskStatus(celery_status)
             except ValueError:
                 # Handle states not in our Enum if any (e.g. RECEIVED, RETRY handled by TaskStatus)
-                if celery_status == "RECEIVED":
-                    status = TaskStatus.PENDING
-                else:
-                    # Fallback to PENDING or whatever makes sense for unknown Celery states
-                    status = TaskStatus.PENDING
+                status = TaskStatus.PENDING if celery_status == "RECEIVED" else TaskStatus.PENDING
 
             return GetTaskStatusResponseV2(
                 status=status,
