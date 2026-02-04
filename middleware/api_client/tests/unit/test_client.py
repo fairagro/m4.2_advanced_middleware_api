@@ -11,7 +11,7 @@ import respx
 from arctrl import ARC, ArcInvestigation  # type: ignore[import-untyped]
 
 from middleware.api_client import ApiClient, ApiClientError, Config
-from middleware.shared.api_models.models import ArcOperationResult, TaskStatus
+from middleware.shared.api_models.models import ArcOperationResult
 
 
 @pytest.fixture
