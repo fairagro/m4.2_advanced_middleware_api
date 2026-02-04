@@ -89,12 +89,12 @@ ENV UVICORN_PORT=8000
 ENV GUNICORN_WORKERS=0
 ENV GUNICORN_LOG_LEVEL=info
 
-COPY --from=binary-builder /build/dist/middleware-api /api/middleware-api
-
 # Create non-root user and group and fix permissions
 RUN apk add --no-cache curl=8.17.0-r1 git=2.52.0-r0 tzdata \
     && addgroup -S middleware && adduser -S middleware -G middleware \
-    && chown -R middleware:middleware /api
+    && chown middleware:middleware /api
+
+COPY --chown=middleware:middleware --from=binary-builder /build/dist/middleware-api /api/middleware-api
 
 # Configure Git system-wide (before switching user) to ensure settings apply
 # http.postBuffer: 500MB buffer for large requests
