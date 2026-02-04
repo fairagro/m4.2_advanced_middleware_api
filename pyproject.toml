@@ -5,6 +5,7 @@ description = "The FAIRagro advanced middleware"
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
+  "aiocouch>=4.0.1",
   "api",
   "api_client",
   "shared",

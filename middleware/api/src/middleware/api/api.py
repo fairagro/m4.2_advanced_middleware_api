@@ -38,6 +38,7 @@ from middleware.shared.api_models.models import (
     TaskStatus,
     WhoamiResponse,
 )
+from middleware.shared.couchdb_client import CouchDBClient
 from middleware.shared.tracing import initialize_logging, initialize_tracing
 
 from .celery_app import celery_app
@@ -135,6 +136,7 @@ class Api:
         self._config = app_config
         self._tracer_provider: TracerProvider | None = None
         self._logger_provider: LoggerProvider | None = None
+        self._couchdb_client: CouchDBClient | None = None
         logger.debug("API configuration: %s", self._config.model_dump())
 
         # Initialize OpenTelemetry tracing with optional OTLP endpoint
@@ -157,7 +159,27 @@ class Api:
 
         @asynccontextmanager
         async def lifespan(_app: FastAPI) -> AsyncGenerator[None, None]:
+            # Initialize CouchDB client
+            couchdb_url = os.environ.get("COUCHDB_URL", "http://localhost:5984")
+            couchdb_user = os.environ.get("COUCHDB_USER")
+            couchdb_password = os.environ.get("COUCHDB_PASSWORD")
+            
+            self._couchdb_client = CouchDBClient(
+                url=couchdb_url,
+                user=couchdb_user,
+                password=couchdb_password,
+            )
+            try:
+                await self._couchdb_client.connect()
+                logger.info("CouchDB client connected")
+            except Exception as e:  # pylint: disable=broad-exception-caught
+                logger.warning("Failed to connect to CouchDB: %s", e)
+            
             yield
+            
+            # Cleanup
+            if self._couchdb_client:
+                await self._couchdb_client.close()
             if self._tracer_provider is not None:
                 try:
                     self._tracer_provider.shutdown()
@@ -405,11 +427,11 @@ class Api:
 
     def _setup_health_route(self) -> None:
         @self._app.get("/v1/health", response_model=HealthResponse)
-        def health_check(
+        async def health_check(
             response: Response,
             _accept_validated: Annotated[None, Depends(self._validate_accept_type)],
         ) -> HealthResponse:
-            """Check health of API and connected services (Redis, RabbitMQ)."""
+            """Check health of API and connected services (Redis, RabbitMQ, CouchDB)."""
             # Check Redis (result backend)
             redis_reachable = False
             try:
@@ -434,10 +456,18 @@ class Api:
             except Exception as e:  # pylint: disable=broad-exception-caught
                 logger.error("RabbitMQ health check failed: %s", e)
 
+            # Check CouchDB
+            couchdb_reachable = False
+            if self._couchdb_client:
+                couchdb_reachable = await self._couchdb_client.health_check()
+            else:
+                logger.warning("CouchDB client not initialized")
+
             # API only checks its direct dependencies
             status = {
                 "redis_reachable": redis_reachable,
                 "rabbitmq_reachable": rabbitmq_reachable,
+                "couchdb_reachable": couchdb_reachable,
             }
 
             is_healthy = all(status.values())
