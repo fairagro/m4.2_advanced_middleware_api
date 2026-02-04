@@ -5,16 +5,20 @@ updating and deleting ARC objects. It includes authentication via client certifi
 and content type validation.
 """
 
+import hashlib
+import json
 import logging
 import os
 import sys
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
+from datetime import datetime, timezone
 from pathlib import Path
-from typing import Annotated, cast
+from typing import Annotated, Any, cast
 from urllib.parse import unquote
 
 import redis
+from arctrl import ARC  # type: ignore[import-untyped]
 from asn1crypto.core import Sequence, UTF8String  # type: ignore
 from cryptography import x509
 from cryptography.x509.extensions import ExtensionNotFound
@@ -27,6 +31,8 @@ from pydantic import ValidationError
 
 from middleware.shared.api_models.models import (
     ArcOperationResult,
+    ArcResponse,
+    ArcStatus,
     CreateOrUpdateArcRequest,
     CreateOrUpdateArcResponse,
     CreateOrUpdateArcsRequest,
@@ -487,6 +493,21 @@ class Api:
 
             return CreateOrUpdateArcsResponse(task_id=task.id, status="processing")
 
+    def _get_arc_id(self, rdi: str, arc_data: dict[str, Any]) -> str:
+        """Extract ARC identifier from RO-Crate and calculate internal ID."""
+        try:
+            arc_json = json.dumps(arc_data)
+            arc = ARC.from_rocrate_json_string(arc_json)
+            identifier = getattr(arc, "Identifier", None)
+            if not identifier:
+                raise ValueError("Missing identifier in RO-Crate")
+
+            input_str = f"{identifier}:{rdi}"
+            return hashlib.sha256(input_str.encode("utf-8")).hexdigest()
+        except Exception as e:
+            logger.error("Failed to extract ARC ID: %s", e)
+            raise HTTPException(status_code=400, detail=f"Invalid RO-Crate: {str(e)}") from e
+
     def _setup_create_or_update_arc_route_v2(self) -> None:
         @self._app.post("/v2/arcs", status_code=202)
         async def create_or_update_arc(
@@ -506,11 +527,22 @@ class Api:
             # Submit task to Celery
             arc_data = request_body.arc
 
+            # Calculate ARC ID for immediate response
+            arc_id = self._get_arc_id(rdi, arc_data)
+            timestamp = datetime.now(timezone.utc).isoformat()
+
             task = process_arc.delay(rdi, arc_data, client_id)
 
-            logger.info("Enqueued task %s for ARC processing", task.id)
+            logger.info("Enqueued task %s for ARC processing of ID %s", task.id, arc_id)
 
-            return CreateOrUpdateArcResponse(rdi=rdi, task_id=task.id, status="processing")
+            return CreateOrUpdateArcResponse(
+                task_id=task.id,
+                arc=ArcResponse(
+                    id=arc_id,
+                    status=ArcStatus.PROCESSING,
+                    timestamp=timestamp,
+                ),
+            )
 
     def _setup_task_status_route(self) -> None:
         @self._app.get("/v1/tasks/{task_id}")

@@ -20,8 +20,27 @@ def test_create_or_update_arc_success(client: TestClient, cert: str, expected_ht
     mock_task = MagicMock()
     mock_task.id = "task-123"
 
+    rocrate = {
+        "@context": "https://w3id.org/ro/crate/1.1/context",
+        "@graph": [
+            {
+                "@id": "./",
+                "@type": "Dataset",
+                "additionalType": "Investigation",
+                "identifier": "ARC-001",
+            },
+            {
+                "@id": "ro-crate-metadata.json",
+                "@type": "CreativeWork",
+                "conformsTo": {"@id": "https://w3id.org/ro/crate/1.1"},
+                "about": {"@id": "./"},
+            },
+        ],
+    }
+
     with pytest.MonkeyPatch.context() as mp:
         mock_process_arc = MagicMock()
+        # Mock task creation
         mock_process_arc.delay.return_value = mock_task
         mp.setattr("middleware.api.api.process_arc", mock_process_arc)
 
@@ -33,13 +52,14 @@ def test_create_or_update_arc_success(client: TestClient, cert: str, expected_ht
                 "content-type": "application/json",
                 "accept": "application/json",
             },
-            json={"rdi": "rdi-1", "arc": {"dummy": "crate"}},
+            json={"rdi": "rdi-1", "arc": rocrate},
         )
         assert r.status_code == expected_http_status
         body = r.json()
         assert body["task_id"] == "task-123"
-        assert body["status"] == "processing"
-        assert body["rdi"] == "rdi-1"
+        assert "arc" in body
+        assert body["arc"]["status"] == "processing"
+        assert body["arc"]["id"] is not None
 
 
 @pytest.mark.unit
@@ -61,6 +81,17 @@ def test_create_or_update_arc_validation_error(client: TestClient, cert: str) ->
 @pytest.mark.unit
 def test_create_or_update_arc_rdi_not_known(client: TestClient, cert: str) -> None:
     """Test that requesting an unknown RDI returns 400."""
+    rocrate = {
+        "@context": "https://w3id.org/ro/crate/1.1/context",
+        "@graph": [
+            {
+                "@id": "./",
+                "@type": "Dataset",
+                "additionalType": "Investigation",
+                "identifier": "ARC-001",
+            }
+        ],
+    }
     r = client.post(
         "/v2/arcs",
         headers={
@@ -69,7 +100,7 @@ def test_create_or_update_arc_rdi_not_known(client: TestClient, cert: str) -> No
             "content-type": "application/json",
             "accept": "application/json",
         },
-        json={"rdi": "rdi-unknown", "arc": {"dummy": "crate"}},
+        json={"rdi": "rdi-unknown", "arc": rocrate},
     )
     assert r.status_code == http.HTTPStatus.BAD_REQUEST
 

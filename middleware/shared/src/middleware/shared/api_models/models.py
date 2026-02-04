@@ -21,6 +21,7 @@ class ArcStatus(str, Enum):
     UPDATED = "updated"
     DELETED = "deleted"
     REQUESTED = "requested"
+    PROCESSING = "processing"
 
 
 class LivenessResponse(BaseModel):
@@ -108,9 +109,8 @@ class CreateOrUpdateArcsResponse(ApiResponse):
 class CreateOrUpdateArcResponse(ApiResponse):
     """Response model for create or update a single ARC operation ticket (v2)."""
 
-    rdi: Annotated[str, Field(description="Research Data Infrastructure identifier the ARC belongs to")]
     task_id: Annotated[str, Field(description="The ID of the background task processing the ARC")]
-    status: Annotated[str, Field(description="The status of the task submission")]
+    arc: Annotated[ArcResponse, Field(description="ARC response indicating the processing status")]
 
 
 class ArcOperationResult(ApiResponse):
