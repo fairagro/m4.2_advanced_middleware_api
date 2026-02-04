@@ -43,7 +43,6 @@ class HealthResponse(BaseModel):
     rabbitmq_reachable: Annotated[bool, Field(description="True if RabbitMQ is reachable")]
 
 
-
 class CreateOrUpdateArcsRequest(BaseModel):
     """Request model for creating or updating ARCs."""
 
@@ -56,7 +55,6 @@ class CreateOrUpdateArcRequest(BaseModel):
 
     rdi: Annotated[str, Field(description="Research Data Infrastructure identifier")]
     arc: Annotated[dict, Field(description="ARC definition in RO-Crate JSON format")]
-
 
 
 class ApiResponse(BaseModel):
