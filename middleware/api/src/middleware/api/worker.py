@@ -37,16 +37,14 @@ def process_arc(rdi: str, arc_data: dict[str, Any], client_id: str | None) -> di
 
     # Run the async business logic in a sync wrapper
     try:
-        # We process a list of 1 ARC to reuse the existing batch processing logic
-        # wrapping it in a coroutine call
         loop = asyncio.new_event_loop()
         asyncio.set_event_loop(loop)
 
-        # We need to construct a list of one ARC
-        result = loop.run_until_complete(business_logic.create_or_update_arcs(rdi, [arc_data], client_id))
+        # Process a single ARC
+        result = loop.run_until_complete(business_logic.create_or_update_arc(rdi, arc_data, client_id))
         loop.close()
 
-        # The result is a CreateOrUpdateArcsResponse object (Pydantic model)
+        # The result is an ArcOperationResult object (Pydantic model)
         # We return the dict representation
         return result.model_dump()
 

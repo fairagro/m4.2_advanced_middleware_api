@@ -7,20 +7,26 @@ from pydantic import BaseModel, Field
 
 
 class ArcStatus(str, Enum):
-    """Enumeration of possible ARC status values.
-
-    Values:
-        created: ARC was newly created
-        updated: ARC was updated
-        deleted: ARC was deleted
-        requested: ARC was requested
-
-    """
+    """Enumeration of possible ARC status values."""
 
     CREATED = "created"
     UPDATED = "updated"
     DELETED = "deleted"
     REQUESTED = "requested"
+
+
+class TaskStatus(str, Enum):
+    """Enumeration of possible task states.
+
+    Values match Celery task states.
+    """
+
+    PENDING = "PENDING"
+    STARTED = "STARTED"
+    SUCCESS = "SUCCESS"
+    FAILURE = "FAILURE"
+    RETRY = "RETRY"
+    REVOKED = "REVOKED"
 
 
 class LivenessResponse(BaseModel):
@@ -42,6 +48,13 @@ class CreateOrUpdateArcsRequest(BaseModel):
 
     rdi: Annotated[str, Field(description="Research Data Infrastructure identifier")]
     arcs: Annotated[list[dict], Field(description="List of ARC definitions in RO-Crate JSON format")]
+
+
+class CreateOrUpdateArcRequest(BaseModel):
+    """Request model for creating or updating a single ARC (v2)."""
+
+    rdi: Annotated[str, Field(description="Research Data Infrastructure identifier")]
+    arc: Annotated[dict, Field(description="ARC definition in RO-Crate JSON format")]
 
 
 class ApiResponse(BaseModel):
@@ -96,12 +109,37 @@ class CreateOrUpdateArcsResponse(ApiResponse):
     status: Annotated[str | None, Field(description="The status of the task submission")] = None
 
 
+class CreateOrUpdateArcResponse(ApiResponse):
+    """Response model for create or update a single ARC operation ticket (v2)."""
+
+    task_id: Annotated[str, Field(description="The ID of the background task")]
+    status: Annotated[TaskStatus, Field(description="The status of the task")]
+
+
+class ArcOperationResult(ApiResponse):
+    """Response model for the actual result of a single ARC operation (v2)."""
+
+    rdi: Annotated[str, Field(description="Research Data Infrastructure identifier the ARC belongs to")]
+    arc: Annotated[ArcResponse, Field(description="ARC response for the operation")]
+
+
 class GetTaskStatusResponse(BaseModel):
-    """Response model for task status."""
+    """Response model for task status (v1)."""
 
     task_id: Annotated[str, Field(description="The ID of the background task")]
     status: Annotated[str, Field(description="The status of the task")]
-    result: Annotated[CreateOrUpdateArcsResponse | None, Field(description="The result of the task if completed")] = (
-        None
-    )
+    result: Annotated[
+        CreateOrUpdateArcsResponse | None,
+        Field(description="The result of the task if completed"),
+    ] = None
     error: Annotated[str | None, Field(description="Error message if task failed")] = None
+
+
+class GetTaskStatusResponseV2(ApiResponse):
+    """Response model for task status (v2)."""
+
+    status: Annotated[TaskStatus, Field(description="The status of the task")]
+    result: Annotated[
+        ArcOperationResult | None,
+        Field(description="The result of the task if completed"),
+    ] = None

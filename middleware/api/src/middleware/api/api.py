@@ -26,11 +26,16 @@ from opentelemetry.sdk.trace import TracerProvider
 from pydantic import ValidationError
 
 from middleware.shared.api_models.models import (
+    ArcOperationResult,
+    CreateOrUpdateArcRequest,
+    CreateOrUpdateArcResponse,
     CreateOrUpdateArcsRequest,
     CreateOrUpdateArcsResponse,
     GetTaskStatusResponse,
+    GetTaskStatusResponseV2,
     HealthResponse,
     LivenessResponse,
+    TaskStatus,
     WhoamiResponse,
 )
 from middleware.shared.tracing import initialize_logging, initialize_tracing
@@ -333,14 +338,16 @@ class Api:
     def _get_known_rdis(self) -> list[str]:
         return self._config.known_rdis
 
-    def _validate_rdi_known(self, request_body: CreateOrUpdateArcsRequest) -> str:
+    def _validate_rdi_known(self, request_body: CreateOrUpdateArcsRequest | CreateOrUpdateArcRequest) -> str:
         known_rdis = self._get_known_rdis()
         rdi = request_body.rdi
         if rdi not in known_rdis:
             raise HTTPException(status_code=400, detail=f"RDI '{rdi}' is not recognized.")
         return cast(str, rdi)
 
-    def _validate_rdi_authorized(self, request: Request, request_body: CreateOrUpdateArcsRequest) -> str:
+    def _validate_rdi_authorized(
+        self, request: Request, request_body: CreateOrUpdateArcsRequest | CreateOrUpdateArcRequest
+    ) -> str:
         rdi = self._validate_rdi_known(request_body)
 
         # If client certificates are required, check authorized RDIs from certificate
@@ -368,7 +375,9 @@ class Api:
         self._setup_liveness_route()
         self._setup_health_route()
         self._setup_create_or_update_arcs_route()
+        self._setup_create_or_update_arc_route_v2()
         self._setup_task_status_route()
+        self._setup_task_status_route_v2()
 
     def _setup_whoami_route(self) -> None:
         @self._app.get("/v1/whoami", response_model=WhoamiResponse)
@@ -479,33 +488,110 @@ class Api:
 
             return CreateOrUpdateArcsResponse(task_id=task.id, status="processing")
 
+    def _setup_create_or_update_arc_route_v2(self) -> None:
+        @self._app.post("/v2/arcs", status_code=202)
+        async def create_or_update_arc(
+            request_body: CreateOrUpdateArcRequest,
+            client_id: Annotated[str | None, Depends(self._validate_client_id)],
+            _content_type_validated: Annotated[None, Depends(self._validate_content_type)],
+            _accept_validated: Annotated[None, Depends(self._validate_accept_type)],
+            rdi: Annotated[str, Depends(self._validate_rdi_authorized)],
+        ) -> CreateOrUpdateArcResponse:
+            """Submit a single ARC for processing asynchronously."""
+            logger.info(
+                "Received POST /v2/arcs request: rdi=%s, client_id=%s",
+                rdi,
+                client_id or "none",
+            )
+
+            # Submit task to Celery
+            arc_data = request_body.arc
+
+            task = process_arc.delay(rdi, arc_data, client_id)
+
+            logger.info("Enqueued task %s for ARC processing", task.id)
+
+            return CreateOrUpdateArcResponse(
+                task_id=task.id,
+                status=TaskStatus.PENDING,
+            )
+
     def _setup_task_status_route(self) -> None:
         @self._app.get("/v1/tasks/{task_id}")
         async def get_task_status(
             task_id: str,
             _accept_validated: Annotated[None, Depends(self._validate_accept_type)],
         ) -> GetTaskStatusResponse:
-            """Get the status of an async task."""
+            """Get the status of an async task (v1)."""
             result = celery_app.AsyncResult(task_id)
 
-            task_result = None
+            task_result: CreateOrUpdateArcsResponse | None = None
             error_message = None
 
             if result.ready():
                 if result.successful():
-                    # If successful, the result is a dict representation of CreateOrUpdateArcsResponse
-                    # (as returned by process_arc's model_dump())
                     try:
-                        task_result = CreateOrUpdateArcsResponse.model_validate(result.result)
-                    except ValidationError as e:
-                        # Use more specific exception handling if possible, or just log
-                        logger.error("Failed to validate task result: %s", e)
-                        # Fallback if result is not valid model-dump
-                        pass
+                        # Success case: result.result is a dict.
+                        # Internal processing is now ArcOperationResult.
+                        # We parse and transform to v1 CreateOrUpdateArcsResponse.
+                        inner_res = ArcOperationResult.model_validate(result.result)
+                        task_result = CreateOrUpdateArcsResponse(
+                            client_id=inner_res.client_id,
+                            rdi=inner_res.rdi,
+                            message=inner_res.message,
+                            arcs=[inner_res.arc] if inner_res.arc else [],
+                        )
+                    except ValidationError:
+                        try:
+                            # Fallback for old plural results if any exist in the backend
+                            task_result = CreateOrUpdateArcsResponse.model_validate(result.result)
+                        except ValidationError as e:
+                            logger.error("Failed to validate task result for v1 request: %s", e)
                 elif result.failed():
                     error_message = str(result.result)
 
-            return GetTaskStatusResponse(task_id=task_id, status=result.status, result=task_result, error=error_message)
+            return GetTaskStatusResponse(
+                task_id=task_id,
+                status=result.status,
+                result=task_result,
+                error=error_message,
+            )
+
+    def _setup_task_status_route_v2(self) -> None:
+        @self._app.get("/v2/tasks/{task_id}")
+        async def get_task_status_v2(
+            task_id: str,
+            _accept_validated: Annotated[None, Depends(self._validate_accept_type)],
+        ) -> GetTaskStatusResponseV2:
+            """Get the status of an async task (v2)."""
+            result = celery_app.AsyncResult(task_id)
+
+            task_result: ArcOperationResult | None = None
+            error_message = None
+
+            if result.ready():
+                if result.successful():
+                    try:
+                        task_result = ArcOperationResult.model_validate(result.result)
+                    except ValidationError as e:
+                        logger.error("Failed to validate task result for v2 request: %s", e)
+                elif result.failed():
+                    error_message = str(result.result)
+
+            # Map Celery status to TaskStatus
+            celery_status = result.status
+            try:
+                status = TaskStatus(celery_status)
+            except ValueError:
+                # Handle states not in our Enum if any (e.g. RECEIVED, RETRY handled by TaskStatus)
+                status = TaskStatus.PENDING if celery_status == "RECEIVED" else TaskStatus.PENDING
+
+            return GetTaskStatusResponseV2(
+                status=status,
+                result=task_result,
+                message=error_message or "",
+                client_id=task_result.client_id if task_result else None,
+            )
 
 
 middleware_api = Api(loaded_config)
