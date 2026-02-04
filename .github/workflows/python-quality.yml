@@ -103,7 +103,7 @@ jobs:
 
     - name: Run unit tests with coverage
       run: |
-        uv run pytest middleware/*/tests/unit/ --cov=api --cov=api_client --cov=shared --cov-report=xml --cov-report=html --cov-report=term-missing --junitxml=pytest-report.xml
+        uv run pytest -m "not system" --cov=api --cov=api_client --cov=shared --cov-report=xml --cov-report=html --cov-report=term-missing --junitxml=pytest-report.xml
 
     - name: Upload coverage to Codecov
       uses: codecov/codecov-action@v4

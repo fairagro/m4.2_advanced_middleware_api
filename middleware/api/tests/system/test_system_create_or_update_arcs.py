@@ -1,4 +1,4 @@
-"""Integration tests for creating or updating ARCs."""
+"""System tests for creating or updating ARCs."""
 
 import hashlib
 import http
@@ -12,6 +12,7 @@ from gitlab import Gitlab
 
 
 @pytest.mark.asyncio
+@pytest.mark.system
 @pytest.mark.parametrize(
     "json_info",
     [
@@ -43,7 +44,7 @@ async def test_create_arcs(
     assert "task_id" in body  # nosec
     assert body["status"] == "processing"  # nosec
 
-    # Note: In integration tests, we would need to poll /v1/tasks/{task_id} to verify completion
+    # Note: In system tests, we would need to poll /v1/tasks/{task_id} to verify completion
     # For now, we skip verification as it requires Celery worker to be running
     # _verify_gitlab_project(gitlab_api, config, json_info)
 

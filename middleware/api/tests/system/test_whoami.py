@@ -1,4 +1,4 @@
-"""Integration tests for the /v1/whoami endpoint."""
+"""System tests for the /v1/whoami endpoint."""
 
 import http
 
@@ -7,6 +7,7 @@ from fastapi.testclient import TestClient
 
 
 @pytest.mark.asyncio
+@pytest.mark.system
 async def test_whoami_with_client_cert(client: TestClient, cert: str) -> None:
     """Test the /v1/whoami endpoint with a client certificate."""
     cert_with_linebreaks = cert.replace("\\n", "\n")

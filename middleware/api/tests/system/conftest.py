@@ -1,4 +1,4 @@
-"""Integration tests configuration and fixtures."""
+"""System tests configuration and fixtures."""
 
 import os
 from collections.abc import Generator
