@@ -7,11 +7,14 @@ import ssl
 from typing import TYPE_CHECKING, Any
 
 import httpx
-from pydantic import BaseModel
+from pydantic import BaseModel, ValidationError
 
 from middleware.shared.api_models.models import (
-    CreateOrUpdateArcsRequest,
-    CreateOrUpdateArcsResponse,
+    ArcOperationResult,
+    CreateOrUpdateArcRequest,
+    CreateOrUpdateArcResponse,
+    GetTaskStatusResponseV2,
+    TaskStatus,
 )
 
 from .config import Config
@@ -205,7 +208,7 @@ class ApiClient:
         self,
         rdi: str,
         arc: "ARC | dict[str, Any]",
-    ) -> CreateOrUpdateArcsResponse:
+    ) -> ArcOperationResult:
         """Create or update a single ARC in the FAIRagro Middleware API.
 
         Args:
@@ -213,7 +216,7 @@ class ApiClient:
             arc (ARC | dict[str, Any]): ARC object or already serialized ARC (as dict).
 
         Returns:
-            CreateOrUpdateArcsResponse: The response containing the result of the operation.
+            ArcOperationResult: The response containing the result of the operation.
 
         Raises:
             ApiClientError: If the request fails.
@@ -231,17 +234,18 @@ class ApiClient:
             json_str = arc.ToROCrateJsonString()
             serialized_arc = json.loads(json_str)
 
-        # The API currently expects a list of ARCs, so we wrap the single ARC
-        request = CreateOrUpdateArcsRequest(rdi=rdi, arcs=[serialized_arc])
+        # Prepare request
+        request = CreateOrUpdateArcRequest(rdi=rdi, arc=serialized_arc)
         logger.debug("Request payload: %s", json.dumps(request.model_dump(), indent=2))
 
         # 1. Submit task
-        result = await self._post("v1/arcs", request)
+        response_data = await self._post("v2/arcs", request)
+        try:
+            submission = CreateOrUpdateArcResponse.model_validate(response_data)
+        except ValidationError as e:
+            raise ApiClientError(f"Invalid response from API during submission: {str(e)}") from e
 
-        task_id = result.get("task_id")
-        if not task_id:
-            raise ApiClientError("No task_id returned from API")
-
+        task_id = submission.task_id
         logger.info("Task submitted, ID: %s. Polling for results...", task_id)
 
         # 2. Poll for results with exponential backoff
@@ -249,24 +253,27 @@ class ApiClient:
         max_delay = 30.0  # Max delay of 30 seconds
         while True:
             await asyncio.sleep(delay)
-            status_response = await self._get(f"v1/tasks/{task_id}")
-            status = status_response.get("status")
+            status_data = await self._get(f"v2/tasks/{task_id}")
+            try:
+                status_response = GetTaskStatusResponseV2.model_validate(status_data)
+            except ValidationError as e:
+                raise ApiClientError(f"Invalid response from API during polling: {str(e)}") from e
+            status = status_response.status
 
             logger.debug("Task %s status: %s (next poll in %.1fs)", task_id, status, delay)
 
-            if status == "SUCCESS":
-                result_data = status_response.get("result")
-                response = CreateOrUpdateArcsResponse.model_validate(result_data)
+            if status == TaskStatus.SUCCESS:
+                if status_response.result is None:
+                    raise ApiClientError("Task succeeded but no result was returned")
                 logger.info(
-                    "Successfully created/updated %d ARCs for RDI: %s",
-                    len(response.arcs),
-                    response.rdi,
+                    "Successfully created/updated ARC for RDI: %s",
+                    status_response.result.rdi,
                 )
-                return response
+                return status_response.result
 
-            if status == "FAILURE":
-                error_msg = status_response.get("error", "Unknown error")
-                raise ApiClientError(f"Task failed: {error_msg}")
+            if status in (TaskStatus.FAILURE, TaskStatus.REVOKED):
+                error_msg = status_response.message or "Unknown error"
+                raise ApiClientError(f"Task {status.value}: {error_msg}")
 
             # Increase delay for next poll iteration
             delay = min(delay * 1.5, max_delay)

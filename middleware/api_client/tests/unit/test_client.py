@@ -11,7 +11,7 @@ import respx
 from arctrl import ARC, ArcInvestigation  # type: ignore[import-untyped]
 
 from middleware.api_client import ApiClient, ApiClientError, Config
-from middleware.shared.api_models.models import CreateOrUpdateArcsResponse
+from middleware.shared.api_models.models import ArcOperationResult, TaskStatus
 
 
 @pytest.fixture
@@ -67,31 +67,28 @@ async def test_create_or_update_arc_success(client_config: Config) -> None:
     """Test successful create_or_update_arc request."""
     # Mock the API response
     # Mock the API response (Task submission)
-    task_response = {"task_id": "task-123", "status": "processing"}
+    task_response = {"task_id": "task-123", "status": "PENDING"}
 
     # Mock the Task Status response
     status_response = {
-        "task_id": "task-123",
         "status": "SUCCESS",
         "result": {
             "client_id": "TestClient",
-            "message": "ARCs created successfully",
+            "message": "ARC created successfully",
             "rdi": "test-rdi",
-            "arcs": [
-                {
-                    "id": "test-arc-123",
-                    "status": "created",
-                    "timestamp": "2024-01-01T12:00:00Z",
-                }
-            ],
+            "arc": {
+                "id": "test-arc-123",
+                "status": "created",
+                "timestamp": "2024-01-01T12:00:00Z",
+            },
         },
     }
 
-    route_post = respx.post(f"{client_config.api_url}v1/arcs").mock(
+    route_post = respx.post(f"{client_config.api_url}v2/arcs").mock(
         return_value=httpx.Response(http.HTTPStatus.ACCEPTED, json=task_response)
     )
 
-    route_get = respx.get(f"{client_config.api_url}v1/tasks/task-123").mock(
+    route_get = respx.get(f"{client_config.api_url}v2/tasks/task-123").mock(
         return_value=httpx.Response(http.HTTPStatus.OK, json=status_response)
     )
 
@@ -106,11 +103,10 @@ async def test_create_or_update_arc_success(client_config: Config) -> None:
     # Verify
     assert route_post.called
     assert route_get.called
-    assert isinstance(response, CreateOrUpdateArcsResponse)
+    assert isinstance(response, ArcOperationResult)
     assert response.rdi == "test-rdi"
-    assert len(response.arcs) == 1
-    assert response.arcs[0].id == "test-arc-123"
-    assert response.arcs[0].status == "created"
+    assert response.arc.id == "test-arc-123"
+    assert response.arc.status == "created"
 
 
 @pytest.mark.asyncio
@@ -118,7 +114,7 @@ async def test_create_or_update_arc_success(client_config: Config) -> None:
 async def test_create_or_update_arc_http_error(client_config: Config) -> None:
     """Test create_or_update_arc with HTTP error response."""
     # Mock an error response
-    respx.post(f"{client_config.api_url}v1/arcs").mock(
+    respx.post(f"{client_config.api_url}v2/arcs").mock(
         return_value=httpx.Response(http.HTTPStatus.FORBIDDEN, text="Forbidden")
     )
 
@@ -137,7 +133,7 @@ async def test_create_or_update_arc_http_error(client_config: Config) -> None:
 async def test_create_or_update_arc_network_error(client_config: Config) -> None:
     """Test create_or_update_arc with network error."""
     # Mock a network error
-    respx.post(f"{client_config.api_url}v1/arcs").mock(side_effect=httpx.ConnectError("Connection refused"))
+    respx.post(f"{client_config.api_url}v2/arcs").mock(side_effect=httpx.ConnectError("Connection refused"))
 
     # Should raise ApiClientError
     arc = ARC.from_arc_investigation(ArcInvestigation.create(identifier="test", title="Test"))
@@ -210,23 +206,22 @@ async def test_client_uses_certificates(test_config_dict: dict, test_cert_pem: t
 @respx.mock
 async def test_client_headers(client_config: Config) -> None:
     """Test that client sends correct headers."""
-    task_response = {"task_id": "task-headers", "status": "processing"}
+    task_response = {"task_id": "task-headers", "status": "PENDING"}
     status_response = {
-        "task_id": "task-headers",
         "status": "SUCCESS",
         "result": {
             "client_id": "test",
             "message": "ok",
             "rdi": "test",
-            "arcs": [],
+            "arc": {"id": "arc-1", "status": "created", "timestamp": "2024-01-01T00:00:00Z"},
         },
     }
 
-    route_post = respx.post(f"{client_config.api_url}v1/arcs").mock(
+    route_post = respx.post(f"{client_config.api_url}v2/arcs").mock(
         return_value=httpx.Response(http.HTTPStatus.ACCEPTED, json=task_response)
     )
 
-    respx.get(f"{client_config.api_url}v1/tasks/task-headers").mock(
+    respx.get(f"{client_config.api_url}v2/tasks/task-headers").mock(
         return_value=httpx.Response(http.HTTPStatus.OK, json=status_response)
     )
 
@@ -302,29 +297,29 @@ async def test_client_with_ca_and_mtls_cert(test_config_dict: dict, temp_dir: Pa
 @respx.mock
 async def test_get_http_error(client_config: Config) -> None:
     """Test _get with an HTTP error."""
-    respx.get(f"{client_config.api_url}v1/test").mock(return_value=httpx.Response(http.HTTPStatus.NOT_FOUND))
+    respx.get(f"{client_config.api_url}v2/test").mock(return_value=httpx.Response(http.HTTPStatus.NOT_FOUND))
     client = ApiClient(client_config)
     with pytest.raises(ApiClientError, match="HTTP error 404"):
-        await client._get("v1/test")  # pylint: disable=protected-access
+        await client._get("v2/test")  # pylint: disable=protected-access
 
 
 @pytest.mark.asyncio
 @respx.mock
 async def test_get_network_error(client_config: Config) -> None:
     """Test _get with a network error."""
-    respx.get(f"{client_config.api_url}v1/test").mock(side_effect=httpx.RequestError("Network error"))
+    respx.get(f"{client_config.api_url}v2/test").mock(side_effect=httpx.RequestError("Network error"))
     client = ApiClient(client_config)
     with pytest.raises(ApiClientError, match="Request error: Network error"):
-        await client._get("v1/test")  # pylint: disable=protected-access
+        await client._get("v2/test")  # pylint: disable=protected-access
 
 
 @pytest.mark.asyncio
 @respx.mock
 async def test_create_or_update_arc_no_task_id(client_config: Config) -> None:
     """Test create_or_update_arc when API returns no task_id."""
-    respx.post(f"{client_config.api_url}v1/arcs").mock(return_value=httpx.Response(http.HTTPStatus.ACCEPTED, json={}))
+    respx.post(f"{client_config.api_url}v2/arcs").mock(return_value=httpx.Response(http.HTTPStatus.ACCEPTED, json={}))
     client = ApiClient(client_config)
-    with pytest.raises(ApiClientError, match="No task_id returned from API"):
+    with pytest.raises(ApiClientError, match="Invalid response from API during submission"):
         await client.create_or_update_arc(rdi="test", arc={"id": "mock-arc"})
 
 
@@ -332,23 +327,22 @@ async def test_create_or_update_arc_no_task_id(client_config: Config) -> None:
 @respx.mock
 async def test_create_or_update_arc_task_failure(client_config: Config) -> None:
     """Test create_or_update_arc when poll returns FAILURE."""
-    task_response = {"task_id": "failed-task"}
+    task_response = {"task_id": "failed-task", "status": "PENDING"}
     status_response = {
-        "task_id": "failed-task",
         "status": "FAILURE",
-        "error": "Something went wrong",
+        "message": "Something went wrong",
     }
 
-    respx.post(f"{client_config.api_url}v1/arcs").mock(
+    respx.post(f"{client_config.api_url}v2/arcs").mock(
         return_value=httpx.Response(http.HTTPStatus.ACCEPTED, json=task_response)
     )
-    respx.get(f"{client_config.api_url}v1/tasks/failed-task").mock(
+    respx.get(f"{client_config.api_url}v2/tasks/failed-task").mock(
         return_value=httpx.Response(http.HTTPStatus.OK, json=status_response)
     )
 
     client = ApiClient(client_config)
     with (
         patch("asyncio.sleep", return_value=None),
-        pytest.raises(ApiClientError, match="Task failed: Something went wrong"),
+        pytest.raises(ApiClientError, match="Task FAILURE: Something went wrong"),
     ):
         await client.create_or_update_arc(rdi="test", arc={"id": "mock-arc"})
