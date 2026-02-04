@@ -4,14 +4,17 @@ import asyncio
 import json
 import logging
 import ssl
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, cast
 
 import httpx
-from pydantic import BaseModel
+from pydantic import BaseModel, ValidationError
 
 from middleware.shared.api_models.models import (
-    CreateOrUpdateArcsRequest,
-    CreateOrUpdateArcsResponse,
+    ArcOperationResult,
+    CreateOrUpdateArcRequest,
+    CreateOrUpdateArcResponse,
+    GetTaskStatusResponseV2,
+    TaskStatus,
 )
 
 from .config import Config
@@ -201,75 +204,86 @@ class ApiClient:
             logger.error(error_msg)
             raise ApiClientError(error_msg) from e
 
+    def _serialize_arc(self, arc: "ARC | dict[str, Any]") -> dict[str, Any]:
+        """Serialize ARC to RO-Crate JSON dict."""
+        if isinstance(arc, dict):
+            return arc
+        return cast(dict[str, Any], json.loads(arc.ToROCrateJsonString()))
+
     async def create_or_update_arc(
         self,
         rdi: str,
         arc: "ARC | dict[str, Any]",
-    ) -> CreateOrUpdateArcsResponse:
+    ) -> ArcOperationResult:
         """Create or update a single ARC in the FAIRagro Middleware API.
 
         Args:
-            rdi (str): The RDI identifier.
-            arc (ARC | dict[str, Any]): ARC object or already serialized ARC (as dict).
+            rdi: The RDI identifier.
+            arc: ARC object or already serialized ARC (as dict).
 
         Returns:
-            CreateOrUpdateArcsResponse: The response containing the result of the operation.
+            The response containing the result of the operation.
 
         Raises:
             ApiClientError: If the request fails.
         """
-        # Determine if arc is an ARC object or dict
-        if isinstance(arc, dict):
-            # Already serialized
-            serialized_arc = arc
-            # If serialized, we might need to extract ID for logging if not provided separately
-            # But the caller logs it, so we just log a summary here
-            logger.info("Creating/updating 1 ARC (pre-serialized) for RDI: %s", rdi)
-        else:
-            # ARC object, needs serialization
-            logger.info("Creating/updating 1 ARC for RDI: %s", rdi)
-            json_str = arc.ToROCrateJsonString()
-            serialized_arc = json.loads(json_str)
+        logger.info("Creating/updating ARC for RDI: %s", rdi)
+        serialized_arc = self._serialize_arc(arc)
 
-        # The API currently expects a list of ARCs, so we wrap the single ARC
-        request = CreateOrUpdateArcsRequest(rdi=rdi, arcs=[serialized_arc])
-        logger.debug("Request payload: %s", json.dumps(request.model_dump(), indent=2))
+        # Prepare and submit request
+        request = CreateOrUpdateArcRequest(rdi=rdi, arc=serialized_arc)
+        response_data = await self._post("v2/arcs", request)
+        try:
+            submission = CreateOrUpdateArcResponse.model_validate(response_data)
+        except ValidationError as e:
+            raise ApiClientError(f"Invalid response from API during submission: {str(e)}") from e
 
-        # 1. Submit task
-        result = await self._post("v1/arcs", request)
+        logger.info("Task submitted, ID: %s. Polling for results...", submission.task_id)
 
-        task_id = result.get("task_id")
-        if not task_id:
-            raise ApiClientError("No task_id returned from API")
+        # Poll for results
+        return await self._poll_for_result(submission.task_id)
 
-        logger.info("Task submitted, ID: %s. Polling for results...", task_id)
+    async def _poll_for_result(self, task_id: str) -> ArcOperationResult:
+        """Poll the API for the result of a background task.
 
-        # 2. Poll for results with exponential backoff
-        delay = 1.0  # Start with 1 second delay
-        max_delay = 30.0  # Max delay of 30 seconds
-        while True:
+        Args:
+            task_id: The ID of the task to poll.
+
+        Returns:
+            The result of the operation.
+
+        Raises:
+            ApiClientError: If the task fails or times out.
+        """
+        delay = self._config.polling_initial_delay
+        time_waited = 0.0
+        timeout_seconds = self._config.polling_timeout * 60
+
+        while time_waited < timeout_seconds:
             await asyncio.sleep(delay)
-            status_response = await self._get(f"v1/tasks/{task_id}")
-            status = status_response.get("status")
+            time_waited += delay
 
-            logger.debug("Task %s status: %s (next poll in %.1fs)", task_id, status, delay)
+            status_data = await self._get(f"v2/tasks/{task_id}")
+            try:
+                status_response = GetTaskStatusResponseV2.model_validate(status_data)
+            except ValidationError as e:
+                raise ApiClientError(f"Invalid response from API during polling: {str(e)}") from e
 
-            if status == "SUCCESS":
-                result_data = status_response.get("result")
-                response = CreateOrUpdateArcsResponse.model_validate(result_data)
-                logger.info(
-                    "Successfully created/updated %d ARCs for RDI: %s",
-                    len(response.arcs),
-                    response.rdi,
-                )
-                return response
+            logger.debug("Task %s status: %s (next poll in %.1fs)", task_id, status_response.status, delay)
 
-            if status == "FAILURE":
-                error_msg = status_response.get("error", "Unknown error")
-                raise ApiClientError(f"Task failed: {error_msg}")
+            if status_response.status == TaskStatus.SUCCESS:
+                if status_response.result is None:
+                    raise ApiClientError("Task succeeded but no result was returned")
+                return status_response.result
 
-            # Increase delay for next poll iteration
-            delay = min(delay * 1.5, max_delay)
+            if status_response.status in (TaskStatus.FAILURE, TaskStatus.REVOKED):
+                error_msg = status_response.message or "Unknown error"
+                raise ApiClientError(f"Task {status_response.status.value}: {error_msg}")
+
+            # Increase delay with exponential backoff
+            delay = min(delay * self._config.polling_backoff_factor, self._config.polling_max_delay)
+
+        raise ApiClientError(f"Polling for task {task_id} timed out after {self._config.polling_timeout} minutes.")
 
     async def aclose(self) -> None:
         """Close the underlying HTTP client connection.

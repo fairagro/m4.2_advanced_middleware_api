@@ -26,28 +26,26 @@ async def test_create_arcs_integration_mock_server(client_config: Config) -> Non
     """
     # Mock successful response
     # Mock successful response
-    task_response = {"task_id": "task-integr-001", "status": "processing"}
+    task_response = {"task_id": "task-integr-001", "status": "STARTED"}
 
     final_result = {
         "client_id": "TestClient",
-        "message": "ARCs created",
+        "message": "ARC created",
         "rdi": "test-rdi",
-        "arcs": [
-            {
-                "id": "arc-id-123",
-                "status": "created",
-                "timestamp": "2024-01-01T12:00:00Z",
-            }
-        ],
+        "arc": {
+            "id": "arc-id-123",
+            "status": "created",
+            "timestamp": "2024-01-01T12:00:00Z",
+        },
     }
 
-    status_response = {"task_id": "task-integr-001", "status": "SUCCESS", "result": final_result}
+    status_response = {"status": "SUCCESS", "result": final_result}
 
-    route_post = respx.post(f"{client_config.api_url}v1/arcs").mock(
+    route_post = respx.post(f"{client_config.api_url}v2/arcs").mock(
         return_value=httpx.Response(http.HTTPStatus.ACCEPTED, json=task_response)
     )
 
-    route_get = respx.get(f"{client_config.api_url}v1/tasks/task-integr-001").mock(
+    route_get = respx.get(f"{client_config.api_url}v2/tasks/task-integr-001").mock(
         return_value=httpx.Response(http.HTTPStatus.OK, json=status_response)
     )
 
@@ -65,8 +63,7 @@ async def test_create_arcs_integration_mock_server(client_config: Config) -> Non
     assert route_post.called
     assert route_get.called
     assert response.rdi == "test-rdi"
-    assert len(response.arcs) == 1
-    assert response.arcs[0].status == "created"
+    assert response.arc.status == "created"
 
     # Verify request was sent correctly
     last_request = route_post.calls.last.request
@@ -76,14 +73,14 @@ async def test_create_arcs_integration_mock_server(client_config: Config) -> Non
     # Verify request body
     body = json.loads(last_request.content)
     assert body["rdi"] == "test-rdi"
-    assert len(body["arcs"]) == 1
+    assert "arc" in body
 
 
 @pytest.mark.asyncio
 @respx.mock
 async def test_create_arcs_unauthorized(client_config: Config) -> None:
     """Test handling of 401 Unauthorized response."""
-    respx.post(f"{client_config.api_url}v1/arcs").mock(
+    respx.post(f"{client_config.api_url}v2/arcs").mock(
         return_value=httpx.Response(http.HTTPStatus.UNAUTHORIZED, text="Unauthorized")
     )
 
@@ -100,7 +97,7 @@ async def test_create_arcs_unauthorized(client_config: Config) -> None:
 @respx.mock
 async def test_create_arcs_forbidden(client_config: Config) -> None:
     """Test handling of 403 Forbidden response."""
-    respx.post(f"{client_config.api_url}v1/arcs").mock(
+    respx.post(f"{client_config.api_url}v2/arcs").mock(
         return_value=httpx.Response(http.HTTPStatus.FORBIDDEN, text="Forbidden - RDI not authorized")
     )
 
@@ -117,7 +114,7 @@ async def test_create_arcs_forbidden(client_config: Config) -> None:
 @respx.mock
 async def test_create_arcs_validation_error(client_config: Config) -> None:
     """Test handling of 422 Validation Error response."""
-    respx.post(f"{client_config.api_url}v1/arcs").mock(
+    respx.post(f"{client_config.api_url}v2/arcs").mock(
         return_value=httpx.Response(http.HTTPStatus.UNPROCESSABLE_ENTITY, json={"detail": "Invalid ARC data"})
     )
 
@@ -158,7 +155,7 @@ async def test_timeout_error(client_config: Config) -> None:
     client_config.timeout = 0.1
 
     # Mock a slow response
-    respx.post(f"{client_config.api_url}v1/arcs").mock(side_effect=httpx.TimeoutException("Request timeout"))
+    respx.post(f"{client_config.api_url}v2/arcs").mock(side_effect=httpx.TimeoutException("Request timeout"))
 
     arc = ARC.from_arc_investigation(ArcInvestigation.create(identifier="test", title="Test"))
     async with ApiClient(client_config) as client:
