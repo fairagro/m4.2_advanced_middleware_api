@@ -18,7 +18,7 @@ from opentelemetry import trace
 from middleware.shared.api_models.models import (
     ArcResponse,
     ArcStatus,
-    CreateOrUpdateArcResponse,
+    ArcOperationResult,
     CreateOrUpdateArcsResponse,
 )
 
@@ -102,7 +102,7 @@ class BusinessLogic:
     # Depending on the answer, we need to refactor the current validation approach.
     async def create_or_update_arc(
         self, rdi: str, arc: Any, client_id: str | None
-    ) -> CreateOrUpdateArcResponse:
+    ) -> ArcOperationResult:
         """Create or update a single ARC based on the provided RO-Crate JSON data.
 
         Args:
@@ -115,7 +115,7 @@ class BusinessLogic:
             BusinessLogicError: If an error occurs during the operation.
 
         Returns:
-            CreateOrUpdateArcResponse: Response containing details of the processed ARC.
+            ArcOperationResult: Response containing details of the processed ARC.
 
         """
         with self._tracer.start_as_current_span(
@@ -132,7 +132,7 @@ class BusinessLogic:
 
                 logger.info("Successfully processed ARC for RDI: %s", rdi)
 
-                return CreateOrUpdateArcResponse(
+                return ArcOperationResult(
                     client_id=client_id,
                     rdi=rdi,
                     message="Processed ARC successfully",

@@ -6,9 +6,9 @@ from unittest.mock import AsyncMock
 import pytest
 
 from middleware.api.business_logic import (
+    ArcOperationResult,
     ArcResponse,
     BusinessLogic,
-    CreateOrUpdateArcResponse,
     InvalidJsonSemanticError,
 )
 
@@ -70,7 +70,7 @@ async def test_create_arc_success(service: BusinessLogic, rocrate: dict[str, Any
     """Test creating an ARC with valid RO-Crate JSON."""
     result = await service.create_or_update_arc(rdi="TestRDI", arc=rocrate, client_id="TestClient")
 
-    assert isinstance(result, CreateOrUpdateArcResponse)  # nosec
+    assert isinstance(result, ArcOperationResult)  # nosec
     assert result.client_id == "TestClient"  # nosec
     assert isinstance(result.arc, ArcResponse)  # nosec
     assert is_valid_sha256(result.arc.id)  # nosec
@@ -102,7 +102,7 @@ async def test_update_arc_success(service: BusinessLogic) -> None:
     service._store.exists = AsyncMock(return_value=True)  # type: ignore
     result = await service.create_or_update_arc(rdi="TestRDI", arc=rocrate, client_id="TestClient")
 
-    assert isinstance(result, CreateOrUpdateArcResponse)  # nosec
+    assert isinstance(result, ArcOperationResult)  # nosec
     assert result.client_id == "TestClient"  # nosec
     assert isinstance(result.arc, ArcResponse)  # nosec
     assert is_valid_sha256(result.arc.id)  # nosec

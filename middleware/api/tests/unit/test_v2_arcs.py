@@ -6,8 +6,6 @@ from unittest.mock import MagicMock
 import pytest
 from fastapi.testclient import TestClient
 
-from middleware.api.api import Api
-
 
 @pytest.mark.unit
 @pytest.mark.parametrize(
@@ -41,6 +39,7 @@ def test_create_or_update_arc_success(client: TestClient, cert: str, expected_ht
         body = r.json()
         assert body["task_id"] == "task-123"
         assert body["status"] == "processing"
+        assert body["rdi"] == "rdi-1"
 
 
 @pytest.mark.unit
@@ -57,6 +56,7 @@ def test_create_or_update_arc_validation_error(client: TestClient, cert: str) ->
         json={"rdi": "rdi-1", "arcs": [{"dummy": "crate"}]},  # Wrong field name
     )
     assert r.status_code == http.HTTPStatus.UNPROCESSABLE_ENTITY
+
 
 @pytest.mark.unit
 def test_create_or_update_arc_rdi_not_known(client: TestClient, cert: str) -> None:
@@ -82,7 +82,7 @@ def test_get_task_status_v2(client: TestClient) -> None:
     mock_result.ready.return_value = True
     mock_result.successful.return_value = True
     mock_result.failed.return_value = False
-    # Mock return value from worker (singular)
+    # Mock return value from worker (ArcOperationResult)
     mock_result.result = {
         "client_id": "test",
         "message": "ok",
@@ -104,4 +104,3 @@ def test_get_task_status_v2(client: TestClient) -> None:
         assert body["status"] == "SUCCESS"
         assert body["result"]["message"] == "ok"
         assert body["result"]["arc"]["id"] == "arc-1"
-

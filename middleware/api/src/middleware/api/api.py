@@ -26,6 +26,7 @@ from opentelemetry.sdk.trace import TracerProvider
 from pydantic import ValidationError
 
 from middleware.shared.api_models.models import (
+    ArcOperationResult,
     CreateOrUpdateArcRequest,
     CreateOrUpdateArcResponse,
     CreateOrUpdateArcsRequest,
@@ -509,7 +510,7 @@ class Api:
 
             logger.info("Enqueued task %s for ARC processing", task.id)
 
-            return CreateOrUpdateArcResponse(task_id=task.id, status="processing")
+            return CreateOrUpdateArcResponse(rdi=rdi, task_id=task.id, status="processing")
 
     def _setup_task_status_route(self) -> None:
         @self._app.get("/v1/tasks/{task_id}")
@@ -527,16 +528,14 @@ class Api:
                 if result.successful():
                     try:
                         # Success case: result.result is a dict.
-                        # Since internal processing is now singular (v2),
-                        # we try to parse as v2 and transform to v1.
-                        inner_res = CreateOrUpdateArcResponse.model_validate(result.result)
+                        # Internal processing is now ArcOperationResult.
+                        # We parse and transform to v1 CreateOrUpdateArcsResponse.
+                        inner_res = ArcOperationResult.model_validate(result.result)
                         task_result = CreateOrUpdateArcsResponse(
                             client_id=inner_res.client_id,
                             rdi=inner_res.rdi,
                             message=inner_res.message,
                             arcs=[inner_res.arc] if inner_res.arc else [],
-                            task_id=inner_res.task_id,
-                            status=inner_res.status,
                         )
                     except ValidationError:
                         try:
@@ -563,13 +562,13 @@ class Api:
             """Get the status of an async task (v2)."""
             result = celery_app.AsyncResult(task_id)
 
-            task_result: CreateOrUpdateArcResponse | None = None
+            task_result: ArcOperationResult | None = None
             error_message = None
 
             if result.ready():
                 if result.successful():
                     try:
-                        task_result = CreateOrUpdateArcResponse.model_validate(result.result)
+                        task_result = ArcOperationResult.model_validate(result.result)
                     except ValidationError as e:
                         logger.error("Failed to validate task result for v2 request: %s", e)
                 elif result.failed():

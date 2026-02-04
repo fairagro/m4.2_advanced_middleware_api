@@ -106,14 +106,18 @@ class CreateOrUpdateArcsResponse(ApiResponse):
 
 
 class CreateOrUpdateArcResponse(ApiResponse):
-    """Response model for create or update a single ARC operation (Task Ticket or Result)."""
+    """Response model for create or update a single ARC operation ticket (v2)."""
 
-    rdi: Annotated[str | None, Field(description="Research Data Infrastructure identifier the ARC belongs to")] = None
-    arc: Annotated[ArcResponse | None, Field(description="ARC response for the operation")] = None
+    rdi: Annotated[str, Field(description="Research Data Infrastructure identifier the ARC belongs to")]
+    task_id: Annotated[str, Field(description="The ID of the background task processing the ARC")]
+    status: Annotated[str, Field(description="The status of the task submission")]
 
-    # Async task fields
-    task_id: Annotated[str | None, Field(description="The ID of the background task processing the ARC")] = None
-    status: Annotated[str | None, Field(description="The status of the task submission")] = None
+
+class ArcOperationResult(ApiResponse):
+    """Response model for the actual result of a single ARC operation (v2)."""
+
+    rdi: Annotated[str, Field(description="Research Data Infrastructure identifier the ARC belongs to")]
+    arc: Annotated[ArcResponse, Field(description="ARC response for the operation")]
 
 
 class GetTaskStatusResponse(BaseModel):
@@ -134,6 +138,6 @@ class GetTaskStatusResponseV2(ApiResponse):
     task_id: Annotated[str, Field(description="The ID of the background task")]
     status: Annotated[str, Field(description="The status of the task")]
     result: Annotated[
-        CreateOrUpdateArcResponse | None,
+        ArcOperationResult | None,
         Field(description="The result of the task if completed"),
     ] = None

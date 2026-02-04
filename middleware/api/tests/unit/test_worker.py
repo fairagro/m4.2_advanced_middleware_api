@@ -7,16 +7,16 @@ import pytest
 
 from middleware.api.worker import process_arc
 from middleware.shared.api_models.models import (
+    ArcOperationResult,
     ArcResponse,
     ArcStatus,
-    CreateOrUpdateArcResponse,
 )
 
 
 def test_process_arc_success() -> None:
     """Test successful task execution."""
     # Mock business logic result
-    mock_result = CreateOrUpdateArcResponse(
+    mock_result = ArcOperationResult(
         rdi="test-rdi",
         client_id="test-client",
         message="ok",
@@ -26,7 +26,7 @@ def test_process_arc_success() -> None:
     # Mock the business_logic from celery_app
     with patch("middleware.api.worker.business_logic") as mock_bl:
         # Define the async return value
-        async def async_return(*_args: Any, **_kwargs: Any) -> CreateOrUpdateArcResponse:
+        async def async_return(*_args: Any, **_kwargs: Any) -> ArcOperationResult:
             return mock_result
 
         mock_bl.create_or_update_arc.side_effect = async_return

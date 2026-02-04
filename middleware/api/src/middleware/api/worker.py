@@ -44,7 +44,7 @@ def process_arc(rdi: str, arc_data: dict[str, Any], client_id: str | None) -> di
         result = loop.run_until_complete(business_logic.create_or_update_arc(rdi, arc_data, client_id))
         loop.close()
 
-        # The result is a CreateOrUpdateArcResponse object (Pydantic model)
+        # The result is an ArcOperationResult object (Pydantic model)
         # We return the dict representation
         return result.model_dump()
 
