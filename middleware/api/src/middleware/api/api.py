@@ -579,7 +579,7 @@ class Api:
                 task_id=task_id,
                 status=result.status,
                 result=task_result,
-                error=error_message,
+                message=error_message or "",
                 client_id=task_result.client_id if task_result else None,
             )
 

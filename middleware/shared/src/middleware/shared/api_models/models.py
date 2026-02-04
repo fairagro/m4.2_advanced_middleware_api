@@ -137,4 +137,3 @@ class GetTaskStatusResponseV2(ApiResponse):
         CreateOrUpdateArcResponse | None,
         Field(description="The result of the task if completed"),
     ] = None
-    error: Annotated[str | None, Field(description="Error message if task failed")] = None
