@@ -224,7 +224,6 @@ def test_get_task_status_v1_transformation(client: TestClient) -> None:
         assert body["result"]["arcs"][0]["id"] == "arc-1"
 
 
-
 # Removed test_create_or_update_arcs_invalid_json_semantic as validation runs async now
 
 
