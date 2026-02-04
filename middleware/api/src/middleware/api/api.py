@@ -584,7 +584,7 @@ class Api:
                 status = TaskStatus(celery_status)
             except ValueError:
                 # Handle states not in our Enum if any (e.g. RECEIVED, RETRY handled by TaskStatus)
-                status = TaskStatus.PENDING if celery_status == "RECEIVED" else TaskStatus.PENDING
+                status = TaskStatus.PENDING
 
             return GetTaskStatusResponseV2(
                 status=status,

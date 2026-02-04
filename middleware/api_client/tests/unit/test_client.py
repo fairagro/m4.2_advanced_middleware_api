@@ -346,3 +346,27 @@ async def test_create_or_update_arc_task_failure(client_config: Config) -> None:
         pytest.raises(ApiClientError, match="Task FAILURE: Something went wrong"),
     ):
         await client.create_or_update_arc(rdi="test", arc={"id": "mock-arc"})
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_poll_for_result_timeout(client_config: Config) -> None:
+    """Test that _poll_for_result raises ApiClientError on timeout."""
+    # Set a short timeout for the test (in minutes)
+    client_config.polling_timeout = 0.01  # 0.6 seconds
+    client_config.polling_initial_delay = 0.2
+
+    # Mock the Task Status response to stay PENDING
+    status_response = {"status": "PENDING"}
+
+    respx.get(f"{client_config.api_url}v2/tasks/task-timeout").mock(
+        return_value=httpx.Response(http.HTTPStatus.OK, json=status_response)
+    )
+
+    async with ApiClient(client_config) as client:
+        # We mock asyncio.sleep to avoid waiting during the test
+        # but the logic still increments time_waited based on 'delay'
+        with patch("asyncio.sleep", return_value=None) as mock_sleep:
+            with pytest.raises(ApiClientError, match="timed out after 0.01 minutes"):
+                await client._poll_for_result("task-timeout")  # pylint: disable=protected-access
+            assert mock_sleep.called

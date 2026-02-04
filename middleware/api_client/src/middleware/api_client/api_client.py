@@ -255,9 +255,14 @@ class ApiClient:
         Raises:
             ApiClientError: If the task fails or times out.
         """
-        delay = 1.0  # Start with 1 second delay
-        while True:
+        delay = self._config.polling_initial_delay
+        time_waited = 0.0
+        timeout_seconds = self._config.polling_timeout * 60
+
+        while time_waited < timeout_seconds:
             await asyncio.sleep(delay)
+            time_waited += delay
+
             status_data = await self._get(f"v2/tasks/{task_id}")
             try:
                 status_response = GetTaskStatusResponseV2.model_validate(status_data)
@@ -275,8 +280,10 @@ class ApiClient:
                 error_msg = status_response.message or "Unknown error"
                 raise ApiClientError(f"Task {status_response.status.value}: {error_msg}")
 
-            # Increase delay with exponential backoff (max 30s)
-            delay = min(delay * 1.5, 30.0)
+            # Increase delay with exponential backoff
+            delay = min(delay * self._config.polling_backoff_factor, self._config.polling_max_delay)
+
+        raise ApiClientError(f"Polling for task {task_id} timed out after {self._config.polling_timeout} minutes.")
 
     async def aclose(self) -> None:
         """Close the underlying HTTP client connection.

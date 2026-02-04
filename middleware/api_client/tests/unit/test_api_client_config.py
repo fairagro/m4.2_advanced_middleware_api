@@ -104,3 +104,34 @@ def test_config_timeout_negative() -> None:
         )
 
     assert "timeout" in str(exc_info.value)
+
+
+def test_config_polling_defaults() -> None:
+    """Test default values for polling parameters."""
+    config = Config(
+        api_url="https://api.example.com",
+        otel=OtelConfig(),
+    )
+    assert config.polling_initial_delay == 1.0
+    assert config.polling_max_delay == 30.0  # noqa: PLR2004
+    assert config.polling_backoff_factor == 1.5  # noqa: PLR2004
+    assert config.polling_timeout == 90.0  #  noqa: PLR2004
+
+
+def test_config_polling_validation() -> None:
+    """Test validation of polling parameters."""
+    with pytest.raises(ValidationError) as exc_info:
+        Config(
+            api_url="https://api.example.com",
+            polling_initial_delay=0,  # Invalid: must be > 0
+            otel=OtelConfig(),
+        )
+    assert "polling_initial_delay" in str(exc_info.value)
+
+    with pytest.raises(ValidationError) as exc_info:
+        Config(
+            api_url="https://api.example.com",
+            polling_backoff_factor=1.0,  # Invalid: must be > 1.0
+            otel=OtelConfig(),
+        )
+    assert "polling_backoff_factor" in str(exc_info.value)

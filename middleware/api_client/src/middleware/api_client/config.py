@@ -29,6 +29,16 @@ class Config(ConfigBase):
     verify_ssl: Annotated[bool, Field(description="Enable SSL certificate verification")] = True
     follow_redirects: Annotated[bool, Field(description="Follow HTTP redirects for API requests")] = True
 
+    # Polling parameters
+    polling_initial_delay: Annotated[
+        float, Field(description="Initial delay in seconds between polling requests", gt=0)
+    ] = 1.0
+    polling_max_delay: Annotated[
+        float, Field(description="Maximum delay in seconds between polling requests", gt=0)
+    ] = 30.0
+    polling_backoff_factor: Annotated[float, Field(description="Factor to increase delay between polls", gt=1.0)] = 1.5
+    polling_timeout: Annotated[float, Field(description="Total timeout for polling in minutes", gt=0)] = 90.0
+
     @field_validator("api_url")
     @classmethod
     def ensure_trailing_slash(cls, v: str) -> str:
