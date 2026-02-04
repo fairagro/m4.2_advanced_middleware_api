@@ -11,7 +11,7 @@ import sys
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 from pathlib import Path
-from typing import Annotated, Any, cast
+from typing import Annotated, cast
 from urllib.parse import unquote
 
 import redis
@@ -27,8 +27,6 @@ from pydantic import ValidationError
 
 from middleware.shared.api_models.models import (
     ArcOperationResult,
-    ArcResponse,
-    ArcStatus,
     CreateOrUpdateArcRequest,
     CreateOrUpdateArcResponse,
     CreateOrUpdateArcsRequest,
@@ -586,11 +584,7 @@ class Api:
                 status = TaskStatus(celery_status)
             except ValueError:
                 # Handle states not in our Enum if any (e.g. RECEIVED, RETRY handled by TaskStatus)
-                if celery_status == "RECEIVED":
-                    status = TaskStatus.PENDING
-                else:
-                    # Fallback to PENDING or whatever makes sense for unknown Celery states
-                    status = TaskStatus.PENDING
+                status = TaskStatus.PENDING if celery_status == "RECEIVED" else TaskStatus.PENDING
 
             return GetTaskStatusResponseV2(
                 status=status,
@@ -602,52 +596,3 @@ class Api:
 
 middleware_api = Api(loaded_config)
 app = middleware_api.app
-
-
-# # -------------------------
-# # READ ARCs
-# # -------------------------
-# @app.get("/arcs", response_model=List[ARC])
-# async def get_arcs():
-#     return list(ARC_DB.values())
-
-# @app.get("/arcs/{arc_id}")
-# async def get_arc(arc_id: str, request: Request):
-#     arc = ARC_DB.get(arc_id)
-#     if not arc:
-#         raise HTTPException(status_code=404, detail="ARC not found")
-#     accept = request.headers.get("accept", "application/json")
-#     return JSONResponse(content=serialize_arc(arc, accept))
-
-# # -------------------------
-# # UPDATE ARC
-# # -------------------------
-# @app.put("/arcs/{arc_id}")
-# async def update_arc(arc_id: str, updated: ARC):
-#     if arc_id not in ARC_DB:
-#         raise HTTPException(status_code=404, detail="ARC not found")
-#     updated.id = arc_id
-#     updated.created_at = ARC_DB[arc_id]["created_at"]
-#     updated.updated_at = datetime.now(UTC).isoformat() + "Z"
-#     ARC_DB[arc_id] = updated.dict()
-#     return updated
-
-# @app.patch("/arcs/{arc_id}")
-# async def patch_arc(arc_id: str, patch_data: dict):
-#     if arc_id not in ARC_DB:
-#         raise HTTPException(status_code=404, detail="ARC not found")
-#     arc = ARC_DB[arc_id]
-#     arc.update(patch_data)
-#     arc["updated_at"] = datetime.now(UTC).isoformat() + "Z"
-#     ARC_DB[arc_id] = arc
-#     return arc
-
-# # -------------------------
-# # DELETE ARC
-# # -------------------------
-# @app.delete("/arcs/{arc_id}", status_code=204)
-# async def delete_arc(arc_id: str):
-#     if arc_id not in ARC_DB:
-#         raise HTTPException(status_code=404, detail="ARC not found")
-#     del ARC_DB[arc_id]
-#     return Response(status_code=204)

@@ -6,7 +6,6 @@ This module provides:
 - Business logic for creating, updating, and managing ARCs
 """
 
-import asyncio
 import json
 import logging
 from datetime import UTC, datetime
@@ -16,10 +15,9 @@ from arctrl import ARC  # type: ignore[import-untyped]
 from opentelemetry import trace
 
 from middleware.shared.api_models.models import (
+    ArcOperationResult,
     ArcResponse,
     ArcStatus,
-    ArcOperationResult,
-    CreateOrUpdateArcsResponse,
 )
 
 from .arc_store import ArcStore
@@ -93,16 +91,7 @@ class BusinessLogic:
                 timestamp=datetime.now(UTC).isoformat() + "Z",
             )
 
-
-
-    # -------------------------- Create or Update ARCs --------------------------
-    # TODO: in the first implementation, we accepted string data for ARC JSON,
-    # now we accept list[Any] that is already validated using Pydantic in the API layer.
-    # The question is: do we need validation on the BusinessLogic layer as well?
-    # Depending on the answer, we need to refactor the current validation approach.
-    async def create_or_update_arc(
-        self, rdi: str, arc: Any, client_id: str | None
-    ) -> ArcOperationResult:
+    async def create_or_update_arc(self, rdi: str, arc: Any, client_id: str | None) -> ArcOperationResult:
         """Create or update a single ARC based on the provided RO-Crate JSON data.
 
         Args:
@@ -122,9 +111,7 @@ class BusinessLogic:
             "api.BusinessLogic.create_or_update_arc",
             attributes={"rdi": rdi, "client_id": client_id or "none"},
         ) as span:
-            logger.info(
-                "Starting ARC creation/update: rdi=%s, client_id=%s", rdi, client_id or "none"
-            )
+            logger.info("Starting ARC creation/update: rdi=%s, client_id=%s", rdi, client_id or "none")
             try:
                 result = await self._create_arc_from_rocrate(rdi, arc)
 
@@ -144,51 +131,3 @@ class BusinessLogic:
                 if isinstance(e, InvalidJsonSemanticError):
                     raise e
                 raise BusinessLogicError(f"unexpected error encountered: {str(e)}") from e
-
-    # # -------------------------
-    # # READ ARCs
-    # # -------------------------
-    # @app.get("/arcs", response_model=List[ARC])
-    # async def get_arcs():
-    #     return list(ARC_DB.values())
-
-    # @app.get("/arcs/{arc_id}")
-    # async def get_arc(arc_id: str, request: Request):
-    #     arc = ARC_DB.get(arc_id)
-    #     if not arc:
-    #         raise HTTPException(status_code=404, detail="ARC not found")
-    #     accept = request.headers.get("accept", "application/json")
-    #     return JSONResponse(content=serialize_arc(arc, accept))
-
-    # # -------------------------
-    # # UPDATE ARC
-    # # -------------------------
-    # @app.put("/arcs/{arc_id}")
-    # async def update_arc(arc_id: str, updated: ARC):
-    #     if arc_id not in ARC_DB:
-    #         raise HTTPException(status_code=404, detail="ARC not found")
-    #     updated.id = arc_id
-    #     updated.created_at = ARC_DB[arc_id]["created_at"]
-    #     updated.updated_at = datetime.now(UTC).isoformat() + "Z"
-    #     ARC_DB[arc_id] = updated.dict()
-    #     return updated
-
-    # @app.patch("/arcs/{arc_id}")
-    # async def patch_arc(arc_id: str, patch_data: dict):
-    #     if arc_id not in ARC_DB:
-    #         raise HTTPException(status_code=404, detail="ARC not found")
-    #     arc = ARC_DB[arc_id]
-    #     arc.update(patch_data)
-    #     arc["updated_at"] = datetime.now(UTC).isoformat() + "Z"
-    #     ARC_DB[arc_id] = arc
-    #     return arc
-
-    # # -------------------------
-    # # DELETE ARC
-    # # -------------------------
-    # @app.delete("/arcs/{arc_id}", status_code=204)
-    # async def delete_arc(arc_id: str):
-    #     if arc_id not in ARC_DB:
-    #         raise HTTPException(status_code=404, detail="ARC not found")
-    #     del ARC_DB[arc_id]
-    #     return Response(status_code=204)
