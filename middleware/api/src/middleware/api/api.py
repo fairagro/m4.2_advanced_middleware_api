@@ -552,7 +552,6 @@ class Api:
                 status=result.status,
                 result=task_result,
                 error=error_message,
-                client_id=task_result.client_id if task_result else None,
             )
 
     def _setup_task_status_route_v2(self) -> None:

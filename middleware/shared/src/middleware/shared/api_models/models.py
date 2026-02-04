@@ -116,7 +116,7 @@ class CreateOrUpdateArcResponse(ApiResponse):
     status: Annotated[str | None, Field(description="The status of the task submission")] = None
 
 
-class GetTaskStatusResponse(ApiResponse):
+class GetTaskStatusResponse(BaseModel):
     """Response model for task status (v1)."""
 
     task_id: Annotated[str, Field(description="The ID of the background task")]
