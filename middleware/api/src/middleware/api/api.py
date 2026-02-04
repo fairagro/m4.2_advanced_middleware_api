@@ -37,7 +37,6 @@ from middleware.shared.api_models.models import (
     GetTaskStatusResponseV2,
     HealthResponse,
     LivenessResponse,
-    TaskInfo,
     TaskStatus,
     WhoamiResponse,
 )
@@ -515,7 +514,8 @@ class Api:
             logger.info("Enqueued task %s for ARC processing", task.id)
 
             return CreateOrUpdateArcResponse(
-                task=TaskInfo(task_id=task.id, status=TaskStatus.PENDING),
+                task_id=task.id,
+                status=TaskStatus.PENDING,
             )
 
     def _setup_task_status_route(self) -> None:
@@ -593,7 +593,7 @@ class Api:
                     status = TaskStatus.PENDING
 
             return GetTaskStatusResponseV2(
-                task=TaskInfo(task_id=task_id, status=status),
+                status=status,
                 result=task_result,
                 message=error_message or "",
                 client_id=task_result.client_id if task_result else None,

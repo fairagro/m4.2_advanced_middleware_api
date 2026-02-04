@@ -29,13 +29,6 @@ class TaskStatus(str, Enum):
     REVOKED = "REVOKED"
 
 
-class TaskInfo(BaseModel):
-    """Model containing basic information about a background task."""
-
-    task_id: Annotated[str, Field(description="The ID of the background task")]
-    status: Annotated[TaskStatus, Field(description="The status of the task")]
-
-
 class LivenessResponse(BaseModel):
     """Response model for liveness check."""
 
@@ -121,7 +114,8 @@ class CreateOrUpdateArcsResponse(ApiResponse):
 class CreateOrUpdateArcResponse(ApiResponse):
     """Response model for create or update a single ARC operation ticket (v2)."""
 
-    task: Annotated[TaskInfo, Field(description="Task information for the submitted operation")]
+    task_id: Annotated[str, Field(description="The ID of the background task")]
+    status: Annotated[TaskStatus, Field(description="The status of the task")]
 
 
 class ArcOperationResult(ApiResponse):
@@ -146,7 +140,7 @@ class GetTaskStatusResponse(BaseModel):
 class GetTaskStatusResponseV2(ApiResponse):
     """Response model for task status (v2)."""
 
-    task: Annotated[TaskInfo, Field(description="Task information for the submitted operation")]
+    status: Annotated[TaskStatus, Field(description="The status of the task")]
     result: Annotated[
         ArcOperationResult | None,
         Field(description="The result of the task if completed"),

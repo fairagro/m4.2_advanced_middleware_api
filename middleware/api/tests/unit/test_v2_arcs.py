@@ -58,9 +58,8 @@ def test_create_or_update_arc_success(client: TestClient, cert: str, expected_ht
         )
         assert r.status_code == expected_http_status
         body = r.json()
-        assert body["task"]["task_id"] == "task-123"
-        assert body["task"]["status"] == TaskStatus.PENDING
-        assert "arc" not in body
+        assert body["task_id"] == "task-123"
+        assert body["status"] == TaskStatus.PENDING
 
 
 @pytest.mark.unit
@@ -132,7 +131,6 @@ def test_get_task_status_v2(client: TestClient) -> None:
         )
         assert r.status_code == http.HTTPStatus.OK
         body = r.json()
-        assert body["task"]["task_id"] == "task-123"
-        assert body["task"]["status"] == TaskStatus.SUCCESS
+        assert body["status"] == TaskStatus.SUCCESS
         assert body["result"]["message"] == "ok"
         assert body["result"]["arc"]["id"] == "arc-1"
