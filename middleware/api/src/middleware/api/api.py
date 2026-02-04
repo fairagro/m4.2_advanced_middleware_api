@@ -547,7 +547,13 @@ class Api:
                 elif result.failed():
                     error_message = str(result.result)
 
-            return GetTaskStatusResponse(task_id=task_id, status=result.status, result=task_result, error=error_message)
+            return GetTaskStatusResponse(
+                task_id=task_id,
+                status=result.status,
+                result=task_result,
+                error=error_message,
+                client_id=task_result.client_id if task_result else None,
+            )
 
     def _setup_task_status_route_v2(self) -> None:
         @self._app.get("/v2/tasks/{task_id}")
@@ -571,7 +577,11 @@ class Api:
                     error_message = str(result.result)
 
             return GetTaskStatusResponseV2(
-                task_id=task_id, status=result.status, result=task_result, error=error_message
+                task_id=task_id,
+                status=result.status,
+                result=task_result,
+                error=error_message,
+                client_id=task_result.client_id if task_result else None,
             )
 
 
