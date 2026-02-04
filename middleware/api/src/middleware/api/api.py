@@ -518,7 +518,7 @@ class Api:
             """Get the status of an async task."""
             result = celery_app.AsyncResult(task_id)
 
-            task_result = None
+            task_result: CreateOrUpdateArcResponse | CreateOrUpdateArcsResponse | None = None
             error_message = None
 
             if result.ready():
@@ -526,12 +526,15 @@ class Api:
                     # If successful, the result is a dict representation of CreateOrUpdateArcsResponse
                     # (as returned by process_arc's model_dump())
                     try:
-                        task_result = CreateOrUpdateArcsResponse.model_validate(result.result)
-                    except ValidationError as e:
-                        # Use more specific exception handling if possible, or just log
-                        logger.error("Failed to validate task result: %s", e)
-                        # Fallback if result is not valid model-dump
-                        pass
+                        # Try v2 response first (singular)
+                        task_result = CreateOrUpdateArcResponse.model_validate(result.result)
+                    except ValidationError:
+                        try:
+                            # Fallback to v1 response (plural)
+                            task_result = CreateOrUpdateArcsResponse.model_validate(result.result)
+                        except ValidationError as e:
+                            logger.error("Failed to validate task result: %s", e)
+                            pass
                 elif result.failed():
                     error_message = str(result.result)
 

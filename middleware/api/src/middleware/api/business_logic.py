@@ -18,6 +18,7 @@ from opentelemetry import trace
 from middleware.shared.api_models.models import (
     ArcResponse,
     ArcStatus,
+    CreateOrUpdateArcResponse,
     CreateOrUpdateArcsResponse,
 )
 
@@ -92,42 +93,21 @@ class BusinessLogic:
                 timestamp=datetime.now(UTC).isoformat() + "Z",
             )
 
-    async def _process_arcs(self, rdi: str, arcs: list[Any]) -> list[ArcResponse]:
-        """Process a batch of ARCs with span for batch timing."""
-        logger.debug("Processing batch of %d ARCs for RDI: %s", len(arcs), rdi)
-        with self._tracer.start_as_current_span(
-            "api.BusinessLogic._process_arcs",
-            attributes={"rdi": rdi, "batch_size": len(arcs)},
-        ):
-            tasks = [self._create_arc_from_rocrate(rdi, arc) for arc in arcs]
-            # Use return_exceptions=True to ensure one failure doesn't stop the whole batch
-            results = await asyncio.gather(*tasks, return_exceptions=True)
 
-            processed_arcs: list[ArcResponse] = []
-            for i, res in enumerate(results):
-                if isinstance(res, Exception):
-                    logger.error(
-                        "Failed to process ARC at index %d in batch for RDI %s: %s", i, rdi, res, exc_info=True
-                    )
-                else:
-                    processed_arcs.append(res)  # type: ignore[arg-type]
-
-            logger.debug("Batch processing complete: %d/%d ARCs processed successfully", len(processed_arcs), len(arcs))
-            return processed_arcs
 
     # -------------------------- Create or Update ARCs --------------------------
     # TODO: in the first implementation, we accepted string data for ARC JSON,
     # now we accept list[Any] that is already validated using Pydantic in the API layer.
     # The question is: do we need validation on the BusinessLogic layer as well?
     # Depending on the answer, we need to refactor the current validation approach.
-    async def create_or_update_arcs(
-        self, rdi: str, arcs: list[Any], client_id: str | None
-    ) -> CreateOrUpdateArcsResponse:
-        """Create or update ARCs based on the provided RO-Crate JSON data.
+    async def create_or_update_arc(
+        self, rdi: str, arc: Any, client_id: str | None
+    ) -> CreateOrUpdateArcResponse:
+        """Create or update a single ARC based on the provided RO-Crate JSON data.
 
         Args:
             rdi: Research Data Infrastructure identifier.
-            arcs: List of ARC definitions.
+            arc: ARC definition.
             client_id: The client identifier, or None if not authenticated.
 
         Raises:
@@ -135,37 +115,34 @@ class BusinessLogic:
             BusinessLogicError: If an error occurs during the operation.
 
         Returns:
-            CreateOrUpdateArcsResponse: Response containing details of the processed
-            ARCs.
+            CreateOrUpdateArcResponse: Response containing details of the processed ARC.
 
         """
         with self._tracer.start_as_current_span(
-            "api.BusinessLogic.create_or_update_arcs",
-            attributes={"rdi": rdi, "num_arcs": len(arcs), "client_id": client_id or "none"},
+            "api.BusinessLogic.create_or_update_arc",
+            attributes={"rdi": rdi, "client_id": client_id or "none"},
         ) as span:
             logger.info(
-                "Starting ARC creation/update: rdi=%s, num_arcs=%d, client_id=%s", rdi, len(arcs), client_id or "none"
+                "Starting ARC creation/update: rdi=%s, client_id=%s", rdi, client_id or "none"
             )
             try:
-                # We do not catch InvalidJsonSemanticError or BusinessLogicError here anymore explicitly
-                # because individual ARC failures are handled inside _process_arcs now.
-                # Only if _process_arcs itself crashes (unexpectedly) will we land here.
-                result = await self._process_arcs(rdi, arcs)
+                result = await self._create_arc_from_rocrate(rdi, arc)
 
                 span.set_attribute("success", True)
-                span.set_attribute("processed_count", len(result))
 
-                logger.info("Successfully processed %d/%d ARCs for RDI: %s", len(result), len(arcs), rdi)
+                logger.info("Successfully processed ARC for RDI: %s", rdi)
 
-                return CreateOrUpdateArcsResponse(
+                return CreateOrUpdateArcResponse(
                     client_id=client_id,
                     rdi=rdi,
-                    message=f"Processed {len(result)}/{len(arcs)} ARCs successfully",
-                    arcs=result,
+                    message="Processed ARC successfully",
+                    arc=result,
                 )
             except Exception as e:
-                logger.error("Unexpected error while processing ARCs batch: %s", e, exc_info=True)
+                logger.error("Unexpected error while processing ARC: %s", e, exc_info=True)
                 span.record_exception(e)
+                if isinstance(e, InvalidJsonSemanticError):
+                    raise e
                 raise BusinessLogicError(f"unexpected error encountered: {str(e)}") from e
 
     # # -------------------------

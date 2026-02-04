@@ -121,7 +121,8 @@ class GetTaskStatusResponse(BaseModel):
 
     task_id: Annotated[str, Field(description="The ID of the background task")]
     status: Annotated[str, Field(description="The status of the task")]
-    result: Annotated[CreateOrUpdateArcsResponse | None, Field(description="The result of the task if completed")] = (
-        None
-    )
+    result: Annotated[
+        CreateOrUpdateArcsResponse | CreateOrUpdateArcResponse | None,
+        Field(description="The result of the task if completed"),
+    ] = None
     error: Annotated[str | None, Field(description="Error message if task failed")] = None
