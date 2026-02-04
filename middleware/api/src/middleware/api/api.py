@@ -31,6 +31,7 @@ from middleware.shared.api_models.models import (
     CreateOrUpdateArcsRequest,
     CreateOrUpdateArcsResponse,
     GetTaskStatusResponse,
+    GetTaskStatusResponseV2,
     HealthResponse,
     LivenessResponse,
     WhoamiResponse,
@@ -374,6 +375,7 @@ class Api:
         self._setup_create_or_update_arcs_route()
         self._setup_create_or_update_arc_route_v2()
         self._setup_task_status_route()
+        self._setup_task_status_route_v2()
 
     def _setup_whoami_route(self) -> None:
         @self._app.get("/v1/whoami", response_model=WhoamiResponse)
@@ -515,30 +517,62 @@ class Api:
             task_id: str,
             _accept_validated: Annotated[None, Depends(self._validate_accept_type)],
         ) -> GetTaskStatusResponse:
-            """Get the status of an async task."""
+            """Get the status of an async task (v1)."""
             result = celery_app.AsyncResult(task_id)
 
-            task_result: CreateOrUpdateArcResponse | CreateOrUpdateArcsResponse | None = None
+            task_result: CreateOrUpdateArcsResponse | None = None
             error_message = None
 
             if result.ready():
                 if result.successful():
-                    # If successful, the result is a dict representation of CreateOrUpdateArcsResponse
-                    # (as returned by process_arc's model_dump())
                     try:
-                        # Try v2 response first (singular)
-                        task_result = CreateOrUpdateArcResponse.model_validate(result.result)
+                        # Success case: result.result is a dict.
+                        # Since internal processing is now singular (v2),
+                        # we try to parse as v2 and transform to v1.
+                        inner_res = CreateOrUpdateArcResponse.model_validate(result.result)
+                        task_result = CreateOrUpdateArcsResponse(
+                            client_id=inner_res.client_id,
+                            rdi=inner_res.rdi,
+                            message=inner_res.message,
+                            arcs=[inner_res.arc] if inner_res.arc else [],
+                            task_id=inner_res.task_id,
+                            status=inner_res.status,
+                        )
                     except ValidationError:
                         try:
-                            # Fallback to v1 response (plural)
+                            # Fallback for old plural results if any exist in the backend
                             task_result = CreateOrUpdateArcsResponse.model_validate(result.result)
                         except ValidationError as e:
-                            logger.error("Failed to validate task result: %s", e)
-                            pass
+                            logger.error("Failed to validate task result for v1 request: %s", e)
                 elif result.failed():
                     error_message = str(result.result)
 
             return GetTaskStatusResponse(task_id=task_id, status=result.status, result=task_result, error=error_message)
+
+    def _setup_task_status_route_v2(self) -> None:
+        @self._app.get("/v2/tasks/{task_id}")
+        async def get_task_status_v2(
+            task_id: str,
+            _accept_validated: Annotated[None, Depends(self._validate_accept_type)],
+        ) -> GetTaskStatusResponseV2:
+            """Get the status of an async task (v2)."""
+            result = celery_app.AsyncResult(task_id)
+
+            task_result: CreateOrUpdateArcResponse | None = None
+            error_message = None
+
+            if result.ready():
+                if result.successful():
+                    try:
+                        task_result = CreateOrUpdateArcResponse.model_validate(result.result)
+                    except ValidationError as e:
+                        logger.error("Failed to validate task result for v2 request: %s", e)
+                elif result.failed():
+                    error_message = str(result.result)
+
+            return GetTaskStatusResponseV2(
+                task_id=task_id, status=result.status, result=task_result, error=error_message
+            )
 
 
 middleware_api = Api(loaded_config)

@@ -72,3 +72,36 @@ def test_create_or_update_arc_rdi_not_known(client: TestClient, cert: str) -> No
         json={"rdi": "rdi-unknown", "arc": {"dummy": "crate"}},
     )
     assert r.status_code == http.HTTPStatus.BAD_REQUEST
+
+
+@pytest.mark.unit
+def test_get_task_status_v2(client: TestClient) -> None:
+    """Test getting task status via /v2/tasks endpoint."""
+    mock_result = MagicMock()
+    mock_result.status = "SUCCESS"
+    mock_result.ready.return_value = True
+    mock_result.successful.return_value = True
+    mock_result.failed.return_value = False
+    # Mock return value from worker (singular)
+    mock_result.result = {
+        "client_id": "test",
+        "message": "ok",
+        "rdi": "rdi-1",
+        "arc": {"id": "arc-1", "status": "created", "timestamp": "2024-01-01T00:00:00Z"},
+    }
+
+    with pytest.MonkeyPatch.context() as mp:
+        mock_async_result = MagicMock(return_value=mock_result)
+        mp.setattr("middleware.api.api.celery_app.AsyncResult", mock_async_result)
+
+        r = client.get(
+            "/v2/tasks/task-123",
+            headers={"accept": "application/json"},
+        )
+        assert r.status_code == http.HTTPStatus.OK
+        body = r.json()
+        assert body["task_id"] == "task-123"
+        assert body["status"] == "SUCCESS"
+        assert body["result"]["message"] == "ok"
+        assert body["result"]["arc"]["id"] == "arc-1"
+

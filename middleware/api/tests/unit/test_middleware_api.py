@@ -191,17 +191,23 @@ def test_create_or_update_arcs_no_cert_allowed(client: TestClient, middleware_ap
     middleware_api._config.require_client_cert = True
 
 
-def test_get_task_status(client: TestClient) -> None:
-    """Test getting task status."""
+def test_get_task_status_v1_transformation(client: TestClient) -> None:
+    """Test getting task status via /v1/tasks (v1 endpoint) with singular result from worker."""
     mock_result = MagicMock()
     mock_result.status = "SUCCESS"
     mock_result.ready.return_value = True
+    mock_result.successful.return_value = True
     mock_result.failed.return_value = False
-    mock_result.result = {"client_id": "test", "message": "ok", "rdi": "rdi-1", "arcs": []}
+    # Mock return value from worker (singular)
+    mock_result.result = {
+        "client_id": "test",
+        "message": "ok",
+        "rdi": "rdi-1",
+        "arc": {"id": "arc-1", "status": "created", "timestamp": "2024-01-01T00:00:00Z"},
+    }
 
     with pytest.MonkeyPatch.context() as mp:
         mock_async_result = MagicMock(return_value=mock_result)
-        # Verify import path in api.py: from .celery_app import celery_app
         mp.setattr("middleware.api.api.celery_app.AsyncResult", mock_async_result)
 
         r = client.get(
@@ -213,7 +219,10 @@ def test_get_task_status(client: TestClient) -> None:
         assert body["task_id"] == "task-123"
         assert body["status"] == "SUCCESS"
         assert body["result"]["message"] == "ok"
-        assert body["result"]["client_id"] == "test"
+        # Transformation: single 'arc' becomes 'arcs' list with 1 item
+        assert len(body["result"]["arcs"]) == 1
+        assert body["result"]["arcs"][0]["id"] == "arc-1"
+
 
 
 # Removed test_create_or_update_arcs_invalid_json_semantic as validation runs async now
