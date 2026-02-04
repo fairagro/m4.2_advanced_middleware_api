@@ -1,4 +1,4 @@
-"""Integration tests for GitRepo backend."""
+"""System tests for GitRepo backend."""
 
 import hashlib
 import http
@@ -69,6 +69,7 @@ def api_client(git_repo_config: dict[str, Any]) -> Generator[TestClient, None, N
 
 
 @pytest.mark.asyncio
+@pytest.mark.system
 async def test_create_arc_via_git_repo(
     api_client: TestClient,
     git_server_root: Path,
@@ -114,7 +115,7 @@ async def test_create_arc_via_git_repo(
     assert "task_id" in response_data
     assert response_data["status"] == "processing"
 
-    # Note: In integration tests, we would need to poll /v1/tasks/{task_id} and wait for completion
+    # Note: In system tests, we would need to poll /v1/tasks/{task_id} and wait for completion
     # For now, we skip verification as it requires Celery worker to be running
     # _verify_repo_content(repo_path)
 

@@ -148,6 +148,7 @@ markers = [
     "asyncio: marks tests as async",
     "unit: marks tests as unit tests",
     "integration: marks tests as integration tests",
+    "system: marks tests as system tests",
 ]
 
 [tool.coverage.run]
