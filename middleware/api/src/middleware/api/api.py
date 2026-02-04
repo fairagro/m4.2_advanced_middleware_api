@@ -27,6 +27,7 @@ from pydantic import ValidationError
 
 from middleware.shared.api_models.models import (
     CreateOrUpdateArcRequest,
+    CreateOrUpdateArcResponse,
     CreateOrUpdateArcsRequest,
     CreateOrUpdateArcsResponse,
     GetTaskStatusResponse,
@@ -491,7 +492,7 @@ class Api:
             _content_type_validated: Annotated[None, Depends(self._validate_content_type)],
             _accept_validated: Annotated[None, Depends(self._validate_accept_type)],
             rdi: Annotated[str, Depends(self._validate_rdi_authorized)],
-        ) -> CreateOrUpdateArcsResponse:
+        ) -> CreateOrUpdateArcResponse:
             """Submit a single ARC for processing asynchronously."""
             logger.info(
                 "Received POST /v2/arcs request: rdi=%s, client_id=%s",
@@ -506,7 +507,7 @@ class Api:
 
             logger.info("Enqueued task %s for ARC processing", task.id)
 
-            return CreateOrUpdateArcsResponse(task_id=task.id, status="processing")
+            return CreateOrUpdateArcResponse(task_id=task.id, status="processing")
 
     def _setup_task_status_route(self) -> None:
         @self._app.get("/v1/tasks/{task_id}")
