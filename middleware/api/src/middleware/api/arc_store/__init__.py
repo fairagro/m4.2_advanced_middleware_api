@@ -1,12 +1,11 @@
 """Contains the ArcStore interface and its implementations."""
 
+import hashlib
 import logging
 from abc import ABC, abstractmethod
 
 from arctrl import ARC  # type: ignore[import-untyped]
 from opentelemetry import trace
-
-from middleware.shared.utils import calculate_arc_id
 
 logger = logging.getLogger(__name__)
 
@@ -27,7 +26,8 @@ class ArcStore(ABC):
 
     def arc_id(self, identifier: str, rdi: str) -> str:
         """Generate ARC ID."""
-        return calculate_arc_id(identifier, rdi)
+        input_str = f"{identifier}:{rdi}"
+        return hashlib.sha256(input_str.encode("utf-8")).hexdigest()
 
     @abstractmethod
     async def _create_or_update(self, arc_id: str, arc: ARC) -> None:

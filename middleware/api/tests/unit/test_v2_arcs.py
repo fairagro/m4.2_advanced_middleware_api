@@ -59,10 +59,8 @@ def test_create_or_update_arc_success(client: TestClient, cert: str, expected_ht
         assert r.status_code == expected_http_status
         body = r.json()
         assert body["task"]["task_id"] == "task-123"
-        assert body["task"]["status"] == TaskStatus.PROCESSING
-        assert "arc" in body
-        assert body["arc"]["status"] == "requested"
-        assert body["arc"]["id"] is not None
+        assert body["task"]["status"] == TaskStatus.PENDING
+        assert "arc" not in body
 
 
 @pytest.mark.unit

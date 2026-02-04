@@ -18,17 +18,15 @@ class ArcStatus(str, Enum):
 class TaskStatus(str, Enum):
     """Enumeration of possible task states.
 
-    Values:
-        pending: Task is in the queue
-        processing: Task is being processed
-        success: Task completed successfully
-        failure: Task failed
+    Values match Celery task states.
     """
 
-    PENDING = "pending"
-    PROCESSING = "processing"
-    SUCCESS = "success"
-    FAILURE = "failure"
+    PENDING = "PENDING"
+    STARTED = "STARTED"
+    SUCCESS = "SUCCESS"
+    FAILURE = "FAILURE"
+    RETRY = "RETRY"
+    REVOKED = "REVOKED"
 
 
 class TaskInfo(BaseModel):
@@ -124,7 +122,6 @@ class CreateOrUpdateArcResponse(ApiResponse):
     """Response model for create or update a single ARC operation ticket (v2)."""
 
     task: Annotated[TaskInfo, Field(description="Task information for the submitted operation")]
-    arc: Annotated[ArcResponse, Field(description="ARC response for the operation indicating the initial status")]
 
 
 class ArcOperationResult(ApiResponse):
