@@ -41,9 +41,12 @@ from middleware.shared.api_models.models import (
     GetTaskStatusResponseV2,
     HealthResponse,
     LivenessResponse,
+    TaskInfo,
+    TaskStatus,
     WhoamiResponse,
 )
 from middleware.shared.tracing import initialize_logging, initialize_tracing
+from middleware.shared.utils import calculate_arc_id
 
 from .celery_app import celery_app
 from .config import Config
@@ -502,8 +505,7 @@ class Api:
             if not identifier:
                 raise ValueError("Missing identifier in RO-Crate")
 
-            input_str = f"{identifier}:{rdi}"
-            return hashlib.sha256(input_str.encode("utf-8")).hexdigest()
+            return calculate_arc_id(identifier, rdi)
         except Exception as e:
             logger.error("Failed to extract ARC ID: %s", e)
             raise HTTPException(status_code=400, detail=f"Invalid RO-Crate: {str(e)}") from e
@@ -536,10 +538,10 @@ class Api:
             logger.info("Enqueued task %s for ARC processing of ID %s", task.id, arc_id)
 
             return CreateOrUpdateArcResponse(
-                task_id=task.id,
+                task=TaskInfo(task_id=task.id, status=TaskStatus.PROCESSING),
                 arc=ArcResponse(
                     id=arc_id,
-                    status=ArcStatus.PROCESSING,
+                    status=ArcStatus.REQUESTED,  # Use REQUESTED for initial state
                     timestamp=timestamp,
                 ),
             )
@@ -606,9 +608,19 @@ class Api:
                 elif result.failed():
                     error_message = str(result.result)
 
+            # Map Celery status to TaskStatus
+            celery_status = result.status
+            if celery_status == "SUCCESS":
+                status = TaskStatus.SUCCESS
+            elif celery_status == "FAILURE":
+                status = TaskStatus.FAILURE
+            elif celery_status in ("PENDING", "RECEIVED"):
+                status = TaskStatus.PENDING
+            else:
+                status = TaskStatus.PROCESSING
+
             return GetTaskStatusResponseV2(
-                task_id=task_id,
-                status=result.status,
+                task=TaskInfo(task_id=task_id, status=status),
                 result=task_result,
                 message=error_message or "",
                 client_id=task_result.client_id if task_result else None,

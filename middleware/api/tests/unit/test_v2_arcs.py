@@ -6,6 +6,8 @@ from unittest.mock import MagicMock
 import pytest
 from fastapi.testclient import TestClient
 
+from middleware.shared.api_models.models import TaskStatus
+
 
 @pytest.mark.unit
 @pytest.mark.parametrize(
@@ -56,9 +58,10 @@ def test_create_or_update_arc_success(client: TestClient, cert: str, expected_ht
         )
         assert r.status_code == expected_http_status
         body = r.json()
-        assert body["task_id"] == "task-123"
+        assert body["task"]["task_id"] == "task-123"
+        assert body["task"]["status"] == TaskStatus.PROCESSING
         assert "arc" in body
-        assert body["arc"]["status"] == "processing"
+        assert body["arc"]["status"] == "requested"
         assert body["arc"]["id"] is not None
 
 
@@ -131,7 +134,7 @@ def test_get_task_status_v2(client: TestClient) -> None:
         )
         assert r.status_code == http.HTTPStatus.OK
         body = r.json()
-        assert body["task_id"] == "task-123"
-        assert body["status"] == "SUCCESS"
+        assert body["task"]["task_id"] == "task-123"
+        assert body["task"]["status"] == TaskStatus.SUCCESS
         assert body["result"]["message"] == "ok"
         assert body["result"]["arc"]["id"] == "arc-1"

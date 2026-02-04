@@ -7,21 +7,35 @@ from pydantic import BaseModel, Field
 
 
 class ArcStatus(str, Enum):
-    """Enumeration of possible ARC status values.
-
-    Values:
-        created: ARC was newly created
-        updated: ARC was updated
-        deleted: ARC was deleted
-        requested: ARC was requested
-
-    """
+    """Enumeration of possible ARC status values."""
 
     CREATED = "created"
     UPDATED = "updated"
     DELETED = "deleted"
     REQUESTED = "requested"
+
+
+class TaskStatus(str, Enum):
+    """Enumeration of possible task states.
+
+    Values:
+        pending: Task is in the queue
+        processing: Task is being processed
+        success: Task completed successfully
+        failure: Task failed
+    """
+
+    PENDING = "pending"
     PROCESSING = "processing"
+    SUCCESS = "success"
+    FAILURE = "failure"
+
+
+class TaskInfo(BaseModel):
+    """Model containing basic information about a background task."""
+
+    task_id: Annotated[str, Field(description="The ID of the background task")]
+    status: Annotated[TaskStatus, Field(description="The status of the task")]
 
 
 class LivenessResponse(BaseModel):
@@ -109,8 +123,8 @@ class CreateOrUpdateArcsResponse(ApiResponse):
 class CreateOrUpdateArcResponse(ApiResponse):
     """Response model for create or update a single ARC operation ticket (v2)."""
 
-    task_id: Annotated[str, Field(description="The ID of the background task processing the ARC")]
-    arc: Annotated[ArcResponse, Field(description="ARC response indicating the processing status")]
+    task: Annotated[TaskInfo, Field(description="Task information for the submitted operation")]
+    arc: Annotated[ArcResponse, Field(description="ARC response for the operation indicating the initial status")]
 
 
 class ArcOperationResult(ApiResponse):
@@ -135,8 +149,7 @@ class GetTaskStatusResponse(BaseModel):
 class GetTaskStatusResponseV2(ApiResponse):
     """Response model for task status (v2)."""
 
-    task_id: Annotated[str, Field(description="The ID of the background task")]
-    status: Annotated[str, Field(description="The status of the task")]
+    task: Annotated[TaskInfo, Field(description="Task information for the submitted operation")]
     result: Annotated[
         ArcOperationResult | None,
         Field(description="The result of the task if completed"),
