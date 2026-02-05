@@ -41,6 +41,7 @@ class HealthResponse(BaseModel):
     status: Annotated[str, Field(description="Overall service status (ok/error)")] = "ok"
     redis_reachable: Annotated[bool, Field(description="True if Redis is reachable")]
     rabbitmq_reachable: Annotated[bool, Field(description="True if RabbitMQ is reachable")]
+    couchdb_reachable: Annotated[bool, Field(description="True if CouchDB is reachable")] = False
 
 
 class HealthResponseV2(BaseModel):

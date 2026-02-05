@@ -41,6 +41,7 @@ from middleware.shared.api_models.models import (
     TaskStatus,
     WhoamiResponse,
 )
+from middleware.shared.couchdb_client import CouchDBClient
 from middleware.shared.tracing import initialize_logging, initialize_tracing
 
 from .celery_app import celery_app
