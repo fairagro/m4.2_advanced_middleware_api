@@ -16,6 +16,7 @@ from middleware.api.schemas.arc_document import (
     ArcMetadata,
 )
 from middleware.api.utils import calculate_arc_id
+
 from . import ArcStoreResult, DocumentStore
 
 logger = logging.getLogger(__name__)

@@ -115,7 +115,7 @@ class AsyncBusinessLogic:
         return {"dispatcher": True}
 
     async def setup(self) -> None:
-        """Setup - no-op for async dispatcher."""
+        """Set up the async dispatcher (no-op)."""
         pass
 
     async def connect(self) -> None:
@@ -153,7 +153,7 @@ class DirectBusinessLogic:
         }
 
     async def setup(self) -> None:
-        """Setup stores and apply migrations."""
+        """Set up stores and apply migrations."""
         if self._doc_store:
             try:
                 # We enforce system database creation during setup

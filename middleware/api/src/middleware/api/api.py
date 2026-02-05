@@ -42,8 +42,8 @@ from middleware.shared.api_models.models import (
 )
 from middleware.shared.tracing import initialize_logging, initialize_tracing
 
-from .business_logic_factory import BusinessLogicFactory
 from .business_logic import SetupError
+from .business_logic_factory import BusinessLogicFactory
 from .celery_app import celery_app
 from .config import Config
 from .tracing import instrument_app
