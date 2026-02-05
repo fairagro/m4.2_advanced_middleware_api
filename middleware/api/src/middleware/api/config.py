@@ -19,9 +19,7 @@ class CeleryConfig(BaseModel):
     broker_url: Annotated[
         SecretStr, Field(default="amqp://guest:guest@localhost:5672//", description="RabbitMQ broker URL")
     ]
-    result_backend: Annotated[
-        SecretStr, Field(default="redis://localhost:6379/0", description="Redis backend URL")
-    ]
+    result_backend: Annotated[SecretStr, Field(default="redis://localhost:6379/0", description="Redis backend URL")]
     task_rate_limit: Annotated[str | None, Field(description="Rate limit for tasks (e.g. '10/m')")] = None
 
 
@@ -30,10 +28,9 @@ class CouchDBConfig(BaseModel):
 
     url: Annotated[str, Field(description="CouchDB URL")] = "http://localhost:5984"
     user: Annotated[str | None, Field(description="CouchDB username")] = None
-    password: Annotated[
-        SecretStr | None, Field(description="CouchDB password")
-    ] = None
+    password: Annotated[SecretStr | None, Field(description="CouchDB password")] = None
     db_name: Annotated[str, Field(description="Name of the database to store ARCs in")] = "arcs"
+    max_event_log_size: Annotated[int, Field(default=100, description="Maximum number of events in ARC metadata")] = 100
 
 
 class Config(ConfigBase):

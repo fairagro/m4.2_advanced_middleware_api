@@ -59,7 +59,7 @@ class CouchDBClient:
                 user=self.user,
                 password=self.password,
             )
-            
+
             # Check if database exists, create if not
             try:
                 self._db = await self._client[db_name]
@@ -67,7 +67,7 @@ class CouchDBClient:
             except NotFoundError:
                 self._db = await self._client.create(db_name)
                 logger.info("Created CouchDB database: %s", db_name)
-                
+
         except Exception as e:
             logger.error("Failed to connect to CouchDB: %s", e)
             raise
@@ -131,7 +131,7 @@ class CouchDBClient:
 
         # Check if document exists
         existing_doc = await self.get_document(doc_id)
-        
+
         if existing_doc:
             # Update existing document
             doc = await self._db[doc_id]

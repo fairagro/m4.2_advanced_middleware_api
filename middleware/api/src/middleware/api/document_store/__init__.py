@@ -3,7 +3,7 @@
 from abc import ABC, abstractmethod
 from typing import Any
 
-from middleware.api.schemas import ArcDocument, ArcMetadata, ArcEvent
+from middleware.api.schemas import ArcEvent, ArcMetadata
 
 
 class DocumentStoreError(Exception):
@@ -20,6 +20,14 @@ class ArcStoreResult:
         has_changes: bool,
         should_trigger_git: bool,
     ):
+        """Initialize an ArcStoreResult instance.
+
+        Args:
+            arc_id: The identifier of the ARC.
+            is_new: Indicates if the ARC is new.
+            has_changes: Indicates if the ARC has changes.
+            should_trigger_git: Indicates if the ARC should trigger a Git operation.
+        """
         self.arc_id = arc_id
         self.is_new = is_new
         self.has_changes = has_changes
@@ -91,10 +99,12 @@ class DocumentStore(ABC):
         """
         raise NotImplementedError
 
+    @abstractmethod
     async def connect(self) -> None:
         """Connect to the document store."""
-        pass
+        raise NotImplementedError
 
+    @abstractmethod
     async def close(self) -> None:
         """Close the connection to the document store."""
-        pass
+        raise NotImplementedError

@@ -45,9 +45,7 @@ class HarvestDocument(BaseModel):
     statistics: Annotated[HarvestStatistics, Field(description="Harvest statistics")] = Field(
         default_factory=HarvestStatistics
     )
-    config: Annotated[HarvestConfig, Field(description="Harvest configuration")] = Field(
-        default_factory=HarvestConfig
-    )
+    config: Annotated[HarvestConfig, Field(description="Harvest configuration")] = Field(default_factory=HarvestConfig)
 
     class Config:
         """Pydantic configuration."""

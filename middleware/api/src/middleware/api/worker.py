@@ -40,7 +40,7 @@ def process_arc(rdi: str, arc_data: dict[str, Any], client_id: str) -> dict[str,
     try:
         loop = asyncio.new_event_loop()
         asyncio.set_event_loop(loop)
-        
+
         async def _run_logic() -> ArcOperationResult | ArcTaskTicket:
             try:
                 await business_logic.connect()

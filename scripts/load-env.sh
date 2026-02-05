@@ -76,7 +76,7 @@ if command -v pre-commit &> /dev/null; then
             echo ""
             echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
             echo ""
-            
+
             # Detect environment: Antigravity uses token-based auth, VSCode uses browser-based auth
             if [ "$DEVCONTAINER_TYPE" = "antigravity" ]; then
                 echo "🔐 Using token-based authentication (Antigravity environment)"

@@ -1,8 +1,7 @@
 """Factory for creating BusinessLogic instances."""
+
 import logging
 from typing import Literal
-
-from middleware.shared.api_models.models import ArcOperationResult
 
 from .arc_store import ArcStore
 from .arc_store.git_repo import GitRepo
@@ -30,15 +29,15 @@ class BusinessLogicFactory:
             BusinessLogic: Initialized logic implementation.
         """
         if mode == "dispatcher":
-            # For Dispatcher, we need the task sender. 
+            # For Dispatcher, we need the task sender.
             # In a clean architecture, this might be injected or loaded.
             # Here we import celery_app locally to avoid circular imports at module level
             # if consumers import this factory.
             from .worker import process_arc  # pylint: disable=import-outside-toplevel
-            
+
             # The 'delay' attribute of the task acts as the sender
             return AsyncBusinessLogic(task_sender=process_arc)
-            
+
         elif mode == "processor":
             # Initialize Stores
             store: ArcStore
@@ -48,22 +47,22 @@ class BusinessLogicFactory:
                 store = GitRepo(config.git_repo)
             else:
                 raise ValueError("Invalid ArcStore configuration")
-            
+
             # Initialize Document Store
             # Note: CouchDB document store connects lazily or explicitly.
             # DirectBusinessLogic does not call connect() automatically unless we add it to lifecycle.
             # However, previous Architecture assumed lifecycle management in Api.
-            # Here, we create it. The consumer (e.g. Worker) should handle connect/close 
+            # Here, we create it. The consumer (e.g. Worker) should handle connect/close
             # OR we handle it within BusinessLogic.
-            # Given that DirectBusinessLogic is now the 'Core', the DocumentStore dependency 
+            # Given that DirectBusinessLogic is now the 'Core', the DocumentStore dependency
             # is passed in.
-            
+
             doc_store = CouchDB(config.couchdb)
-            
+
             # We don't connect here, because connect is async and create is sync.
             # The worker/app utilizing this instance must ensure connections are open.
-            
+
             return DirectBusinessLogic(store=store, doc_store=doc_store)
-        
+
         else:
             raise ValueError(f"Unknown mode: {mode}")

@@ -3,7 +3,7 @@
 from datetime import datetime
 from typing import Annotated
 
-from pydantic import BaseModel, Field, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 
 from . import HarvestStatus
 
@@ -45,8 +45,6 @@ class HarvestDocument(BaseModel):
     statistics: Annotated[HarvestStatistics, Field(description="Harvest statistics")] = Field(
         default_factory=HarvestStatistics
     )
-    config: Annotated[HarvestConfig, Field(description="Harvest configuration")] = Field(
-        default_factory=HarvestConfig
-    )
+    config: Annotated[HarvestConfig, Field(description="Harvest configuration")] = Field(default_factory=HarvestConfig)
 
     model_config = ConfigDict(populate_by_name=True)

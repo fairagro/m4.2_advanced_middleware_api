@@ -75,7 +75,7 @@ celery_app.conf.update(
 business_logic = None
 if loaded_config is not None:
     from .business_logic_factory import BusinessLogicFactory  # pylint: disable=import-outside-toplevel
-    
+
     # Create BusinessLogic in Processor mode (with Stores)
     business_logic = BusinessLogicFactory.create(loaded_config, mode="processor")
     logger.info("BusinessLogic initialized for Celery workers (Processor Mode)")
