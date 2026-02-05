@@ -36,7 +36,6 @@ spec:
       securityContext:
         {{- toYaml . | nindent 8 }}
       {{- end }}
-      containers:
 {{- if .Values.couchdb.enabled }}
       initContainers:
         - name: setup-couchdb
@@ -53,6 +52,7 @@ spec:
               readOnly: true
               subPath: middleware-api-config
 {{- end }}
+      containers:
         - name: celery-worker
           {{- with .Values.celery.worker.securityContext }}
           securityContext:

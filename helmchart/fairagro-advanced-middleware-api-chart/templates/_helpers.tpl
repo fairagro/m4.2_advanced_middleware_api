@@ -90,11 +90,17 @@ Compute Celery broker URL based on enabled RabbitMQ or provided override.
 	{{- $user := default "" $rabbitAuth.username -}}
 	{{- $pass := default "" $rabbitAuth.password -}}
 	{{- $existing := default "" $rabbitAuth.existingSecret -}}
-	{{- if and $existing (or (eq $user "") (eq $pass "")) -}}
-		{{- required "Provide rabbitmq.auth.username/password when rabbitmq.auth.existingSecret is set, or set celery.brokerUrl" $brokerOverride -}}
+	{{- if $existing -}}
+		{{- if and $user $pass -}}
+			{{- $userEsc := urlquery $user -}}
+			{{- $passEsc := urlquery $pass -}}
+			{{- printf "amqp://%s:%s@%s-rabbitmq:5672//" $userEsc $passEsc $fullname -}}
+		{{- else -}}
+			{{- required "Provide rabbitmq.auth.username/password when rabbitmq.auth.existingSecret is set, or set celery.brokerUrl" $brokerOverride -}}
+		{{- end -}}
 	{{- else -}}
-		{{- $userEsc := urlquery (required "rabbitmq.auth.username is required when rabbitmq.enabled=true" $user) -}}
-		{{- $passEsc := urlquery (required "rabbitmq.auth.password is required when rabbitmq.enabled=true" $pass) -}}
+		{{- $userEsc := urlquery (required "rabbitmq.auth.username is required when not using an existing secret" $user) -}}
+		{{- $passEsc := urlquery (required "rabbitmq.auth.password is required when not using an existing secret" $pass) -}}
 		{{- printf "amqp://%s:%s@%s-rabbitmq:5672//" $userEsc $passEsc $fullname -}}
 	{{- end -}}
 {{- else -}}
@@ -111,17 +117,20 @@ Compute Celery result backend based on enabled Redis or provided override.
 {{- if .Values.redis.enabled -}}
 	{{- $redisAuth := default (dict) .Values.redis.auth -}}
 	{{- $pass := default "" $redisAuth.password -}}
-	{{- $passEsc := urlquery $pass -}}
 	{{- $existing := default "" $redisAuth.existingSecret -}}
-	{{- if and $existing (eq $pass "") -}}
-		{{- required "Provide redis.auth.password when redis.auth.existingSecret is set, or set resultBackend" $backendOverride -}}
-	{{- else if $pass -}}
-		{{- printf "redis://:%s@%s-redis:6379/0" $passEsc $fullname -}}
+	{{- if $existing -}}
+		{{- if $pass -}}
+			{{- $passEsc := urlquery $pass -}}
+			{{- printf "redis://:%s@%s-redis:6379/0" $passEsc $fullname -}}
+		{{- else -}}
+			{{- required "Provide redis.auth.password when redis.auth.existingSecret is set, or set celery.resultBackend" $backendOverride -}}
+		{{- end -}}
 	{{- else -}}
-		{{- printf "redis://%s-redis:6379/0" $fullname -}}
+		{{- $passEsc := urlquery (required "redis.auth.password is required when not using an existing secret" $pass) -}}
+		{{- printf "redis://:%s@%s-redis:6379/0" $passEsc $fullname -}}
 	{{- end -}}
 {{- else -}}
-{{- required "Set resultBackend when redis.enabled=false" $backendOverride -}}
+{{- required "Set celery.resultBackend when redis.enabled=false" $backendOverride -}}
 {{- end -}}
 {{- end }}
 
