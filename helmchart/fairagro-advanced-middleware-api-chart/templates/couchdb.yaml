@@ -1,0 +1,115 @@
+{{- if .Values.couchdb.enabled }}
+{{- $couchAuth := default (dict) .Values.couchdb.auth }}
+{{- $secretName := default (printf "%s-couchdb-auth" (include "fairagro-advanced-middleware-api-chart.fullname" .)) $couchAuth.existingSecret }}
+{{- if not $couchAuth.existingSecret }}
+apiVersion: v1
+kind: Secret
+metadata:
+  name: {{ $secretName }}
+  labels:
+    {{- include "fairagro-advanced-middleware-api-chart.labels" . | nindent 4 }}
+    app.kubernetes.io/component: couchdb
+type: Opaque
+stringData:
+  username: {{ default "admin" $couchAuth.username | quote }}
+  password: {{ default "password" $couchAuth.password | quote }}
+---
+{{- end }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "fairagro-advanced-middleware-api-chart.fullname" . }}-couchdb
+  labels:
+    {{- include "fairagro-advanced-middleware-api-chart.labels" . | nindent 4 }}
+    app.kubernetes.io/component: couchdb
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: {{ include "fairagro-advanced-middleware-api-chart.name" . }}-couchdb
+      app.kubernetes.io/instance: {{ .Release.Name }}
+  template:
+    metadata:
+      labels:
+        {{- include "fairagro-advanced-middleware-api-chart.labels" . | nindent 8 }}
+        app.kubernetes.io/name: {{ include "fairagro-advanced-middleware-api-chart.name" . }}-couchdb
+        app.kubernetes.io/component: couchdb
+        app.kubernetes.io/instance: {{ .Release.Name }}
+    spec:
+      containers:
+        - name: couchdb
+          image: {{ .Values.couchdb.image | quote }}
+          ports:
+            - containerPort: {{ .Values.couchdb.service.port }}
+              name: couchdb
+          env:
+            - name: COUCHDB_USER
+              valueFrom:
+                secretKeyRef:
+                  name: {{ $secretName }}
+                  key: username
+            - name: COUCHDB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ $secretName }}
+                  key: password
+          readinessProbe:
+            httpGet:
+              path: /_up
+              port: couchdb
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /_up
+              port: couchdb
+            initialDelaySeconds: 10
+            periodSeconds: 20
+          {{- if .Values.couchdb.persistence.enabled }}
+          volumeMounts:
+            - name: couchdb-data
+              mountPath: /opt/couchdb/data
+          {{- end }}
+      {{- if .Values.couchdb.persistence.enabled }}
+      volumes:
+        - name: couchdb-data
+          persistentVolumeClaim:
+            claimName: {{ include "fairagro-advanced-middleware-api-chart.fullname" . }}-couchdb-data
+      {{- end }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "fairagro-advanced-middleware-api-chart.fullname" . }}-couchdb
+  labels:
+    {{- include "fairagro-advanced-middleware-api-chart.labels" . | nindent 4 }}
+    app.kubernetes.io/component: couchdb
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/name: {{ include "fairagro-advanced-middleware-api-chart.name" . }}-couchdb
+    app.kubernetes.io/instance: {{ .Release.Name }}
+  ports:
+    - name: couchdb
+      port: {{ .Values.couchdb.service.port }}
+      targetPort: couchdb
+{{- if .Values.couchdb.persistence.enabled }}
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ include "fairagro-advanced-middleware-api-chart.fullname" . }}-couchdb-data
+  labels:
+    {{- include "fairagro-advanced-middleware-api-chart.labels" . | nindent 4 }}
+    app.kubernetes.io/component: couchdb
+spec:
+  accessModes:
+    - ReadWriteOnce
+  {{- if .Values.couchdb.persistence.storageClass }}
+  storageClassName: {{ .Values.couchdb.persistence.storageClass | quote }}
+  {{- end }}
+  resources:
+    requests:
+      storage: {{ .Values.couchdb.persistence.size | default "8Gi" | quote }}
+{{- end }}
+{{- end }}

@@ -34,6 +34,33 @@ spec:
         {{- toYaml . | nindent 8 }}
       {{- end }}
       containers:
+{{- if .Values.couchdb.enabled }}
+      initContainers:
+        - name: setup-couchdb
+          image: "{{ .Values.api.image.repository }}:{{ .Values.api.image.tag | default .Chart.AppVersion }}"
+          imagePullPolicy: {{ .Values.api.image.pullPolicy }}
+          command: ["/api/middleware-api/middleware-api", "setup-couchdb"]
+          env:
+            - name: MIDDLEWARE_API_CONFIG
+              value: /run/secrets/middleware-api-config
+            - name: COUCHDB_URL
+              value: {{ include "fairagro-advanced-middleware-api-chart.couchdbUrl" . | quote }}
+            - name: COUCHDB_USER
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "fairagro-advanced-middleware-api-chart.couchdbSecretName" . }}
+                  key: {{ include "fairagro-advanced-middleware-api-chart.couchdbUserKey" . }}
+            - name: COUCHDB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "fairagro-advanced-middleware-api-chart.couchdbSecretName" . }}
+                  key: {{ include "fairagro-advanced-middleware-api-chart.couchdbPasswordKey" . }}
+          volumeMounts:
+            - name: config
+              mountPath: /run/secrets/middleware-api-config
+              readOnly: true
+              subPath: middleware-api-config
+{{- end }}
         - name: {{ .Chart.Name }}
           {{- with .Values.api.securityContext }}
           securityContext:
@@ -46,6 +73,18 @@ spec:
               value: {{ include "fairagro-advanced-middleware-api-chart.celeryBrokerUrl" . | quote }}
             - name: CELERY_RESULT_BACKEND
               value: {{ include "fairagro-advanced-middleware-api-chart.celeryResultBackend" . | quote }}
+            - name: COUCHDB_URL
+              value: {{ include "fairagro-advanced-middleware-api-chart.couchdbUrl" . | quote }}
+            - name: COUCHDB_USER
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "fairagro-advanced-middleware-api-chart.couchdbSecretName" . }}
+                  key: {{ include "fairagro-advanced-middleware-api-chart.couchdbUserKey" . }}
+            - name: COUCHDB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "fairagro-advanced-middleware-api-chart.couchdbSecretName" . }}
+                  key: {{ include "fairagro-advanced-middleware-api-chart.couchdbPasswordKey" . }}
           ports:
             - name: http
               containerPort: {{ .Values.api.service.port | int }}

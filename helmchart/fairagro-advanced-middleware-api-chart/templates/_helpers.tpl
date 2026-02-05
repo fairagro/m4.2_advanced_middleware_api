@@ -124,3 +124,38 @@ Compute Celery result backend based on enabled Redis or provided override.
 {{- required "Set resultBackend when redis.enabled=false" $backendOverride -}}
 {{- end -}}
 {{- end }}
+
+{{/*
+Compute CouchDB URL based on enabled CouchDB or provided override.
+*/}}
+{{- define "fairagro-advanced-middleware-api-chart.couchdbUrl" -}}
+{{- $fullname := include "fairagro-advanced-middleware-api-chart.fullname" . -}}
+{{- $couchOverride := .Values.config.couchdb_url -}}
+{{- if .Values.couchdb.enabled -}}
+	{{- printf "http://%s-couchdb:5984" $fullname -}}
+{{- else -}}
+	{{- required "Provide config.couchdb_url or enable couchdb" $couchOverride -}}
+{{- end -}}
+{{- end }}
+
+{{/*
+Get the CouchDB secret name.
+*/}}
+{{- define "fairagro-advanced-middleware-api-chart.couchdbSecretName" -}}
+{{- $couchAuth := default (dict) .Values.couchdb.auth -}}
+{{- default (printf "%s-couchdb-auth" (include "fairagro-advanced-middleware-api-chart.fullname" .)) $couchAuth.existingSecret -}}
+{{- end }}
+
+{{/*
+Get the CouchDB user key.
+*/}}
+{{- define "fairagro-advanced-middleware-api-chart.couchdbUserKey" -}}
+{{- "username" -}}
+{{- end }}
+
+{{/*
+Get the CouchDB password key.
+*/}}
+{{- define "fairagro-advanced-middleware-api-chart.couchdbPasswordKey" -}}
+{{- "password" -}}
+{{- end }}
