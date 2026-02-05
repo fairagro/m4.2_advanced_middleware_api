@@ -1,7 +1,7 @@
 """Unit tests for the v2/arcs endpoint."""
 
 import http
-from unittest.mock import MagicMock, AsyncMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from fastapi.testclient import TestClient
@@ -17,13 +17,12 @@ from middleware.shared.api_models.models import ArcTaskTicket, TaskStatus
         (http.HTTPStatus.ACCEPTED),
     ],
 )
-def test_create_or_update_arc_success(client: TestClient, cert: str, expected_http_status: int, middleware_api: Api) -> None:
+def test_create_or_update_arc_success(
+    client: TestClient, cert: str, expected_http_status: int, middleware_api: Api
+) -> None:
     """Test creating a new ARC via the /v2/arcs endpoint."""
     # Mock the BusinessLogic response
-    mock_ticket = ArcTaskTicket(
-        rdi="rdi-1",
-        task_id="task-123"
-    )
+    mock_ticket = ArcTaskTicket(rdi="rdi-1", task_id="task-123")
 
     rocrate = {
         "@context": "https://w3id.org/ro/crate/1.1/context",
@@ -42,7 +41,6 @@ def test_create_or_update_arc_success(client: TestClient, cert: str, expected_ht
             },
         ],
     }
-
 
     with patch.object(middleware_api.business_logic, "create_or_update_arc", new_callable=AsyncMock) as mock_create:
         mock_create.return_value = mock_ticket

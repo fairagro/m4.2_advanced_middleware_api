@@ -341,17 +341,17 @@ Worker fetches full ARC from CouchDB using arc_id.
 1. **Validation Performance**: ✅ **Two-stage validation**
    - API: Fast JSON syntax + minimal content check (extract fields for ARC ID)
    - Worker: Full ARCTrl deserialization and validation
-   
+
 2. **CouchDB Indexes**: ✅ **Start minimal**
    - Initially: Only `_id` (ARC-ID) - built-in
    - Add later if needed: `rdi`, `status`, `last_seen`
    - Indexes can be created post-deployment
-   
+
 3. **Event-Log Size Limits**: ✅ **Configurable limit**
    - Default: Keep last 100 events per ARC
    - Older events are discarded (no archiving)
    - Configurable via environment variable
-   
+
 4. **Harvest ID Format**: ✅ **UUID v4**
    - Example: `harvest-550e8400-e29b-41d4-a716-446655440000`
 

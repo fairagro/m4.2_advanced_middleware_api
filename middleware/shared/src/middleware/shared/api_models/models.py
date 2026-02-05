@@ -1,12 +1,12 @@
 """FAIRagro Middleware API Models package."""
 
-from enum import Enum
+from enum import StrEnum
 from typing import Annotated
 
 from pydantic import BaseModel, Field
 
 
-class ArcStatus(str, Enum):
+class ArcStatus(StrEnum):
     """Enumeration of possible ARC status values."""
 
     CREATED = "created"
@@ -15,7 +15,7 @@ class ArcStatus(str, Enum):
     REQUESTED = "requested"
 
 
-class TaskStatus(str, Enum):
+class TaskStatus(StrEnum):
     """Enumeration of possible task states.
 
     Values match Celery task states.
@@ -41,7 +41,6 @@ class HealthResponse(BaseModel):
     status: Annotated[str, Field(description="Overall service status (ok/error)")] = "ok"
     redis_reachable: Annotated[bool, Field(description="True if Redis is reachable")]
     rabbitmq_reachable: Annotated[bool, Field(description="True if RabbitMQ is reachable")]
-    couchdb_reachable: Annotated[bool, Field(description="True if CouchDB is reachable")] = False
 
 
 class HealthResponseV2(BaseModel):

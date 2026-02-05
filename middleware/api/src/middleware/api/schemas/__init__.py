@@ -1,9 +1,9 @@
 """Document schemas for CouchDB storage."""
 
-from enum import Enum
+from enum import StrEnum
 
 
-class ArcLifecycleStatus(str, Enum):
+class ArcLifecycleStatus(StrEnum):
     """ARC lifecycle status in the system."""
 
     ACTIVE = "ACTIVE"  # Normal active state
@@ -13,7 +13,7 @@ class ArcLifecycleStatus(str, Enum):
     INVALID = "INVALID"  # Validation failed
 
 
-class ArcEventType(str, Enum):
+class ArcEventType(StrEnum):
     """Types of events in the ARC event log."""
 
     # Lifecycle events
@@ -41,7 +41,7 @@ class ArcEventType(str, Enum):
     MANUAL_DELETION = "MANUAL_DELETION"
 
 
-class HarvestStatus(str, Enum):
+class HarvestStatus(StrEnum):
     """Harvest run status."""
 
     RUNNING = "RUNNING"
@@ -50,5 +50,6 @@ class HarvestStatus(str, Enum):
     CANCELLED = "CANCELLED"
 
 
-from .arc_document import ArcDocument, ArcEvent, ArcMetadata, GitMetadata
-from .harvest_document import HarvestConfig, HarvestDocument, HarvestStatistics
+from .arc_document import ArcDocument, ArcEvent, ArcMetadata  # noqa: E402
+
+__all__ = ["ArcLifecycleStatus", "ArcEventType", "ArcDocument", "ArcEvent", "ArcMetadata", "HarvestStatus"]

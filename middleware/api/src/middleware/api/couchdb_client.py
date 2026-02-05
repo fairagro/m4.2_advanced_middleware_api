@@ -59,7 +59,7 @@ class CouchDBClient:
                 user=self.user,
                 password=self.password,
             )
-            
+
             # Check if database exists, create if not
             try:
                 self._db = await self._client[db_name]
@@ -67,7 +67,7 @@ class CouchDBClient:
             except NotFoundError:
                 self._db = await self._client.create(db_name)
                 logger.info("Created CouchDB database: %s", db_name)
-                
+
         except Exception as e:
             logger.error("Failed to connect to CouchDB: %s", e)
             raise
@@ -79,6 +79,14 @@ class CouchDBClient:
             self._client = None
             self._db = None
             logger.info("Closed CouchDB connection")
+
+    def get_db(self) -> Database | None:
+        """Get the connected database instance.
+
+        Returns:
+            Database: The connected database instance, or None if not connected.
+        """
+        return self._db
 
     async def health_check(self) -> bool:
         """Check if CouchDB is accessible.
@@ -131,7 +139,7 @@ class CouchDBClient:
 
         # Check if document exists
         existing_doc = await self.get_document(doc_id)
-        
+
         if existing_doc:
             # Update existing document
             doc = await self._db[doc_id]

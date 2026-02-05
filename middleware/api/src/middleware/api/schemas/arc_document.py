@@ -1,11 +1,11 @@
 """ARC document schema for CouchDB."""
 
 from datetime import datetime
-from typing import Any, Annotated
+from typing import Annotated, Any
 
-from pydantic import BaseModel, Field, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 
-from . import ArcLifecycleStatus, ArcEventType
+from . import ArcEventType, ArcLifecycleStatus
 
 
 class ArcEvent(BaseModel):
@@ -15,9 +15,7 @@ class ArcEvent(BaseModel):
     type: Annotated[ArcEventType, Field(description="Event type")]
     message: Annotated[str, Field(description="Human-readable event description")]
     harvest_id: Annotated[str | None, Field(description="Associated harvest ID")] = None
-    metadata: Annotated[dict[str, Any], Field(description="Additional event metadata")] = Field(
-        default_factory=dict
-    )
+    metadata: Annotated[dict[str, Any], Field(description="Additional event metadata")] = Field(default_factory=dict)
 
 
 class GitMetadata(BaseModel):
