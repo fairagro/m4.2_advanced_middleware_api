@@ -88,7 +88,6 @@ class AsyncBusinessLogic:
 
     async def create_or_update_arc(self, rdi: str, arc: dict[str, Any], client_id: str) -> ArcTaskTicket:
         """Dispatch ARC for async processing."""
-        # Note: doc_store is ignored here as it's not serializable/relevant for dispatch
         with self._tracer.start_as_current_span(
             "api.AsyncBusinessLogic.create_or_update_arc",
             attributes={"rdi": rdi, "client_id": client_id},

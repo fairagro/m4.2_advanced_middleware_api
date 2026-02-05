@@ -26,6 +26,9 @@ dependencies = [
   "aiocouch>=2.0.0",
 ]
 
+[project.scripts]
+middleware-couchdb-setup = "middleware.api.cli:main"
+
 [tool.uv.sources]
 shared = { workspace = true }
 
