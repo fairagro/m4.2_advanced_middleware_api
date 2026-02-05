@@ -119,6 +119,56 @@ def test_health_check_failure(client: TestClient, middleware_api: Api) -> None:
         }
 
 
+def test_health_check_v2_success(client: TestClient, middleware_api: Api) -> None:
+    """Test /v2/health success with CouchDB status."""
+    mock_redis = MagicMock()
+    mock_redis.ping.return_value = True
+
+    with (
+        unittest.mock.patch("middleware.api.api.redis.from_url", return_value=mock_redis),
+        unittest.mock.patch("middleware.api.api.celery_app.connection_or_acquire") as mock_acquire,
+        unittest.mock.patch.object(
+            middleware_api.business_logic,
+            "health_check",
+            side_effect=AsyncMock(return_value={"couchdb_reachable": True}),
+        ),
+    ):
+        mock_acquire.return_value.__enter__.return_value = MagicMock()
+
+        r = client.get("/v2/health", headers={"accept": "application/json"})
+        assert r.status_code == http.HTTPStatus.OK
+        assert r.json() == {
+            "status": "ok",
+            "services": {
+                "redis": True,
+                "rabbitmq": True,
+                "couchdb_reachable": True,
+            },
+        }
+
+
+def test_health_check_v2_couchdb_failure(client: TestClient, middleware_api: Api) -> None:
+    """Test /v2/health with CouchDB failure returns 503."""
+    mock_redis = MagicMock()
+    mock_redis.ping.return_value = True
+
+    with (
+        unittest.mock.patch("middleware.api.api.redis.from_url", return_value=mock_redis),
+        unittest.mock.patch("middleware.api.api.celery_app.connection_or_acquire") as mock_acquire,
+        unittest.mock.patch.object(
+            middleware_api.business_logic,
+            "health_check",
+            side_effect=AsyncMock(return_value={"couchdb_reachable": False}),
+        ),
+    ):
+        mock_acquire.return_value.__enter__.return_value = MagicMock()
+
+        r = client.get("/v2/health", headers={"accept": "application/json"})
+        assert r.status_code == http.HTTPStatus.SERVICE_UNAVAILABLE
+        assert r.json()["services"]["couchdb_reachable"] is False
+        assert r.json()["status"] == "error"
+
+
 # -------------------------------------------------------------------
 # CREATE / UPDATE ARCS
 # -------------------------------------------------------------------

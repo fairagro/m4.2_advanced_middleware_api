@@ -74,6 +74,57 @@ async def test_store_arc_new(store: CouchDB, mock_client_instance: MagicMock) ->
 
 
 @pytest.mark.asyncio
+async def test_get_arc_content(store: CouchDB, mock_client_instance: MagicMock) -> None:
+    """Test get_arc_content returns content."""
+    arc_content = {"key": "value"}
+    mock_client_instance.get_document.return_value = {"arc_content": arc_content}
+
+    result = await store.get_arc_content("test_id")
+    assert result == arc_content
+    mock_client_instance.get_document.assert_called_once_with("arc_test_id")
+
+
+@pytest.mark.asyncio
+async def test_get_metadata(store: CouchDB, mock_client_instance: MagicMock) -> None:
+    """Test get_metadata returns ArcMetadata."""
+    metadata_dict = {
+        "arc_hash": "hash",
+        "status": "ACTIVE",
+        "first_seen": datetime.now(UTC).isoformat(),
+        "last_seen": datetime.now(UTC).isoformat(),
+        "events": [],
+    }
+    mock_client_instance.get_document.return_value = {"metadata": metadata_dict}
+
+    result = await store.get_metadata("test_id")
+    assert isinstance(result, ArcMetadata)
+    assert result.arc_hash == "hash"
+
+
+@pytest.mark.asyncio
+async def test_add_event_non_existent(store: CouchDB, mock_client_instance: MagicMock) -> None:
+    """Test add_event does nothing if document not found."""
+    mock_client_instance.get_document.return_value = None
+    event = ArcEvent(type=ArcEventType.ARC_UPDATED, message="test", timestamp=datetime.now(UTC))
+
+    await store.add_event("non_existent", event)
+    mock_client_instance.save_document.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_couchdb_store_lifecycle(store: CouchDB, mock_client_instance: MagicMock) -> None:
+    """Test connect, close, and health_check calls client."""
+    await store.connect()
+    mock_client_instance.connect.assert_called_once()
+
+    await store.close()
+    mock_client_instance.close.assert_called_once()
+
+    await store.health_check()
+    mock_client_instance.health_check.assert_called_once()
+
+
+@pytest.mark.asyncio
 async def test_store_arc_update_changed(store: CouchDB, mock_client_instance: MagicMock) -> None:
     """Test updating an existing ARC with changes."""
     # Setup

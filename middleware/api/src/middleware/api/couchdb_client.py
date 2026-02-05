@@ -80,6 +80,14 @@ class CouchDBClient:
             self._db = None
             logger.info("Closed CouchDB connection")
 
+    def get_db(self) -> Database | None:
+        """Get the connected database instance.
+
+        Returns:
+            Database: The connected database instance, or None if not connected.
+        """
+        return self._db
+
     async def health_check(self) -> bool:
         """Check if CouchDB is accessible.
 

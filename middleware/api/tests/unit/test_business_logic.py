@@ -94,6 +94,59 @@ async def test_direct_business_logic() -> None:
     assert health["couchdb_reachable"] is True
 
 
+@pytest.mark.asyncio
+async def test_direct_business_logic_store_arc_exception() -> None:
+    """Test DirectBusinessLogic exception handling when doc_store fails."""
+    store = MagicMock()
+    store.arc_id.return_value = "arc-id"
+    store.exists = AsyncMock(return_value=False)
+    store.create_or_update = AsyncMock()
+
+    doc_store = MagicMock()
+    doc_store.store_arc = AsyncMock(side_effect=Exception("CouchDB Down"))
+
+    logic = DirectBusinessLogic(store=store, doc_store=doc_store)
+
+    # Use a real dict that ARC can parse or mock ARC.from_rocrate_json_string
+    arc_dict = {"@id": "./", "Identifier": "abc"}
+
+    with patch("middleware.api.business_logic.ARC") as mock_arc_class:
+        mock_arc = MagicMock()
+        mock_arc.Identifier = "abc"
+        mock_arc_class.from_rocrate_json_string.return_value = mock_arc
+
+        # This calls _create_arc_from_rocrate internally
+        result = await logic.create_or_update_arc(rdi="test-rdi", arc=arc_dict, client_id="client-1")
+
+        # Verify it proceeded despite CouchDB error
+        assert result.arc.id == "arc-id"
+        assert result.arc.status == ArcStatus.CREATED
+        store.create_or_update.assert_called_once()
+
+
+@pytest.mark.asyncio
+async def test_direct_business_logic_no_doc_store() -> None:
+    """Test DirectBusinessLogic with no doc_store (legacy behavior)."""
+    store = MagicMock()
+    store.arc_id.return_value = "arc-id"
+    store.exists = AsyncMock(return_value=True)
+    store.create_or_update = AsyncMock()
+
+    logic = DirectBusinessLogic(store=store, doc_store=None)
+    arc_dict = {"Identifier": "abc"}
+
+    with patch("middleware.api.business_logic.ARC") as mock_arc_class:
+        mock_arc = MagicMock()
+        mock_arc.Identifier = "abc"
+        mock_arc_class.from_rocrate_json_string.return_value = mock_arc
+
+        result = await logic.create_or_update_arc(rdi="test-rdi", arc=arc_dict, client_id="client-1")
+
+        assert result.arc.status == ArcStatus.UPDATED
+        # Verify doc_store access didn't happen
+        store.exists.assert_called_once()
+
+
 def test_factory_dispatcher(mock_config: MagicMock) -> None:
     """Test Factory creating Dispatcher."""
     with patch("middleware.api.worker.process_arc") as mock_process_arc:

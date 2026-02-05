@@ -42,9 +42,7 @@ class HarvestDocument(BaseModel):
     started_at: Annotated[datetime, Field(description="Harvest start timestamp")]
     completed_at: Annotated[datetime | None, Field(description="Harvest completion timestamp")] = None
     status: Annotated[HarvestStatus, Field(description="Harvest status")]
-    statistics: Annotated[HarvestStatistics, Field(description="Harvest statistics")] = Field(
-        default_factory=HarvestStatistics
-    )
-    config: Annotated[HarvestConfig, Field(description="Harvest configuration")] = Field(default_factory=HarvestConfig)
+    statistics: Annotated[HarvestStatistics, Field(default_factory=HarvestStatistics, description="Harvest statistics")]
+    config: Annotated[HarvestConfig, Field(default_factory=HarvestConfig, description="Harvest configuration")]
 
     model_config = ConfigDict(populate_by_name=True)
