@@ -1,12 +1,12 @@
 """FAIRagro Middleware API Models package."""
 
-from enum import Enum
+from enum import StrEnum
 from typing import Annotated
 
 from pydantic import BaseModel, Field
 
 
-class ArcStatus(str, Enum):
+class ArcStatus(StrEnum):
     """Enumeration of possible ARC status values."""
 
     CREATED = "created"
@@ -15,7 +15,7 @@ class ArcStatus(str, Enum):
     REQUESTED = "requested"
 
 
-class TaskStatus(str, Enum):
+class TaskStatus(StrEnum):
     """Enumeration of possible task states.
 
     Values match Celery task states.
@@ -41,6 +41,13 @@ class HealthResponse(BaseModel):
     status: Annotated[str, Field(description="Overall service status (ok/error)")] = "ok"
     redis_reachable: Annotated[bool, Field(description="True if Redis is reachable")]
     rabbitmq_reachable: Annotated[bool, Field(description="True if RabbitMQ is reachable")]
+
+
+class HealthResponseV2(BaseModel):
+    """Response model for health check v2."""
+
+    status: Annotated[str, Field(description="Overall service status (ok/error)")] = "ok"
+    services: Annotated[dict[str, bool], Field(description="Dictionary of service statuses")]
 
 
 class CreateOrUpdateArcsRequest(BaseModel):
@@ -69,7 +76,7 @@ class ApiResponse(BaseModel):
         str | None,
         Field(
             description="Client identifier which is the CN from the client certificate, "
-            "or None if client certificates are not required",
+            "or 'unknown' if client certificates are not required",
         ),
     ] = None
     message: Annotated[str, Field(description="Response message")] = ""
@@ -121,6 +128,13 @@ class ArcOperationResult(ApiResponse):
 
     rdi: Annotated[str, Field(description="Research Data Infrastructure identifier the ARC belongs to")]
     arc: Annotated[ArcResponse, Field(description="ARC response for the operation")]
+
+
+class ArcTaskTicket(ApiResponse):
+    """Response model for a newly created async task ticket."""
+
+    rdi: Annotated[str, Field(description="Research Data Infrastructure identifier the ARC belongs to")]
+    task_id: Annotated[str, Field(description="Async task ID")]
 
 
 class GetTaskStatusResponse(BaseModel):

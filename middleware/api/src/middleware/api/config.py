@@ -16,9 +16,24 @@ from .arc_store.gitlab_api import GitlabApiConfig
 class CeleryConfig(BaseModel):
     """Configuration for Celery worker."""
 
-    broker_url: Annotated[SecretStr, Field(description="RabbitMQ broker URL")]
-    result_backend: Annotated[SecretStr, Field(description="Redis backend URL")]
+    broker_url: Annotated[
+        SecretStr,
+        Field(default=SecretStr("amqp://guest:guest@localhost:5672//"), description="RabbitMQ broker URL"),
+    ]
+    result_backend: Annotated[
+        SecretStr, Field(default=SecretStr("redis://localhost:6379/0"), description="Redis backend URL")
+    ]
     task_rate_limit: Annotated[str | None, Field(description="Rate limit for tasks (e.g. '10/m')")] = None
+
+
+class CouchDBConfig(BaseModel):
+    """Configuration for CouchDB."""
+
+    url: Annotated[str, Field(description="CouchDB URL")] = "http://localhost:5984"
+    user: Annotated[str | None, Field(description="CouchDB username")] = None
+    password: Annotated[SecretStr | None, Field(description="CouchDB password")] = None
+    db_name: Annotated[str, Field(description="Name of the database for ARCs and harvests")] = "arcs"
+    max_event_log_size: Annotated[int, Field(default=100, description="Maximum number of events in ARC metadata")] = 100
 
 
 class Config(ConfigBase):
@@ -31,6 +46,7 @@ class Config(ConfigBase):
 
     git_repo: Annotated[GitRepoConfig | None, Field(description="GitRepo storage backend configuration")] = None
     gitlab_api: Annotated[GitlabApiConfig | None, Field(description="GitLab API storage backend configuration")] = None
+    couchdb: CouchDBConfig = Field(default_factory=CouchDBConfig, description="CouchDB configuration")
 
     celery: Annotated[CeleryConfig, Field(description="Celery configuration")]
 

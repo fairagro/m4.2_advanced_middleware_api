@@ -27,6 +27,7 @@ from pydantic import ValidationError
 
 from middleware.shared.api_models.models import (
     ArcOperationResult,
+    ArcTaskTicket,
     CreateOrUpdateArcRequest,
     CreateOrUpdateArcResponse,
     CreateOrUpdateArcsRequest,
@@ -34,16 +35,17 @@ from middleware.shared.api_models.models import (
     GetTaskStatusResponse,
     GetTaskStatusResponseV2,
     HealthResponse,
+    HealthResponseV2,
     LivenessResponse,
     TaskStatus,
     WhoamiResponse,
 )
 from middleware.shared.tracing import initialize_logging, initialize_tracing
 
+from .business_logic_factory import BusinessLogicFactory
 from .celery_app import celery_app
 from .config import Config
 from .tracing import instrument_app
-from .worker import process_arc
 
 try:
     from importlib.metadata import PackageNotFoundError, version
@@ -135,6 +137,10 @@ class Api:
         self._config = app_config
         self._tracer_provider: TracerProvider | None = None
         self._logger_provider: LoggerProvider | None = None
+
+        # Initialize BusinessLogic via Factory (Dispatcher mode)
+        self.business_logic = BusinessLogicFactory.create(self._config, mode="dispatcher")
+
         logger.debug("API configuration: %s", self._config.model_dump())
 
         # Initialize OpenTelemetry tracing with optional OTLP endpoint
@@ -157,7 +163,17 @@ class Api:
 
         @asynccontextmanager
         async def lifespan(_app: FastAPI) -> AsyncGenerator[None, None]:
+            # Initialize connections
+            try:
+                await self.business_logic.connect()
+                logger.info("Business logic connected successfully")
+            except Exception:  # pylint: disable=broad-exception-caught
+                logger.exception("An unexpected error occurred during business logic connection")
+                raise
+
             yield
+
+            # Cleanup
             if self._tracer_provider is not None:
                 try:
                     self._tracer_provider.shutdown()
@@ -242,19 +258,19 @@ class Api:
         request.state.cert = cert
         return cert
 
-    def _validate_client_id(self, request: Request) -> str | None:
+    def _validate_client_id(self, request: Request) -> str:
         """Extract client ID from certificate Common Name (CN) attribute.
 
         Args:
             request (Request): FastAPI request object.
 
         Returns:
-            str | None: Client identifier extracted from the certificate, or None if not authenticated.
+            str: Client identifier extracted from the certificate, or "unknown" if not authenticated.
         """
         cert = self._validate_client_cert(request)
         if cert is None:
-            logger.debug("No client certificate - client ID is None")
-            return None
+            logger.debug("No client certificate - client ID is unknown")
+            return "unknown"
 
         cn_attributes = cert.subject.get_attributes_for_oid(NameOID.COMMON_NAME)
         if not cn_attributes:
@@ -374,6 +390,7 @@ class Api:
         self._setup_whoami_route()
         self._setup_liveness_route()
         self._setup_health_route()
+        self._setup_health_route_v2()
         self._setup_create_or_update_arcs_route()
         self._setup_create_or_update_arc_route_v2()
         self._setup_task_status_route()
@@ -405,20 +422,16 @@ class Api:
 
     def _setup_health_route(self) -> None:
         @self._app.get("/v1/health", response_model=HealthResponse)
-        def health_check(
+        async def health_check(
             response: Response,
             _accept_validated: Annotated[None, Depends(self._validate_accept_type)],
         ) -> HealthResponse:
-            """Check health of API and connected services (Redis, RabbitMQ)."""
+            """Check health of API and connected services (Redis, RabbitMQ, CouchDB)."""
             # Check Redis (result backend)
             redis_reachable = False
             try:
                 # Get Redis URL from config
-                redis_url = (
-                    self._config.celery.result_backend.get_secret_value()
-                    if self._config.celery
-                    else "redis://localhost:6379/0"
-                )
+                redis_url = self._config.celery.result_backend.get_secret_value()
                 r = redis.from_url(redis_url)
                 r.ping()
                 redis_reachable = True
@@ -434,11 +447,12 @@ class Api:
             except Exception as e:  # pylint: disable=broad-exception-caught
                 logger.error("RabbitMQ health check failed: %s", e)
 
-            # API only checks its direct dependencies
-            status = {
-                "redis_reachable": redis_reachable,
-                "rabbitmq_reachable": rabbitmq_reachable,
-            }
+            # Check BusinessLogic Dependencies (CouchDB/Dispatcher)
+            # The API doesn't know what's underneath, just asks BL
+            bl_health = await self.business_logic.health_check()
+
+            # Merge statuses
+            status = {"redis_reachable": redis_reachable, "rabbitmq_reachable": rabbitmq_reachable, **bl_health}
 
             is_healthy = all(status.values())
 
@@ -451,11 +465,48 @@ class Api:
                 rabbitmq_reachable=rabbitmq_reachable,
             )
 
+    def _setup_health_route_v2(self) -> None:
+        @self._app.get("/v2/health", response_model=HealthResponseV2)
+        async def health_check_v2(
+            response: Response,
+            _accept_validated: Annotated[None, Depends(self._validate_accept_type)],
+        ) -> HealthResponseV2:
+            """Check health of API and connected services (v2)."""
+            # Check Redis
+            redis_reachable = False
+            try:
+                redis_url = self._config.celery.result_backend.get_secret_value()
+                r = redis.from_url(redis_url)
+                r.ping()
+                redis_reachable = True
+            except Exception:  # pylint: disable=broad-exception-caught
+                logger.debug("Redis health check failed")
+
+            # Check RabbitMQ
+            rabbitmq_reachable = False
+            try:
+                with celery_app.connection_or_acquire() as conn:
+                    conn.ensure_connection(max_retries=1)
+                    rabbitmq_reachable = True
+            except Exception:  # pylint: disable=broad-exception-caught
+                logger.debug("RabbitMQ health check failed")
+
+            # Check BusinessLogic
+            bl_health = await self.business_logic.health_check()
+
+            services = {"redis": redis_reachable, "rabbitmq": rabbitmq_reachable, **bl_health}
+
+            is_healthy = all(services.values())
+            if not is_healthy:
+                response.status_code = 503
+
+            return HealthResponseV2(status="ok" if is_healthy else "error", services=services)
+
     def _setup_create_or_update_arcs_route(self) -> None:
         @self._app.post("/v1/arcs", status_code=202)
         async def create_or_update_arcs(
             request_body: CreateOrUpdateArcsRequest,
-            client_id: Annotated[str | None, Depends(self._validate_client_id)],
+            client_id: Annotated[str, Depends(self._validate_client_id)],
             _content_type_validated: Annotated[None, Depends(self._validate_content_type)],
             _accept_validated: Annotated[None, Depends(self._validate_accept_type)],
             rdi: Annotated[str, Depends(self._validate_rdi_authorized)],
@@ -465,7 +516,7 @@ class Api:
                 "Received POST /v1/arcs request: rdi=%s, num_arcs=%d, client_id=%s",
                 rdi,
                 len(request_body.arcs),
-                client_id or "none",
+                client_id,
             )
 
             if len(request_body.arcs) != 1:
@@ -482,17 +533,23 @@ class Api:
             # Note: rate limit is usually applied at task definition or globally,
             # here we just dispatch.
 
-            task = process_arc.delay(rdi, arc_data, client_id)
+            result = await self.business_logic.create_or_update_arc(rdi, arc_data, client_id)
 
-            logger.info("Enqueued task %s for ARC processing", task.id)
+            # Use task_id from result - we expect an ArcTaskTicket in this context
+            if not isinstance(result, ArcTaskTicket):
+                raise RuntimeError(f"Expected ArcTaskTicket from BusinessLogic, got {type(result)}")
 
-            return CreateOrUpdateArcsResponse(task_id=task.id, status="processing")
+            task_id = result.task_id
+
+            logger.info("Enqueued task %s for ARC processing via BusinessLogic", task_id)
+
+            return CreateOrUpdateArcsResponse(task_id=task_id, status="processing")
 
     def _setup_create_or_update_arc_route_v2(self) -> None:
         @self._app.post("/v2/arcs", status_code=202)
         async def create_or_update_arc(
             request_body: CreateOrUpdateArcRequest,
-            client_id: Annotated[str | None, Depends(self._validate_client_id)],
+            client_id: Annotated[str, Depends(self._validate_client_id)],
             _content_type_validated: Annotated[None, Depends(self._validate_content_type)],
             _accept_validated: Annotated[None, Depends(self._validate_accept_type)],
             rdi: Annotated[str, Depends(self._validate_rdi_authorized)],
@@ -501,18 +558,25 @@ class Api:
             logger.info(
                 "Received POST /v2/arcs request: rdi=%s, client_id=%s",
                 rdi,
-                client_id or "none",
+                client_id,
             )
 
-            # Submit task to Celery
-            arc_data = request_body.arc
+            # Delegate to Business Logic (Dispatcher)
+            # api.py sends arc_data. but create_or_update_arc expects 'arc' as Any.
+            # The Dispatcher implementation will enqueue it.
 
-            task = process_arc.delay(rdi, arc_data, client_id)
+            result = await self.business_logic.create_or_update_arc(rdi, request_body.arc, client_id)
 
-            logger.info("Enqueued task %s for ARC processing", task.id)
+            # Use task_id from result - we expect an ArcTaskTicket in this context
+            if not isinstance(result, ArcTaskTicket):
+                raise RuntimeError(f"Expected ArcTaskTicket from BusinessLogic, got {type(result)}")
+
+            task_id = result.task_id
+
+            logger.info("Enqueued task %s for ARC processing via BusinessLogic", task_id)
 
             return CreateOrUpdateArcResponse(
-                task_id=task.id,
+                task_id=task_id,
                 status=TaskStatus.PENDING,
             )
 

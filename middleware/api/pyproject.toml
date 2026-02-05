@@ -23,7 +23,11 @@ dependencies = [
   "sse-starlette>=2.0.0",
   "uvicorn>=0.35.0",
   "celery-types>=0.24.0",
+  "aiocouch>=2.0.0",
 ]
+
+[project.scripts]
+middleware-couchdb-setup = "middleware.api.cli:main"
 
 [tool.uv.sources]
 shared = { workspace = true }
@@ -38,3 +42,8 @@ raw-options = { root = "../..", fallback_version = "0.0.0" }
 [build-system]
 requires = ["hatchling", "hatch-vcs"]
 build-backend = "hatchling.build"
+
+[dependency-groups]
+dev = [
+    "types-pyyaml>=6.0.12.20250915",
+]

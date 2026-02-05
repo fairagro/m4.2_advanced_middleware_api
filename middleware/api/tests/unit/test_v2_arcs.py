@@ -1,12 +1,13 @@
 """Unit tests for the v2/arcs endpoint."""
 
 import http
-from unittest.mock import MagicMock
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from fastapi.testclient import TestClient
 
-from middleware.shared.api_models.models import TaskStatus
+from middleware.api.api import Api
+from middleware.shared.api_models.models import ArcTaskTicket, TaskStatus
 
 
 @pytest.mark.unit
@@ -16,11 +17,12 @@ from middleware.shared.api_models.models import TaskStatus
         (http.HTTPStatus.ACCEPTED),
     ],
 )
-def test_create_or_update_arc_success(client: TestClient, cert: str, expected_http_status: int) -> None:
+def test_create_or_update_arc_success(
+    client: TestClient, cert: str, expected_http_status: int, middleware_api: Api
+) -> None:
     """Test creating a new ARC via the /v2/arcs endpoint."""
-    # Mock the Celery task
-    mock_task = MagicMock()
-    mock_task.id = "task-123"
+    # Mock the BusinessLogic response
+    mock_ticket = ArcTaskTicket(rdi="rdi-1", task_id="task-123")
 
     rocrate = {
         "@context": "https://w3id.org/ro/crate/1.1/context",
@@ -40,11 +42,8 @@ def test_create_or_update_arc_success(client: TestClient, cert: str, expected_ht
         ],
     }
 
-    with pytest.MonkeyPatch.context() as mp:
-        mock_process_arc = MagicMock()
-        # Mock task creation
-        mock_process_arc.delay.return_value = mock_task
-        mp.setattr("middleware.api.api.process_arc", mock_process_arc)
+    with patch.object(middleware_api.business_logic, "create_or_update_arc", new_callable=AsyncMock) as mock_create:
+        mock_create.return_value = mock_ticket
 
         r = client.post(
             "/v2/arcs",

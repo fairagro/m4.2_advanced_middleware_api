@@ -14,10 +14,8 @@ from pydantic import HttpUrl, SecretStr
 
 from middleware.api.api import Api
 from middleware.api.arc_store.gitlab_api import GitlabApi, GitlabApiConfig
-from middleware.api.business_logic import (
-    BusinessLogic,
-)
-from middleware.api.config import CeleryConfig, Config
+from middleware.api.business_logic import BusinessLogic, DirectBusinessLogic
+from middleware.api.config import CeleryConfig, Config, CouchDBConfig
 from middleware.shared.config.config_base import OtelConfig
 
 
@@ -67,7 +65,9 @@ def config(oid: x509.ObjectIdentifier, known_rdis: list[str]) -> Config:
             broker_url=SecretStr("amqp://guest:guest@localhost:5672//"),
             result_backend=SecretStr("redis://localhost:6379/0"),
         ),
+        couchdb=CouchDBConfig(),
         otel=OtelConfig(),
+        require_client_cert=True,
     )
 
 
@@ -101,7 +101,7 @@ def service() -> BusinessLogic:
     store.get = AsyncMock(return_value=None)
     store.delete = AsyncMock()
     store.create_or_update = AsyncMock()
-    return BusinessLogic(store)
+    return DirectBusinessLogic(store=store)  # type: ignore[abstract]
 
 
 @pytest.fixture
