@@ -48,6 +48,22 @@ redis:
   service:
     port: 6379
 
+couchdb:
+  enabled: true
+  image: couchdb:3.3
+  # auth:
+  #   username: admin
+  #   password: password
+  #   existingSecret: ""  # if set, the secret must contain keys: username, password
+  #   usernameKey: username
+  #   passwordKey: password
+  service:
+    port: 5984
+  persistence:
+    enabled: false
+    # storageClass: "-"
+    # size: 8Gi
+
 # API deployment settings
 api:
   replicaCount: 1

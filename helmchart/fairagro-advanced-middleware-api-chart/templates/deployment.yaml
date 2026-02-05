@@ -34,6 +34,22 @@ spec:
         {{- toYaml . | nindent 8 }}
       {{- end }}
       containers:
+{{- if .Values.couchdb.enabled }}
+      initContainers:
+        - name: setup-couchdb
+          image: "{{ .Values.api.image.repository }}:{{ .Values.api.image.tag | default .Chart.AppVersion }}"
+          imagePullPolicy: {{ .Values.api.image.pullPolicy }}
+          command: ["/api/middleware-api/middleware-api", "setup-couchdb"]
+          env:
+            - name: MIDDLEWARE_API_CONFIG
+              value: /run/secrets/middleware-api-config
+            {{- include "fairagro-advanced-middleware-api-chart.couchdbEnvVars" . | nindent 12 }}
+          volumeMounts:
+            - name: config
+              mountPath: /run/secrets/middleware-api-config
+              readOnly: true
+              subPath: middleware-api-config
+{{- end }}
         - name: {{ .Chart.Name }}
           {{- with .Values.api.securityContext }}
           securityContext:
@@ -46,6 +62,7 @@ spec:
               value: {{ include "fairagro-advanced-middleware-api-chart.celeryBrokerUrl" . | quote }}
             - name: CELERY_RESULT_BACKEND
               value: {{ include "fairagro-advanced-middleware-api-chart.celeryResultBackend" . | quote }}
+            {{- include "fairagro-advanced-middleware-api-chart.couchdbEnvVars" . | nindent 12 }}
           ports:
             - name: http
               containerPort: {{ .Values.api.service.port | int }}

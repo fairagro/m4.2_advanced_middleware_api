@@ -124,3 +124,58 @@ Compute Celery result backend based on enabled Redis or provided override.
 {{- required "Set resultBackend when redis.enabled=false" $backendOverride -}}
 {{- end -}}
 {{- end }}
+
+{{/*
+Compute CouchDB URL based on enabled CouchDB or provided override.
+*/}}
+{{- define "fairagro-advanced-middleware-api-chart.couchdbUrl" -}}
+{{- $fullname := include "fairagro-advanced-middleware-api-chart.fullname" . -}}
+{{- $couchOverride := .Values.config.couchdb_url -}}
+{{- if .Values.couchdb.enabled -}}
+	{{- printf "http://%s-couchdb:5984" $fullname -}}
+{{- else -}}
+	{{- required "Provide config.couchdb_url or enable couchdb" $couchOverride -}}
+{{- end -}}
+{{- end }}
+
+{{/*
+Get the CouchDB secret name.
+*/}}
+{{- define "fairagro-advanced-middleware-api-chart.couchdbSecretName" -}}
+{{- $couchAuth := default (dict) .Values.couchdb.auth -}}
+{{- default (printf "%s-couchdb-auth" (include "fairagro-advanced-middleware-api-chart.fullname" .)) $couchAuth.existingSecret -}}
+{{- end }}
+
+{{/*
+Get the CouchDB user key.
+*/}}
+{{- define "fairagro-advanced-middleware-api-chart.couchdbUserKey" -}}
+{{- $couchAuth := default (dict) .Values.couchdb.auth -}}
+{{- default "username" $couchAuth.usernameKey -}}
+{{- end }}
+
+{{/*
+Get the CouchDB password key.
+*/}}
+{{- define "fairagro-advanced-middleware-api-chart.couchdbPasswordKey" -}}
+{{- $couchAuth := default (dict) .Values.couchdb.auth -}}
+{{- default "password" $couchAuth.passwordKey -}}
+{{- end }}
+
+{{/*
+CouchDB environment variables
+*/}}
+{{- define "fairagro-advanced-middleware-api-chart.couchdbEnvVars" -}}
+- name: COUCHDB_URL
+  value: {{ include "fairagro-advanced-middleware-api-chart.couchdbUrl" . | quote }}
+- name: COUCHDB_USER
+  valueFrom:
+    secretKeyRef:
+      name: {{ include "fairagro-advanced-middleware-api-chart.couchdbSecretName" . }}
+      key: {{ include "fairagro-advanced-middleware-api-chart.couchdbUserKey" . }}
+- name: COUCHDB_PASSWORD
+  valueFrom:
+    secretKeyRef:
+      name: {{ include "fairagro-advanced-middleware-api-chart.couchdbSecretName" . }}
+      key: {{ include "fairagro-advanced-middleware-api-chart.couchdbPasswordKey" . }}
+{{- end }}

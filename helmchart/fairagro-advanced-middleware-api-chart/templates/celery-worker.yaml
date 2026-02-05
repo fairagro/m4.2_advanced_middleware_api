@@ -37,6 +37,22 @@ spec:
         {{- toYaml . | nindent 8 }}
       {{- end }}
       containers:
+{{- if .Values.couchdb.enabled }}
+      initContainers:
+        - name: setup-couchdb
+          image: "{{ $repo }}:{{ $tag }}"
+          imagePullPolicy: {{ $pull }}
+          command: ["/api/middleware-api/middleware-api", "setup-couchdb"]
+          env:
+            - name: MIDDLEWARE_API_CONFIG
+              value: /run/secrets/middleware-api-config
+            {{- include "fairagro-advanced-middleware-api-chart.couchdbEnvVars" . | nindent 12 }}
+          volumeMounts:
+            - name: config
+              mountPath: /run/secrets/middleware-api-config
+              readOnly: true
+              subPath: middleware-api-config
+{{- end }}
         - name: celery-worker
           {{- with .Values.celery.worker.securityContext }}
           securityContext:
@@ -49,6 +65,7 @@ spec:
               value: {{ include "fairagro-advanced-middleware-api-chart.celeryBrokerUrl" . | quote }}
             - name: CELERY_RESULT_BACKEND
               value: {{ include "fairagro-advanced-middleware-api-chart.celeryResultBackend" . | quote }}
+            {{- include "fairagro-advanced-middleware-api-chart.couchdbEnvVars" . | nindent 12 }}
             - name: MIDDLEWARE_API_CONFIG
               value: /run/secrets/middleware-api-config
             {{- if and .Values.celery.worker.persistence .Values.celery.worker.persistence.enabled }}
