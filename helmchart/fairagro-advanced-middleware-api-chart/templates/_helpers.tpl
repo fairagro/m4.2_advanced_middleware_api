@@ -150,12 +150,32 @@ Get the CouchDB secret name.
 Get the CouchDB user key.
 */}}
 {{- define "fairagro-advanced-middleware-api-chart.couchdbUserKey" -}}
-{{- "username" -}}
+{{- $couchAuth := default (dict) .Values.couchdb.auth -}}
+{{- default "username" $couchAuth.usernameKey -}}
 {{- end }}
 
 {{/*
 Get the CouchDB password key.
 */}}
 {{- define "fairagro-advanced-middleware-api-chart.couchdbPasswordKey" -}}
-{{- "password" -}}
+{{- $couchAuth := default (dict) .Values.couchdb.auth -}}
+{{- default "password" $couchAuth.passwordKey -}}
+{{- end }}
+
+{{/*
+CouchDB environment variables
+*/}}
+{{- define "fairagro-advanced-middleware-api-chart.couchdbEnvVars" -}}
+- name: COUCHDB_URL
+  value: {{ include "fairagro-advanced-middleware-api-chart.couchdbUrl" . | quote }}
+- name: COUCHDB_USER
+  valueFrom:
+    secretKeyRef:
+      name: {{ include "fairagro-advanced-middleware-api-chart.couchdbSecretName" . }}
+      key: {{ include "fairagro-advanced-middleware-api-chart.couchdbUserKey" . }}
+- name: COUCHDB_PASSWORD
+  valueFrom:
+    secretKeyRef:
+      name: {{ include "fairagro-advanced-middleware-api-chart.couchdbSecretName" . }}
+      key: {{ include "fairagro-advanced-middleware-api-chart.couchdbPasswordKey" . }}
 {{- end }}

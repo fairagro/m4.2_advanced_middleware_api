@@ -11,8 +11,8 @@ metadata:
     app.kubernetes.io/component: couchdb
 type: Opaque
 stringData:
-  username: {{ default "admin" $couchAuth.username | quote }}
-  password: {{ default "password" $couchAuth.password | quote }}
+  username: {{ required "A username is required under couchdb.auth.username when not using an existing secret" $couchAuth.username | quote }}
+  password: {{ required "A password is required under couchdb.auth.password when not using an existing secret" $couchAuth.password | quote }}
 ---
 {{- end }}
 apiVersion: apps/v1
@@ -26,15 +26,13 @@ spec:
   replicas: 1
   selector:
     matchLabels:
-      app.kubernetes.io/name: {{ include "fairagro-advanced-middleware-api-chart.name" . }}-couchdb
-      app.kubernetes.io/instance: {{ .Release.Name }}
+      {{- include "fairagro-advanced-middleware-api-chart.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: couchdb
   template:
     metadata:
       labels:
         {{- include "fairagro-advanced-middleware-api-chart.labels" . | nindent 8 }}
-        app.kubernetes.io/name: {{ include "fairagro-advanced-middleware-api-chart.name" . }}-couchdb
         app.kubernetes.io/component: couchdb
-        app.kubernetes.io/instance: {{ .Release.Name }}
     spec:
       containers:
         - name: couchdb
@@ -87,8 +85,8 @@ metadata:
 spec:
   type: ClusterIP
   selector:
-    app.kubernetes.io/name: {{ include "fairagro-advanced-middleware-api-chart.name" . }}-couchdb
-    app.kubernetes.io/instance: {{ .Release.Name }}
+    {{- include "fairagro-advanced-middleware-api-chart.selectorLabels" . | nindent 4 }}
+    app.kubernetes.io/component: couchdb
   ports:
     - name: couchdb
       port: {{ .Values.couchdb.service.port }}

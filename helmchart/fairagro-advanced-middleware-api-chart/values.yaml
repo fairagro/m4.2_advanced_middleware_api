@@ -55,6 +55,8 @@ couchdb:
   #   username: admin
   #   password: password
   #   existingSecret: ""  # if set, the secret must contain keys: username, password
+  #   usernameKey: username
+  #   passwordKey: password
   service:
     port: 5984
   persistence:

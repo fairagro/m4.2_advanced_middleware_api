@@ -46,18 +46,7 @@ spec:
           env:
             - name: MIDDLEWARE_API_CONFIG
               value: /run/secrets/middleware-api-config
-            - name: COUCHDB_URL
-              value: {{ include "fairagro-advanced-middleware-api-chart.couchdbUrl" . | quote }}
-            - name: COUCHDB_USER
-              valueFrom:
-                secretKeyRef:
-                  name: {{ include "fairagro-advanced-middleware-api-chart.couchdbSecretName" . }}
-                  key: {{ include "fairagro-advanced-middleware-api-chart.couchdbUserKey" . }}
-            - name: COUCHDB_PASSWORD
-              valueFrom:
-                secretKeyRef:
-                  name: {{ include "fairagro-advanced-middleware-api-chart.couchdbSecretName" . }}
-                  key: {{ include "fairagro-advanced-middleware-api-chart.couchdbPasswordKey" . }}
+            {{- include "fairagro-advanced-middleware-api-chart.couchdbEnvVars" . | nindent 12 }}
           volumeMounts:
             - name: config
               mountPath: /run/secrets/middleware-api-config
@@ -76,18 +65,7 @@ spec:
               value: {{ include "fairagro-advanced-middleware-api-chart.celeryBrokerUrl" . | quote }}
             - name: CELERY_RESULT_BACKEND
               value: {{ include "fairagro-advanced-middleware-api-chart.celeryResultBackend" . | quote }}
-            - name: COUCHDB_URL
-              value: {{ include "fairagro-advanced-middleware-api-chart.couchdbUrl" . | quote }}
-            - name: COUCHDB_USER
-              valueFrom:
-                secretKeyRef:
-                  name: {{ include "fairagro-advanced-middleware-api-chart.couchdbSecretName" . }}
-                  key: {{ include "fairagro-advanced-middleware-api-chart.couchdbUserKey" . }}
-            - name: COUCHDB_PASSWORD
-              valueFrom:
-                secretKeyRef:
-                  name: {{ include "fairagro-advanced-middleware-api-chart.couchdbSecretName" . }}
-                  key: {{ include "fairagro-advanced-middleware-api-chart.couchdbPasswordKey" . }}
+            {{- include "fairagro-advanced-middleware-api-chart.couchdbEnvVars" . | nindent 12 }}
             - name: MIDDLEWARE_API_CONFIG
               value: /run/secrets/middleware-api-config
             {{- if and .Values.celery.worker.persistence .Values.celery.worker.persistence.enabled }}

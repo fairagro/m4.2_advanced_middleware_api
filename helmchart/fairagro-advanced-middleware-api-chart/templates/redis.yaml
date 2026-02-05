@@ -26,15 +26,13 @@ spec:
   replicas: 1
   selector:
     matchLabels:
-      app.kubernetes.io/name: {{ include "fairagro-advanced-middleware-api-chart.name" . }}-redis
-      app.kubernetes.io/instance: {{ .Release.Name }}
+      {{- include "fairagro-advanced-middleware-api-chart.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: redis
   template:
     metadata:
       labels:
         {{- include "fairagro-advanced-middleware-api-chart.labels" . | nindent 8 }}
-        app.kubernetes.io/name: {{ include "fairagro-advanced-middleware-api-chart.name" . }}-redis
         app.kubernetes.io/component: redis
-        app.kubernetes.io/instance: {{ .Release.Name }}
     spec:
       containers:
         - name: redis
@@ -76,8 +74,8 @@ metadata:
 spec:
   type: ClusterIP
   selector:
-    app.kubernetes.io/name: {{ include "fairagro-advanced-middleware-api-chart.name" . }}-redis
-    app.kubernetes.io/instance: {{ .Release.Name }}
+    {{- include "fairagro-advanced-middleware-api-chart.selectorLabels" . | nindent 4 }}
+    app.kubernetes.io/component: redis
   ports:
     - name: redis
       port: {{ .Values.redis.service.port }}

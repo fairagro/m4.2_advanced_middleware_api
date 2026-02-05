@@ -27,15 +27,13 @@ spec:
   replicas: 1
   selector:
     matchLabels:
-      app.kubernetes.io/name: {{ include "fairagro-advanced-middleware-api-chart.name" . }}-rabbitmq
-      app.kubernetes.io/instance: {{ .Release.Name }}
+      {{- include "fairagro-advanced-middleware-api-chart.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: rabbitmq
   template:
     metadata:
       labels:
         {{- include "fairagro-advanced-middleware-api-chart.labels" . | nindent 8 }}
-        app.kubernetes.io/name: {{ include "fairagro-advanced-middleware-api-chart.name" . }}-rabbitmq
         app.kubernetes.io/component: rabbitmq
-        app.kubernetes.io/instance: {{ .Release.Name }}
     spec:
       containers:
         - name: rabbitmq
@@ -82,8 +80,8 @@ metadata:
 spec:
   type: ClusterIP
   selector:
-    app.kubernetes.io/name: {{ include "fairagro-advanced-middleware-api-chart.name" . }}-rabbitmq
-    app.kubernetes.io/instance: {{ .Release.Name }}
+    {{- include "fairagro-advanced-middleware-api-chart.selectorLabels" . | nindent 4 }}
+    app.kubernetes.io/component: rabbitmq
   ports:
     - name: amqp
       port: {{ .Values.rabbitmq.service.port }}
