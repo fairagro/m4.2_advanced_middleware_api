@@ -12,20 +12,21 @@ from middleware.api.couchdb_client import CouchDBClient
 from middleware.api.document_store.couchdb import CouchDB
 from middleware.api.schemas.arc_document import ArcDocument, ArcLifecycleStatus
 
+from pydantic import SecretStr
 
 from middleware.api.config import CouchDBConfig
 
 @pytest.fixture
-def config():
+def config() -> CouchDBConfig:
     """Create test configuration."""
     return CouchDBConfig(
         url="http://test:5984",
         user="user",
-        password="pass"
+        password=SecretStr("pass")
     )
 
 @pytest.fixture
-def mock_client_instance():
+def mock_client_instance() -> MagicMock:
     """Create a mock client instance."""
     client = MagicMock()
     # Async methods need to be AsyncMock
@@ -37,16 +38,16 @@ def mock_client_instance():
     return client
 
 @pytest.fixture
-def store(config, mock_client_instance):
+def store(config: CouchDBConfig, mock_client_instance: MagicMock) -> CouchDB:
     """Create CouchDB store with mocked client."""
     # Patch where CouchDB calls CouchDBClient.from_config
     with patch("middleware.api.document_store.couchdb.CouchDBClient.from_config", return_value=mock_client_instance):
-        store = CouchDB(config)
-        return store
+        store_inst = CouchDB(config)
+        return store_inst
 
 
 @pytest.mark.asyncio
-async def test_store_arc_new(store, mock_client_instance):
+async def test_store_arc_new(store: CouchDB, mock_client_instance: MagicMock) -> None:
     """Test storing a new ARC."""
     # Setup
     rdi = "test_rdi"
@@ -81,7 +82,7 @@ async def test_store_arc_new(store, mock_client_instance):
 
 
 @pytest.mark.asyncio
-async def test_store_arc_update_changed(store, mock_client_instance):
+async def test_store_arc_update_changed(store: CouchDB, mock_client_instance: MagicMock) -> None:
     """Test updating an existing ARC with changes."""
     # Setup
     rdi = "test_rdi"
@@ -128,7 +129,7 @@ async def test_store_arc_update_changed(store, mock_client_instance):
 
 
 @pytest.mark.asyncio
-async def test_store_arc_no_change(store, mock_client_instance):
+async def test_store_arc_no_change(store: CouchDB, mock_client_instance: MagicMock) -> None:
     """Test storing an unchanged ARC."""
     # Setup
     rdi = "test_rdi"

@@ -1,14 +1,14 @@
-"""Unit tests for BusinessLogic refactoring."""
+from typing import Any
 from unittest.mock import MagicMock, AsyncMock, patch
 import pytest
 
-from middleware.api.business_logic import AsyncBusinessLogic, DirectBusinessLogic, BusinessLogic
+from middleware.api.business_logic import AsyncBusinessLogic, DirectBusinessLogic
 from middleware.api.business_logic_factory import BusinessLogicFactory
 from middleware.shared.api_models.models import ArcOperationResult, ArcResponse, ArcStatus, ArcTaskTicket
 from datetime import datetime
 
 @pytest.fixture
-def mock_config():
+def mock_config() -> MagicMock:
     """Mock configuration."""
     config = MagicMock()
     config.couchdb = MagicMock()
@@ -17,14 +17,14 @@ def mock_config():
     return config
 
 @pytest.fixture
-def mock_task_sender():
+def mock_task_sender() -> MagicMock:
     """Mock Celery task sender."""
     sender = MagicMock()
     sender.delay.return_value = MagicMock(id="task-123")
     return sender
 
 @pytest.mark.asyncio
-async def test_async_business_logic(mock_task_sender):
+async def test_async_business_logic(mock_task_sender: MagicMock) -> None:
     """Test AsyncBusinessLogic (Dispatcher)."""
     logic = AsyncBusinessLogic(task_sender=mock_task_sender)
     
@@ -40,19 +40,16 @@ async def test_async_business_logic(mock_task_sender):
     assert result.message == "Task enqueued"
     assert result.task_id == "task-123"
     
+    # pylint: disable=protected-access
+    assert logic._task_sender == mock_task_sender
     mock_task_sender.delay.assert_called_once()
     
     # Test health
     health = await logic.health_check()
     assert health["dispatcher"] is True
 
-from middleware.shared.api_models.models import ArcOperationResult, ArcResponse, ArcStatus
-from datetime import datetime
-
-# ...
-
 @pytest.mark.asyncio
-async def test_direct_business_logic():
+async def test_direct_business_logic() -> None:
     """Test DirectBusinessLogic (Processor)."""
     # ... setup mocks ...
     store = MagicMock()
@@ -89,14 +86,15 @@ async def test_direct_business_logic():
     health = await logic.health_check()
     assert health["couchdb_reachable"] is True
 
-def test_factory_dispatcher(mock_config):
+def test_factory_dispatcher(mock_config: MagicMock) -> None:
     """Test Factory creating Dispatcher."""
     with patch("middleware.api.worker.process_arc") as mock_process_arc:
         logic = BusinessLogicFactory.create(mock_config, mode="dispatcher")
         assert isinstance(logic, AsyncBusinessLogic)
+        # pylint: disable=protected-access
         assert logic._task_sender == mock_process_arc
 
-def test_factory_processor(mock_config):
+def test_factory_processor(mock_config: MagicMock) -> None:
     """Test Factory creating Processor."""
     with patch("middleware.api.business_logic_factory.GitlabApi") as mock_gitlab, \
          patch("middleware.api.business_logic_factory.CouchDB") as mock_couchdb:

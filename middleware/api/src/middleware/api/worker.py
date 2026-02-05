@@ -6,9 +6,10 @@ This module provides:
 
 import asyncio
 import logging
-from typing import Any
+from typing import Any, cast
 
 from middleware.api.celery_app import business_logic, celery_app
+from middleware.shared.api_models.models import ArcOperationResult, ArcTaskTicket
 
 # Initialize logger
 logger = logging.getLogger(__name__)
@@ -40,7 +41,7 @@ def process_arc(rdi: str, arc_data: dict[str, Any], client_id: str) -> dict[str,
         loop = asyncio.new_event_loop()
         asyncio.set_event_loop(loop)
         
-        async def _run_logic():
+        async def _run_logic() -> ArcOperationResult | ArcTaskTicket:
             try:
                 await business_logic.connect()
                 return await business_logic.create_or_update_arc(rdi, arc_data, client_id)
@@ -48,12 +49,12 @@ def process_arc(rdi: str, arc_data: dict[str, Any], client_id: str) -> dict[str,
                 await business_logic.close()
 
         # Process a single ARC
-        result = loop.run_until_complete(_run_logic())
+        result: ArcOperationResult | ArcTaskTicket = loop.run_until_complete(_run_logic())
         loop.close()
 
         # The result is an ArcOperationResult object (Pydantic model)
         # We return the dict representation
-        return result.model_dump()
+        return cast(dict[str, Any], result.model_dump())
 
     except Exception as e:
         logger.error("Task failed: %s", e, exc_info=True)

@@ -90,10 +90,11 @@ class CouchDBClient:
             if not self._client:
                 return False
             # Check the server version/info as a health check
-            async with self._client.request("GET", "/") as resp:  # type: ignore[attr-defined]
+            # aiocouch.CouchDB object does have a request method but it's not in the type stubs/known by static analysis
+            async with self._client.request("GET", "/") as resp:  # type: ignore[attr-defined] # pylint: disable=no-member
                 await resp.json()
             return True
-        except Exception as e:
+        except Exception as e:  # pylint: disable=broad-exception-caught
             logger.error("CouchDB health check failed: %s", e)
             return False
 

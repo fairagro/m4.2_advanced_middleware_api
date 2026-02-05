@@ -1,7 +1,7 @@
 """Unit tests for the v2/arcs endpoint."""
 
 import http
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, AsyncMock, patch
 
 import pytest
 from fastapi.testclient import TestClient
@@ -43,7 +43,7 @@ def test_create_or_update_arc_success(client: TestClient, cert: str, expected_ht
         ],
     }
 
-    from unittest.mock import AsyncMock, patch
+
     with patch.object(middleware_api.business_logic, "create_or_update_arc", new_callable=AsyncMock) as mock_create:
         mock_create.return_value = mock_ticket
 

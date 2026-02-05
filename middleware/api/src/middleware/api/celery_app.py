@@ -55,7 +55,7 @@ else:
 
     # Instrument the Celery app if OTLP endpoint is configured
     try:
-        from .tracing import instrument_celery
+        from .tracing import instrument_celery  # pylint: disable=import-outside-toplevel
 
         instrument_celery(celery_app)
     except ImportError:
@@ -74,7 +74,7 @@ celery_app.conf.update(
 # Initialize BusinessLogic for workers (None in test mode)
 business_logic = None
 if loaded_config is not None:
-    from .business_logic_factory import BusinessLogicFactory
+    from .business_logic_factory import BusinessLogicFactory  # pylint: disable=import-outside-toplevel
     
     # Create BusinessLogic in Processor mode (with Stores)
     business_logic = BusinessLogicFactory.create(loaded_config, mode="processor")

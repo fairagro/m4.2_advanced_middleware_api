@@ -24,6 +24,7 @@ from fastapi.responses import JSONResponse
 from opentelemetry.sdk._logs import LoggerProvider
 from opentelemetry.sdk.trace import TracerProvider
 from pydantic import ValidationError
+from .business_logic_factory import BusinessLogicFactory
 
 from middleware.shared.api_models.models import (
     ArcOperationResult,
@@ -138,7 +139,6 @@ class Api:
         self._logger_provider: LoggerProvider | None = None
         
         # Initialize BusinessLogic via Factory (Dispatcher mode)
-        from .business_logic_factory import BusinessLogicFactory
         self.business_logic = BusinessLogicFactory.create(self._config, mode="dispatcher")
         
         logger.debug("API configuration: %s", self._config.model_dump())

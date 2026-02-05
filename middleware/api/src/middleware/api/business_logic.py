@@ -45,7 +45,7 @@ class TaskSender(Protocol):
 
     def delay(self, *args: Any, **kwargs: Any) -> Any:
         """Schedule the task."""
-        ...
+        pass
 
 
 @runtime_checkable
@@ -56,11 +56,19 @@ class BusinessLogic(Protocol):
         self, rdi: str, arc: dict[str, Any], client_id: str
     ) -> ArcOperationResult | ArcTaskTicket:
         """Create or update an ARC."""
-        ...
+        pass
+
+    async def connect(self) -> None:
+        """Connect to dependencies."""
+        pass
+
+    async def close(self) -> None:
+        """Close connections."""
+        pass
 
     async def health_check(self) -> dict[str, bool]:
         """Check health of dependencies."""
-        ...
+        pass
 
 
 class AsyncBusinessLogic:
@@ -195,7 +203,7 @@ class DirectBusinessLogic:
                     should_trigger_git = doc_result.should_trigger_git
                     # We could also use doc_result.arc_id but we trust _store.arc_id matches logic
                     
-                except Exception as e:
+                except Exception as e:  # pylint: disable=broad-exception-caught
                     logger.error("Failed to store ARC in DocumentStore: %s", e, exc_info=True)
                     # Proceed with Git store as fallback
                     pass

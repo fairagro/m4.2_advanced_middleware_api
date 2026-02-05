@@ -34,7 +34,7 @@ class BusinessLogicFactory:
             # In a clean architecture, this might be injected or loaded.
             # Here we import celery_app locally to avoid circular imports at module level
             # if consumers import this factory.
-            from .worker import process_arc
+            from .worker import process_arc  # pylint: disable=import-outside-toplevel
             
             # The 'delay' attribute of the task acts as the sender
             return AsyncBusinessLogic(task_sender=process_arc)
