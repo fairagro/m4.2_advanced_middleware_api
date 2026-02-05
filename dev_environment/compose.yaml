@@ -41,6 +41,24 @@ services:
       retries: 5
     restart: unless-stopped
 
+  couchdb-init:
+    image: middleware-api:latest
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.api
+    depends_on:
+      couchdb:
+        condition: service_healthy
+    environment:
+      - MIDDLEWARE_API_CONFIG=/run/secrets/middleware-api-config
+      - COUCHDB_URL=http://couchdb:5984
+      - COUCHDB_USER
+      - COUCHDB_PASSWORD
+    volumes:
+      - ./middleware-api-config.yaml:/run/secrets/middleware-api-config:ro
+    command: ["/api/middleware-api/middleware-couchdb-setup"]
+    restart: "no"
+
   celery-worker:
     image: middleware-api:latest
     build:
@@ -51,8 +69,8 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
-      couchdb:
-        condition: service_healthy
+      couchdb-init:
+        condition: service_completed_successfully
       middleware-api:
         condition: service_started
     environment:
@@ -86,8 +104,8 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
-      couchdb:
-        condition: service_healthy
+      couchdb-init:
+        condition: service_completed_successfully
     ports:
       - "8000:8000"
     environment:
