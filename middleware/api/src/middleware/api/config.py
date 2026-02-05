@@ -43,7 +43,7 @@ class Config(ConfigBase):
 
     git_repo: Annotated[GitRepoConfig | None, Field(description="GitRepo storage backend configuration")] = None
     gitlab_api: Annotated[GitlabApiConfig | None, Field(description="GitLab API storage backend configuration")] = None
-    couchdb: Annotated[CouchDBConfig, Field(default_factory=CouchDBConfig, description="CouchDB configuration")]
+    couchdb: CouchDBConfig = Field(default_factory=CouchDBConfig, description="CouchDB configuration")
 
     celery: Annotated[CeleryConfig, Field(description="Celery configuration")]
 

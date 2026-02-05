@@ -100,6 +100,15 @@ class DocumentStore(ABC):
         raise NotImplementedError
 
     @abstractmethod
+    async def setup(self, setup_system: bool = False) -> None:
+        """Initialize the document store and its dependencies.
+
+        Args:
+            setup_system: Whether to ensure system databases exist.
+        """
+        raise NotImplementedError
+
+    @abstractmethod
     async def connect(self) -> None:
         """Connect to the document store."""
         raise NotImplementedError

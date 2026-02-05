@@ -35,10 +35,7 @@ class ConfigBase(BaseModel):
     """Configuration base class for the FAIRagro advanced Middleware."""
 
     log_level: Annotated[LogLevel, Field(description="Logging level for console/stdout logging")] = "INFO"
-    otel: Annotated[
-        OtelConfig,
-        Field(default_factory=OtelConfig, description="OpenTelemetry configuration"),
-    ]
+    otel: OtelConfig = Field(default_factory=OtelConfig, description="OpenTelemetry configuration")
 
     @field_validator("otel", mode="before")
     @classmethod

@@ -67,6 +67,7 @@ def config(oid: x509.ObjectIdentifier, known_rdis: list[str]) -> Config:
         ),
         couchdb=CouchDBConfig(),
         otel=OtelConfig(),
+        require_client_cert=True,
     )
 
 
@@ -100,7 +101,7 @@ def service() -> BusinessLogic:
     store.get = AsyncMock(return_value=None)
     store.delete = AsyncMock()
     store.create_or_update = AsyncMock()
-    return DirectBusinessLogic(store)
+    return DirectBusinessLogic(store=store)  # type: ignore[abstract]
 
 
 @pytest.fixture

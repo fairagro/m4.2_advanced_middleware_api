@@ -38,6 +38,10 @@ class InvalidJsonSemanticError(BusinessLogicError):
     """
 
 
+class SetupError(BusinessLogicError):
+    """Arises when the business logic setup fails."""
+
+
 @runtime_checkable
 class TaskSender(Protocol):
     """Protocol for Celery Task sender."""
@@ -55,6 +59,10 @@ class BusinessLogic(Protocol):
         self, rdi: str, arc: dict[str, Any], client_id: str
     ) -> ArcOperationResult | ArcTaskTicket:
         """Create or update an ARC."""
+        raise NotImplementedError("This method must be implemented in a subclass.")
+
+    async def setup(self) -> None:
+        """Initialize dependencies and migrations."""
         raise NotImplementedError("This method must be implemented in a subclass.")
 
     async def connect(self) -> None:
@@ -106,6 +114,10 @@ class AsyncBusinessLogic:
         # Ideally check broker connection
         return {"dispatcher": True}
 
+    async def setup(self) -> None:
+        """Setup - no-op for async dispatcher."""
+        pass
+
     async def connect(self) -> None:
         """Connect - no-op for async dispatcher."""
         pass
@@ -139,6 +151,17 @@ class DirectBusinessLogic:
         return {
             "couchdb_reachable": couchdb_ok,
         }
+
+    async def setup(self) -> None:
+        """Setup stores and apply migrations."""
+        if self._doc_store:
+            try:
+                # We enforce system database creation during setup
+                await self._doc_store.setup(setup_system=True)
+                # Future: await apply_migrations(self._doc_store)
+            except Exception as e:
+                logger.error("Failed to setup CouchDB store: %s", e, exc_info=True)
+                raise SetupError(f"Failed to setup CouchDB store: {e}") from e
 
     async def connect(self) -> None:
         """Connect to stores."""

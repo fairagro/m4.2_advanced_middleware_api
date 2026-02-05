@@ -43,6 +43,7 @@ from middleware.shared.api_models.models import (
 from middleware.shared.tracing import initialize_logging, initialize_tracing
 
 from .business_logic_factory import BusinessLogicFactory
+from .business_logic import SetupError
 from .celery_app import celery_app
 from .config import Config
 from .tracing import instrument_app
@@ -163,9 +164,17 @@ class Api:
 
         @asynccontextmanager
         async def lifespan(_app: FastAPI) -> AsyncGenerator[None, None]:
-            # BusinessLogic (Dispatcher) might not need explicit connect/close
-            # but if we add health checks or connection pools later, we might need it.
-            # Currently AsyncBusinessLogic (Celery) doesn't need connect.
+            # Initialize dependencies and CouchDB system databases
+            try:
+                await self.business_logic.setup()
+                logger.info("Business logic setup completed successfully")
+            except SetupError as e:
+                logger.error("Failed to setup business logic: %s", e)
+                # Re-raise as fatal if we want to prevent the API from starting unhealthy
+                raise
+            except Exception:  # pylint: disable=broad-exception-caught
+                logger.exception("An unexpected error occurred during business logic setup")
+                raise
 
             yield
 

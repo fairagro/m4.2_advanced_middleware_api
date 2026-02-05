@@ -31,6 +31,15 @@ class CouchDBClient:
         self._client: CouchDB | None = None
         self._db: Database | None = None
 
+    @property
+    def client(self) -> CouchDB | None:
+        """Get the underlying CouchDB client.
+
+        Returns:
+            CouchDB: The aiocouch client instance, or None if not connected.
+        """
+        return self._client
+
     @classmethod
     def from_config(cls, config: CouchDBConfig) -> "CouchDBClient":
         """Create a CouchDBClient from a configuration object.
@@ -47,11 +56,12 @@ class CouchDBClient:
             password=config.password.get_secret_value() if config.password else None,
         )
 
-    async def connect(self, db_name: str = "fairagro_middleware") -> None:
+    async def connect(self, db_name: str = "fairagro_middleware", setup_system: bool = False) -> None:
         """Connect to CouchDB and ensure database exists.
 
         Args:
             db_name: Database name to use
+            setup_system: Whether to ensure system databases exist (default: False)
         """
         try:
             self._client = CouchDB(
@@ -59,6 +69,9 @@ class CouchDBClient:
                 user=self.user,
                 password=self.password,
             )
+
+            if setup_system:
+                await self.ensure_system_databases()
 
             # Check if database exists, create if not
             try:
@@ -71,6 +84,25 @@ class CouchDBClient:
         except Exception as e:
             logger.error("Failed to connect to CouchDB: %s", e)
             raise
+
+    async def ensure_system_databases(self) -> None:
+        """Ensure CouchDB system databases exist.
+
+        CouchDB 3.x requires _users, _replicator, and _global_changes to be present.
+        """
+        if not self._client:
+            raise RuntimeError("Not connected to CouchDB server")
+
+        system_dbs = ["_users", "_replicator", "_global_changes"]
+        for db in system_dbs:
+            try:
+                await self._client[db]
+                logger.debug("System database exists: %s", db)
+            except NotFoundError:
+                logger.info("Creating missing system database: %s", db)
+                await self._client.create(db)
+            except Exception as e:  # pylint: disable=broad-exception-caught
+                logger.warning("Failed to check/create system database %s: %s", db, e)
 
     async def close(self) -> None:
         """Close CouchDB connection."""
