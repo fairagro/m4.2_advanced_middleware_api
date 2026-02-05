@@ -50,6 +50,7 @@ class ArcDocument(BaseModel):
     doc_type: Annotated[str, Field(description="Document type")] = "arc"
 
     # ARC data
+    schema_version: Annotated[int, Field(description="Schema version of the document")] = 1
     rdi: Annotated[str, Field(description="Research Data Infrastructure identifier")]
     arc_content: Annotated[dict[str, Any], Field(description="RO-Crate JSON content")]
     metadata: Annotated[ArcMetadata, Field(description="ARC metadata")]

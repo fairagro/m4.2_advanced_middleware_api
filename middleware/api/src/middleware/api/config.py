@@ -29,7 +29,7 @@ class CouchDBConfig(BaseModel):
     url: Annotated[str, Field(description="CouchDB URL")] = "http://localhost:5984"
     user: Annotated[str | None, Field(description="CouchDB username")] = None
     password: Annotated[SecretStr | None, Field(description="CouchDB password")] = None
-    db_name: Annotated[str, Field(description="Name of the database to store ARCs in")] = "arcs"
+    db_name: Annotated[str, Field(description="Name of the database for ARCs and harvests")] = "arcs"
     max_event_log_size: Annotated[int, Field(default=100, description="Maximum number of events in ARC metadata")] = 100
 
 

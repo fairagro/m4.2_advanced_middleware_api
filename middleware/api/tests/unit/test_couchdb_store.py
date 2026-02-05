@@ -115,13 +115,20 @@ async def test_add_event_non_existent(store: CouchDB, mock_client_instance: Magi
 async def test_couchdb_store_lifecycle(store: CouchDB, mock_client_instance: MagicMock) -> None:
     """Test connect, close, and health_check calls client."""
     await store.connect()
-    mock_client_instance.connect.assert_called_once()
+    mock_client_instance.connect.assert_called_with(db_name="arcs")
 
     await store.close()
     mock_client_instance.close.assert_called_once()
 
     await store.health_check()
     mock_client_instance.health_check.assert_called_once()
+
+
+@pytest.mark.asyncio
+async def test_couchdb_store_setup(store: CouchDB, mock_client_instance: MagicMock) -> None:
+    """Test setup calls client.connect with setup_system."""
+    await store.setup(setup_system=True)
+    mock_client_instance.connect.assert_called_with(db_name="arcs", setup_system=True)
 
 
 @pytest.mark.asyncio

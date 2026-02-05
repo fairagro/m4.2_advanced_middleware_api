@@ -16,8 +16,6 @@ from middleware.api.schemas.arc_document import (
     ArcMetadata,
 )
 from middleware.api.utils import calculate_arc_id
-
-from ..migrations import MigrationManager
 from . import ArcStoreResult, DocumentStore
 
 logger = logging.getLogger(__name__)
@@ -210,12 +208,6 @@ class CouchDB(DocumentStore):
             setup_system: Whether to ensure system databases exist.
         """
         await self._client.connect(db_name=self._db_name, setup_system=setup_system)
-
-        manager = MigrationManager(self._client)
-        # For now, we have an empty list of migrations. 
-        # Future migrations will be registered here.
-        await manager.run_migrations([])
-
         logger.info("CouchDB document store initialized (setup_system=%s)", setup_system)
 
     async def connect(self) -> None:
