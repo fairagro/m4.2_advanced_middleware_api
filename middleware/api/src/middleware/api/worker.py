@@ -41,31 +41,11 @@ def process_arc(rdi: str, arc_data: dict[str, Any], client_id: str | None) -> di
         asyncio.set_event_loop(loop)
         
         async def _run_logic():
-            # Initialize CouchDB context for this task
-            import os
-            from middleware.api.couchdb_client import CouchDBClient
-            from middleware.api.document_store.couchdb import CouchDB
-            
-            couchdb_url = os.environ.get("COUCHDB_URL", "http://localhost:5984")
-            couchdb_user = os.environ.get("COUCHDB_USER")
-            couchdb_password = os.environ.get("COUCHDB_PASSWORD")
-            
-            client = CouchDBClient(couchdb_url, couchdb_user, couchdb_password)
             try:
-                # We attempt to connect, but if it fails we might log and proceed without CouchDB
-                # (similar to fallback logic in business_logic, but here we can check connection)
-                await client.connect()
-                doc_store = CouchDB(client)
-            except Exception as e:
-                logger.warning("Failed to initialize CouchDB for worker task: %s", e)
-                # Fallback to None (Git-only)
-                doc_store = None
-            
-            try:
-                return await business_logic.create_or_update_arc(rdi, arc_data, client_id, doc_store=doc_store)
+                await business_logic.connect()
+                return await business_logic.create_or_update_arc(rdi, arc_data, client_id or "unknown")
             finally:
-                if client:
-                    await client.close()
+                await business_logic.close()
 
         # Process a single ARC
         result = loop.run_until_complete(_run_logic())

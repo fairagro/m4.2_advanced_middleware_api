@@ -18,6 +18,7 @@ from middleware.shared.api_models.models import (
     ArcOperationResult,
     ArcResponse,
     ArcStatus,
+    ArcTaskTicket,
     HealthResponse,
 )
 
@@ -52,8 +53,8 @@ class BusinessLogic(Protocol):
     """Protocol for Business Logic implementations."""
 
     async def create_or_update_arc(
-        self, rdi: str, arc: dict[str, Any], client_id: str, doc_store: DocumentStore | None = None
-    ) -> ArcOperationResult:
+        self, rdi: str, arc: dict[str, Any], client_id: str
+    ) -> ArcOperationResult | ArcTaskTicket:
         """Create or update an ARC."""
         ...
 
@@ -71,8 +72,8 @@ class AsyncBusinessLogic:
         self._tracer = trace.get_tracer(__name__)
 
     async def create_or_update_arc(
-        self, rdi: str, arc: dict[str, Any], client_id: str, doc_store: DocumentStore | None = None
-    ) -> ArcOperationResult:
+        self, rdi: str, arc: dict[str, Any], client_id: str
+    ) -> ArcTaskTicket:
         """Dispatch ARC for async processing."""
         # Note: doc_store is ignored here as it's not serializable/relevant for dispatch
         with self._tracer.start_as_current_span(
@@ -88,28 +89,25 @@ class AsyncBusinessLogic:
             logger.info("Enqueued task %s", task.id)
 
             # Return a result indicating accepted status
-            # CreateOrUpdateArcsResponse expects tasks, but internally we return ArcOperationResult?
-            # actually internal logic uses ArcOperationResult.
-            # However, for Async dispatch, we return a "Processing" status.
-            # But the signature demands ArcOperationResult. 
-            # We might need to adjust the return type or return a 'Pending' result.
-            
-            return ArcOperationResult(
+            return ArcTaskTicket(
                 client_id=client_id,
                 rdi=rdi,
                 message="Task enqueued",
-                arc=None,  # No ARC response yet
                 task_id=task.id,
             )
 
     async def health_check(self) -> dict[str, bool]:
         """Check health of dispatch mechanism (e.g. RabbitMQ)."""
         # Ideally check broker connection
-        # This implementation depends on how `task_sender` (Celery) exposes health
-        # For now, we assume if we can instantiate, it's 'ok' or we delegate to Api health check logic
-        # But strict layering means Api shouldn't know. 
-        # We can implement a basic check here if possible, or pass.
         return {"dispatcher": True}
+
+    async def connect(self) -> None:
+        """Connect - no-op for async dispatcher."""
+        pass
+
+    async def close(self) -> None:
+        """Close - no-op for async dispatcher."""
+        pass
 
 
 class DirectBusinessLogic:
@@ -133,13 +131,21 @@ class DirectBusinessLogic:
         if self._doc_store:
             couchdb_ok = await self._doc_store.health_check()
             
-        # arc_store (Git) might not have health check yet, assume True or check if path exists
         return {
             "couchdb_reachable": couchdb_ok,
-            # "git_reachable": True 
         }
 
-    async def _create_arc_from_rocrate(self, rdi: str, arc_dict: dict[str, Any], doc_store: DocumentStore | None = None) -> ArcResponse:
+    async def connect(self) -> None:
+        """Connect to stores."""
+        if self._doc_store:
+            await self._doc_store.connect()
+
+    async def close(self) -> None:
+        """Close store connections."""
+        if self._doc_store:
+            await self._doc_store.close()
+
+    async def _create_arc_from_rocrate(self, rdi: str, arc_dict: dict[str, Any]) -> ArcResponse:
         """Create an ARC from RO-Crate JSON with tracing."""
         with self._tracer.start_as_current_span(
             "api.DirectBusinessLogic._create_arc_from_rocrate",
@@ -168,8 +174,7 @@ class DirectBusinessLogic:
             span.set_attribute("arc_id", arc_id)
 
             # 1. Store in DocumentStore (CouchDB) if configured
-            # Use injected store or fall back to instance store
-            active_doc_store = doc_store or self._doc_store
+            active_doc_store = self._doc_store
             
             is_new = True
             should_trigger_git = True
@@ -218,7 +223,7 @@ class DirectBusinessLogic:
             )
 
     async def create_or_update_arc(
-        self, rdi: str, arc: dict[str, Any], client_id: str, doc_store: DocumentStore | None = None
+        self, rdi: str, arc: dict[str, Any], client_id: str
     ) -> ArcOperationResult:
         """Create or update a single ARC based on the provided RO-Crate JSON data.
 
@@ -226,7 +231,6 @@ class DirectBusinessLogic:
             rdi: Research Data Infrastructure identifier.
             arc: ARC definition.
             client_id: The client identifier, or None if not authenticated.
-            doc_store: Optional DocumentStore to use for this operation.
 
         Raises:
             InvalidJsonSemanticError: If the JSON is semantically incorrect.
@@ -242,7 +246,7 @@ class DirectBusinessLogic:
         ) as span:
             logger.info("Starting ARC creation/update: rdi=%s, client_id=%s", rdi, client_id or "none")
             try:
-                result = await self._create_arc_from_rocrate(rdi, arc, doc_store=doc_store)
+                result = await self._create_arc_from_rocrate(rdi, arc)
 
                 span.set_attribute("success", True)
 

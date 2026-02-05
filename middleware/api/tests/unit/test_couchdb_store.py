@@ -39,8 +39,8 @@ def mock_client_instance():
 @pytest.fixture
 def store(config, mock_client_instance):
     """Create CouchDB store with mocked client."""
-    # Patch where CouchDB imports CouchDBClient
-    with patch("middleware.api.document_store.couchdb.CouchDBClient", return_value=mock_client_instance):
+    # Patch where CouchDB calls CouchDBClient.from_config
+    with patch("middleware.api.document_store.couchdb.CouchDBClient.from_config", return_value=mock_client_instance):
         store = CouchDB(config)
         return store
 

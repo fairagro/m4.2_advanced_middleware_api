@@ -4,7 +4,7 @@ import pytest
 
 from middleware.api.business_logic import AsyncBusinessLogic, DirectBusinessLogic, BusinessLogic
 from middleware.api.business_logic_factory import BusinessLogicFactory
-from middleware.shared.api_models.models import ArcOperationResult, ArcResponse, ArcStatus
+from middleware.shared.api_models.models import ArcOperationResult, ArcResponse, ArcStatus, ArcTaskTicket
 from datetime import datetime
 
 @pytest.fixture
@@ -35,7 +35,7 @@ async def test_async_business_logic(mock_task_sender):
         client_id="client-1"
     )
     
-    assert isinstance(result, ArcOperationResult)
+    assert isinstance(result, ArcTaskTicket)
     assert result.rdi == "test-rdi"
     assert result.message == "Task enqueued"
     assert result.task_id == "task-123"

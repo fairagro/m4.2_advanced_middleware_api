@@ -18,7 +18,7 @@ from middleware.api.business_logic import (
     BusinessLogic,
     DirectBusinessLogic
 )
-from middleware.api.config import CeleryConfig, Config
+from middleware.api.config import CeleryConfig, Config, CouchDBConfig
 from middleware.shared.config.config_base import OtelConfig
 
 
@@ -68,6 +68,7 @@ def config(oid: x509.ObjectIdentifier, known_rdis: list[str]) -> Config:
             broker_url=SecretStr("amqp://guest:guest@localhost:5672//"),
             result_backend=SecretStr("redis://localhost:6379/0"),
         ),
+        couchdb=CouchDBConfig(),
         otel=OtelConfig(),
     )
 
@@ -102,7 +103,7 @@ def service() -> BusinessLogic:
     store.get = AsyncMock(return_value=None)
     store.delete = AsyncMock()
     store.create_or_update = AsyncMock()
-    return BusinessLogic(store)
+    return DirectBusinessLogic(store)
 
 
 @pytest.fixture

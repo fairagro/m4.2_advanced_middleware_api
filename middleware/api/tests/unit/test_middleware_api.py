@@ -12,6 +12,7 @@ from cryptography import x509
 from fastapi.testclient import TestClient
 
 from middleware.api.api import Api
+from middleware.shared.api_models.models import ArcTaskTicket
 
 
 def test_whoami_success(client: TestClient, middleware_api: Api, cert: str) -> None:
@@ -119,18 +120,18 @@ def test_health_check_failure(client: TestClient) -> None:
         (http.HTTPStatus.ACCEPTED),
     ],
 )
-def test_create_or_update_arcs_success(client: TestClient, cert: str, expected_http_status: int) -> None:
+def test_create_or_update_arcs_success(client: TestClient, cert: str, expected_http_status: int, middleware_api: Api) -> None:
     """Test creating a new ARC via the /v1/arcs endpoint."""
-    # Mock the Celery task
-    mock_task = MagicMock()
-    mock_task.id = "task-123"
+    # Mock the BusinessLogic response
+    mock_ticket = ArcTaskTicket(
+        rdi="rdi-1",
+        task_id="task-123"
+    )
 
-    # Check where process_arc is imported in api.py. It is imported as: from .worker import process_arc
-    # We need to patch the one in api.py
-    with pytest.MonkeyPatch.context() as mp:
-        mock_process_arc = MagicMock()
-        mock_process_arc.delay.return_value = mock_task
-        mp.setattr("middleware.api.api.process_arc", mock_process_arc)
+    with (
+        unittest.mock.patch.object(middleware_api.business_logic, "create_or_update_arc", new_callable=unittest.mock.AsyncMock) as mock_create
+    ):
+        mock_create.return_value = mock_ticket
 
         r = client.post(
             "/v1/arcs",
@@ -143,6 +144,7 @@ def test_create_or_update_arcs_success(client: TestClient, cert: str, expected_h
             json={"rdi": "rdi-1", "arcs": [{"dummy": "crate"}]},
         )
         assert r.status_code == expected_http_status
+        assert r.json()["task_id"] == "task-123"
 
 
 def test_create_or_update_arcs_invalid_cert_format(client: TestClient) -> None:
@@ -170,11 +172,12 @@ def test_create_or_update_arcs_no_cert_allowed(client: TestClient, middleware_ap
     # Needs to be known RDI
     middleware_api._config.known_rdis = ["rdi-1"]
 
-    # We must mock process_arc.delay since we expect success
-    mock_task = MagicMock()
-    mock_task.id = "task-no-cert"
+    mock_task_ticket = ArcTaskTicket(rdi="rdi-1", task_id="task-no-cert")
 
-    with unittest.mock.patch("middleware.api.api.process_arc.delay", return_value=mock_task):
+    with (
+        unittest.mock.patch.object(middleware_api.business_logic, "create_or_update_arc", new_callable=unittest.mock.AsyncMock) as mock_create
+    ):
+        mock_create.return_value = mock_task_ticket
         r = client.post(
             "/v1/arcs",
             headers={

@@ -27,6 +27,7 @@ from pydantic import ValidationError
 
 from middleware.shared.api_models.models import (
     ArcOperationResult,
+    ArcTaskTicket,
     CreateOrUpdateArcRequest,
     CreateOrUpdateArcResponse,
     CreateOrUpdateArcsRequest,
@@ -34,6 +35,7 @@ from middleware.shared.api_models.models import (
     GetTaskStatusResponse,
     GetTaskStatusResponseV2,
     HealthResponse,
+    HealthResponseV2,
     LivenessResponse,
     TaskStatus,
     WhoamiResponse,
@@ -263,8 +265,8 @@ class Api:
         """
         cert = self._validate_client_cert(request)
         if cert is None:
-            logger.debug("No client certificate - client ID is None")
-            return None
+            logger.debug("No client certificate - client ID is unknown")
+            return "unknown"
 
         cn_attributes = cert.subject.get_attributes_for_oid(NameOID.COMMON_NAME)
         if not cn_attributes:
@@ -384,6 +386,7 @@ class Api:
         self._setup_whoami_route()
         self._setup_liveness_route()
         self._setup_health_route()
+        self._setup_health_route_v2()
         self._setup_create_or_update_arcs_route()
         self._setup_create_or_update_arc_route_v2()
         self._setup_task_status_route()
@@ -466,6 +469,54 @@ class Api:
                 rabbitmq_reachable=rabbitmq_reachable,
             )
 
+    def _setup_health_route_v2(self) -> None:
+        @self._app.get("/v2/health", response_model=HealthResponseV2)
+        async def health_check_v2(
+            response: Response,
+            _accept_validated: Annotated[None, Depends(self._validate_accept_type)],
+        ) -> HealthResponseV2:
+            """Check health of API and connected services (v2)."""
+            # Check Redis
+            redis_reachable = False
+            try:
+                redis_url = (
+                    self._config.celery.result_backend.get_secret_value()
+                    if self._config.celery
+                    else "redis://localhost:6379/0"
+                )
+                r = redis.from_url(redis_url)
+                r.ping()
+                redis_reachable = True
+            except Exception: # pylint: disable=broad-exception-caught
+                pass
+
+            # Check RabbitMQ
+            rabbitmq_reachable = False
+            try:
+                with celery_app.connection_or_acquire() as conn:
+                    conn.ensure_connection(max_retries=1)
+                    rabbitmq_reachable = True
+            except Exception: # pylint: disable=broad-exception-caught
+                pass
+
+            # Check BusinessLogic
+            bl_health = await self.business_logic.health_check()
+            
+            services = {
+                "redis": redis_reachable,
+                "rabbitmq": rabbitmq_reachable,
+                **bl_health
+            }
+
+            is_healthy = all(services.values())
+            if not is_healthy:
+                response.status_code = 503
+
+            return HealthResponseV2(
+                status="ok" if is_healthy else "error",
+                services=services
+            )
+
     def _setup_create_or_update_arcs_route(self) -> None:
         @self._app.post("/v1/arcs", status_code=202)
         async def create_or_update_arcs(
@@ -499,8 +550,8 @@ class Api:
 
             result = await self.business_logic.create_or_update_arc(rdi, arc_data, client_id or "unknown")
             
-            # Use task_id from result if available, or unknown if sync
-            task_id = result.task_id or "sync-completed"
+            # Use task_id from result if it's a ticket
+            task_id = result.task_id if isinstance(result, ArcTaskTicket) else "sync-completed"
 
             logger.info("Enqueued task %s for ARC processing via BusinessLogic", task_id)
 
@@ -528,7 +579,7 @@ class Api:
             
             result = await self.business_logic.create_or_update_arc(rdi, request_body.arc, client_id or "anonymous")
             
-            task_id = result.task_id or "sync-completed"
+            task_id = result.task_id if isinstance(result, ArcTaskTicket) else "sync-completed"
             
             logger.info("Enqueued task %s for ARC processing via BusinessLogic", task_id)
 

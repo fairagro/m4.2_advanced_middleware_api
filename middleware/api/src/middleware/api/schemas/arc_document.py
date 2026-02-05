@@ -49,7 +49,7 @@ class ArcDocument(BaseModel):
     doc_rev: Annotated[str | None, Field(description="CouchDB revision", alias="_rev")] = None
 
     # Document type for queries
-    type: Annotated[str, Field(description="Document type")] = "arc"
+    doc_type: Annotated[str, Field(description="Document type")] = "arc"
 
     # ARC data
     rdi: Annotated[str, Field(description="Research Data Infrastructure identifier")]

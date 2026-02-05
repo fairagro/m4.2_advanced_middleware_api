@@ -9,6 +9,8 @@ from typing import Any
 from aiocouch import CouchDB, Database
 from aiocouch.exception import NotFoundError
 
+from .config import CouchDBConfig
+
 logger = logging.getLogger(__name__)
 
 
@@ -28,6 +30,22 @@ class CouchDBClient:
         self.password = password
         self._client: CouchDB | None = None
         self._db: Database | None = None
+
+    @classmethod
+    def from_config(cls, config: CouchDBConfig) -> "CouchDBClient":
+        """Create a CouchDBClient from a configuration object.
+
+        Args:
+            config: CouchDB configuration
+
+        Returns:
+            CouchDBClient: Initialized client
+        """
+        return cls(
+            url=config.url,
+            user=config.user,
+            password=config.password.get_secret_value() if config.password else None,
+        )
 
     async def connect(self, db_name: str = "fairagro_middleware") -> None:
         """Connect to CouchDB and ensure database exists.
@@ -71,8 +89,9 @@ class CouchDBClient:
         try:
             if not self._client:
                 return False
-            # Try to access the root endpoint
-            await self._client.get()
+            # Check the server version/info as a health check
+            async with self._client.request("GET", "/") as resp:
+                await resp.json()
             return True
         except Exception as e:
             logger.error("CouchDB health check failed: %s", e)
@@ -156,13 +175,13 @@ class CouchDBClient:
             raise RuntimeError("Not connected to CouchDB")
 
         # Use the find method of the database
-        result = await self._db.find(selector, limit=limit)
+        result = self._db.find(selector, limit=limit)
         return [dict(doc) async for doc in result]
 
     async def __aenter__(self) -> "CouchDBClient":
         """Async context manager entry."""
         return self
 
-    async def __aexit__(self, exc_type, exc_val, exc_tb) -> None:
+    async def __aexit__(self, exc_type: Any, exc_val: Any, exc_tb: Any) -> None:
         """Async context manager exit."""
         await self.close()

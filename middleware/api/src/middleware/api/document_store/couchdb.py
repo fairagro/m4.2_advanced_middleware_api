@@ -15,6 +15,7 @@ from middleware.api.schemas.arc_document import (
     ArcMetadata,
 )
 from middleware.api.schemas import ArcEventType
+from middleware.shared.utils import calculate_arc_id
 
 from . import ArcStoreResult, DocumentStore
 
@@ -32,62 +33,23 @@ class CouchDB(DocumentStore):
         """
         self._config = config
         self._db_name = config.db_name
-        self._client = CouchDBClient(
-            url=config.url,
-            user=config.user,
-            password=config.password.get_secret_value() if config.password else None
-        )
+        self._client = CouchDBClient.from_config(config)
 
-    def _calculate_arc_id(self, rdi: str, arc_content: dict[str, Any]) -> str:
-        """Calculate ARC ID based on identifier in content and RDI.
-        
-        Logic mirrors ArcStore.arc_id but works with dict content.
-        The identifier is typically in "@id" or "identifier" field of RO-Crate.
-        """
-        # Try to find identifier in RO-Crate
-        # RO-Crate/JSON-LD usually has @graph where the Root Data Entity has the identifier
-        # But for simpler matching with existing logic, we assume the caller ensures
-        # we can find the identifier.
-        # However, ArcStore logic is: hashlib.sha256(f"{identifier}:{rdi}".encode()).hexdigest()
-        
-        # We need to extract the identifier from the RO-Crate.
-        # Usually it's the @id of the distinct RO-Crate object, often "./"
-        # BUT the existing middleware passes "identifier" separately in some contexts.
-        # Wait, the Abstract Base Class `store_arc` signature I defined is:
-        # async def store_arc(self, rdi: str, arc_content: dict, harvest_id: str | None = None)
-        
-        # It misses the 'identifier' argument that ArcStore.arc_id uses!
-        # The BusinessLogic usually knows the identifier.
-        # We should probably pass existing arc_id if known, OR extract it.
-        # For simplicity and robustness, I will extract it from the "./" node in @graph if possible,
-        # OR better yet, let's look at how BusinessLogic uses it.
-        # Actually, to be safe and consistent with ArcStore, maybe I should just pass arc_id?
-        # But the ABC `store_arc` didn't have arc_id.
-        # Let's check `ArcStore.arc_id`.
-        
-        # The ARC object has an identifier.
-        # Let's iterate @graph to find the Root Data Entity (./)
+    def _extract_identifier(self, arc_content: dict[str, Any]) -> str:
+        """Extract identifier from RO-Crate content."""
         identifier = "unknown"
         if "@graph" in arc_content:
             for item in arc_content["@graph"]:
                 if item.get("@id") == "./":
-                    # This is the root dataset.
-                    # It might have an 'identifier' property?
-                    # Or is the ARC ID derived from the generic identifier?
-                    # Let's look at BusinessLogic.
                     identifier = item.get("identifier", "unknown")
                     if isinstance(identifier, list):
                         identifier = identifier[0] if identifier else "unknown"
                     break
         
-        # Fallback/Safety: If identifier is still unknown, we might have a problem.
-        # However, for now let's assume valid RO-Crate.
         if identifier == "unknown":
-             # Try top level if flat
             identifier = arc_content.get("identifier", "unknown")
-
-        input_str = f"{identifier}:{rdi}"
-        return hashlib.sha256(input_str.encode("utf-8")).hexdigest()
+            
+        return identifier
 
     def _calculate_content_hash(self, arc_content: dict[str, Any]) -> str:
         """Calculate SHA256 hash of ARC content."""
@@ -102,10 +64,9 @@ class CouchDB(DocumentStore):
         harvest_id: str | None = None,
     ) -> ArcStoreResult:
         """Store ARC with change detection."""
-        # Note: We really need a consistent way to determine ARC ID.
-        # Using the internal helper for now, but this might need refinement
-        # to match exactly how BusinessLogic/ArcStore does it.
-        arc_id = self._calculate_arc_id(rdi, arc_content)
+        # Use the shared utility to calculate ARC ID
+        identifier = self._extract_identifier(arc_content)
+        arc_id = calculate_arc_id(identifier, rdi)
         doc_id = f"arc_{arc_id}"
         
         content_hash = self._calculate_content_hash(arc_content)
@@ -138,6 +99,7 @@ class CouchDB(DocumentStore):
             )
         else:
             # Check for changes
+            assert existing_doc is not None
             has_changes = existing_doc.metadata.arc_hash != content_hash
             
             # Start with existing metadata
