@@ -24,10 +24,17 @@ def main() -> None:
     from celery.__main__ import main as celery_main  # pylint: disable=import-outside-toplevel
 
     from middleware.api.api import middleware_api  # pylint: disable=import-outside-toplevel
+    from middleware.api.cli import setup_couchdb  # pylint: disable=import-outside-toplevel
     from middleware.api.worker_health import check_worker_health  # pylint: disable=import-outside-toplevel
 
     if len(sys.argv) > 1 and sys.argv[1] == "worker-health":
         sys.exit(0 if check_worker_health() else 1)
+
+    if len(sys.argv) > 1 and sys.argv[1] == "setup-couchdb":
+        import asyncio  # pylint: disable=import-outside-toplevel
+
+        asyncio.run(setup_couchdb())
+        sys.exit(0)
 
     if len(sys.argv) > 1 and sys.argv[1] == "celery":
         # Remove the executable name and the 'celery' command, so sys.argv[0] becomes 'celery'

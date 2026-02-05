@@ -9,9 +9,9 @@ from pathlib import Path
 import yaml
 from pydantic import ValidationError
 
-from .business_logic import SetupError
-from .business_logic_factory import BusinessLogicFactory
-from .config import Config
+from middleware.api.business_logic import SetupError
+from middleware.api.business_logic_factory import BusinessLogicFactory
+from middleware.api.config import Config
 
 logger = logging.getLogger("middleware_api.cli")
 
@@ -42,13 +42,13 @@ async def setup_couchdb() -> None:
     except RuntimeError as e:
         logger.error("Runtime error: %s", e)
         sys.exit(1)
-    except Exception as e:
+    except Exception as e:  # pylint: disable=broad-exception-caught
         logger.error("An unexpected error occurred: %s", e, exc_info=True)
         sys.exit(1)
 
 
 def main() -> None:
-    """Main entry point for the CLI."""
+    """Run the main entry point for the CLI."""
     asyncio.run(setup_couchdb())
 
 

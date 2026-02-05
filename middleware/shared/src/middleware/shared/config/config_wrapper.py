@@ -181,7 +181,7 @@ class ConfigWrapper:
             The override value as a primitive type, or None if not found.
         """
         # self._path should alwys be upper case
-        full_key = self._path + "_" + key.upper()
+        full_key = self._build_path(key.upper())
 
         override_value = None
 
@@ -258,16 +258,23 @@ class ConfigWrapperDict(ConfigWrapper):
     def _all_keys(self) -> set[str]:
         """All keys including discovered ENV/Secrets."""
         keys = set(self._data.keys())
-        for env_key in os.environ:
-            if env_key.startswith(self._path + "_"):
-                key_suffix = env_key[len(self._path) + 1 :]
-                keys.add(key_suffix.lower())
+        prefix = f"{self._path}_" if self._path else ""
+
+        # Only discover new keys from environment if we are within a sub-path
+        # Root level keys must be present in the YAML to be overridden
+        if prefix:
+            for env_key in os.environ:
+                if env_key.startswith(prefix):
+                    key_suffix = env_key[len(prefix) :]
+                    keys.add(key_suffix.lower())
+
         secrets_dir = Path("/run/secrets")
         path_lower = self._path.lower()
-        if secrets_dir.exists():
+        prefix_lower = f"{path_lower}_" if path_lower else ""
+        if secrets_dir.exists() and prefix_lower:
             for secret_file in secrets_dir.iterdir():
-                if secret_file.name.startswith(path_lower + "_"):
-                    key_suffix = secret_file.name[len(path_lower) + 1 :]
+                if secret_file.name.startswith(prefix_lower):
+                    key_suffix = secret_file.name[len(prefix_lower) :]
                     keys.add(key_suffix.lower())
         return keys
 

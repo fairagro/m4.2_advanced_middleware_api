@@ -18,6 +18,9 @@ known_rdis:
 - thunen_atlas
 require_client_cert: false
 
+# Enable CouchDB and allow environment overrides (like COUCHDB_URL)
+couchdb: {}
+
 celery: {}
 
 otel:

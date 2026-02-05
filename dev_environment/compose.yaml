@@ -52,11 +52,11 @@ services:
     environment:
       - MIDDLEWARE_API_CONFIG=/run/secrets/middleware-api-config
       - COUCHDB_URL=http://couchdb:5984
-      - COUCHDB_USER
-      - COUCHDB_PASSWORD
+      - COUCHDB_USER=${COUCHDB_USER:-admin}
+      - COUCHDB_PASSWORD=${COUCHDB_PASSWORD:-password}
     volumes:
       - ./middleware-api-config.yaml:/run/secrets/middleware-api-config:ro
-    command: ["/api/middleware-api/middleware-couchdb-setup"]
+    command: ["/api/middleware-api/middleware-api", "setup-couchdb"]
     restart: "no"
 
   celery-worker:
@@ -80,8 +80,8 @@ services:
       - GITLAB_API_TOKEN
       - GIT_REPO_TOKEN
       - COUCHDB_URL=http://couchdb:5984
-      - COUCHDB_USER
-      - COUCHDB_PASSWORD
+      - COUCHDB_USER=${COUCHDB_USER:-admin}
+      - COUCHDB_PASSWORD=${COUCHDB_PASSWORD:-password}
     volumes:
       - ./middleware-api-config.yaml:/run/secrets/middleware-api-config:ro
     # Command to run celery worker
@@ -113,8 +113,8 @@ services:
       - CELERY_RESULT_BACKEND
       - MIDDLEWARE_API_CONFIG=/run/secrets/middleware-api-config
       - COUCHDB_URL=http://couchdb:5984
-      - COUCHDB_USER
-      - COUCHDB_PASSWORD
+      - COUCHDB_USER=${COUCHDB_USER:-admin}
+      - COUCHDB_PASSWORD=${COUCHDB_PASSWORD:-password}
     volumes:
       - ./middleware-api-config.yaml:/run/secrets/middleware-api-config:ro
     # Run uvicorn directly (default command of the binary runs uvicorn)
@@ -127,5 +127,4 @@ services:
 #     environment: data
 
 volumes:
-  postgres_data:
   couchdb_data:

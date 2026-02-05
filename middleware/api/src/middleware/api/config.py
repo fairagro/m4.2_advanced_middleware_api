@@ -17,9 +17,12 @@ class CeleryConfig(BaseModel):
     """Configuration for Celery worker."""
 
     broker_url: Annotated[
-        SecretStr, Field(default="amqp://guest:guest@localhost:5672//", description="RabbitMQ broker URL")
+        SecretStr,
+        Field(default=SecretStr("amqp://guest:guest@localhost:5672//"), description="RabbitMQ broker URL"),
     ]
-    result_backend: Annotated[SecretStr, Field(default="redis://localhost:6379/0", description="Redis backend URL")]
+    result_backend: Annotated[
+        SecretStr, Field(default=SecretStr("redis://localhost:6379/0"), description="Redis backend URL")
+    ]
     task_rate_limit: Annotated[str | None, Field(description="Rate limit for tasks (e.g. '10/m')")] = None
 
 
