@@ -254,14 +254,14 @@ class Api:
         request.state.cert = cert
         return cert
 
-    def _validate_client_id(self, request: Request) -> str | None:
+    def _validate_client_id(self, request: Request) -> str:
         """Extract client ID from certificate Common Name (CN) attribute.
 
         Args:
             request (Request): FastAPI request object.
 
         Returns:
-            str | None: Client identifier extracted from the certificate, or None if not authenticated.
+            str: Client identifier extracted from the certificate, or "unknown" if not authenticated.
         """
         cert = self._validate_client_cert(request)
         if cert is None:
@@ -427,11 +427,7 @@ class Api:
             redis_reachable = False
             try:
                 # Get Redis URL from config
-                redis_url = (
-                    self._config.celery.result_backend.get_secret_value()
-                    if self._config.celery
-                    else "redis://localhost:6379/0"
-                )
+                redis_url = self._config.celery.result_backend.get_secret_value()
                 r = redis.from_url(redis_url)
                 r.ping()
                 redis_reachable = True
@@ -479,11 +475,7 @@ class Api:
             # Check Redis
             redis_reachable = False
             try:
-                redis_url = (
-                    self._config.celery.result_backend.get_secret_value()
-                    if self._config.celery
-                    else "redis://localhost:6379/0"
-                )
+                redis_url = self._config.celery.result_backend.get_secret_value()
                 r = redis.from_url(redis_url)
                 r.ping()
                 redis_reachable = True
@@ -521,7 +513,7 @@ class Api:
         @self._app.post("/v1/arcs", status_code=202)
         async def create_or_update_arcs(
             request_body: CreateOrUpdateArcsRequest,
-            client_id: Annotated[str | None, Depends(self._validate_client_id)],
+            client_id: Annotated[str, Depends(self._validate_client_id)],
             _content_type_validated: Annotated[None, Depends(self._validate_content_type)],
             _accept_validated: Annotated[None, Depends(self._validate_accept_type)],
             rdi: Annotated[str, Depends(self._validate_rdi_authorized)],
@@ -531,7 +523,7 @@ class Api:
                 "Received POST /v1/arcs request: rdi=%s, num_arcs=%d, client_id=%s",
                 rdi,
                 len(request_body.arcs),
-                client_id or "none",
+                client_id,
             )
 
             if len(request_body.arcs) != 1:
@@ -548,10 +540,13 @@ class Api:
             # Note: rate limit is usually applied at task definition or globally,
             # here we just dispatch.
 
-            result = await self.business_logic.create_or_update_arc(rdi, arc_data, client_id or "unknown")
+            result = await self.business_logic.create_or_update_arc(rdi, arc_data, client_id)
             
-            # Use task_id from result if it's a ticket
-            task_id = result.task_id if isinstance(result, ArcTaskTicket) else "sync-completed"
+            # Use task_id from result - we expect an ArcTaskTicket in this context
+            if not isinstance(result, ArcTaskTicket):
+                raise RuntimeError(f"Expected ArcTaskTicket from BusinessLogic, got {type(result)}")
+            
+            task_id = result.task_id
 
             logger.info("Enqueued task %s for ARC processing via BusinessLogic", task_id)
 
@@ -561,7 +556,7 @@ class Api:
         @self._app.post("/v2/arcs", status_code=202)
         async def create_or_update_arc(
             request_body: CreateOrUpdateArcRequest,
-            client_id: Annotated[str | None, Depends(self._validate_client_id)],
+            client_id: Annotated[str, Depends(self._validate_client_id)],
             _content_type_validated: Annotated[None, Depends(self._validate_content_type)],
             _accept_validated: Annotated[None, Depends(self._validate_accept_type)],
             rdi: Annotated[str, Depends(self._validate_rdi_authorized)],
@@ -570,16 +565,20 @@ class Api:
             logger.info(
                 "Received POST /v2/arcs request: rdi=%s, client_id=%s",
                 rdi,
-                client_id or "none",
+                client_id,
             )
 
             # Delegate to Business Logic (Dispatcher)
             # api.py sends arc_data. but create_or_update_arc expects 'arc' as Any.
             # The Dispatcher implementation will enqueue it.
             
-            result = await self.business_logic.create_or_update_arc(rdi, request_body.arc, client_id or "anonymous")
+            result = await self.business_logic.create_or_update_arc(rdi, request_body.arc, client_id)
             
-            task_id = result.task_id if isinstance(result, ArcTaskTicket) else "sync-completed"
+            # Use task_id from result - we expect an ArcTaskTicket in this context
+            if not isinstance(result, ArcTaskTicket):
+                raise RuntimeError(f"Expected ArcTaskTicket from BusinessLogic, got {type(result)}")
+            
+            task_id = result.task_id
             
             logger.info("Enqueued task %s for ARC processing via BusinessLogic", task_id)
 

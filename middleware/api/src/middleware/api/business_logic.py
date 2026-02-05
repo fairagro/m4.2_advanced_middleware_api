@@ -78,7 +78,7 @@ class AsyncBusinessLogic:
         # Note: doc_store is ignored here as it's not serializable/relevant for dispatch
         with self._tracer.start_as_current_span(
             "api.AsyncBusinessLogic.create_or_update_arc",
-            attributes={"rdi": rdi, "client_id": client_id or "none"},
+            attributes={"rdi": rdi, "client_id": client_id},
         ) as span:
             logger.info("Dispatching ARC task for RDI: %s", rdi)
             
@@ -242,9 +242,9 @@ class DirectBusinessLogic:
         """
         with self._tracer.start_as_current_span(
             "api.DirectBusinessLogic.create_or_update_arc",
-            attributes={"rdi": rdi, "client_id": client_id or "none"},
+            attributes={"rdi": rdi, "client_id": client_id},
         ) as span:
-            logger.info("Starting ARC creation/update: rdi=%s, client_id=%s", rdi, client_id or "none")
+            logger.info("Starting ARC creation/update: rdi=%s, client_id=%s", rdi, client_id)
             try:
                 result = await self._create_arc_from_rocrate(rdi, arc)
 

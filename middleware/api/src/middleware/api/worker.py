@@ -15,13 +15,13 @@ logger = logging.getLogger(__name__)
 
 
 @celery_app.task(name="process_arc")
-def process_arc(rdi: str, arc_data: dict[str, Any], client_id: str | None) -> dict[str, Any]:
+def process_arc(rdi: str, arc_data: dict[str, Any], client_id: str) -> dict[str, Any]:
     """Process a single ARC asynchronously.
 
     Args:
         rdi: Research Data Infrastructure identifier
         arc_data: ARC data dictionary
-        client_id: Optional client identifier
+        client_id: Client identifier
 
     Returns:
         Task result as dictionary
@@ -43,7 +43,7 @@ def process_arc(rdi: str, arc_data: dict[str, Any], client_id: str | None) -> di
         async def _run_logic():
             try:
                 await business_logic.connect()
-                return await business_logic.create_or_update_arc(rdi, arc_data, client_id or "unknown")
+                return await business_logic.create_or_update_arc(rdi, arc_data, client_id)
             finally:
                 await business_logic.close()
 

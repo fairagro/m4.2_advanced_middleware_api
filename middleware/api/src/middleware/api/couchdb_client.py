@@ -90,7 +90,7 @@ class CouchDBClient:
             if not self._client:
                 return False
             # Check the server version/info as a health check
-            async with self._client.request("GET", "/") as resp:
+            async with self._client.request("GET", "/") as resp:  # type: ignore[attr-defined]
                 await resp.json()
             return True
         except Exception as e:
@@ -182,6 +182,11 @@ class CouchDBClient:
         """Async context manager entry."""
         return self
 
-    async def __aexit__(self, exc_type: Any, exc_val: Any, exc_tb: Any) -> None:
+    async def __aexit__(
+        self,
+        exc_type: type[BaseException] | None,
+        exc_val: BaseException | None,
+        exc_tb: Any | None,
+    ) -> None:
         """Async context manager exit."""
         await self.close()

@@ -1,4 +1,4 @@
-"""Shared utility functions for the FAIRagro Middleware."""
+"""Utility functions for the FAIRagro Middleware API."""
 
 import hashlib
 

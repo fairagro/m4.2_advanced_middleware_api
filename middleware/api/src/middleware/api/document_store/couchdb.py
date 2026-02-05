@@ -15,7 +15,7 @@ from middleware.api.schemas.arc_document import (
     ArcMetadata,
 )
 from middleware.api.schemas import ArcEventType
-from middleware.shared.utils import calculate_arc_id
+from middleware.api.utils import calculate_arc_id
 
 from . import ArcStoreResult, DocumentStore
 
