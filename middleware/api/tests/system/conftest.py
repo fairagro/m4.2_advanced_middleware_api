@@ -52,8 +52,12 @@ def gitlab_api(
 @pytest.fixture(scope="session")
 def gitlab_group(config: dict[str, Any], gitlab_api: Gitlab) -> Any:  # pylint: disable=redefined-outer-name
     """Provide the Gitlab group for tests."""
-    group = gitlab_api.groups.get(config["gitlab_api"]["group"])
-    return group
+    try:
+        group = gitlab_api.groups.get(config["gitlab_api"]["group"])
+        return group
+    except GitlabError as e:
+        pytest.skip(f"GitLab group {config['gitlab_api']['group']} not found or accessible: {e}")
+        return None
 
 
 @pytest.fixture
@@ -77,6 +81,8 @@ def client(
 @pytest.fixture(scope="session", autouse=True)
 def cleanup_gitlab_group(gitlab_group: Any, gitlab_api: Gitlab) -> None:  # pylint: disable=redefined-outer-name
     """Cleanup the Gitlab group before tests."""
+    if gitlab_group is None:
+        return
     # delete all projects in the group
     for project in gitlab_group.projects.list(all=True):
         try:

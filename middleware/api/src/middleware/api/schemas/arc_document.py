@@ -3,7 +3,7 @@
 from datetime import datetime
 from typing import Any, Annotated
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ConfigDict
 
 from . import ArcLifecycleStatus, ArcEventType
 
@@ -56,7 +56,4 @@ class ArcDocument(BaseModel):
     arc_content: Annotated[dict[str, Any], Field(description="RO-Crate JSON content")]
     metadata: Annotated[ArcMetadata, Field(description="ARC metadata")]
 
-    class Config:
-        """Pydantic configuration."""
-
-        populate_by_name = True
+    model_config = ConfigDict(populate_by_name=True)
