@@ -11,8 +11,8 @@ metadata:
     app.kubernetes.io/component: rabbitmq
 type: Opaque
 stringData:
-  username: {{ default "guest" $rabbitAuth.username | quote }}
-  password: {{ default "guest" $rabbitAuth.password | quote }}
+  username: {{ required "A username is required under rabbitmq.auth.username when not using an existing secret" $rabbitAuth.username | quote }}
+  password: {{ required "A password is required under rabbitmq.auth.password when not using an existing secret" $rabbitAuth.password | quote }}
   erlang_cookie: {{ default "" $rabbitAuth.erlang_cookie | quote }}
 ---
 {{- end }}
