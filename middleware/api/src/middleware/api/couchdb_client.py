@@ -169,16 +169,14 @@ class CouchDBClient:
         if not self._db:
             raise RuntimeError("Not connected to CouchDB")
 
-        # Check if document exists
-        existing_doc = await self.get_document(doc_id)
-
-        if existing_doc:
-            # Update existing document
+        try:
+            # Attempt to fetch the document
             doc = await self._db[doc_id]
+            # If successful, it's an update
             doc.update(data)
             await doc.save()
-        else:
-            # Create new document
+        except NotFoundError:
+            # If not found, it's a create
             doc = await self._db.create(doc_id, data=data)
 
         return dict(doc)

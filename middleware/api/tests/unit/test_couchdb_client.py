@@ -209,16 +209,15 @@ async def test_couchdb_client_save_document_new(couchdb_client: CouchDBClient) -
     couchdb_client : CouchDBClient
         An instance of CouchDBClient initialized with the provided configuration.
     """
-    mock_db = AsyncMock()
-    # Mock get_document to return None (not found)
-    with patch.object(couchdb_client, "get_document", return_value=None):
-        mock_doc = {"_id": "new_doc", "val": 1}
-        mock_db.create.return_value = mock_doc
-        couchdb_client._db = mock_db  # pylint: disable=protected-access
+    mock_db = MagicMock()
+    mock_db.__getitem__ = AsyncMock(side_effect=NotFoundError)
+    mock_doc = {"_id": "new_doc", "val": 1}
+    mock_db.create = AsyncMock(return_value=mock_doc)
+    couchdb_client._db = mock_db  # pylint: disable=protected-access
 
-        result = await couchdb_client.save_document("new_doc", {"val": 1})
-        assert result == mock_doc
-        mock_db.create.assert_called_with("new_doc", data={"val": 1})
+    result = await couchdb_client.save_document("new_doc", {"val": 1})
+    assert result == mock_doc
+    mock_db.create.assert_called_with("new_doc", data={"val": 1})
 
 
 @pytest.mark.asyncio
@@ -230,24 +229,23 @@ async def test_couchdb_client_save_document_update(couchdb_client: CouchDBClient
     couchdb_client : CouchDBClient
         An instance of CouchDBClient initialized with the provided configuration.
     """
-    mock_db = AsyncMock()
+    mock_db = MagicMock()
     existing_doc_data = {"_id": "doc1", "val": 1}
 
-    with patch.object(couchdb_client, "get_document", return_value=existing_doc_data):
-        mock_doc = MagicMock()
-        mock_doc.update = MagicMock()
-        mock_doc.save = AsyncMock()
-        # Mocking dict(mock_doc) is tricky, let's make mock_doc behave like a dict or return one
-        mock_doc.__iter__.return_value = iter(existing_doc_data.keys())
-        mock_doc.__getitem__.side_effect = existing_doc_data.__getitem__
+    mock_doc = MagicMock()
+    mock_doc.update = MagicMock()
+    mock_doc.save = AsyncMock()
+    # Mocking dict(mock_doc) is tricky, let's make mock_doc behave like a dict or return one
+    mock_doc.__iter__.return_value = iter(existing_doc_data.keys())
+    mock_doc.__getitem__.side_effect = existing_doc_data.__getitem__
 
-        mock_db.__getitem__ = AsyncMock(return_value=mock_doc)
-        couchdb_client._db = mock_db  # pylint: disable=protected-access
+    mock_db.__getitem__ = AsyncMock(return_value=mock_doc)
+    couchdb_client._db = mock_db  # pylint: disable=protected-access
 
-        await couchdb_client.save_document("doc1", {"val": 2})
+    await couchdb_client.save_document("doc1", {"val": 2})
 
-        mock_doc.update.assert_called_with({"val": 2})
-        mock_doc.save.assert_called_once()
+    mock_doc.update.assert_called_with({"val": 2})
+    mock_doc.save.assert_called_once()
 
 
 @pytest.mark.asyncio
