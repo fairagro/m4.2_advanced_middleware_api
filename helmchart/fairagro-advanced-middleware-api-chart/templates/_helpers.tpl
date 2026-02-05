@@ -89,12 +89,12 @@ Compute Celery broker URL based on enabled RabbitMQ or provided override.
 	{{- $rabbitAuth := default (dict) .Values.rabbitmq.auth -}}
 	{{- $user := default "" $rabbitAuth.username -}}
 	{{- $pass := default "" $rabbitAuth.password -}}
-	{{- $userEsc := urlquery (default "guest" $user) -}}
-	{{- $passEsc := urlquery (default "guest" $pass) -}}
 	{{- $existing := default "" $rabbitAuth.existingSecret -}}
 	{{- if and $existing (or (eq $user "") (eq $pass "")) -}}
 		{{- required "Provide rabbitmq.auth.username/password when rabbitmq.auth.existingSecret is set, or set celery.brokerUrl" $brokerOverride -}}
 	{{- else -}}
+		{{- $userEsc := urlquery (required "rabbitmq.auth.username is required when rabbitmq.enabled=true" $user) -}}
+		{{- $passEsc := urlquery (required "rabbitmq.auth.password is required when rabbitmq.enabled=true" $pass) -}}
 		{{- printf "amqp://%s:%s@%s-rabbitmq:5672//" $userEsc $passEsc $fullname -}}
 	{{- end -}}
 {{- else -}}
