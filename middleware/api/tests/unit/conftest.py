@@ -16,6 +16,7 @@ from middleware.api.api import Api
 from middleware.api.arc_store.gitlab_api import GitlabApi, GitlabApiConfig
 from middleware.api.business_logic import (
     BusinessLogic,
+    DirectBusinessLogic
 )
 from middleware.api.config import CeleryConfig, Config
 from middleware.shared.config.config_base import OtelConfig

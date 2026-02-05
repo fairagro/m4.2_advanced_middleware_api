@@ -25,6 +25,22 @@ services:
       retries: 5
     restart: unless-stopped
 
+  couchdb:
+    image: couchdb:3.3
+    ports:
+      - "5984:5984"
+    environment:
+      - COUCHDB_USER=${COUCHDB_USER:-admin}
+      - COUCHDB_PASSWORD=${COUCHDB_PASSWORD:-password}
+    volumes:
+      - couchdb_data:/opt/couchdb/data
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5984/_up"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
   celery-worker:
     image: middleware-api:latest
     build:
@@ -35,6 +51,8 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+      couchdb:
+        condition: service_healthy
       middleware-api:
         condition: service_started
     environment:
@@ -43,6 +61,9 @@ services:
       - CELERY_RESULT_BACKEND
       - GITLAB_API_TOKEN
       - GIT_REPO_TOKEN
+      - COUCHDB_URL=http://couchdb:5984
+      - COUCHDB_USER
+      - COUCHDB_PASSWORD
     volumes:
       - ./middleware-api-config.yaml:/run/secrets/middleware-api-config:ro
     # Command to run celery worker
@@ -65,12 +86,17 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+      couchdb:
+        condition: service_healthy
     ports:
       - "8000:8000"
     environment:
       - CELERY_BROKER_URL
       - CELERY_RESULT_BACKEND
       - MIDDLEWARE_API_CONFIG=/run/secrets/middleware-api-config
+      - COUCHDB_URL=http://couchdb:5984
+      - COUCHDB_USER
+      - COUCHDB_PASSWORD
     volumes:
       - ./middleware-api-config.yaml:/run/secrets/middleware-api-config:ro
     # Run uvicorn directly (default command of the binary runs uvicorn)
@@ -84,3 +110,4 @@ services:
 
 volumes:
   postgres_data:
+  couchdb_data:

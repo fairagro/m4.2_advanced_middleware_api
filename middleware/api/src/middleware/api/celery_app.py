@@ -74,19 +74,8 @@ celery_app.conf.update(
 # Initialize BusinessLogic for workers (None in test mode)
 business_logic = None
 if loaded_config is not None:
-    from .arc_store import ArcStore
-    from .arc_store.git_repo import GitRepo
-    from .arc_store.gitlab_api import GitlabApi
-    from .business_logic import BusinessLogic
-
-    store: ArcStore
-    if loaded_config.gitlab_api:
-        store = GitlabApi(loaded_config.gitlab_api)
-    elif loaded_config.git_repo:
-        store = GitRepo(loaded_config.git_repo)
-    else:
-        logger.error("Invalid ArcStore configuration")
-        raise ValueError("Invalid ArcStore configuration")
-
-    business_logic = BusinessLogic(store)
-    logger.info("BusinessLogic initialized for Celery workers")
+    from .business_logic_factory import BusinessLogicFactory
+    
+    # Create BusinessLogic in Processor mode (with Stores)
+    business_logic = BusinessLogicFactory.create(loaded_config, mode="processor")
+    logger.info("BusinessLogic initialized for Celery workers (Processor Mode)")

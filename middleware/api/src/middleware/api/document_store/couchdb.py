@@ -1,0 +1,256 @@
+"""CouchDB implementation of DocumentStore."""
+
+import hashlib
+import json
+import logging
+from datetime import datetime, timezone
+from typing import Any
+
+from middleware.api.config import CouchDBConfig
+from middleware.api.couchdb_client import CouchDBClient
+from middleware.api.schemas.arc_document import (
+    ArcDocument,
+    ArcEvent,
+    ArcLifecycleStatus,
+    ArcMetadata,
+)
+from middleware.api.schemas import ArcEventType
+
+from . import ArcStoreResult, DocumentStore
+
+logger = logging.getLogger(__name__)
+
+
+class CouchDB(DocumentStore):
+    """CouchDB implementation of DocumentStore."""
+
+    def __init__(self, config: CouchDBConfig) -> None:
+        """Initialize CouchDB document store.
+
+        Args:
+            config: CouchDB configuration
+        """
+        self._config = config
+        self._db_name = config.db_name
+        self._client = CouchDBClient(
+            url=config.url,
+            user=config.user,
+            password=config.password.get_secret_value() if config.password else None
+        )
+
+    def _calculate_arc_id(self, rdi: str, arc_content: dict[str, Any]) -> str:
+        """Calculate ARC ID based on identifier in content and RDI.
+        
+        Logic mirrors ArcStore.arc_id but works with dict content.
+        The identifier is typically in "@id" or "identifier" field of RO-Crate.
+        """
+        # Try to find identifier in RO-Crate
+        # RO-Crate/JSON-LD usually has @graph where the Root Data Entity has the identifier
+        # But for simpler matching with existing logic, we assume the caller ensures
+        # we can find the identifier.
+        # However, ArcStore logic is: hashlib.sha256(f"{identifier}:{rdi}".encode()).hexdigest()
+        
+        # We need to extract the identifier from the RO-Crate.
+        # Usually it's the @id of the distinct RO-Crate object, often "./"
+        # BUT the existing middleware passes "identifier" separately in some contexts.
+        # Wait, the Abstract Base Class `store_arc` signature I defined is:
+        # async def store_arc(self, rdi: str, arc_content: dict, harvest_id: str | None = None)
+        
+        # It misses the 'identifier' argument that ArcStore.arc_id uses!
+        # The BusinessLogic usually knows the identifier.
+        # We should probably pass existing arc_id if known, OR extract it.
+        # For simplicity and robustness, I will extract it from the "./" node in @graph if possible,
+        # OR better yet, let's look at how BusinessLogic uses it.
+        # Actually, to be safe and consistent with ArcStore, maybe I should just pass arc_id?
+        # But the ABC `store_arc` didn't have arc_id.
+        # Let's check `ArcStore.arc_id`.
+        
+        # The ARC object has an identifier.
+        # Let's iterate @graph to find the Root Data Entity (./)
+        identifier = "unknown"
+        if "@graph" in arc_content:
+            for item in arc_content["@graph"]:
+                if item.get("@id") == "./":
+                    # This is the root dataset.
+                    # It might have an 'identifier' property?
+                    # Or is the ARC ID derived from the generic identifier?
+                    # Let's look at BusinessLogic.
+                    identifier = item.get("identifier", "unknown")
+                    if isinstance(identifier, list):
+                        identifier = identifier[0] if identifier else "unknown"
+                    break
+        
+        # Fallback/Safety: If identifier is still unknown, we might have a problem.
+        # However, for now let's assume valid RO-Crate.
+        if identifier == "unknown":
+             # Try top level if flat
+            identifier = arc_content.get("identifier", "unknown")
+
+        input_str = f"{identifier}:{rdi}"
+        return hashlib.sha256(input_str.encode("utf-8")).hexdigest()
+
+    def _calculate_content_hash(self, arc_content: dict[str, Any]) -> str:
+        """Calculate SHA256 hash of ARC content."""
+        # Use sort_keys=True for canonical JSON representation
+        json_str = json.dumps(arc_content, sort_keys=True)
+        return hashlib.sha256(json_str.encode("utf-8")).hexdigest()
+
+    async def store_arc(
+        self,
+        rdi: str,
+        arc_content: dict[str, Any],
+        harvest_id: str | None = None,
+    ) -> ArcStoreResult:
+        """Store ARC with change detection."""
+        # Note: We really need a consistent way to determine ARC ID.
+        # Using the internal helper for now, but this might need refinement
+        # to match exactly how BusinessLogic/ArcStore does it.
+        arc_id = self._calculate_arc_id(rdi, arc_content)
+        doc_id = f"arc_{arc_id}"
+        
+        content_hash = self._calculate_content_hash(arc_content)
+        now = datetime.now(timezone.utc)
+        
+        # Check existing document
+        existing_doc_dict = await self._client.get_document(doc_id)
+        existing_doc = ArcDocument(**existing_doc_dict) if existing_doc_dict else None
+        
+        is_new = existing_doc is None
+        has_changes = True # Default to true for new
+        should_trigger_git = True
+        
+        if is_new:
+            logger.info("ARC %s is new (hash: %s)", arc_id, content_hash[:8])
+            metadata = ArcMetadata(
+                arc_hash=content_hash,
+                status=ArcLifecycleStatus.ACTIVE,
+                first_seen=now,
+                last_seen=now,
+                last_harvest_id=harvest_id,
+                events=[
+                    ArcEvent(
+                        timestamp=now,
+                        type=ArcEventType.ARC_CREATED,
+                        message="ARC first seen",
+                        harvest_id=harvest_id
+                    )
+                ]
+            )
+        else:
+            # Check for changes
+            has_changes = existing_doc.metadata.arc_hash != content_hash
+            
+            # Start with existing metadata
+            metadata = existing_doc.metadata
+            metadata.last_seen = now
+            metadata.last_harvest_id = harvest_id
+            
+            if has_changes:
+                logger.info("ARC %s changed (old: %s, new: %s)", arc_id, metadata.arc_hash[:8], content_hash[:8])
+                metadata.arc_hash = content_hash
+                metadata.status = ArcLifecycleStatus.ACTIVE # Reset to active if it was missing/deleted
+                metadata.missing_since = None
+                should_trigger_git = True
+                
+                # Append update event
+                metadata.events.append(
+                    ArcEvent(
+                        timestamp=now,
+                        type=ArcEventType.ARC_UPDATED,
+                        message="ARC content updated",
+                        harvest_id=harvest_id
+                    )
+                )
+            else:
+                logger.debug("ARC %s unchanged", arc_id)
+                should_trigger_git = False
+                # Optionally log "not changed" event, or just update timestamps?
+                # For now, we don't log every "seen but unchanged" to avoid spam, 
+                # but we DO update last_seen (already done above).
+                
+                # If it was marked MISSING/DELETED but is now back (restored), we should note that
+                if metadata.status in (ArcLifecycleStatus.MISSING, ArcLifecycleStatus.DELETED):
+                    metadata.status = ArcLifecycleStatus.ACTIVE
+                    metadata.missing_since = None
+                    metadata.events.append(
+                        ArcEvent(
+                            timestamp=now,
+                            type=ArcEventType.ARC_RESTORED,
+                            message="ARC reappeared after being missing/deleted",
+                            harvest_id=harvest_id
+                        )
+                    )
+
+        # Trim events (keep last 100)
+        if len(metadata.events) > 100:
+            metadata.events = metadata.events[-100:]
+
+        # Create/Update document
+        doc = ArcDocument(
+            doc_id=doc_id,
+            doc_rev=existing_doc.doc_rev if existing_doc else None,
+            rdi=rdi,
+            arc_content=arc_content,
+            metadata=metadata
+        )
+        # Hack to handle _rev which is aliased in Pydantic but needs to be passed to client logic if we were using it manually.
+        # But our client.save_document wraps simple dict PUT.
+        # We need to pass the dict. Pydantic's model_dump(by_alias=True) will include _id and _rev.
+        doc_data = doc.model_dump(by_alias=True, exclude_none=True)
+        # _rev should not be in data if it's None (new doc)
+        
+        await self._client.save_document(doc_id, doc_data)
+        
+        return ArcStoreResult(
+            arc_id=arc_id,
+            is_new=is_new,
+            has_changes=has_changes,
+            should_trigger_git=should_trigger_git
+        )
+
+    async def get_arc_content(self, arc_id: str) -> dict[str, Any] | None:
+        """Get raw ARC RO-Crate JSON."""
+        doc_id = f"arc_{arc_id}"
+        doc = await self._client.get_document(doc_id)
+        return doc.get("arc_content") if doc else None
+
+    async def get_metadata(self, arc_id: str) -> ArcMetadata | None:
+        """Get ARC metadata without full content."""
+        doc_id = f"arc_{arc_id}"
+        doc = await self._client.get_document(doc_id)
+        if doc and "metadata" in doc:
+            return ArcMetadata(**doc["metadata"])
+        return None
+
+    async def add_event(self, arc_id: str, event: ArcEvent) -> None:
+        """Append event to ARC event log."""
+        doc_id = f"arc_{arc_id}"
+        doc_dict = await self._client.get_document(doc_id)
+        
+        if not doc_dict:
+            logger.warning("Attempted to add event to non-existent ARC %s", arc_id)
+            return
+
+        doc = ArcDocument(**doc_dict)
+        doc.metadata.events.append(event)
+        
+        # Trim events
+        if len(doc.metadata.events) > 100:
+            doc.metadata.events = doc.metadata.events[-100:]
+            
+        doc_data = doc.model_dump(by_alias=True, exclude_none=True)
+        await self._client.save_document(doc_id, doc_data)
+
+    async def health_check(self) -> bool:
+        """Check if document store is reachable."""
+        return await self._client.health_check()
+
+    async def connect(self) -> None:
+        """Connect to CouchDB."""
+        await self._client.connect()
+        logger.info("CouchDB document store connected")
+
+    async def close(self) -> None:
+        """Close CouchDB connection."""
+        await self._client.close()
+        logger.info("CouchDB document store disconnected")

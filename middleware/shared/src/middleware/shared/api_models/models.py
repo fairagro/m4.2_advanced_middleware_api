@@ -41,6 +41,7 @@ class HealthResponse(BaseModel):
     status: Annotated[str, Field(description="Overall service status (ok/error)")] = "ok"
     redis_reachable: Annotated[bool, Field(description="True if Redis is reachable")]
     rabbitmq_reachable: Annotated[bool, Field(description="True if RabbitMQ is reachable")]
+    couchdb_reachable: Annotated[bool, Field(description="True if CouchDB is reachable")] = False
 
 
 class CreateOrUpdateArcsRequest(BaseModel):
@@ -69,7 +70,7 @@ class ApiResponse(BaseModel):
         str | None,
         Field(
             description="Client identifier which is the CN from the client certificate, "
-            "or None if client certificates are not required",
+            "or 'unknown' if client certificates are not required",
         ),
     ] = None
     message: Annotated[str, Field(description="Response message")] = ""
@@ -120,7 +121,8 @@ class ArcOperationResult(ApiResponse):
     """Response model for the actual result of a single ARC operation (v2)."""
 
     rdi: Annotated[str, Field(description="Research Data Infrastructure identifier the ARC belongs to")]
-    arc: Annotated[ArcResponse, Field(description="ARC response for the operation")]
+    arc: Annotated[ArcResponse | None, Field(description="ARC response for the operation")] = None
+    task_id: Annotated[str | None, Field(description="Async task ID if applicable")] = None
 
 
 class GetTaskStatusResponse(BaseModel):

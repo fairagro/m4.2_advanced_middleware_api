@@ -21,6 +21,17 @@ class CeleryConfig(BaseModel):
     task_rate_limit: Annotated[str | None, Field(description="Rate limit for tasks (e.g. '10/m')")] = None
 
 
+class CouchDBConfig(BaseModel):
+    """Configuration for CouchDB."""
+
+    url: Annotated[str, Field(description="CouchDB URL")] = "http://localhost:5984"
+    user: Annotated[str | None, Field(description="CouchDB username")] = None
+    password: Annotated[
+        SecretStr | None, Field(description="CouchDB password")
+    ] = None
+    db_name: Annotated[str, Field(description="Name of the database to store ARCs in")] = "arcs"
+
+
 class Config(ConfigBase):
     """Configuration model for the Middleware API."""
 
@@ -31,6 +42,7 @@ class Config(ConfigBase):
 
     git_repo: Annotated[GitRepoConfig | None, Field(description="GitRepo storage backend configuration")] = None
     gitlab_api: Annotated[GitlabApiConfig | None, Field(description="GitLab API storage backend configuration")] = None
+    couchdb: Annotated[CouchDBConfig, Field(default_factory=CouchDBConfig, description="CouchDB configuration")]
 
     celery: Annotated[CeleryConfig, Field(description="Celery configuration")]
 

@@ -43,7 +43,6 @@ from middleware.shared.tracing import initialize_logging, initialize_tracing
 from .celery_app import celery_app
 from .config import Config
 from .tracing import instrument_app
-from .worker import process_arc
 
 try:
     from importlib.metadata import PackageNotFoundError, version
@@ -135,6 +134,11 @@ class Api:
         self._config = app_config
         self._tracer_provider: TracerProvider | None = None
         self._logger_provider: LoggerProvider | None = None
+        
+        # Initialize BusinessLogic via Factory (Dispatcher mode)
+        from .business_logic_factory import BusinessLogicFactory
+        self.business_logic = BusinessLogicFactory.create(self._config, mode="dispatcher")
+        
         logger.debug("API configuration: %s", self._config.model_dump())
 
         # Initialize OpenTelemetry tracing with optional OTLP endpoint
@@ -157,7 +161,13 @@ class Api:
 
         @asynccontextmanager
         async def lifespan(_app: FastAPI) -> AsyncGenerator[None, None]:
+            # BusinessLogic (Dispatcher) might not need explicit connect/close
+            # but if we add health checks or connection pools later, we might need it.
+            # Currently AsyncBusinessLogic (Celery) doesn't need connect.
+            
             yield
+            
+            # Cleanup
             if self._tracer_provider is not None:
                 try:
                     self._tracer_provider.shutdown()
@@ -405,11 +415,11 @@ class Api:
 
     def _setup_health_route(self) -> None:
         @self._app.get("/v1/health", response_model=HealthResponse)
-        def health_check(
+        async def health_check(
             response: Response,
             _accept_validated: Annotated[None, Depends(self._validate_accept_type)],
         ) -> HealthResponse:
-            """Check health of API and connected services (Redis, RabbitMQ)."""
+            """Check health of API and connected services (Redis, RabbitMQ, CouchDB)."""
             # Check Redis (result backend)
             redis_reachable = False
             try:
@@ -434,10 +444,15 @@ class Api:
             except Exception as e:  # pylint: disable=broad-exception-caught
                 logger.error("RabbitMQ health check failed: %s", e)
 
-            # API only checks its direct dependencies
+            # Check BusinessLogic Dependencies (CouchDB/Dispatcher)
+            # The API doesn't know what's underneath, just asks BL
+            bl_health = await self.business_logic.health_check()
+            
+            # Merge statuses
             status = {
                 "redis_reachable": redis_reachable,
                 "rabbitmq_reachable": rabbitmq_reachable,
+                **bl_health
             }
 
             is_healthy = all(status.values())
@@ -482,11 +497,14 @@ class Api:
             # Note: rate limit is usually applied at task definition or globally,
             # here we just dispatch.
 
-            task = process_arc.delay(rdi, arc_data, client_id)
+            result = await self.business_logic.create_or_update_arc(rdi, arc_data, client_id or "unknown")
+            
+            # Use task_id from result if available, or unknown if sync
+            task_id = result.task_id or "sync-completed"
 
-            logger.info("Enqueued task %s for ARC processing", task.id)
+            logger.info("Enqueued task %s for ARC processing via BusinessLogic", task_id)
 
-            return CreateOrUpdateArcsResponse(task_id=task.id, status="processing")
+            return CreateOrUpdateArcsResponse(task_id=task_id, status="processing")
 
     def _setup_create_or_update_arc_route_v2(self) -> None:
         @self._app.post("/v2/arcs", status_code=202)
@@ -504,15 +522,18 @@ class Api:
                 client_id or "none",
             )
 
-            # Submit task to Celery
-            arc_data = request_body.arc
-
-            task = process_arc.delay(rdi, arc_data, client_id)
-
-            logger.info("Enqueued task %s for ARC processing", task.id)
+            # Delegate to Business Logic (Dispatcher)
+            # api.py sends arc_data. but create_or_update_arc expects 'arc' as Any.
+            # The Dispatcher implementation will enqueue it.
+            
+            result = await self.business_logic.create_or_update_arc(rdi, request_body.arc, client_id or "anonymous")
+            
+            task_id = result.task_id or "sync-completed"
+            
+            logger.info("Enqueued task %s for ARC processing via BusinessLogic", task_id)
 
             return CreateOrUpdateArcResponse(
-                task_id=task.id,
+                task_id=task_id,
                 status=TaskStatus.PENDING,
             )
 
