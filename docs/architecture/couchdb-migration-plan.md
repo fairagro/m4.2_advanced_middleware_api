@@ -17,14 +17,16 @@ Migrate from Redis-based state management to CouchDB-based ARC storage with comp
 ## Architecture Changes
 
 ### Before (Current)
-```
+
+```text
 API → RabbitMQ → Worker → Git
        ↓
      Redis (task state)
 ```
 
 ### After (Target)
-```
+
+```text
 API → CouchDB (ARCs + Events + Harvests)
        ↓ (if new/changed)
      RabbitMQ → Worker → Git
@@ -39,6 +41,7 @@ API → CouchDB (ARCs + Events + Harvests)
 ### 1.1 Docker Compose
 
 #### [MODIFY] [docker-compose.yml](file:///workspaces/m4.2_advanced_middleware_api-antigravity/docker-compose.yml)
+
 - Add CouchDB service
 - Configure persistent volume
 - Set up admin credentials
@@ -59,6 +62,7 @@ couchdb:
 ### 1.2 Python Client
 
 #### [NEW] [middleware/shared/src/middleware/shared/couchdb_client.py](file:///workspaces/m4.2_advanced_middleware_api-antigravity/middleware/shared/src/middleware/shared/couchdb_client.py)
+
 - Async CouchDB wrapper using `aiocouch`
 - Connection pooling
 - Error handling
@@ -67,6 +71,7 @@ couchdb:
 ### 1.3 Document Schemas
 
 #### [NEW] [middleware/shared/src/middleware/shared/schemas/](file:///workspaces/m4.2_advanced_middleware_api-antigravity/middleware/shared/src/middleware/shared/schemas/)
+
 - `arc_document.py` - ARC storage schema
 - `harvest_document.py` - Harvest-run schema
 - `event_types.py` - Event-log enum and models
@@ -91,6 +96,7 @@ GET    /v3/harvests/{harvest_id}/arcs      # List ARCs in harvest
 ```
 
 **Request/Response Models:**
+
 - `CreateHarvestRequest` - RDI, source, config
 - `HarvestResponse` - harvest_id, status, statistics
 - `CompleteHarvestRequest` - statistics
@@ -112,6 +118,7 @@ GET    /v3/arcs/{arc_id}/content          # Get ARC RO-Crate only
 ```
 
 **Request/Response Models:**
+
 - `CreateArcRequest` - rdi, arc (RO-Crate JSON)
 - `ArcResponse` - arc_id, status, metadata, events (summary)
 - `ArcEventResponse` - full event-log
@@ -120,6 +127,7 @@ GET    /v3/arcs/{arc_id}/content          # Get ARC RO-Crate only
 ### 2.3 Model Updates
 
 #### [MODIFY] [middleware/shared/src/middleware/shared/api_models/models.py](file:///workspaces/m4.2_advanced_middleware_api-antigravity/middleware/shared/src/middleware/shared/api_models/models.py)
+
 - Add v3 request/response models
 - Add `ArcEventType` enum
 - Add `ArcLifecycleStatus` enum
@@ -134,6 +142,7 @@ GET    /v3/arcs/{arc_id}/content          # Get ARC RO-Crate only
 #### [NEW] [middleware/api/src/middleware/api/services/arc_storage.py](file:///workspaces/m4.2_advanced_middleware_api-antigravity/middleware/api/src/middleware/api/services/arc_storage.py)
 
 **Core Functions:**
+
 ```python
 async def store_arc(rdi: str, arc_data: dict, harvest_id: str | None) -> ArcStoreResult:
     # 1. Calculate ARC ID (existing logic)
@@ -156,6 +165,7 @@ async def add_event(arc_id: str, event_type: ArcEventType, **kwargs):
 ```
 
 **Event Types:**
+
 - `ARC_CREATED`, `ARC_UPDATED`, `ARC_NOT_SEEN`
 - `ARC_MARKED_MISSING`, `ARC_MARKED_DELETED`, `ARC_RESTORED`
 - `GIT_QUEUED`, `GIT_PROCESSING`, `GIT_PUSH_SUCCESS`, `GIT_PUSH_FAILED`
@@ -192,6 +202,7 @@ async def detect_missing_arcs(harvest_id: str, rdi: str):
 ```
 
 **Grace Period Logic:**
+
 - First time not seen: status → `MISSING`
 - Beyond grace period: status → `DELETED`
 - If reappears: status → `ACTIVE`, add `ARC_RESTORED` event
@@ -205,6 +216,7 @@ async def detect_missing_arcs(harvest_id: str, rdi: str):
 #### [MODIFY] [middleware/worker/src/middleware/worker/worker.py](file:///workspaces/m4.2_advanced_middleware_api-antigravity/middleware/worker/src/middleware/worker/worker.py)
 
 **Changes:**
+
 - **Remove Redis** dependencies
 - **Read ARC** from CouchDB (not from RabbitMQ message)
 - **Update status** in CouchDB via events
@@ -212,12 +224,14 @@ async def detect_missing_arcs(harvest_id: str, rdi: str):
 - **Git operations**: Add events for push success/failure
 
 **Message Structure (RabbitMQ):**
+
 ```python
 {
     "arc_id": "xyz123",
     "operation": "git_push|git_delete"
 }
 ```
+
 Worker fetches full ARC from CouchDB using arc_id.
 
 ---
@@ -226,7 +240,8 @@ Worker fetches full ARC from CouchDB using arc_id.
 
 ### 6.1 Remove Dependencies
 
-#### [MODIFY] Files to update:
+#### [MODIFY] Files to update
+
 - [docker-compose.yml](file:///workspaces/m4.2_advanced_middleware_api-antigravity/docker-compose.yml) - Remove Redis service
 - [middleware/api/pyproject.toml](file:///workspaces/m4.2_advanced_middleware_api-antigravity/middleware/api/pyproject.toml) - Remove redis dependencies
 - [middleware/worker/pyproject.toml](file:///workspaces/m4.2_advanced_middleware_api-antigravity/middleware/worker/pyproject.toml) - Remove redis dependencies
@@ -234,6 +249,7 @@ Worker fetches full ARC from CouchDB using arc_id.
 ### 6.2 API Cleanup
 
 #### [MODIFY] [middleware/api/src/middleware/api/api.py](file:///workspaces/m4.2_advanced_middleware_api-antigravity/middleware/api/src/middleware/api/api.py)
+
 - Remove Redis health check
 - Remove Redis connection initialization
 - Update v1/v2 endpoints to use CouchDB for task status
@@ -243,6 +259,7 @@ Worker fetches full ARC from CouchDB using arc_id.
 ## Database Schemas (CouchDB)
 
 ### ARC Document
+
 ```json
 {
   "_id": "arc_<hash>",
@@ -274,6 +291,7 @@ Worker fetches full ARC from CouchDB using arc_id.
 ```
 
 ### Harvest Document
+
 ```json
 {
   "_id": "harvest-2026-02-04-030000-fairagro",
@@ -302,18 +320,21 @@ Worker fetches full ARC from CouchDB using arc_id.
 ## Testing Strategy
 
 ### Unit Tests
+
 - ARC hash calculation
 - Change detection logic
 - Event-log appending
 - Harvest completion logic
 
 ### Integration Tests
+
 - Full harvest workflow
 - Direct ARC upload
 - Deletion detection (with time mocking)
 - Event-log retrieval
 
 ### API Tests
+
 - All v3 endpoints
 - RESTful verb semantics
 - Error handling (404, 409, 422)
@@ -323,11 +344,13 @@ Worker fetches full ARC from CouchDB using arc_id.
 ## Migration Path
 
 ### Backward Compatibility
+
 - **Keep v1/v2 endpoints** temporarily
 - Map v1/v2 to CouchDB backend
 - Deprecation notice in responses
 
 ### Deployment Steps
+
 1. Deploy CouchDB alongside existing system
 2. Deploy v3 API (new endpoints)
 3. Migrate harvest clients to v3
@@ -362,6 +385,7 @@ Worker fetches full ARC from CouchDB using arc_id.
 Each step can be deployed **independently** and provides value on its own.
 
 ### **Step 1: CouchDB Foundation** (Week 1)
+
 **Goal**: Add CouchDB infrastructure without changing API behavior
 
 - Add CouchDB to Docker Compose
@@ -375,9 +399,11 @@ Each step can be deployed **independently** and provides value on its own.
 ---
 
 ### **Step 2: Basic ARC Storage** (Week 2)
+
 **Goal**: Store ARCs in CouchDB while keeping existing API
 
 **Changes:**
+
 - v1/v2 endpoints write to **both** Redis and CouchDB
 - Read still from Redis (no behavior change)
 - Add basic change detection (hash comparison)
@@ -388,16 +414,19 @@ Each step can be deployed **independently** and provides value on its own.
 ---
 
 ### **Step 3: Direct ARC Upload (v3)** (Week 3)
+
 **Goal**: Introduce `/v3/arcs` endpoint for direct uploads
 
 **New Endpoints:**
-```
+
+```text
 POST   /v3/arcs              # Direct upload (no harvest context)
 GET    /v3/arcs/{arc_id}     # Get ARC details
 GET    /v3/arcs              # List ARCs
 ```
 
 **Features:**
+
 - Change detection (skip git if unchanged)
 - Event-log with configurable limit
 - Only trigger git workflow if new/changed
@@ -407,10 +436,12 @@ GET    /v3/arcs              # List ARCs
 ---
 
 ### **Step 4: Harvest Endpoints (v3)** (Week 4)
+
 **Goal**: Add harvest-run management
 
 **New Endpoints:**
-```
+
+```text
 POST   /v3/harvests                      # Start harvest
 POST   /v3/harvests/{harvest_id}/arcs    # Upload in harvest context
 PATCH  /v3/harvests/{harvest_id}         # Complete harvest
@@ -418,6 +449,7 @@ GET    /v3/harvests/{harvest_id}         # Get harvest details
 ```
 
 **Features:**
+
 - Harvest document creation
 - Track ARCs per harvest-run
 - Basic statistics
@@ -427,9 +459,11 @@ GET    /v3/harvests/{harvest_id}         # Get harvest details
 ---
 
 ### **Step 5: Deletion Detection** (Week 5)
+
 **Goal**: Implement missing/deleted ARC detection
 
 **Changes:**
+
 - Add deletion detection on harvest completion
 - Grace period logic (configurable, default 3 days)
 - Soft-delete (status flag)
@@ -440,9 +474,11 @@ GET    /v3/harvests/{harvest_id}         # Get harvest details
 ---
 
 ### **Step 6: Worker Updates** (Week 6)
+
 **Goal**: Worker reads from CouchDB and updates event-log
 
 **Changes:**
+
 - Worker fetches ARC content from CouchDB (not RabbitMQ message)
 - Worker adds events: `GIT_QUEUED`, `GIT_PUSH_SUCCESS`, `GIT_PUSH_FAILED`
 - Worker updates git metadata in CouchDB
@@ -453,10 +489,12 @@ GET    /v3/harvests/{harvest_id}         # Get harvest details
 ---
 
 ### **Step 7: Additional v3 Endpoints** (Week 7)
+
 **Goal**: Complete v3 API surface
 
 **New Endpoints:**
-```
+
+```text
 GET    /v3/arcs/{arc_id}/events      # Event-log
 POST   /v3/arcs/{arc_id}/events      # Operator notes
 PATCH  /v3/arcs/{arc_id}             # Update metadata
@@ -468,9 +506,11 @@ DELETE /v3/arcs/{arc_id}             # Manual soft-delete
 ---
 
 ### **Step 8: Redis Removal** (Week 8)
+
 **Goal**: Remove Redis completely
 
 **Changes:**
+
 - v1/v2 endpoints read task status from CouchDB
 - Remove Redis from Docker Compose
 - Remove redis client dependencies
@@ -481,6 +521,7 @@ DELETE /v3/arcs/{arc_id}             # Manual soft-delete
 ---
 
 ### **Step 9: v1/v2 Deprecation** (Future)
+
 **Goal**: Migrate all clients to v3
 
 - Add deprecation warnings to v1/v2 responses
@@ -492,6 +533,7 @@ DELETE /v3/arcs/{arc_id}             # Manual soft-delete
 ## Testing Strategy Per Step
 
 Each step includes:
+
 - **Unit tests** for new functionality
 - **Integration tests** for new endpoints
 - **Backward compatibility tests** to ensure existing behavior unchanged
@@ -501,6 +543,7 @@ Each step includes:
 ## Rollback Strategy
 
 Each step can be rolled back independently:
+
 - **Steps 1-2**: No API changes, just remove CouchDB
 - **Steps 3-7**: v3 endpoints can be disabled via feature flag
 - **Step 8**: Keep Redis in Docker Compose until confident
@@ -510,9 +553,11 @@ Each step can be rolled back independently:
 ## Dependencies
 
 ### New Python Packages
+
 - `aiocouch` - Async CouchDB client
 - Remove (Step 8): `redis`, `aioredis`
 
 ### Docker Services
+
 - Add (Step 1): CouchDB 3.3
 - Remove (Step 8): Redis

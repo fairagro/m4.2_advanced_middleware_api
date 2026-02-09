@@ -7,6 +7,8 @@ from abc import ABC, abstractmethod
 from arctrl import ARC  # type: ignore[import-untyped]
 from opentelemetry import trace
 
+from middleware.api.utils import calculate_arc_id
+
 logger = logging.getLogger(__name__)
 
 
@@ -26,8 +28,7 @@ class ArcStore(ABC):
 
     def arc_id(self, identifier: str, rdi: str) -> str:
         """Generate ARC ID."""
-        input_str = f"{identifier}:{rdi}"
-        return hashlib.sha256(input_str.encode("utf-8")).hexdigest()
+        return calculate_arc_id(identifier, rdi)
 
     @abstractmethod
     async def _create_or_update(self, arc_id: str, arc: ARC) -> None:

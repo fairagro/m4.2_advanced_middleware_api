@@ -2,6 +2,7 @@
 
 import http
 import unittest.mock
+import uuid
 from collections.abc import Callable
 from unittest.mock import AsyncMock, MagicMock
 
@@ -12,7 +13,12 @@ from cryptography import x509
 from fastapi.testclient import TestClient
 
 from middleware.api.api import Api
-from middleware.shared.api_models.models import ArcTaskTicket
+from middleware.shared.api_models.models import (
+    ArcOperationResult,
+    ArcResponse,
+    ArcStatus,
+    ArcTaskTicket,
+)
 
 
 def test_whoami_success(client: TestClient, middleware_api: Api, cert: str) -> None:
@@ -185,25 +191,32 @@ def test_create_or_update_arcs_success(
 ) -> None:
     """Test creating a new ARC via the /v1/arcs endpoint."""
     # Mock the BusinessLogic response
-    mock_ticket = ArcTaskTicket(rdi="rdi-1", task_id="task-123")
+    mock_result = ArcOperationResult(
+        rdi="rdi-1",
+        client_id="test-client",
+        message="ok",
+        arc=ArcResponse(id="arc-1", status=ArcStatus.CREATED, timestamp="2024-01-01T00:00:00Z"),
+    )
 
     with unittest.mock.patch.object(
         middleware_api.business_logic, "create_or_update_arc", new_callable=unittest.mock.AsyncMock
     ) as mock_create:
-        mock_create.return_value = mock_ticket
+        mock_create.return_value = mock_result
 
-        r = client.post(
-            "/v1/arcs",
-            headers={
-                "ssl-client-cert": cert,
-                "ssl-client-verify": "SUCCESS",
-                "content-type": "application/json",
-                "accept": "application/json",
-            },
-            json={"rdi": "rdi-1", "arcs": [{"dummy": "crate"}]},
-        )
+        # Mock uuid to get predictable task_id
+        with unittest.mock.patch("middleware.api.api.uuid.uuid4", return_value=uuid.UUID("12345678-1234-5678-1234-567812345678")):
+            r = client.post(
+                "/v1/arcs",
+                headers={
+                    "ssl-client-cert": cert,
+                    "ssl-client-verify": "SUCCESS",
+                    "content-type": "application/json",
+                    "accept": "application/json",
+                },
+                json={"rdi": "rdi-1", "arcs": [{"dummy": "crate"}]},
+            )
         assert r.status_code == expected_http_status
-        assert r.json()["task_id"] == "task-123"
+        assert r.json()["task_id"] == "12345678-1234-5678-1234-567812345678"
 
 
 def test_create_or_update_arcs_invalid_cert_format(client: TestClient) -> None:
@@ -231,23 +244,31 @@ def test_create_or_update_arcs_no_cert_allowed(client: TestClient, middleware_ap
     # Needs to be known RDI
     middleware_api._config.known_rdis = ["rdi-1"]
 
-    mock_task_ticket = ArcTaskTicket(rdi="rdi-1", task_id="task-no-cert")
+    mock_result = ArcOperationResult(
+        rdi="rdi-1",
+        client_id="unknown",
+        message="ok",
+        arc=ArcResponse(id="arc-1", status=ArcStatus.CREATED, timestamp="2024-01-01T00:00:00Z"),
+    )
 
     with unittest.mock.patch.object(
         middleware_api.business_logic, "create_or_update_arc", new_callable=unittest.mock.AsyncMock
     ) as mock_create:
-        mock_create.return_value = mock_task_ticket
-        r = client.post(
-            "/v1/arcs",
-            headers={
-                "content-type": "application/json",
-                "accept": "application/json",
-            },
-            json={"rdi": "rdi-1", "arcs": [{"dummy": "crate"}]},
-        )
+        mock_create.return_value = mock_result
+        
+        # Mock uuid to get predictable task_id
+        with unittest.mock.patch("middleware.api.api.uuid.uuid4", return_value=uuid.UUID("12345678-1234-5678-1234-567812345678")):
+            r = client.post(
+                "/v1/arcs",
+                headers={
+                    "content-type": "application/json",
+                    "accept": "application/json",
+                },
+                json={"rdi": "rdi-1", "arcs": [{"dummy": "crate"}]},
+            )
         assert r.status_code == http.HTTPStatus.ACCEPTED
         body = r.json()
-        assert body["task_id"] == "task-no-cert"
+        assert body["task_id"] == "12345678-1234-5678-1234-567812345678"
 
     # Reset config
     middleware_api._config.require_client_cert = True

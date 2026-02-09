@@ -8,6 +8,7 @@ and content type validation.
 import logging
 import os
 import sys
+import uuid
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 from pathlib import Path
@@ -141,8 +142,8 @@ class Api:
         self._tracer_provider: TracerProvider | None = None
         self._logger_provider: LoggerProvider | None = None
 
-        # Initialize BusinessLogic via Factory (Dispatcher mode)
-        self.business_logic = BusinessLogicFactory.create(self._config, mode="dispatcher")
+        # Initialize BusinessLogic via Factory (API mode)
+        self.business_logic = BusinessLogicFactory.create(self._config, mode="api")
 
         logger.debug("API configuration: %s", self._config.model_dump())
 
@@ -538,13 +539,22 @@ class Api:
 
             result = await self.business_logic.create_or_update_arc(rdi, arc_data, client_id)
 
-            # Use task_id from result - we expect an ArcTaskTicket in this context
-            if not isinstance(result, ArcTaskTicket):
-                raise RuntimeError(f"Expected ArcTaskTicket from BusinessLogic, got {type(result)}")
+            # Generate task_id for the completed operation
+            task_id = str(uuid.uuid4())
 
-            task_id = result.task_id
+            # Store result in Celery backend so it can be retrieved via GET /tasks/{task_id}
+            # We must serialize the result as a dict
+            if isinstance(result, ArcOperationResult):
+                celery_app.backend.store_result(
+                    task_id,
+                    result=result.model_dump(),
+                    state="SUCCESS",
+                )
+            else:
+                logger.error("Unexpected result type from BusinessLogic: %s", type(result))
+                raise RuntimeError("Unexpected result type from BusinessLogic")
 
-            logger.info("Enqueued task %s for ARC processing via BusinessLogic", task_id)
+            logger.info("Processed ARC synchronously (simulated task_id=%s)", task_id)
 
             return CreateOrUpdateArcsResponse(task_id=task_id, status="processing")
 
@@ -570,17 +580,26 @@ class Api:
 
             result = await self.business_logic.create_or_update_arc(rdi, request_body.arc, client_id)
 
-            # Use task_id from result - we expect an ArcTaskTicket in this context
-            if not isinstance(result, ArcTaskTicket):
-                raise RuntimeError(f"Expected ArcTaskTicket from BusinessLogic, got {type(result)}")
+            # Generate task_id for the completed operation
+            task_id = str(uuid.uuid4())
 
-            task_id = result.task_id
+            # Store result in Celery backend
+            if isinstance(result, ArcOperationResult):
+                celery_app.backend.store_result(
+                    task_id,
+                    result=result.model_dump(),
+                    state="SUCCESS",
+                )
+            else:
+                logger.error("Unexpected result type from BusinessLogic: %s", type(result))
+                raise RuntimeError("Unexpected result type from BusinessLogic")
 
-            logger.info("Enqueued task %s for ARC processing via BusinessLogic", task_id)
+            logger.info("Processed ARC synchronously (simulated task_id=%s)", task_id)
 
+            # Return success immediately (but user may still poll)
             return CreateOrUpdateArcResponse(
                 task_id=task_id,
-                status=TaskStatus.PENDING,
+                status=TaskStatus.SUCCESS,
             )
 
     def _setup_task_status_route(self) -> None:

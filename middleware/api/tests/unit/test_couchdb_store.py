@@ -59,7 +59,7 @@ async def test_store_arc_new(store: CouchDB, mock_client_instance: MagicMock) ->
     # Verify
     assert result.is_new is True
     assert result.has_changes is True
-    assert result.should_trigger_git is True
+    assert result.has_changes is True
 
     # Check save called
     mock_client_instance.save_document.assert_called_once()
@@ -163,7 +163,7 @@ async def test_store_arc_update_changed(store: CouchDB, mock_client_instance: Ma
     # Verify
     assert result.is_new is False
     assert result.has_changes is True
-    assert result.should_trigger_git is True
+    assert result.has_changes is True
 
     mock_client_instance.save_document.assert_called_once()
     args, _ = mock_client_instance.save_document.call_args
@@ -208,7 +208,7 @@ async def test_store_arc_no_change(store: CouchDB, mock_client_instance: MagicMo
     # Verify
     assert result.is_new is False
     assert result.has_changes is False
-    assert result.should_trigger_git is False
+    assert result.has_changes is False
 
     # Should still save to update last_seen
     mock_client_instance.save_document.assert_called_once()

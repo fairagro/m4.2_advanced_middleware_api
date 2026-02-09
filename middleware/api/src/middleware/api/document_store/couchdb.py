@@ -162,7 +162,7 @@ class CouchDB(DocumentStore):
         await self._client.save_document(doc_id, doc_data)
 
         return ArcStoreResult(
-            arc_id=arc_id, is_new=is_new, has_changes=has_changes, should_trigger_git=should_trigger_git
+            arc_id=arc_id, is_new=is_new, has_changes=has_changes
         )
 
     async def get_arc_content(self, arc_id: str) -> dict[str, Any] | None:
