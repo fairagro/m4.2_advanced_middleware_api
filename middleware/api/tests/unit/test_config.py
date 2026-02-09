@@ -30,6 +30,7 @@ def test_config_validate_known_rdis_valid(tmp_path: Path) -> None:
     config_data = {
         "known_rdis": ["valid-rdi", "rdi.123", "under_score"],
         "git_repo": _git_repo(tmp_path),
+        "couchdb": {"url": "http://localhost:5984"},
         "celery": {"broker_url": "memory://", "result_backend": "cache+memory://"},
     }
     config = Config.model_validate(config_data)
@@ -41,6 +42,7 @@ def test_config_validate_known_rdis_invalid(tmp_path: Path) -> None:
     config_data = {
         "known_rdis": ["invalid rdi"],  # space not allowed
         "git_repo": _git_repo(tmp_path),
+        "couchdb": {"url": "http://localhost:5984"},
         "celery": {"broker_url": "memory://", "result_backend": "cache+memory://"},
     }
     with pytest.raises(ValidationError) as exc:
@@ -54,6 +56,7 @@ def test_config_parse_client_auth_oid_str(tmp_path: Path) -> None:
     config_data = {
         "client_auth_oid": oid_str,
         "git_repo": _git_repo(tmp_path),
+        "couchdb": {"url": "http://localhost:5984"},
         "celery": {"broker_url": "memory://", "result_backend": "cache+memory://"},
     }
     config = Config.model_validate(config_data)
@@ -67,6 +70,7 @@ def test_config_parse_client_auth_oid_obj(tmp_path: Path) -> None:
     config_data = {
         "client_auth_oid": oid,
         "git_repo": _git_repo(tmp_path),
+        "couchdb": {"url": "http://localhost:5984"},
         "celery": {"broker_url": "memory://", "result_backend": "cache+memory://"},
     }
     config = Config.model_validate(config_data)
@@ -78,6 +82,7 @@ def test_config_parse_client_auth_oid_invalid_type(tmp_path: Path) -> None:
     config_data = {
         "client_auth_oid": 1234,
         "git_repo": _git_repo(tmp_path),
+        "couchdb": {"url": "http://localhost:5984"},
         "celery": {"broker_url": "memory://", "result_backend": "cache+memory://"},
     }
     with pytest.raises(TypeError) as exc:
@@ -88,6 +93,7 @@ def test_config_parse_client_auth_oid_invalid_type(tmp_path: Path) -> None:
 def test_config_mutual_exclusivity_none() -> None:
     """Test failure when neither backend is configured."""
     config_data: dict[str, Any] = {
+        "couchdb": {"url": "http://localhost:5984"},
         "celery": {"broker_url": "memory://", "result_backend": "cache+memory://"},
     }
     with pytest.raises(ValidationError) as exc:
@@ -100,6 +106,7 @@ def test_config_mutual_exclusivity_both(tmp_path: Path) -> None:
     config_data = {
         "git_repo": _git_repo(tmp_path),
         "gitlab_api": {"url": "https://gitlab.com", "token": "t", "group": "g", "branch": "b"},
+        "couchdb": {"url": "http://localhost:5984"},
         "celery": {"broker_url": "memory://", "result_backend": "cache+memory://"},
     }
     with pytest.raises(ValidationError) as exc:
@@ -123,6 +130,8 @@ def test_config_from_yaml_file_success(tmp_path: Path) -> None:
           url: {tmp_path.as_uri()}
           group: my-group
           path: {tmp_path}
+        couchdb:
+          url: http://localhost:5984
         celery:
           broker_url: memory://
           result_backend: cache+memory://

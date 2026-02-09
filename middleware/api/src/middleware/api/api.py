@@ -75,6 +75,9 @@ if "pytest" in sys.modules:
                 "broker_url": "memory://",
                 "result_backend": "cache+memory://",
             },
+            "couchdb": {
+                "url": "http://localhost:5984",
+            },
             "gitlab_api": {
                 "url": "https://localhost/",
                 "branch": "dummy",
