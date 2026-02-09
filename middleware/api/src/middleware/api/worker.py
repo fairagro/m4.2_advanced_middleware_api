@@ -24,14 +24,9 @@ class BusinessLogicManager:
     _business_logic: BusinessLogic | None = None
 
     @classmethod
-    def get_business_logic(cls) -> BusinessLogic | None:
+    def get_business_logic(cls) -> BusinessLogic:
         """Get or initialize the BusinessLogic instance for the worker."""
         if cls._business_logic is None:
-            if loaded_config is None:
-                # This should only happen in tests without real config
-                logger.warning("Worker started without loaded_config")
-                return None
-
             cls._business_logic = BusinessLogicFactory.create(loaded_config, mode="worker")
             logger.info("BusinessLogic initialized for worker")
 
@@ -52,11 +47,6 @@ def sync_arc_to_gitlab(rdi: str, arc_data: dict[str, Any]) -> dict[str, Any]:
     Returns:
         Task result as dictionary.
     """
-    logic = BusinessLogicManager.get_business_logic()
-    if logic is None:
-        logger.error("BusinessLogic not initialized")
-        raise RuntimeError("BusinessLogic not initialized")
-
     logger.info("Starting GitLab sync task for RDI %s", rdi)
 
     try:
@@ -64,11 +54,10 @@ def sync_arc_to_gitlab(rdi: str, arc_data: dict[str, Any]) -> dict[str, Any]:
         asyncio.set_event_loop(loop)
 
         async def _run_sync() -> None:
-            if logic is not None:
-                async with logic:
-                    await logic.sync_to_gitlab(rdi, arc_data)
-            else:
-                raise RuntimeError("BusinessLogic became None during execution")
+            logic: BusinessLogic = BusinessLogicManager.get_business_logic()
+            # pylint: disable=not-async-context-manager
+            async with logic:
+                await logic.sync_to_gitlab(rdi, arc_data)
 
         loop.run_until_complete(_run_sync())
         loop.close()

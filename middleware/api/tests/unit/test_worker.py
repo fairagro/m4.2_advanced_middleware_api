@@ -53,6 +53,6 @@ def test_sync_arc_to_gitlab_no_business_logic() -> None:
     """Test task fails when business_logic is not initialized."""
     with (
         patch("middleware.api.worker.BusinessLogicManager.get_business_logic", return_value=None),
-        pytest.raises(RuntimeError, match="BusinessLogic not initialized"),
+        pytest.raises(TypeError, match="'NoneType' object does not support the asynchronous context manager protocol"),
     ):
         sync_arc_to_gitlab.apply(args=("test-rdi", {"dummy": "data"})).get()
