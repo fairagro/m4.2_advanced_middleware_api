@@ -1,6 +1,5 @@
 """Contains the ArcStore interface and its implementations."""
 
-import hashlib
 import logging
 from abc import ABC, abstractmethod
 

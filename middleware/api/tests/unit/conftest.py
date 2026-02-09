@@ -103,7 +103,7 @@ def service() -> BusinessLogic:
     store.get = AsyncMock(return_value=None)
     store.delete = AsyncMock()
     store.create_or_update = AsyncMock()
-    
+
     doc_store = MagicMock()
     doc_store.store_arc = AsyncMock()
     doc_store.health_check = AsyncMock(return_value=True)

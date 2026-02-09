@@ -13,16 +13,15 @@ from typing import Any, Protocol, runtime_checkable
 from arctrl import ARC  # type: ignore[import-untyped]
 from opentelemetry import trace
 
+from middleware.api.utils import calculate_arc_id
 from middleware.shared.api_models.models import (
     ArcOperationResult,
     ArcResponse,
     ArcStatus,
-    ArcTaskTicket,
 )
 
 from .arc_store import ArcStore
 from .document_store import DocumentStore
-from middleware.api.utils import calculate_arc_id
 
 logger = logging.getLogger(__name__)
 
@@ -115,9 +114,7 @@ class BusinessLogic:
         """Exit async context."""
         await self.close()
 
-    async def create_or_update_arc(
-        self, rdi: str, arc: dict[str, Any], client_id: str
-    ) -> ArcOperationResult:
+    async def create_or_update_arc(self, rdi: str, arc: dict[str, Any], client_id: str) -> ArcOperationResult:
         """Create or update an ARC with fast CouchDB storage and async GitLab sync.
 
         This method performs fast CouchDB storage and enqueues GitLab sync.
@@ -145,18 +142,14 @@ class BusinessLogic:
         ) as span:
             logger.info("Starting ARC creation/update: rdi=%s, client_id=%s", rdi, client_id)
             try:
-                with self._tracer.start_as_current_span(
-                    "api.BusinessLogic.create_or_update_arc:json_serialize"
-                ):
+                with self._tracer.start_as_current_span("api.BusinessLogic.create_or_update_arc:json_serialize"):
                     arc_json = json.dumps(arc)
 
-                with self._tracer.start_as_current_span(
-                    "api.BusinessLogic.create_or_update_arc:arc_parse_rocrate"
-                ):
-                try:
-                    arc_obj = ARC.from_rocrate_json_string(arc_json)
-                except Exception as exc:
-                    raise InvalidJsonSemanticError(f"Failed to parse RO-Crate JSON: {str(exc)}") from exc
+                with self._tracer.start_as_current_span("api.BusinessLogic.create_or_update_arc:arc_parse_rocrate"):
+                    try:
+                        arc_obj = ARC.from_rocrate_json_string(arc_json)
+                    except Exception as exc:
+                        raise InvalidJsonSemanticError(f"Failed to parse RO-Crate JSON: {str(exc)}") from exc
 
                 identifier = getattr(arc_obj, "Identifier", None)
                 if not identifier or identifier == "":

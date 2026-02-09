@@ -28,7 +28,6 @@ from pydantic import ValidationError
 
 from middleware.shared.api_models.models import (
     ArcOperationResult,
-    ArcTaskTicket,
     CreateOrUpdateArcRequest,
     CreateOrUpdateArcResponse,
     CreateOrUpdateArcsRequest,

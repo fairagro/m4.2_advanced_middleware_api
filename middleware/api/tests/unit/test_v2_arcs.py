@@ -7,7 +7,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from middleware.api.api import Api
-from middleware.shared.api_models.models import ArcTaskTicket, TaskStatus
+from middleware.shared.api_models.models import ArcOperationResult, ArcResponse, ArcStatus, TaskStatus
 
 
 @pytest.mark.unit
@@ -22,7 +22,15 @@ def test_create_or_update_arc_success(
 ) -> None:
     """Test creating a new ARC via the /v2/arcs endpoint."""
     # Mock the BusinessLogic response
-    mock_ticket = ArcTaskTicket(rdi="rdi-1", task_id="task-123")
+    mock_result = ArcOperationResult(
+        client_id="test-client-cn",
+        rdi="rdi-1",
+        arc=ArcResponse(
+            id="arc-123",
+            status=ArcStatus.CREATED,
+            timestamp="2024-01-01T00:00:00Z",
+        ),
+    )
 
     rocrate = {
         "@context": "https://w3id.org/ro/crate/1.1/context",
@@ -42,8 +50,12 @@ def test_create_or_update_arc_success(
         ],
     }
 
-    with patch.object(middleware_api.business_logic, "create_or_update_arc", new_callable=AsyncMock) as mock_create:
-        mock_create.return_value = mock_ticket
+    with (
+        patch.object(middleware_api.business_logic, "create_or_update_arc", new_callable=AsyncMock) as mock_create,
+        patch("middleware.api.api.uuid.uuid4") as mock_uuid,
+    ):
+        mock_create.return_value = mock_result
+        mock_uuid.return_value = "task-123"
 
         r = client.post(
             "/v2/arcs",
@@ -58,7 +70,7 @@ def test_create_or_update_arc_success(
         assert r.status_code == expected_http_status
         body = r.json()
         assert body["task_id"] == "task-123"
-        assert body["status"] == TaskStatus.PENDING
+        assert body["status"] == TaskStatus.SUCCESS
 
 
 @pytest.mark.unit

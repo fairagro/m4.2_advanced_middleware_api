@@ -4,11 +4,9 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-
 from middleware.api.business_logic import BusinessLogic, BusinessLogicError
-from middleware.api.business_logic_factory import BusinessLogicFactory
-from middleware.shared.api_models.models import ArcOperationResult, ArcStatus
 from middleware.api.document_store import ArcStoreResult
+from middleware.shared.api_models.models import ArcOperationResult, ArcStatus
 
 
 @pytest.fixture
@@ -60,16 +58,14 @@ async def test_api_mode_create_or_update_success(
     client_id = "test-client"
 
     # Mock doc_store result
-    mock_doc_store.store_arc.return_value = ArcStoreResult(
-        arc_id="arc_id", is_new=True, has_changes=True
-    )
+    mock_doc_store.store_arc.return_value = ArcStoreResult(arc_id="arc_id", is_new=True, has_changes=True)
 
     # Mock ARC
     with patch("middleware.api.business_logic.ARC") as mock_arc_class:
         mock_arc_instance = MagicMock()
         mock_arc_instance.Identifier = "ABC"
         mock_arc_class.from_rocrate_json_string.return_value = mock_arc_instance
-        
+
         with patch("middleware.api.business_logic.calculate_arc_id", return_value="arc_id"):
             result = await api_logic.create_or_update_arc(rdi, arc_data, client_id)
 
@@ -90,9 +86,7 @@ async def test_api_mode_sync_to_gitlab_forbidden(api_logic: BusinessLogic) -> No
 
 
 @pytest.mark.asyncio
-async def test_worker_mode_sync_to_gitlab_success(
-    worker_logic: BusinessLogic, mock_store: MagicMock
-) -> None:
+async def test_worker_mode_sync_to_gitlab_success(worker_logic: BusinessLogic, mock_store: MagicMock) -> None:
     """Test sync_to_gitlab in Worker mode."""
     rdi = "test-rdi"
     arc_data = {"@graph": [{"@id": "./", "identifier": "ABC"}]}
@@ -125,9 +119,7 @@ async def test_api_mode_skips_sync_if_no_changes(
     api_logic: BusinessLogic, mock_doc_store: MagicMock, mock_task_sender: MagicMock
 ) -> None:
     """Test that GitLab sync is skipped if no changes."""
-    mock_doc_store.store_arc.return_value = ArcStoreResult(
-        arc_id="arc_id", is_new=False, has_changes=False
-    )
+    mock_doc_store.store_arc.return_value = ArcStoreResult(arc_id="arc_id", is_new=False, has_changes=False)
 
     rdi = "test-rdi"
     arc_data = {"@graph": [{"@id": "./", "identifier": "ABC"}]}
@@ -150,16 +142,17 @@ def test_factory_create_api_mode() -> None:
     config.gitlab_api = MagicMock()
     config.couchdb = MagicMock()
 
-    with patch("middleware.api.business_logic_factory.CouchDB"), \
-         patch("middleware.api.business_logic_factory.GitlabApi"):
-        # We need to mock the import of worker inside create
-        with patch.dict("sys.modules", {"middleware.api.worker": MagicMock()}):
-             # Actually, simpler to verify the result has a task sender
-             # But the factory does a local import.
-             # We can't easily patch local import without deeper magic or refactoring
-             # For now, let's assume it works if we mock the module it imports?
-             pass
-    
+    with (
+        patch("middleware.api.business_logic_factory.CouchDB"),
+        patch("middleware.api.business_logic_factory.GitlabApi"),
+        patch.dict("sys.modules", {"middleware.api.worker": MagicMock()}),
+    ):
+        # Actually, simpler to verify the result has a task sender
+        # But the factory does a local import.
+        # We can't easily patch local import without deeper magic or refactoring
+        # For now, let's assume it works if we mock the module it imports?
+        pass
+
     # Since patching local import is hard, let's just create it and see if it fails
     # if worker module is not found. But we are in tests.
     pass

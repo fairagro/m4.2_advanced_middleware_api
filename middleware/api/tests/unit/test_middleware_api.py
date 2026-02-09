@@ -17,7 +17,6 @@ from middleware.shared.api_models.models import (
     ArcOperationResult,
     ArcResponse,
     ArcStatus,
-    ArcTaskTicket,
 )
 
 
@@ -204,7 +203,9 @@ def test_create_or_update_arcs_success(
         mock_create.return_value = mock_result
 
         # Mock uuid to get predictable task_id
-        with unittest.mock.patch("middleware.api.api.uuid.uuid4", return_value=uuid.UUID("12345678-1234-5678-1234-567812345678")):
+        with unittest.mock.patch(
+            "middleware.api.api.uuid.uuid4", return_value=uuid.UUID("12345678-1234-5678-1234-567812345678")
+        ):
             r = client.post(
                 "/v1/arcs",
                 headers={
@@ -255,9 +256,11 @@ def test_create_or_update_arcs_no_cert_allowed(client: TestClient, middleware_ap
         middleware_api.business_logic, "create_or_update_arc", new_callable=unittest.mock.AsyncMock
     ) as mock_create:
         mock_create.return_value = mock_result
-        
+
         # Mock uuid to get predictable task_id
-        with unittest.mock.patch("middleware.api.api.uuid.uuid4", return_value=uuid.UUID("12345678-1234-5678-1234-567812345678")):
+        with unittest.mock.patch(
+            "middleware.api.api.uuid.uuid4", return_value=uuid.UUID("12345678-1234-5678-1234-567812345678")
+        ):
             r = client.post(
                 "/v1/arcs",
                 headers={

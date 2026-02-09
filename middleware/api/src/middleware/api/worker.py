@@ -6,19 +6,16 @@ This module provides:
 
 import asyncio
 import logging
-from typing import Any, cast
+from typing import Any
 
 from middleware.api.celery_app import business_logic, celery_app
-from middleware.shared.api_models.models import ArcOperationResult, ArcTaskTicket
 
 # Initialize logger
 logger = logging.getLogger(__name__)
 
 
-@celery_app.task(name="sync_arc_to_gitlab", bind=True)
-def sync_arc_to_gitlab(
-    self: Any, rdi: str, arc_data: dict[str, Any]
-) -> dict[str, Any]:
+@celery_app.task(name="sync_arc_to_gitlab")
+def sync_arc_to_gitlab(rdi: str, arc_data: dict[str, Any]) -> dict[str, Any]:
     """Sync ARC to GitLab asynchronously.
 
     This task is responsible for the slow GitLab synchronization phase.

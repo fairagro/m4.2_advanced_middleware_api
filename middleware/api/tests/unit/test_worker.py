@@ -1,6 +1,5 @@
 """Unit tests for Celery worker tasks."""
 
-from typing import Any
 from unittest.mock import AsyncMock, patch
 
 import pytest
@@ -11,15 +10,15 @@ from middleware.api.worker import sync_arc_to_gitlab
 def test_sync_arc_to_gitlab_success() -> None:
     """Test successful task execution."""
     # Mock business logic result (sync_to_gitlab returns None)
-    
+
     # Mock the business_logic from celery_app
     with patch("middleware.api.worker.business_logic") as mock_bl:
         # Mock context manager
         mock_bl.__aenter__ = AsyncMock(return_value=mock_bl)
-        mock_bl.__aexit__ = AsyncMock()
-        
+        mock_bl.__aexit__ = AsyncMock(return_value=False)
+
         mock_bl.sync_to_gitlab = AsyncMock()
-        
+
         # Execute the task
         # Note: client_id is no longer passed to sync_arc_to_gitlab
         result = sync_arc_to_gitlab.apply(args=("test-rdi", {"dummy": "data"})).get()
@@ -28,7 +27,7 @@ def test_sync_arc_to_gitlab_success() -> None:
         assert result["status"] == "synced"
         assert result["message"] == "Successfully synced to GitLab"
         assert result["rdi"] == "test-rdi"
-        
+
         mock_bl.sync_to_gitlab.assert_called_once_with("test-rdi", {"dummy": "data"})
 
 
@@ -37,13 +36,10 @@ def test_sync_arc_to_gitlab_failure() -> None:
     with patch("middleware.api.worker.business_logic") as mock_bl:
         # Mock context manager
         mock_bl.__aenter__ = AsyncMock(return_value=mock_bl)
-        mock_bl.__aexit__ = AsyncMock()
+        mock_bl.__aexit__ = AsyncMock(return_value=False)
 
-        # Define the async return value that raises an exception
-        async def async_raise(*_args: Any, **_kwargs: Any) -> None:
-            raise ValueError("Processing failed")
-
-        mock_bl.sync_to_gitlab.side_effect = async_raise
+        # Set sync_to_gitlab as AsyncMock with side_effect
+        mock_bl.sync_to_gitlab = AsyncMock(side_effect=ValueError("Processing failed"))
 
         with pytest.raises(ValueError, match="Processing failed"):
             sync_arc_to_gitlab.apply(args=("test-rdi", {"dummy": "data"})).get()
@@ -51,6 +47,8 @@ def test_sync_arc_to_gitlab_failure() -> None:
 
 def test_sync_arc_to_gitlab_no_business_logic() -> None:
     """Test task fails when business_logic is not initialized."""
-    with patch("middleware.api.worker.business_logic", None):
-        with pytest.raises(RuntimeError, match="BusinessLogic not initialized"):
-            sync_arc_to_gitlab.apply(args=("test-rdi", {"dummy": "data"})).get()
+    with (
+        patch("middleware.api.worker.business_logic", None),
+        pytest.raises(RuntimeError, match="BusinessLogic not initialized"),
+    ):
+        sync_arc_to_gitlab.apply(args=("test-rdi", {"dummy": "data"})).get()
