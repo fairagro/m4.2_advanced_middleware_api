@@ -139,11 +139,13 @@ Compute CouchDB URL based on enabled CouchDB or provided override.
 */}}
 {{- define "fairagro-advanced-middleware-api-chart.couchdbUrl" -}}
 {{- $fullname := include "fairagro-advanced-middleware-api-chart.fullname" . -}}
-{{- $couchOverride := .Values.config.couchdb_url -}}
-{{- if .Values.couchdb.enabled -}}
-	{{- printf "http://%s-couchdb:5984" $fullname -}}
+{{- $couchConfig := default (dict) .Values.config.couchdb -}}
+{{- if $couchConfig.url -}}
+	{{- $couchConfig.url -}}
+{{- else if .Values.couchdb.enabled -}}
+	{{- printf "http://%s-couchdb:%d" $fullname (int .Values.couchdb.service.port) -}}
 {{- else -}}
-	{{- required "Provide config.couchdb_url or enable couchdb" $couchOverride -}}
+	{{- required "Provide config.couchdb.url or enable couchdb" $couchConfig.url -}}
 {{- end -}}
 {{- end }}
 

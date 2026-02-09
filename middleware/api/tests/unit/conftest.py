@@ -65,7 +65,7 @@ def config(oid: x509.ObjectIdentifier, known_rdis: list[str]) -> Config:
             broker_url=SecretStr("amqp://guest:guest@localhost:5672//"),
             result_backend=SecretStr("redis://localhost:6379/0"),
         ),
-        couchdb=CouchDBConfig(),
+        couchdb=CouchDBConfig(url="http://localhost:5984"),
         otel=OtelConfig(),
         require_client_cert=True,
     )
