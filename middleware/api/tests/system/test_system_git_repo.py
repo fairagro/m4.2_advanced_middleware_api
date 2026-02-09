@@ -8,6 +8,7 @@ import tempfile
 from collections.abc import Generator
 from pathlib import Path
 from typing import Any
+from unittest.mock import AsyncMock
 
 import pytest
 from cryptography import x509
@@ -16,6 +17,7 @@ from git import Repo
 
 from middleware.api.api import Api
 from middleware.api.config import Config
+from middleware.api.document_store import ArcStoreResult
 from middleware.shared.config.config_wrapper import ConfigWrapper
 
 
@@ -53,6 +55,9 @@ def git_repo_config(git_server_root: Path, git_repo_cache_dir: Path, oid: x509.O
             "broker_url": "memory://",
             "result_backend": "cache+memory://",
         },
+        "couchdb": {
+            "url": "http://localhost:5984",
+        },
     }
 
 
@@ -64,6 +69,14 @@ def api_client(git_repo_config: dict[str, Any]) -> Generator[TestClient, None, N
     assert isinstance(unwrapped_config, dict), "Config must be a dictionary"
     config = Config.from_data(unwrapped_config)
     api = Api(config)
+    # Mock BusinessLogic connection methods to avoid requiring a real CouchDB for system tests
+    api.business_logic.connect = AsyncMock()  # type: ignore[method-assign]
+    api.business_logic.close = AsyncMock()  # type: ignore[method-assign]
+    api.business_logic._doc_store.health_check = AsyncMock(return_value=True)  # type: ignore[method-assign] # pylint: disable=protected-access
+    # Mock store_arc to avoid requiring a real CouchDB
+    api.business_logic._doc_store.store_arc = AsyncMock(  # type: ignore[method-assign] # pylint: disable=protected-access
+        return_value=ArcStoreResult(arc_id="test-arc-id", is_new=True, has_changes=True)
+    )
     with TestClient(api.app) as c:
         yield c
 

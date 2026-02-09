@@ -28,7 +28,7 @@ async def setup_couchdb() -> None:
     try:
         config = Config.from_yaml_file(config_path)
         # Create BusinessLogic in Processor mode to access setup()
-        business_logic = BusinessLogicFactory.create(config, mode="processor")
+        business_logic = BusinessLogicFactory.create(config, mode="worker")
 
         logger.info("Starting CouchDB setup...")
         await business_logic.setup()
@@ -42,7 +42,7 @@ async def setup_couchdb() -> None:
     except RuntimeError as e:
         logger.error("Runtime error: %s", e)
         sys.exit(1)
-    except Exception as e:  # pylint: disable=broad-exception-caught
+    except Exception as e:  # pylint: disable=broad-exception-caught # noqa: BLE001
         logger.error("An unexpected error occurred: %s", e, exc_info=True)
         sys.exit(1)
 

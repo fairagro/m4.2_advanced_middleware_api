@@ -78,7 +78,6 @@ class CouchDB(DocumentStore):
 
         is_new = existing_doc is None
         has_changes = True  # Default to true for new
-        should_trigger_git = True
 
         if is_new:
             logger.info("ARC %s is new (hash: %s)", arc_id, content_hash[:8])
@@ -109,7 +108,6 @@ class CouchDB(DocumentStore):
                 metadata.arc_hash = content_hash
                 metadata.status = ArcLifecycleStatus.ACTIVE  # Reset to active if it was missing/deleted
                 metadata.missing_since = None
-                should_trigger_git = True
 
                 # Append update event
                 metadata.events.append(
@@ -122,7 +120,6 @@ class CouchDB(DocumentStore):
                 )
             else:
                 logger.debug("ARC %s unchanged", arc_id)
-                should_trigger_git = False
                 # Optionally log "not changed" event, or just update timestamps?
                 # For now, we don't log every "seen but unchanged" to avoid spam,
                 # but we DO update last_seen (already done above).
@@ -161,9 +158,7 @@ class CouchDB(DocumentStore):
 
         await self._client.save_document(doc_id, doc_data)
 
-        return ArcStoreResult(
-            arc_id=arc_id, is_new=is_new, has_changes=has_changes, should_trigger_git=should_trigger_git
-        )
+        return ArcStoreResult(arc_id=arc_id, is_new=is_new, has_changes=has_changes)
 
     async def get_arc_content(self, arc_id: str) -> dict[str, Any] | None:
         """Get raw ARC RO-Crate JSON."""

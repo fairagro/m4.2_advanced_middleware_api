@@ -18,7 +18,6 @@ class ArcStoreResult:
         arc_id: str,
         is_new: bool,
         has_changes: bool,
-        should_trigger_git: bool,
     ):
         """Initialize an ArcStoreResult instance.
 
@@ -26,12 +25,10 @@ class ArcStoreResult:
             arc_id: The identifier of the ARC.
             is_new: Indicates if the ARC is new.
             has_changes: Indicates if the ARC has changes.
-            should_trigger_git: Indicates if the ARC should trigger a Git operation.
         """
         self.arc_id = arc_id
         self.is_new = is_new
         self.has_changes = has_changes
-        self.should_trigger_git = should_trigger_git
 
 
 class DocumentStore(ABC):

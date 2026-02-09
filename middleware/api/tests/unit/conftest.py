@@ -14,7 +14,7 @@ from pydantic import HttpUrl, SecretStr
 
 from middleware.api.api import Api
 from middleware.api.arc_store.gitlab_api import GitlabApi, GitlabApiConfig
-from middleware.api.business_logic import BusinessLogic, DirectBusinessLogic
+from middleware.api.business_logic import BusinessLogic
 from middleware.api.config import CeleryConfig, Config, CouchDBConfig
 from middleware.shared.config.config_base import OtelConfig
 
@@ -72,9 +72,11 @@ def config(oid: x509.ObjectIdentifier, known_rdis: list[str]) -> Config:
 
 
 @pytest.fixture
-def middleware_api(config: Config) -> Api:
+def middleware_api(config: Config, service: BusinessLogic) -> Api:
     """Provide the Middleware API instance for tests."""
-    return Api(config)
+    api = Api(config)
+    api.business_logic = service
+    return api
 
 
 @pytest.fixture
@@ -91,7 +93,7 @@ def client(
 
 
 @pytest.fixture
-def service() -> BusinessLogic:
+def service(config: Config) -> BusinessLogic:
     """Provide a BusinessLogic instance with a mocked ArcStore."""
     store = MagicMock()
     store.arc_id = MagicMock(
@@ -101,7 +103,18 @@ def service() -> BusinessLogic:
     store.get = AsyncMock(return_value=None)
     store.delete = AsyncMock()
     store.create_or_update = AsyncMock()
-    return DirectBusinessLogic(store=store)  # type: ignore[abstract]
+
+    doc_store = MagicMock()
+    doc_store.store_arc = AsyncMock()
+    doc_store.health_check = AsyncMock(return_value=True)
+    doc_store.connect = AsyncMock()
+    doc_store.close = AsyncMock()
+    doc_store.setup = AsyncMock()
+
+    git_sync_task = MagicMock()
+
+    # Provide an instance in API mode (with task sender)
+    return BusinessLogic(config=config, store=store, doc_store=doc_store, git_sync_task=git_sync_task)
 
 
 @pytest.fixture

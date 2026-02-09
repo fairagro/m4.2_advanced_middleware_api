@@ -1,7 +1,7 @@
 """Unit tests for the create_or_update_arc functionality in BusinessLogic."""
 
 from typing import Any
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
@@ -98,8 +98,14 @@ async def test_update_arc_success(service: BusinessLogic) -> None:
         ],
     }
 
-    # pylint: disable=protected-access
-    service._store.exists = AsyncMock(return_value=True)  # type: ignore
+    # Mock doc_store response for update
+    mock_result = MagicMock()
+    mock_result.is_new = False
+    mock_result.has_changes = True
+    mock_result.id = "ARC-001"
+    mock_result.rev = "2-abc"
+    service._doc_store.store_arc = AsyncMock(return_value=mock_result)  # type: ignore[method-assign]
+
     result = await service.create_or_update_arc(rdi="TestRDI", arc=rocrate, client_id="TestClient")
 
     assert isinstance(result, ArcOperationResult)  # nosec

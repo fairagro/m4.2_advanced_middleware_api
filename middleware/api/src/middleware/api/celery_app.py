@@ -23,6 +23,9 @@ config_path = Path(os.environ.get("MIDDLEWARE_API_CONFIG", "/run/secrets/middlew
 # Global config instance (can be None in test mode)
 loaded_config: Config | None = None
 
+# Declare celery_app type for mypy
+celery_app: Celery
+
 # Check if running in test environment (pytest sets PYTEST_CURRENT_TEST) or if config file doesn't exist
 if "pytest" in sys.modules or not config_path.is_file():
     # Create a dummy celery app for testing
@@ -76,6 +79,6 @@ business_logic = None
 if loaded_config is not None:
     from .business_logic_factory import BusinessLogicFactory  # pylint: disable=import-outside-toplevel
 
-    # Create BusinessLogic in Processor mode (with Stores)
-    business_logic = BusinessLogicFactory.create(loaded_config, mode="processor")
-    logger.info("BusinessLogic initialized for Celery workers (Processor Mode)")
+    # Create BusinessLogic in Worker mode (with Stores)
+    business_logic = BusinessLogicFactory.create(loaded_config, mode="worker")
+    logger.info("BusinessLogic initialized for Celery workers (Worker Mode)")

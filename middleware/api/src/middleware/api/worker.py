@@ -6,57 +6,53 @@ This module provides:
 
 import asyncio
 import logging
-from typing import Any, cast
+from typing import Any
 
 from middleware.api.celery_app import business_logic, celery_app
-from middleware.shared.api_models.models import ArcOperationResult, ArcTaskTicket
 
 # Initialize logger
 logger = logging.getLogger(__name__)
 
 
-@celery_app.task(name="process_arc")
-def process_arc(rdi: str, arc_data: dict[str, Any], client_id: str) -> dict[str, Any]:
-    """Process a single ARC asynchronously.
+@celery_app.task(name="sync_arc_to_gitlab")
+def sync_arc_to_gitlab(rdi: str, arc_data: dict[str, Any]) -> dict[str, Any]:
+    """Sync ARC to GitLab asynchronously.
+
+    This task is responsible for the slow GitLab synchronization phase.
+    It is triggered by the API after the ARC has been successfully stored in CouchDB.
 
     Args:
-        rdi: Research Data Infrastructure identifier
-        arc_data: ARC data dictionary
-        client_id: Client identifier
+        self: Celery task instance.
+        rdi: Research Data Infrastructure identifier.
+        arc_data: ARC data dictionary.
 
     Returns:
-        Task result as dictionary
-
-    Raises:
-        RuntimeError: If business logic is not initialized
+        Task result as dictionary.
     """
     if business_logic is None:
         logger.error("BusinessLogic not initialized")
         raise RuntimeError("BusinessLogic not initialized")
 
-    logger.info("Starting processing task for RDI %s", rdi)
+    logger.info("Starting GitLab sync task for RDI %s", rdi)
 
-    # Run the async business logic in a sync wrapper
     try:
         loop = asyncio.new_event_loop()
         asyncio.set_event_loop(loop)
 
-        async def _run_logic() -> ArcOperationResult | ArcTaskTicket:
-            try:
-                await business_logic.connect()
-                return await business_logic.create_or_update_arc(rdi, arc_data, client_id)
-            finally:
-                await business_logic.close()
+        async def _run_sync() -> None:
+            async with business_logic:
+                await business_logic.sync_to_gitlab(rdi, arc_data)
 
-        # Process a single ARC
-        result: ArcOperationResult | ArcTaskTicket = loop.run_until_complete(_run_logic())
+        loop.run_until_complete(_run_sync())
         loop.close()
 
-        # The result is an ArcOperationResult object (Pydantic model)
-        # We return the dict representation
-        return cast(dict[str, Any], result.model_dump())
+        return {
+            "status": "synced",
+            "message": "Successfully synced to GitLab",
+            "rdi": rdi,
+        }
 
     except Exception as e:
-        logger.error("Task failed: %s", e, exc_info=True)
+        logger.error("GitLab sync task failed: %s", e, exc_info=True)
         # Re-raise to mark task as failed in Celery
         raise e
