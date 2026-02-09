@@ -59,7 +59,6 @@ async def test_store_arc_new(store: CouchDB, mock_client_instance: MagicMock) ->
     # Verify
     assert result.is_new is True
     assert result.has_changes is True
-    assert result.has_changes is True
 
     # Check save called
     mock_client_instance.save_document.assert_called_once()

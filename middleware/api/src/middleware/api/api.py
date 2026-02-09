@@ -15,7 +15,6 @@ from pathlib import Path
 from typing import Annotated, cast
 from urllib.parse import unquote
 
-import redis
 from asn1crypto.core import Sequence, UTF8String  # type: ignore
 from cryptography import x509
 from cryptography.x509.extensions import ExtensionNotFound
@@ -43,7 +42,6 @@ from middleware.shared.api_models.models import (
 from middleware.shared.tracing import initialize_logging, initialize_tracing
 
 from .business_logic_factory import BusinessLogicFactory
-from .celery_app import celery_app
 from .config import Config
 from .tracing import instrument_app
 
@@ -430,42 +428,19 @@ class Api:
             _accept_validated: Annotated[None, Depends(self._validate_accept_type)],
         ) -> HealthResponse:
             """Check health of API and connected services (Redis, RabbitMQ, CouchDB)."""
-            # Check Redis (result backend)
-            redis_reachable = False
-            try:
-                # Get Redis URL from config
-                redis_url = self._config.celery.result_backend.get_secret_value()
-                r = redis.from_url(redis_url)
-                r.ping()
-                redis_reachable = True
-            except redis.RedisError as e:
-                logger.error("Redis health check failed: %s", e)
-
-            # Check RabbitMQ (broker)
-            rabbitmq_reachable = False
-            try:
-                with celery_app.connection_or_acquire() as conn:
-                    conn.ensure_connection(max_retries=1)
-                    rabbitmq_reachable = True
-            except Exception as e:  # pylint: disable=broad-exception-caught
-                logger.error("RabbitMQ health check failed: %s", e)
-
-            # Check BusinessLogic Dependencies (CouchDB/Dispatcher)
+            # Check BusinessLogic Dependencies (CouchDB/Dispatcher/Redis/RabbitMQ)
             # The API doesn't know what's underneath, just asks BL
             bl_health = await self.business_logic.health_check()
 
-            # Merge statuses
-            status = {"redis_reachable": redis_reachable, "rabbitmq_reachable": rabbitmq_reachable, **bl_health}
-
-            is_healthy = all(status.values())
+            is_healthy = all(bl_health.values())
 
             if not is_healthy:
                 response.status_code = 503
 
             return HealthResponse(
                 status="ok" if is_healthy else "error",
-                redis_reachable=redis_reachable,
-                rabbitmq_reachable=rabbitmq_reachable,
+                redis_reachable=bl_health.get("redis", False),
+                rabbitmq_reachable=bl_health.get("rabbitmq", False),
             )
 
     def _setup_health_route_v2(self) -> None:
@@ -475,29 +450,8 @@ class Api:
             _accept_validated: Annotated[None, Depends(self._validate_accept_type)],
         ) -> HealthResponseV2:
             """Check health of API and connected services (v2)."""
-            # Check Redis
-            redis_reachable = False
-            try:
-                redis_url = self._config.celery.result_backend.get_secret_value()
-                r = redis.from_url(redis_url)
-                r.ping()
-                redis_reachable = True
-            except Exception:  # pylint: disable=broad-exception-caught
-                logger.debug("Redis health check failed")
-
-            # Check RabbitMQ
-            rabbitmq_reachable = False
-            try:
-                with celery_app.connection_or_acquire() as conn:
-                    conn.ensure_connection(max_retries=1)
-                    rabbitmq_reachable = True
-            except Exception:  # pylint: disable=broad-exception-caught
-                logger.debug("RabbitMQ health check failed")
-
-            # Check BusinessLogic
-            bl_health = await self.business_logic.health_check()
-
-            services = {"redis": redis_reachable, "rabbitmq": rabbitmq_reachable, **bl_health}
+            # Check BusinessLogic Dependencies
+            services = await self.business_logic.health_check()
 
             is_healthy = all(services.values())
             if not is_healthy:
@@ -541,14 +495,9 @@ class Api:
             # Generate task_id for the completed operation
             task_id = str(uuid.uuid4())
 
-            # Store result in Celery backend so it can be retrieved via GET /tasks/{task_id}
-            # We must serialize the result as a dict
+            # Store result in task backend so it can be retrieved via GET /tasks/{task_id}
             if isinstance(result, ArcOperationResult):
-                celery_app.backend.store_result(
-                    task_id,
-                    result=result.model_dump(),
-                    state="SUCCESS",
-                )
+                self.business_logic.store_task_result(task_id, result)
             else:
                 logger.error("Unexpected result type from BusinessLogic: %s", type(result))
                 raise RuntimeError("Unexpected result type from BusinessLogic")
@@ -582,13 +531,9 @@ class Api:
             # Generate task_id for the completed operation
             task_id = str(uuid.uuid4())
 
-            # Store result in Celery backend
+            # Store result in task backend
             if isinstance(result, ArcOperationResult):
-                celery_app.backend.store_result(
-                    task_id,
-                    result=result.model_dump(),
-                    state="SUCCESS",
-                )
+                self.business_logic.store_task_result(task_id, result)
             else:
                 logger.error("Unexpected result type from BusinessLogic: %s", type(result))
                 raise RuntimeError("Unexpected result type from BusinessLogic")
@@ -608,7 +553,7 @@ class Api:
             _accept_validated: Annotated[None, Depends(self._validate_accept_type)],
         ) -> GetTaskStatusResponse:
             """Get the status of an async task (v1)."""
-            result = celery_app.AsyncResult(task_id)
+            result = self.business_logic.get_task_status(task_id)
 
             task_result: CreateOrUpdateArcsResponse | None = None
             error_message = None
@@ -649,7 +594,7 @@ class Api:
             _accept_validated: Annotated[None, Depends(self._validate_accept_type)],
         ) -> GetTaskStatusResponseV2:
             """Get the status of an async task (v2)."""
-            result = celery_app.AsyncResult(task_id)
+            result = self.business_logic.get_task_status(task_id)
 
             task_result: ArcOperationResult | None = None
             error_message = None

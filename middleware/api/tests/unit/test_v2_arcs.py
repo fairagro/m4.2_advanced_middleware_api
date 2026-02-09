@@ -117,7 +117,7 @@ def test_create_or_update_arc_rdi_not_known(client: TestClient, cert: str) -> No
 
 
 @pytest.mark.unit
-def test_get_task_status_v2(client: TestClient) -> None:
+def test_get_task_status_v2(client: TestClient, middleware_api: Api) -> None:
     """Test getting task status via /v2/tasks endpoint."""
     mock_result = MagicMock()
     mock_result.status = "SUCCESS"
@@ -132,10 +132,7 @@ def test_get_task_status_v2(client: TestClient) -> None:
         "arc": {"id": "arc-1", "status": "created", "timestamp": "2024-01-01T00:00:00Z"},
     }
 
-    with pytest.MonkeyPatch.context() as mp:
-        mock_async_result = MagicMock(return_value=mock_result)
-        mp.setattr("middleware.api.api.celery_app.AsyncResult", mock_async_result)
-
+    with patch.object(middleware_api.business_logic, "get_task_status", return_value=mock_result):
         r = client.get(
             "/v2/tasks/task-123",
             headers={"accept": "application/json"},

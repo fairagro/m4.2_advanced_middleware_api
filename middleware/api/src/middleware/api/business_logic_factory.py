@@ -9,6 +9,7 @@ from .arc_store.gitlab_api import GitlabApi
 from .business_logic import BusinessLogic
 from .config import Config
 from .document_store.couchdb import CouchDB
+from .worker import sync_arc_to_gitlab
 
 logger = logging.getLogger(__name__)
 
@@ -43,8 +44,6 @@ class BusinessLogicFactory:
         # For API mode, provide GitLab sync task sender
         git_sync_task = None
         if mode == "api":
-            from .worker import sync_arc_to_gitlab
-
             git_sync_task = sync_arc_to_gitlab
 
-        return BusinessLogic(store=store, doc_store=doc_store, git_sync_task=git_sync_task)
+        return BusinessLogic(config=config, store=store, doc_store=doc_store, git_sync_task=git_sync_task)

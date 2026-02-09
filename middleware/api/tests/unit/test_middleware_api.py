@@ -7,8 +7,6 @@ from collections.abc import Callable
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
-import redis
-import redis.exceptions
 from cryptography import x509
 from fastapi.testclient import TestClient
 
@@ -74,24 +72,11 @@ def test_whoami_cert_verify_not_success(client: TestClient, cert: str, verify_st
 
 def test_health_check_success(client: TestClient, middleware_api: Api) -> None:
     """Test /v1/health success."""
-    # Mock Redis
-    mock_redis = MagicMock()
-    mock_redis.ping.return_value = True
-
-    # Mock Celery connection
-    mock_conn = MagicMock()
-
-    with (
-        unittest.mock.patch("middleware.api.api.redis.from_url", return_value=mock_redis),
-        unittest.mock.patch("middleware.api.api.celery_app.connection_or_acquire") as mock_acquire,
-        unittest.mock.patch.object(
-            middleware_api.business_logic,
-            "health_check",
-            side_effect=AsyncMock(return_value={"couchdb_reachable": True}),
-        ),
+    with unittest.mock.patch.object(
+        middleware_api.business_logic,
+        "health_check",
+        side_effect=AsyncMock(return_value={"couchdb_reachable": True, "redis": True, "rabbitmq": True}),
     ):
-        mock_acquire.return_value.__enter__.return_value = mock_conn
-
         r = client.get("/v1/health", headers={"accept": "application/json"})
         assert r.status_code == http.HTTPStatus.OK
         assert r.json() == {
@@ -103,17 +88,10 @@ def test_health_check_success(client: TestClient, middleware_api: Api) -> None:
 
 def test_health_check_failure(client: TestClient, middleware_api: Api) -> None:
     """Test /v1/health failure."""
-    # Mock Redis failure
-    with (
-        unittest.mock.patch("middleware.api.api.redis.from_url", side_effect=redis.exceptions.RedisError("Redis down")),
-        unittest.mock.patch(
-            "middleware.api.api.celery_app.connection_or_acquire", side_effect=Exception("RabbitMQ down")
-        ),
-        unittest.mock.patch.object(
-            middleware_api.business_logic,
-            "health_check",
-            side_effect=AsyncMock(return_value={"couchdb_reachable": False}),
-        ),
+    with unittest.mock.patch.object(
+        middleware_api.business_logic,
+        "health_check",
+        side_effect=AsyncMock(return_value={"couchdb_reachable": False, "redis": False, "rabbitmq": False}),
     ):
         r = client.get("/v1/health", headers={"accept": "application/json"})
         assert r.status_code == http.HTTPStatus.SERVICE_UNAVAILABLE
@@ -126,20 +104,11 @@ def test_health_check_failure(client: TestClient, middleware_api: Api) -> None:
 
 def test_health_check_v2_success(client: TestClient, middleware_api: Api) -> None:
     """Test /v2/health success with CouchDB status."""
-    mock_redis = MagicMock()
-    mock_redis.ping.return_value = True
-
-    with (
-        unittest.mock.patch("middleware.api.api.redis.from_url", return_value=mock_redis),
-        unittest.mock.patch("middleware.api.api.celery_app.connection_or_acquire") as mock_acquire,
-        unittest.mock.patch.object(
-            middleware_api.business_logic,
-            "health_check",
-            side_effect=AsyncMock(return_value={"couchdb_reachable": True}),
-        ),
+    with unittest.mock.patch.object(
+        middleware_api.business_logic,
+        "health_check",
+        side_effect=AsyncMock(return_value={"couchdb_reachable": True, "redis": True, "rabbitmq": True}),
     ):
-        mock_acquire.return_value.__enter__.return_value = MagicMock()
-
         r = client.get("/v2/health", headers={"accept": "application/json"})
         assert r.status_code == http.HTTPStatus.OK
         assert r.json() == {
@@ -154,20 +123,11 @@ def test_health_check_v2_success(client: TestClient, middleware_api: Api) -> Non
 
 def test_health_check_v2_couchdb_failure(client: TestClient, middleware_api: Api) -> None:
     """Test /v2/health with CouchDB failure returns 503."""
-    mock_redis = MagicMock()
-    mock_redis.ping.return_value = True
-
-    with (
-        unittest.mock.patch("middleware.api.api.redis.from_url", return_value=mock_redis),
-        unittest.mock.patch("middleware.api.api.celery_app.connection_or_acquire") as mock_acquire,
-        unittest.mock.patch.object(
-            middleware_api.business_logic,
-            "health_check",
-            side_effect=AsyncMock(return_value={"couchdb_reachable": False}),
-        ),
+    with unittest.mock.patch.object(
+        middleware_api.business_logic,
+        "health_check",
+        side_effect=AsyncMock(return_value={"couchdb_reachable": False, "redis": True, "rabbitmq": True}),
     ):
-        mock_acquire.return_value.__enter__.return_value = MagicMock()
-
         r = client.get("/v2/health", headers={"accept": "application/json"})
         assert r.status_code == http.HTTPStatus.SERVICE_UNAVAILABLE
         assert r.json()["services"]["couchdb_reachable"] is False
@@ -277,7 +237,7 @@ def test_create_or_update_arcs_no_cert_allowed(client: TestClient, middleware_ap
     middleware_api._config.require_client_cert = True
 
 
-def test_get_task_status_v1_transformation(client: TestClient) -> None:
+def test_get_task_status_v1_transformation(client: TestClient, middleware_api: Api) -> None:
     """Test getting task status via /v1/tasks (v1 endpoint) with singular result from worker."""
     mock_result = MagicMock()
     mock_result.status = "SUCCESS"
@@ -292,10 +252,7 @@ def test_get_task_status_v1_transformation(client: TestClient) -> None:
         "arc": {"id": "arc-1", "status": "created", "timestamp": "2024-01-01T00:00:00Z"},
     }
 
-    with pytest.MonkeyPatch.context() as mp:
-        mock_async_result = MagicMock(return_value=mock_result)
-        mp.setattr("middleware.api.api.celery_app.AsyncResult", mock_async_result)
-
+    with unittest.mock.patch.object(middleware_api.business_logic, "get_task_status", return_value=mock_result):
         r = client.get(
             "/v1/tasks/task-123",
             headers={"accept": "application/json"},

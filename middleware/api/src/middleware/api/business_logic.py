@@ -10,6 +10,7 @@ import logging
 from datetime import UTC, datetime
 from typing import Any, Protocol, runtime_checkable
 
+import redis
 from arctrl import ARC  # type: ignore[import-untyped]
 from opentelemetry import trace
 
@@ -21,6 +22,8 @@ from middleware.shared.api_models.models import (
 )
 
 from .arc_store import ArcStore
+from .celery_app import celery_app
+from .config import Config
 from .document_store import DocumentStore
 
 logger = logging.getLogger(__name__)
@@ -63,6 +66,7 @@ class BusinessLogic:
 
     def __init__(
         self,
+        config: Config,
         store: ArcStore,
         doc_store: DocumentStore,
         git_sync_task: TaskSender | None = None,
@@ -70,22 +74,74 @@ class BusinessLogic:
         """Initialize the BusinessLogic.
 
         Args:
+            config: Middleware API configuration.
             store: ArcStore for GitLab persistence.
             doc_store: DocumentStore for CouchDB persistence.
             git_sync_task: Optional task sender for enqueueing GitLab sync jobs.
         """
+        self._config = config
         self._store = store
         self._doc_store = doc_store
         self._git_sync_task = git_sync_task
         self._tracer = trace.get_tracer(__name__)
 
     async def health_check(self) -> dict[str, bool]:
-        """Check health of stores."""
+        """Check health of stores and message broker."""
         couchdb_ok = await self._doc_store.health_check()
+
+        # Check RabbitMQ (broker) via celery_app
+        rabbitmq_ok = False
+        try:
+            with celery_app.connection_or_acquire() as conn:
+                conn.ensure_connection(max_retries=1)
+                rabbitmq_ok = True
+        except (ConnectionError, redis.ConnectionError) as e:
+            logger.error("RabbitMQ health check failed: %s", e)
+
+        # Check Redis (result backend) via celery_app
+        redis_ok = False
+        try:
+            backend_url = self._config.celery.result_backend.get_secret_value()
+            if "redis" in backend_url:
+                # Use redis library to ping
+                r = redis.from_url(backend_url)
+                r.ping()
+                redis_ok = True
+            else:
+                # If it's not redis (e.g. memory in tests), consider it ok
+                redis_ok = True
+        except (redis.ConnectionError, redis.TimeoutError) as e:
+            logger.error("Redis health check failed: %s", e)
 
         return {
             "couchdb_reachable": couchdb_ok,
+            "rabbitmq": rabbitmq_ok,
+            "redis": redis_ok,
         }
+
+    def get_task_status(self, task_id: str) -> Any:
+        """Get the status and result of a Celery task.
+
+        Args:
+            task_id: The ID of the task to check.
+
+        Returns:
+            The Celery AsyncResult for the task.
+        """
+        return celery_app.AsyncResult(task_id)
+
+    def store_task_result(self, task_id: str, result: ArcOperationResult) -> None:
+        """Store an operation result in the task backend.
+
+        Args:
+            task_id: The ID to store the result under.
+            result: The ArcOperationResult to store.
+        """
+        celery_app.backend.store_result(
+            task_id,
+            result=result.model_dump(),
+            state="SUCCESS",
+        )
 
     async def setup(self) -> None:
         """Set up stores and apply migrations."""

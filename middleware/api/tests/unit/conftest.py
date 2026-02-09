@@ -93,7 +93,7 @@ def client(
 
 
 @pytest.fixture
-def service() -> BusinessLogic:
+def service(config: Config) -> BusinessLogic:
     """Provide a BusinessLogic instance with a mocked ArcStore."""
     store = MagicMock()
     store.arc_id = MagicMock(
@@ -114,7 +114,7 @@ def service() -> BusinessLogic:
     git_sync_task = MagicMock()
 
     # Provide an instance in API mode (with task sender)
-    return BusinessLogic(store=store, doc_store=doc_store, git_sync_task=git_sync_task)
+    return BusinessLogic(config=config, store=store, doc_store=doc_store, git_sync_task=git_sync_task)
 
 
 @pytest.fixture
