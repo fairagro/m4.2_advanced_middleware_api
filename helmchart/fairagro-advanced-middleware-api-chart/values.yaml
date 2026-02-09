@@ -21,6 +21,7 @@ config:
     - publisso
     - thunen_atlas
   celery: {}  # all further celery config is set via environment variables
+  couchdb: {} # all further couchdb config is set via environment variables
   otel:
     # endpoint: http://signoz:4318  # Uncomment to enable Signoz tracing
     # log_console_spans: false      # Set to true to log spans to console
