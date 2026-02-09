@@ -29,7 +29,7 @@ def test_factory_creates_api_mode() -> None:
     with (
         patch("middleware.api.business_logic_factory.CouchDB") as mock_couch,
         patch("middleware.api.business_logic_factory.GitlabApi") as mock_gitlab_api,
-        patch("middleware.api.business_logic_factory.sync_arc_to_gitlab") as mock_task,
+        patch("middleware.api.worker.sync_arc_to_gitlab") as mock_task,
     ):
         bl = BusinessLogicFactory.create(config, mode="api")
 

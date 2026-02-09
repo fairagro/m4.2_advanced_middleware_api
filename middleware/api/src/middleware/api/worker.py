@@ -8,10 +8,34 @@ import asyncio
 import logging
 from typing import Any
 
-from middleware.api.celery_app import business_logic, celery_app
+from middleware.api.business_logic import BusinessLogic
+
+from .business_logic_factory import BusinessLogicFactory
+from .celery_app import celery_app, loaded_config
 
 # Initialize logger
 logger = logging.getLogger(__name__)
+
+
+# Lazy initialization of BusinessLogic
+class BusinessLogicManager:
+    """Manages the lazy initialization and retrieval of the BusinessLogic instance for the worker."""
+
+    _business_logic: BusinessLogic | None = None
+
+    @classmethod
+    def get_business_logic(cls) -> BusinessLogic | None:
+        """Get or initialize the BusinessLogic instance for the worker."""
+        if cls._business_logic is None:
+            if loaded_config is None:
+                # This should only happen in tests without real config
+                logger.warning("Worker started without loaded_config")
+                return None
+
+            cls._business_logic = BusinessLogicFactory.create(loaded_config, mode="worker")
+            logger.info("BusinessLogic initialized for worker")
+
+        return cls._business_logic
 
 
 @celery_app.task(name="sync_arc_to_gitlab")
@@ -22,14 +46,14 @@ def sync_arc_to_gitlab(rdi: str, arc_data: dict[str, Any]) -> dict[str, Any]:
     It is triggered by the API after the ARC has been successfully stored in CouchDB.
 
     Args:
-        self: Celery task instance.
         rdi: Research Data Infrastructure identifier.
         arc_data: ARC data dictionary.
 
     Returns:
         Task result as dictionary.
     """
-    if business_logic is None:
+    logic = BusinessLogicManager.get_business_logic()
+    if logic is None:
         logger.error("BusinessLogic not initialized")
         raise RuntimeError("BusinessLogic not initialized")
 
@@ -40,8 +64,11 @@ def sync_arc_to_gitlab(rdi: str, arc_data: dict[str, Any]) -> dict[str, Any]:
         asyncio.set_event_loop(loop)
 
         async def _run_sync() -> None:
-            async with business_logic:
-                await business_logic.sync_to_gitlab(rdi, arc_data)
+            if logic is not None:
+                async with logic:
+                    await logic.sync_to_gitlab(rdi, arc_data)
+            else:
+                raise RuntimeError("BusinessLogic became None during execution")
 
         loop.run_until_complete(_run_sync())
         loop.close()

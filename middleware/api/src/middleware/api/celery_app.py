@@ -73,12 +73,3 @@ celery_app.conf.update(
     enable_utc=True,
     task_track_started=True,
 )
-
-# Initialize BusinessLogic for workers (None in test mode)
-business_logic = None
-if loaded_config is not None:
-    from .business_logic_factory import BusinessLogicFactory  # pylint: disable=import-outside-toplevel
-
-    # Create BusinessLogic in Worker mode (with Stores)
-    business_logic = BusinessLogicFactory.create(loaded_config, mode="worker")
-    logger.info("BusinessLogic initialized for Celery workers (Worker Mode)")
