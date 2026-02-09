@@ -342,3 +342,34 @@ async def test_couchdb_client_get_db(couchdb_client: CouchDBClient) -> None:
     mock_db = MagicMock()
     couchdb_client._db = mock_db  # pylint: disable=protected-access
     assert couchdb_client.get_db() == mock_db
+
+
+@pytest.mark.asyncio
+async def test_couchdb_client_ensure_system_databases(couchdb_client: CouchDBClient) -> None:
+    """Test ensuring system databases exist."""
+    with patch("middleware.api.couchdb_client.CouchDB") as mock_couchdb:
+        mock_instance = mock_couchdb.return_value
+        # One exists, one missing, one fails
+        mock_instance.__getitem__ = AsyncMock(
+            side_effect=[
+                AsyncMock(),  # _users exists
+                NotFoundError("Not Found"),  # _replicator missing
+                Exception("Error"),  # _global_changes fails
+            ]
+        )
+        mock_instance.create = AsyncMock()
+
+        # Manually set the client since connect() wasn't called
+        couchdb_client._client = mock_instance  # pylint: disable=protected-access
+
+        await couchdb_client.ensure_system_databases()
+
+        assert mock_instance.__getitem__.call_count == 3  # noqa: PLR2004
+        mock_instance.create.assert_called_once_with("_replicator")
+
+
+@pytest.mark.asyncio
+async def test_couchdb_client_ensure_system_databases_not_connected(couchdb_client: CouchDBClient) -> None:
+    """Test ensuring system databases when not connected."""
+    with pytest.raises(RuntimeError, match="Not connected to CouchDB server"):
+        await couchdb_client.ensure_system_databases()

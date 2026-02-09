@@ -84,28 +84,31 @@ Compute Celery broker URL based on enabled RabbitMQ or provided override.
 */}}
 {{- define "fairagro-advanced-middleware-api-chart.celeryBrokerUrl" -}}
 {{- $fullname := include "fairagro-advanced-middleware-api-chart.fullname" . -}}
-{{- $brokerOverride := .Values.celery.brokerUrl -}}
+{{- $celeryConfig := default (dict) .Values.config.celery -}}
+{{- $brokerOverride := default .Values.celery.brokerUrl $celeryConfig.broker_url -}}
 {{- if .Values.rabbitmq.enabled -}}
 	{{- $rabbitAuth := default (dict) .Values.rabbitmq.auth -}}
 	{{- $user := default "" $rabbitAuth.username -}}
 	{{- $pass := default "" $rabbitAuth.password -}}
 	{{- $existing := default "" $rabbitAuth.existingSecret -}}
-	{{- if $existing -}}
+	{{- if $brokerOverride -}}
+		{{- $brokerOverride -}}
+	{{- else if $existing -}}
 		{{- if and $user $pass -}}
 			{{- $userEsc := urlquery $user -}}
 			{{- $passEsc := urlquery $pass -}}
 			{{- printf "amqp://%s:%s@%s-rabbitmq:5672//" $userEsc $passEsc $fullname -}}
 		{{- else -}}
-			{{- required "Provide rabbitmq.auth.username/password when rabbitmq.auth.existingSecret is set, or set celery.brokerUrl" $brokerOverride -}}
+			{{- required "Provide rabbitmq.auth.username/password when rabbitmq.auth.existingSecret is set, or set config.celery.broker_url" $brokerOverride -}}
 		{{- end -}}
 	{{- else -}}
 		{{- $userEsc := urlquery (required "rabbitmq.auth.username is required when not using an existing secret" $user) -}}
 		{{- $passEsc := urlquery (required "rabbitmq.auth.password is required when not using an existing secret" $pass) -}}
 		{{- printf "amqp://%s:%s@%s-rabbitmq:5672//" $userEsc $passEsc $fullname -}}
-	{{- end -}}
-{{- else -}}
-{{- required "Set celery.brokerUrl when rabbitmq.enabled=false" $brokerOverride -}}
-{{- end -}}
+	{{- end }}
+{{- else }}
+{{- required "Set config.celery.broker_url when rabbitmq.enabled=false" $brokerOverride -}}
+{{- end }}
 {{- end }}
 
 {{/*
@@ -113,25 +116,28 @@ Compute Celery result backend based on enabled Redis or provided override.
 */}}
 {{- define "fairagro-advanced-middleware-api-chart.celeryResultBackend" -}}
 {{- $fullname := include "fairagro-advanced-middleware-api-chart.fullname" . -}}
-{{- $backendOverride := default .Values.celery.resultBackend .Values.resultBackend -}}
+{{- $celeryConfig := default (dict) .Values.config.celery -}}
+{{- $backendOverride := default .Values.celery.resultBackend $celeryConfig.result_backend -}}
 {{- if .Values.redis.enabled -}}
 	{{- $redisAuth := default (dict) .Values.redis.auth -}}
 	{{- $pass := default "" $redisAuth.password -}}
 	{{- $existing := default "" $redisAuth.existingSecret -}}
-	{{- if $existing -}}
+	{{- if $backendOverride -}}
+		{{- $backendOverride -}}
+	{{- else if $existing -}}
 		{{- if $pass -}}
 			{{- $passEsc := urlquery $pass -}}
 			{{- printf "redis://:%s@%s-redis:6379/0" $passEsc $fullname -}}
 		{{- else -}}
-			{{- required "Provide redis.auth.password when redis.auth.existingSecret is set, or set celery.resultBackend" $backendOverride -}}
+			{{- required "Provide redis.auth.password when redis.auth.existingSecret is set, or set config.celery.result_backend" $backendOverride -}}
 		{{- end -}}
 	{{- else -}}
 		{{- $passEsc := urlquery (required "redis.auth.password is required when not using an existing secret" $pass) -}}
 		{{- printf "redis://:%s@%s-redis:6379/0" $passEsc $fullname -}}
-	{{- end -}}
-{{- else -}}
-{{- required "Set celery.resultBackend when redis.enabled=false" $backendOverride -}}
-{{- end -}}
+	{{- end }}
+{{- else }}
+{{- required "Set config.celery.result_backend when redis.enabled=false" $backendOverride -}}
+{{- end }}
 {{- end }}
 
 {{/*

@@ -20,6 +20,7 @@ config:
     - openagrar
     - publisso
     - thunen_atlas
+  client_auth_oid: "1.3.6.1.4.1.64609.1.1"
   celery: {}  # all further celery config is set via environment variables
   couchdb: {} # all further couchdb config is set via environment variables
   otel:
@@ -132,8 +133,8 @@ api:
 
 # Celery worker settings
 celery:
-  # brokerUrl: ""     # use this setting if you want to override the generated RabbitMQ URL
-  # resultBackend: "" # use this setting if you want to override the generated Redis URL
+  # brokerUrl: ""     # deprecated: use config.celery.broker_url instead
+  # resultBackend: "" # deprecated: use config.celery.result_backend instead
   image:
     repository: zalf/fairagro-advanced-middleware-api
     pullPolicy: IfNotPresent
