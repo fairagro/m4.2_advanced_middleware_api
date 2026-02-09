@@ -23,6 +23,9 @@ config_path = Path(os.environ.get("MIDDLEWARE_API_CONFIG", "/run/secrets/middlew
 # Global config instance (can be None in test mode)
 loaded_config: Config | None = None
 
+# Declare celery_app type for mypy
+celery_app: Celery
+
 # Check if running in test environment (pytest sets PYTEST_CURRENT_TEST) or if config file doesn't exist
 if "pytest" in sys.modules or not config_path.is_file():
     # Create a dummy celery app for testing

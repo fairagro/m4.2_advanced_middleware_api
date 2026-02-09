@@ -105,14 +105,14 @@ async def test_health_check(api_logic: BusinessLogic, mock_doc_store: MagicMock)
 
     # Mock celery_app and redis
     with (
-        patch("middleware.api.celery_app.celery_app") as mock_celery,
-        patch("redis.from_url") as mock_redis_lib,
+        patch("middleware.api.business_logic.celery_app") as mock_celery,
+        patch("middleware.api.business_logic.redis") as mock_redis_lib,
     ):
         mock_conn = MagicMock()
         mock_celery.connection_or_acquire.return_value.__enter__.return_value = mock_conn
 
         mock_redis_instance = MagicMock()
-        mock_redis_lib.return_value = mock_redis_instance
+        mock_redis_lib.from_url.return_value = mock_redis_instance
 
         result = await api_logic.health_check()
 
@@ -130,15 +130,21 @@ async def test_health_check_failures(
     """Test aggregated health check with failures."""
     mock_doc_store.health_check.return_value = False
 
-    # Mock RabbitMQ failure
-    mock_celery = MagicMock()
-    mock_celery.connection_or_acquire.side_effect = Exception("Connection failed")
+    # Mock Redis and Celery App
+    with (
+        patch("middleware.api.business_logic.celery_app") as mock_celery,
+        patch("middleware.api.business_logic.redis") as mock_redis_lib,
+    ):
+        # Configure Redis mock to have exception classes
+        mock_redis_lib.ConnectionError = type("ConnectionError", (ConnectionError,), {})
+        mock_redis_lib.TimeoutError = type("TimeoutError", (Exception,), {})
 
-    # Mock Redis failure
-    mock_config.celery.result_backend.get_secret_value.return_value = "redis://some-host"
+        # Mock RabbitMQ failure
+        mock_celery.connection_or_acquire.side_effect = ConnectionError("Connection failed")
 
-    with patch("middleware.api.celery_app.celery_app", mock_celery), patch("redis.from_url") as mock_redis_from_url:
-        mock_redis_from_url.return_value.ping.side_effect = Exception("Ping failed")
+        # Mock Redis failure
+        mock_config.celery.result_backend.get_secret_value.return_value = "redis://some-host"
+        mock_redis_lib.from_url.return_value.ping.side_effect = mock_redis_lib.ConnectionError("Ping failed")
 
         status = await api_logic.health_check()
         assert status["couchdb_reachable"] is False
@@ -175,7 +181,7 @@ async def test_setup_failure(api_logic: BusinessLogic, mock_doc_store: MagicMock
 
 def test_get_task_status(api_logic: BusinessLogic) -> None:
     """Test get_task_status wraps celery AsyncResult."""
-    with patch("middleware.api.celery_app.celery_app") as mock_celery:
+    with patch("middleware.api.business_logic.celery_app") as mock_celery:
         mock_celery.AsyncResult.return_value = "task_result"
         assert api_logic.get_task_status("task-1") == "task_result"
         mock_celery.AsyncResult.assert_called_once_with("task-1")
@@ -186,7 +192,7 @@ def test_store_task_result(api_logic: BusinessLogic) -> None:
     mock_res = ArcOperationResult(
         rdi="rdi", arc=ArcResponse(id="1", status=ArcStatus.CREATED, timestamp="2024-01-01T00:00:00Z")
     )
-    with patch("middleware.api.celery_app.celery_app") as mock_celery:
+    with patch("middleware.api.business_logic.celery_app") as mock_celery:
         api_logic.store_task_result("task-1", mock_res)
         mock_celery.backend.store_result.assert_called_once()
 
