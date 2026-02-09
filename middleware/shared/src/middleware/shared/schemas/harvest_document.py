@@ -30,8 +30,8 @@ class HarvestDocument(BaseModel):
     """Harvest run document for CouchDB storage."""
 
     # CouchDB fields
-    _id: Annotated[str, Field(description="Document ID (harvest-<uuid>)", alias="_id")]
-    _rev: Annotated[str | None, Field(description="CouchDB revision", alias="_rev")] = None
+    doc_id: Annotated[str, Field(description="Document ID (harvest-<uuid>)", alias="_id")]
+    doc_rev: Annotated[str | None, Field(description="CouchDB revision", alias="_rev")] = None
 
     # Document type for queries
     type: Annotated[str, Field(description="Document type")] = "harvest"
