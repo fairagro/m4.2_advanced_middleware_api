@@ -88,8 +88,8 @@ if getattr(sys, "frozen", False):
                 return
 
         Distribution.discover = patched_discover  # type: ignore
-    except (ImportError, AttributeError, Exception):  # pylint: disable=broad-exception-caught
-        pass
+    except Exception as e:  # pylint: disable=broad-exception-caught
+        print(f"Warning: Failed to apply Pydantic workaround for Distribution.discover: {e}", file=sys.stderr)
 
 
 def main() -> None:
