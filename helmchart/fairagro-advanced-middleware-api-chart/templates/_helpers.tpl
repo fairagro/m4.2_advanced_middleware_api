@@ -85,7 +85,7 @@ Compute Celery broker URL based on enabled RabbitMQ or provided override.
 {{- define "fairagro-advanced-middleware-api-chart.celeryBrokerUrl" -}}
 {{- $fullname := include "fairagro-advanced-middleware-api-chart.fullname" . -}}
 {{- $celeryConfig := default (dict) .Values.config.celery -}}
-{{- $brokerOverride := default .Values.celery.brokerUrl $celeryConfig.broker_url -}}
+{{- $brokerOverride := $celeryConfig.broker_url -}}
 {{- if .Values.rabbitmq.enabled -}}
 	{{- $rabbitAuth := default (dict) .Values.rabbitmq.auth -}}
 	{{- $user := default "" $rabbitAuth.username -}}
@@ -117,7 +117,7 @@ Compute Celery result backend based on enabled Redis or provided override.
 {{- define "fairagro-advanced-middleware-api-chart.celeryResultBackend" -}}
 {{- $fullname := include "fairagro-advanced-middleware-api-chart.fullname" . -}}
 {{- $celeryConfig := default (dict) .Values.config.celery -}}
-{{- $backendOverride := default .Values.celery.resultBackend $celeryConfig.result_backend -}}
+{{- $backendOverride := $celeryConfig.result_backend -}}
 {{- if .Values.redis.enabled -}}
 	{{- $redisAuth := default (dict) .Values.redis.auth -}}
 	{{- $pass := default "" $redisAuth.password -}}

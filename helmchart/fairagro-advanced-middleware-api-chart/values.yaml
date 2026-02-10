@@ -135,8 +135,6 @@ api:
 
 # Celery worker settings
 celery:
-  # brokerUrl: ""     # deprecated: use config.celery.broker_url instead
-  # resultBackend: "" # deprecated: use config.celery.result_backend instead
   image:
     repository: zalf/fairagro-advanced-middleware-api
     pullPolicy: IfNotPresent
