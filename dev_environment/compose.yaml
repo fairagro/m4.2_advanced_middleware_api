@@ -118,7 +118,12 @@ services:
     volumes:
       - ./middleware-api-config.yaml:/run/secrets/middleware-api-config:ro
     # Run uvicorn directly (default command of the binary runs uvicorn)
-    command: ["/api/middleware-api/middleware-api", "--host", "0.0.0.0", "--port", "8000"]
+    command: [
+      "/api/middleware-api/middleware-api",
+      "--host", "0.0.0.0",
+      "--port", "8000",
+      "--workers", "4",
+    ]
     # command: sleep 3600
     restart: unless-stopped
 

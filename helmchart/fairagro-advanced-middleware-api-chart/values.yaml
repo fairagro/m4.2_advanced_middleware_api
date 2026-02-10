@@ -68,7 +68,9 @@ couchdb:
 
 # API deployment settings
 api:
-  replicaCount: 1
+  replicaCount: 2
+  # Parallelism settings
+  workers: 2
   image:
     repository: zalf/fairagro-advanced-middleware-api
     pullPolicy: IfNotPresent
