@@ -63,6 +63,9 @@ class CouchDBClient:
             db_name: Database name to use
             setup_system: Whether to ensure system databases exist (default: False)
         """
+        if self._client is not None:
+            return
+
         try:
             self._client = CouchDB(
                 self.url,
@@ -107,10 +110,12 @@ class CouchDBClient:
     async def close(self) -> None:
         """Close CouchDB connection."""
         if self._client:
-            await self._client.close()
-            self._client = None
-            self._db = None
-            logger.info("Closed CouchDB connection")
+            try:
+                await self._client.close()
+                logger.info("Closed CouchDB connection")
+            finally:
+                self._client = None
+                self._db = None
 
     def get_db(self) -> Database | None:
         """Get the connected database instance.
@@ -129,10 +134,8 @@ class CouchDBClient:
         try:
             if not self._client:
                 return False
-            # Check the server version/info as a health check
-            # aiocouch.CouchDB object does have a request method but it's not in the type stubs/known by static analysis
-            async with self._client.request("GET", "/") as resp:  # type: ignore[attr-defined] # pylint: disable=no-member
-                await resp.json()
+            # Check the server info as a health check
+            await self._client.info()
             return True
         except Exception as e:  # pylint: disable=broad-exception-caught
             logger.error("CouchDB health check failed: %s", e)

@@ -166,25 +166,32 @@ class Api:
         async def lifespan(_app: FastAPI) -> AsyncGenerator[None, None]:
             # Initialize connections
             try:
-                await self.business_logic.connect()
-                logger.info("Business logic connected successfully")
-            except Exception:  # pylint: disable=broad-exception-caught
-                logger.exception("An unexpected error occurred during business logic connection")
-                raise
-
-            yield
-
-            # Cleanup
-            if self._tracer_provider is not None:
                 try:
-                    self._tracer_provider.shutdown()
-                except (RuntimeError, ValueError, OSError) as exc:
-                    logger.warning("Failed to shutdown tracer provider: %s", exc)
-            if self._logger_provider is not None:
+                    await self.business_logic.connect()
+                    logger.info("Business logic connected successfully")
+                except Exception:  # pylint: disable=broad-exception-caught
+                    logger.exception("An unexpected error occurred during business logic connection")
+                    raise
+
+                yield
+            finally:
+                # Cleanup
                 try:
-                    self._logger_provider.shutdown()
-                except (RuntimeError, ValueError, OSError) as exc:
-                    logger.warning("Failed to shutdown logger provider: %s", exc)
+                    await self.business_logic.close()
+                    logger.info("Business logic disconnected successfully")
+                except Exception:  # pylint: disable=broad-exception-caught
+                    logger.exception("An error occurred during business logic disconnection")
+
+                if self._tracer_provider is not None:
+                    try:
+                        self._tracer_provider.shutdown()
+                    except (RuntimeError, ValueError, OSError) as exc:
+                        logger.warning("Failed to shutdown tracer provider: %s", exc)
+                if self._logger_provider is not None:
+                    try:
+                        self._logger_provider.shutdown()
+                    except (RuntimeError, ValueError, OSError) as exc:
+                        logger.warning("Failed to shutdown logger provider: %s", exc)
 
         self._app = FastAPI(
             title="FAIR Middleware API",
