@@ -95,6 +95,9 @@ ENV UVICORN_HOST=0.0.0.0
 ENV UVICORN_PORT=8000
 ENV GUNICORN_WORKERS=0
 ENV GUNICORN_LOG_LEVEL=info
+# Workaround for Pydantic v2 + PyInstaller + Python 3.12 crash
+# Disables Pydantic plugins which are not needed and cause metadata scan crashes
+ENV PYDANTIC_DISABLE_PLUGINS=1
 
 # Create non-root user and group and fix permissions
 RUN apk add --no-cache curl=8.17.0-r1 git=2.52.0-r0 tzdata && \
