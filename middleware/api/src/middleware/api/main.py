@@ -13,21 +13,6 @@ def main() -> None:
     # Required for PyInstaller binaries using multiprocessing (workers)
     multiprocessing.freeze_support()
 
-    # Workaround for Pydantic v2 + PyInstaller + Python 3.12 crash
-    # See: https://github.com/pydantic/pydantic/issues/11054
-    if getattr(sys, "frozen", False):
-        import importlib.metadata  # pylint: disable=import-outside-toplevel
-
-        orig_distributions = importlib.metadata.distributions
-
-        def patched_distributions(**kwargs):  # type: ignore
-            """Filter distributions to avoid None path crashes."""
-            for dist in orig_distributions(**kwargs):
-                if getattr(dist, "path", None) is not None:
-                    yield dist
-
-        importlib.metadata.distributions = patched_distributions  # type: ignore
-
     # Handle --version flag
     if len(sys.argv) > 1 and sys.argv[1] in ("--version", "-v"):
         try:
