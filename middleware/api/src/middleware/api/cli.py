@@ -31,8 +31,11 @@ async def setup_couchdb() -> None:
         business_logic = BusinessLogicFactory.create(config, mode="worker")
 
         logger.info("Starting CouchDB setup...")
-        await business_logic.setup()
-        logger.info("CouchDB setup completed successfully.")
+        try:
+            await business_logic.setup()
+            logger.info("CouchDB setup completed successfully.")
+        finally:
+            await business_logic.close()
     except (yaml.YAMLError, ValidationError) as e:
         logger.error("Configuration error: %s", e)
         sys.exit(1)
