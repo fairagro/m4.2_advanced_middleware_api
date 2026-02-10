@@ -3,6 +3,94 @@
 import multiprocessing
 import sys
 
+# Workaround for Pydantic v2 + PyInstaller + Python 3.12 crash
+# See: https://github.com/pydantic/pydantic/issues/11054
+# This MUST be applied before any other imports that might trigger pydantic
+if getattr(sys, "frozen", False):
+    import importlib.metadata
+    import os
+
+    # 1. Clean sys.path from None values which cause os.stat crashes in importlib.metadata
+    sys.path = [p for p in sys.path if p is not None]
+
+    # 2. Disable plugins via environment variable as first line of defense
+    os.environ["PYDANTIC_DISABLE_PLUGINS"] = "1"
+
+    # 3. Aggressively patch importlib.metadata to handle None paths if they leak in
+    try:
+        # Patch FastPath.mtime which is a common crash point
+        from importlib.metadata import FastPath  # type: ignore
+
+        orig_mtime = FastPath.mtime
+
+        def safe_mtime(self: FastPath) -> float:  # type: ignore
+            """Get the modification time of the root path, or return 0.0 if the path is invalid.
+
+            Returns
+            -------
+            float
+                The modification time of the root path, or 0.0 if the root is None or an error occurs.
+            """
+            if self.root is None:
+                return 0.0
+            try:
+                return os.stat(self.root).st_mtime
+            except (OSError, TypeError):
+                return 0.0
+
+        FastPath.mtime = safe_mtime  # type: ignore
+    except (ImportError, AttributeError, Exception):  # pylint: disable=broad-exception-caught
+        pass
+
+    # 4. Patch distributions() and Distribution.discover() as backup
+    orig_distributions = importlib.metadata.distributions
+
+    def patched_distributions(**kwargs):  # type: ignore
+        """Filter distributions to avoid None path crashes."""
+        try:
+            for dist in orig_distributions(**kwargs):
+                try:
+                    if getattr(dist, "path", None) is not None:
+                        yield dist
+                except (AttributeError, TypeError, ValueError, OSError):
+                    continue
+        except Exception:  # pylint: disable=broad-exception-caught
+            return
+
+    importlib.metadata.distributions = patched_distributions  # type: ignore
+
+    try:
+        from importlib.metadata import Distribution
+
+        orig_discover = Distribution.discover
+
+        def patched_discover(**kwargs):  # type: ignore
+            """Discover distributions while filtering out those with None paths.
+
+            Parameters
+            ----------
+            **kwargs : dict
+                Additional keyword arguments to pass to the original discover method.
+
+            Yields
+            ------
+            Distribution
+                Valid distributions with non-None paths.
+            """
+            try:
+                for dist in orig_discover(**kwargs):
+                    try:
+                        if getattr(dist, "path", None) is not None:
+                            yield dist
+                    except (AttributeError, TypeError, ValueError, OSError):
+                        continue
+            except (Exception, ImportError):  # pylint: disable=broad-exception-caught
+                return
+
+        Distribution.discover = patched_discover  # type: ignore
+    except (ImportError, AttributeError, Exception):  # pylint: disable=broad-exception-caught
+        pass
+
 
 def main() -> None:
     """Call uvicorn.main() or celery.main() to pass control.
