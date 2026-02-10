@@ -3,8 +3,14 @@
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+import redis
 
-from middleware.api.business_logic import BusinessLogic, BusinessLogicError, SetupError
+from middleware.api.business_logic import (
+    BusinessLogic,
+    BusinessLogicError,
+    InvalidJsonSemanticError,
+    SetupError,
+)
 from middleware.api.document_store import ArcStoreResult
 from middleware.shared.api_models.models import ArcOperationResult, ArcResponse, ArcStatus
 
@@ -105,14 +111,14 @@ async def test_health_check(api_logic: BusinessLogic, mock_doc_store: MagicMock)
 
     # Mock celery_app and redis
     with (
-        patch("middleware.api.business_logic.celery_app") as mock_celery,
-        patch("middleware.api.business_logic.redis") as mock_redis_lib,
+        patch("middleware.api.celery_app.celery_app") as mock_celery,
+        patch("redis.from_url") as mock_redis_lib,
     ):
         mock_conn = MagicMock()
         mock_celery.connection_or_acquire.return_value.__enter__.return_value = mock_conn
 
         mock_redis_instance = MagicMock()
-        mock_redis_lib.from_url.return_value = mock_redis_instance
+        mock_redis_lib.return_value = mock_redis_instance
 
         result = await api_logic.health_check()
 
@@ -133,18 +139,14 @@ async def test_health_check_failures(
     # Mock Redis and Celery App
     with (
         patch("middleware.api.business_logic.celery_app") as mock_celery,
-        patch("middleware.api.business_logic.redis") as mock_redis_lib,
+        patch("middleware.api.business_logic.redis.from_url") as mock_redis_from_url,
     ):
-        # Configure Redis mock to have exception classes
-        mock_redis_lib.ConnectionError = type("ConnectionError", (ConnectionError,), {})
-        mock_redis_lib.TimeoutError = type("TimeoutError", (Exception,), {})
-
         # Mock RabbitMQ failure
         mock_celery.connection_or_acquire.side_effect = ConnectionError("Connection failed")
 
         # Mock Redis failure
         mock_config.celery.result_backend.get_secret_value.return_value = "redis://some-host"
-        mock_redis_lib.from_url.return_value.ping.side_effect = mock_redis_lib.ConnectionError("Ping failed")
+        mock_redis_from_url.return_value.ping.side_effect = redis.ConnectionError("Ping failed")
 
         status = await api_logic.health_check()
         assert status["couchdb_reachable"] is False
@@ -270,4 +272,76 @@ def test_factory_create_api_mode() -> None:
     pass
 
 
-# Re-implement simple Factory test if possible, or skip if dependencies are complex
+@pytest.mark.asyncio
+async def test_create_or_update_arc_parse_failure(api_logic: BusinessLogic) -> None:
+    """Test create_or_update_arc with parsing failure."""
+    with patch("middleware.api.business_logic.ARC") as mock_arc_class:
+        mock_arc_class.from_rocrate_json_string.side_effect = Exception("Parse error")
+
+        with pytest.raises(InvalidJsonSemanticError, match="Failed to parse RO-Crate JSON"):
+            await api_logic.create_or_update_arc("test_rdi", {}, "client_1")
+
+
+@pytest.mark.asyncio
+async def test_create_or_update_missing_identifier(api_logic: BusinessLogic) -> None:
+    """Test create_or_update_arc with missing Identifier."""
+    arc_data = {"@graph": [{"@id": "arc"}]}
+
+    with patch("middleware.api.business_logic.ARC") as mock_arc_class:
+        mock_arc_obj = MagicMock()
+        mock_arc_obj.Identifier = None
+        mock_arc_class.from_rocrate_json_string.return_value = mock_arc_obj
+
+        with pytest.raises(InvalidJsonSemanticError, match="must contain an 'Identifier'"):
+            await api_logic.create_or_update_arc("test_rdi", arc_data, "client_1")
+
+
+@pytest.mark.asyncio
+async def test_create_or_update_generic_exception(api_logic: BusinessLogic, mock_doc_store: MagicMock) -> None:
+    """Test create_or_update_arc with unexpected exception."""
+    mock_doc_store.store_arc.side_effect = Exception("Unexpected failure")
+    arc_data = {"@graph": [{"Identifier": "test"}]}
+
+    with patch("middleware.api.business_logic.ARC") as mock_arc_class:
+        mock_arc_obj = MagicMock()
+        mock_arc_obj.Identifier = "test"
+        mock_arc_class.from_rocrate_json_string.return_value = mock_arc_obj
+
+        with pytest.raises(BusinessLogicError, match="unexpected error encountered"):
+            await api_logic.create_or_update_arc("test_rdi", arc_data, "client_1")
+
+
+@pytest.mark.asyncio
+async def test_sync_to_gitlab_missing_identifier(worker_logic: BusinessLogic) -> None:
+    """Test sync_to_gitlab with missing Identifier."""
+    arc_data = {"@graph": [{"@id": "arc"}]}
+
+    with patch("middleware.api.business_logic.ARC") as mock_arc_class:
+        mock_arc_obj = MagicMock()
+        mock_arc_obj.Identifier = ""
+        mock_arc_class.from_rocrate_json_string.return_value = mock_arc_obj
+
+        with pytest.raises(InvalidJsonSemanticError, match="must contain an 'Identifier'"):
+            await worker_logic.sync_to_gitlab("test_rdi", arc_data)
+
+
+@pytest.mark.asyncio
+async def test_sync_to_gitlab_generic_exception(worker_logic: BusinessLogic, mock_store: MagicMock) -> None:
+    """Test sync_to_gitlab with unexpected exception."""
+    mock_store.create_or_update.side_effect = Exception("Git failure")
+    arc_data = {"@graph": [{"Identifier": "test"}]}
+
+    with patch("middleware.api.business_logic.ARC") as mock_arc_class:
+        mock_arc_obj = MagicMock()
+        mock_arc_obj.Identifier = "test"
+        mock_arc_class.from_rocrate_json_string.return_value = mock_arc_obj
+
+        with pytest.raises(BusinessLogicError, match="unexpected error encountered"):
+            await worker_logic.sync_to_gitlab("test_rdi", arc_data)
+
+
+@pytest.mark.asyncio
+async def test_sync_to_gitlab_business_logic_error(api_logic: BusinessLogic) -> None:
+    """Test sync_to_gitlab in API mode (should fail)."""
+    with pytest.raises(BusinessLogicError, match="must not be called in API mode"):
+        await api_logic.sync_to_gitlab("test_rdi", {})

@@ -104,7 +104,7 @@ async def test_update_arc_success(service: BusinessLogic) -> None:
     mock_result.has_changes = True
     mock_result.id = "ARC-001"
     mock_result.rev = "2-abc"
-    service._doc_store.store_arc = AsyncMock(return_value=mock_result)  # type: ignore[method-assign]
+    service._doc_store.store_arc = AsyncMock(return_value=mock_result)  # type: ignore[method-assign]   # pylint: disable=protected-access
 
     result = await service.create_or_update_arc(rdi="TestRDI", arc=rocrate, client_id="TestClient")
 
