@@ -65,6 +65,7 @@ async def test_setup_couchdb_setup_error() -> None:
     mock_bl = MagicMock()
     # Make setup an async mock that raises SetupError
     mock_bl.setup = AsyncMock(side_effect=SetupError("Setup failed"))
+    mock_bl.close = AsyncMock()
 
     with (
         patch("middleware.api.cli.Path.is_file", return_value=True),
@@ -77,6 +78,7 @@ async def test_setup_couchdb_setup_error() -> None:
 
     assert exc_info.value.code == 1
     assert any("Setup failed" in str(call) for call in mock_logger.error.call_args_list)
+    mock_bl.close.assert_called_once()
 
 
 @pytest.mark.asyncio
@@ -99,8 +101,9 @@ async def test_setup_couchdb_success() -> None:
     """Test setup_couchdb successful execution."""
     mock_config = MagicMock()
     mock_bl = MagicMock()
-    # Make setup an async mock that succeeds
+    # Make setup and close async mocks
     mock_bl.setup = AsyncMock(return_value=None)
+    mock_bl.close = AsyncMock()
 
     with (
         patch("middleware.api.cli.Path.is_file", return_value=True),
@@ -111,5 +114,7 @@ async def test_setup_couchdb_success() -> None:
         await setup_couchdb()
         # Verify setup was called
         mock_bl.setup.assert_called_once()
+        # Verify close was called
+        mock_bl.close.assert_called_once()
         # Verify success message was logged
         assert any("completed successfully" in str(call) for call in mock_logger.info.call_args_list)
