@@ -63,6 +63,9 @@ class CouchDBClient:
             db_name: Database name to use
             setup_system: Whether to ensure system databases exist (default: False)
         """
+        if self._client is not None:
+            return
+
         try:
             self._client = CouchDB(
                 self.url,
@@ -107,10 +110,12 @@ class CouchDBClient:
     async def close(self) -> None:
         """Close CouchDB connection."""
         if self._client:
-            await self._client.close()
-            self._client = None
-            self._db = None
-            logger.info("Closed CouchDB connection")
+            try:
+                await self._client.close()
+            finally:
+                self._client = None
+                self._db = None
+                logger.info("Closed CouchDB connection")
 
     def get_db(self) -> Database | None:
         """Get the connected database instance.
