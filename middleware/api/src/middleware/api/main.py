@@ -54,12 +54,12 @@ def main() -> None:
     app_path = f"{middleware_api.__module__}:middleware_api.app"
 
     # Filter out non-uvicorn flags that might leak in from multiprocessing or wrappers
-    NON_UVICORN_ARGS_TO_FILTER = {
+    non_uvicorn_args_to_filter = {
         "--multiprocessing-fork",  # Internal multiprocessing flag from PyInstaller workers
-        "-B",                      # Python interpreter flag (no .pyc) that might be passed by wrappers
-        "-u",                      # Python interpreter flag (unbuffered I/O) that might be passed by wrappers
+        "-B",  # Python interpreter flag (no .pyc) that might be passed by wrappers
+        "-u",  # Python interpreter flag (unbuffered I/O) that might be passed by wrappers
     }
-    filtered_args = [arg for arg in sys.argv[1:] if arg not in NON_UVICORN_ARGS_TO_FILTER]
+    filtered_args = [arg for arg in sys.argv[1:] if arg not in non_uvicorn_args_to_filter]
 
     # Rebuild sys.argv for uvicorn.main()
     sys.argv = ["uvicorn", app_path] + filtered_args
