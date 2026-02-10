@@ -27,7 +27,8 @@ if getattr(sys, "frozen", False):
                 # or invalid path which causes importlib.metadata's mtime/stat to crash.
                 if getattr(dist, "path", None) is not None:
                     yield dist
-            except (AttributeError, TypeError, ValueError):
+            except (AttributeError, TypeError, ValueError) as e:
+                print(f"Warning: Skipping problematic distribution in PyInstaller patch: {e}", file=sys.stderr)
                 continue
 
     importlib.metadata.distributions = patched_distributions  # type: ignore
