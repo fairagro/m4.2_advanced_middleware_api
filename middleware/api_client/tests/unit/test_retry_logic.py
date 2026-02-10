@@ -35,7 +35,7 @@ async def test_client_retries_on_503_then_success() -> None:
 
             result = await client._get("v2/tasks/123")  # pylint: disable=protected-access
             assert result["status"] == "SUCCESS"
-            max_retries_plus_one = 3  # Named constant for clarity
+            max_retries_plus_one = config.max_retries + 1
             assert route.call_count == max_retries_plus_one
 
 
