@@ -112,10 +112,10 @@ class CouchDBClient:
         if self._client:
             try:
                 await self._client.close()
+                logger.info("Closed CouchDB connection")
             finally:
                 self._client = None
                 self._db = None
-                logger.info("Closed CouchDB connection")
 
     def get_db(self) -> Database | None:
         """Get the connected database instance.
