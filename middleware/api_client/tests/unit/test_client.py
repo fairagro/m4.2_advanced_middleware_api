@@ -138,7 +138,7 @@ async def test_create_or_update_arc_network_error(client_config: Config) -> None
     # Should raise ApiClientError
     arc = ARC.from_arc_investigation(ArcInvestigation.create(identifier="test", title="Test"))
     async with ApiClient(client_config) as client:
-        with pytest.raises(ApiClientError, match="Request error"):
+        with pytest.raises(ApiClientError, match="Request failed after 3 retries"):
             await client.create_or_update_arc(
                 rdi="test-rdi",
                 arc=arc,
@@ -309,7 +309,7 @@ async def test_get_network_error(client_config: Config) -> None:
     """Test _get with a network error."""
     respx.get(f"{client_config.api_url}v2/test").mock(side_effect=httpx.RequestError("Network error"))
     client = ApiClient(client_config)
-    with pytest.raises(ApiClientError, match="Request error: Network error"):
+    with pytest.raises(ApiClientError, match="Request failed after 3 retries: Network error"):
         await client._get("v2/test")  # pylint: disable=protected-access
 
 

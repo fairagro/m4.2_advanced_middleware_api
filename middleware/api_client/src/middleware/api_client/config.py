@@ -29,6 +29,10 @@ class Config(ConfigBase):
     verify_ssl: Annotated[bool, Field(description="Enable SSL certificate verification")] = True
     follow_redirects: Annotated[bool, Field(description="Follow HTTP redirects for API requests")] = True
 
+    # Retry parameters
+    max_retries: Annotated[int, Field(description="Maximum number of retries for transient HTTP errors", ge=0)] = 3
+    retry_backoff_factor: Annotated[float, Field(description="Backoff factor for retries", gt=0)] = 2.0
+
     # Polling parameters
     polling_initial_delay: Annotated[
         float, Field(description="Initial delay in seconds between polling requests", gt=0)
