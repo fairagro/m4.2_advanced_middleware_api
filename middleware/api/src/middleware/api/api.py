@@ -9,6 +9,30 @@ import logging
 import os
 import sys
 import uuid
+
+# Workaround for Pydantic v2 + PyInstaller + Python 3.12 crash
+# See: https://github.com/pydantic/pydantic/issues/11054
+# We patch importlib.metadata.distributions to filter out distributions with None paths,
+# which cause os.stat to crash in frozen environments.
+if getattr(sys, "frozen", False):
+    import importlib.metadata
+
+    orig_distributions = importlib.metadata.distributions
+
+    def patched_distributions(**kwargs):  # type: ignore
+        """Filter distributions to avoid None path crashes."""
+        for dist in orig_distributions(**kwargs):
+            try:
+                # In PyInstaller frozen environment, some distributions might have a None
+                # or invalid path which causes importlib.metadata's mtime/stat to crash.
+                if getattr(dist, "path", None) is not None:
+                    yield dist
+            except (AttributeError, TypeError, ValueError) as e:
+                print(f"Warning: Skipping problematic distribution in PyInstaller patch: {e}", file=sys.stderr)
+                continue
+
+    importlib.metadata.distributions = patched_distributions  # type: ignore
+
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 from pathlib import Path
