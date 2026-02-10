@@ -136,16 +136,18 @@ class ApiClient:
 
         return self._client
 
-    async def _post(
+    async def _request_with_retries(
         self,
+        method: str,
         path: str,
-        body: BaseModel,
+        **kwargs: Any,
     ) -> Any:
-        """Send a POST request to the API with retries.
+        """Send an HTTP request to the API with retries.
 
         Args:
+            method (str): HTTP method (GET, POST, etc.).
             path (str): API endpoint path.
-            body (BaseModel): Request body as Pydantic model.
+            **kwargs: Additional arguments passed to httpx client.
 
         Returns:
             Any: JSON response data.
@@ -155,20 +157,19 @@ class ApiClient:
         """
         client = self._get_client()
         path = path.lstrip("/")
+        method = method.upper()
 
         for attempt in range(self._config.max_retries + 1):
             if attempt > 0:
                 delay = self._config.retry_backoff_factor * (2 ** (attempt - 1))
-                logger.info("Retrying POST %s in %.1fs (attempt %d/%d)", path, delay, attempt, self._config.max_retries)
+                logger.info(
+                    "Retrying %s %s in %.1fs (attempt %d/%d)", method, path, delay, attempt, self._config.max_retries
+                )
                 await asyncio.sleep(delay)
 
             try:
-                logger.debug("Sending POST request to %s (attempt %d)", path, attempt + 1)
-                resp = await client.post(
-                    path,
-                    json=body.model_dump(),
-                    headers={"content-type": "application/json"},
-                )
+                logger.debug("Sending %s request to %s (attempt %d)", method, path, attempt + 1)
+                resp = await client.request(method, path, **kwargs)
 
                 # Retry on 502, 503, 504
                 if resp.status_code in (502, 503, 504) and attempt < self._config.max_retries:
@@ -176,7 +177,7 @@ class ApiClient:
                     continue
 
                 resp.raise_for_status()
-                logger.debug("POST request successful, status code: %s", resp.status_code)
+                logger.debug("%s request successful, status code: %s", method, resp.status_code)
                 return resp.json()
             except httpx.HTTPStatusError as e:
                 # If we get here and it's not a retryable error, or we're out of retries
@@ -202,6 +203,30 @@ class ApiClient:
 
         raise ApiClientError("Request failed for an unknown reason")
 
+    async def _post(
+        self,
+        path: str,
+        body: BaseModel,
+    ) -> Any:
+        """Send a POST request to the API with retries.
+
+        Args:
+            path (str): API endpoint path.
+            body (BaseModel): Request body as Pydantic model.
+
+        Returns:
+            Any: JSON response data.
+
+        Raises:
+            ApiClientError: If the request fails after all retries.
+        """
+        return await self._request_with_retries(
+            "POST",
+            path,
+            json=body.model_dump(),
+            headers={"content-type": "application/json"},
+        )
+
     async def _get(self, path: str) -> Any:
         """Send a GET request to the API with retries.
 
@@ -214,49 +239,7 @@ class ApiClient:
         Raises:
             ApiClientError: If the request fails after all retries.
         """
-        client = self._get_client()
-        path = path.lstrip("/")
-
-        for attempt in range(self._config.max_retries + 1):
-            if attempt > 0:
-                delay = self._config.retry_backoff_factor * (2 ** (attempt - 1))
-                logger.info("Retrying GET %s in %.1fs (attempt %d/%d)", path, delay, attempt, self._config.max_retries)
-                await asyncio.sleep(delay)
-
-            try:
-                logger.debug("Sending GET request to %s (attempt %d)", path, attempt + 1)
-                resp = await client.get(path)
-
-                # Retry on 502, 503, 504
-                if resp.status_code in (502, 503, 504) and attempt < self._config.max_retries:
-                    logger.warning("Transient HTTP error %d from server", resp.status_code)
-                    continue
-
-                resp.raise_for_status()
-                logger.debug("GET request successful, status code: %s", resp.status_code)
-                return resp.json()
-            except httpx.HTTPStatusError as e:
-                if e.response.status_code in (502, 503, 504) and attempt < self._config.max_retries:
-                    continue
-
-                if e.response.status_code in (502, 503, 504):
-                    error_msg = (
-                        f"Request failed after {self._config.max_retries} retries: HTTP {e.response.status_code}"
-                    )
-                else:
-                    error_msg = f"HTTP error {e.response.status_code}: {e.response.text}"
-
-                logger.error(error_msg)
-                raise ApiClientError(error_msg, status_code=e.response.status_code) from e
-            except httpx.RequestError as e:
-                if attempt < self._config.max_retries:
-                    logger.warning("Request error: %s. Retrying...", str(e))
-                    continue
-                error_msg = f"Request failed after {self._config.max_retries} retries: {str(e)}"
-                logger.error(error_msg)
-                raise ApiClientError(error_msg) from e
-
-        raise ApiClientError("Request failed for an unknown reason")
+        return await self._request_with_retries("GET", path)
 
     def _serialize_arc(self, arc: "ARC | dict[str, Any]") -> dict[str, Any]:
         """Serialize ARC to RO-Crate JSON dict."""
