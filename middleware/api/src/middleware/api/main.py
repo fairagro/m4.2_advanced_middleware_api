@@ -39,8 +39,8 @@ if getattr(sys, "frozen", False):
                 return 0.0
 
         FastPath.mtime = safe_mtime  # type: ignore
-    except (ImportError, AttributeError, Exception):  # pylint: disable=broad-exception-caught
-        pass
+    except Exception as e:  # pylint: disable=broad-exception-caught
+        print(f"Warning: Failed to apply Pydantic workaround for FastPath.mtime: {e}", file=sys.stderr)
 
     # 4. Patch distributions() and Distribution.discover() as backup
     orig_distributions = importlib.metadata.distributions
