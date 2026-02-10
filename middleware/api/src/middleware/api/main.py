@@ -1,5 +1,6 @@
 """Entry point for running the Middleware API with Uvicorn or Celery."""
 
+import multiprocessing
 import sys
 
 
@@ -9,6 +10,9 @@ def main() -> None:
     If the first argument is 'celery', we pass control to celery.
     Otherwise we default to uvicorn with the hardcoded app path.
     """
+    # Required for PyInstaller binaries using multiprocessing (workers)
+    multiprocessing.freeze_support()
+
     # Handle --version flag
     if len(sys.argv) > 1 and sys.argv[1] in ("--version", "-v"):
         try:
@@ -49,8 +53,11 @@ def main() -> None:
     # Construct the app path string
     app_path = f"{middleware_api.__module__}:middleware_api.app"
 
+    # Filter out non-uvicorn flags that might leak in from multiprocessing or wrappers
+    filtered_args = [arg for arg in sys.argv[1:] if arg not in ("--multiprocessing-fork", "-B", "-u")]
+
     # Rebuild sys.argv for uvicorn.main()
-    sys.argv = ["uvicorn", app_path] + sys.argv[1:]
+    sys.argv = ["uvicorn", app_path] + filtered_args
 
     uvicorn.main()  # pylint: disable=no-value-for-parameter
 
