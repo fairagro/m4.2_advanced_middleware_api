@@ -3,6 +3,7 @@
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+from aiocouch import CouchDB
 from aiocouch.exception import NotFoundError
 from pydantic import SecretStr
 
@@ -109,17 +110,14 @@ async def test_couchdb_client_health_check_success(couchdb_client: CouchDBClient
     couchdb_client : CouchDBClient
         An instance of CouchDBClient initialized with the provided configuration.
     """
-    mock_client = MagicMock()
-    mock_resp = AsyncMock()
-    mock_resp.json.return_value = {"couchdb": "Welcome"}
-    mock_resp.__aenter__.return_value = mock_resp
-    mock_client.request.return_value = mock_resp
+    mock_client = MagicMock(spec=CouchDB)
+    mock_client.info = AsyncMock(return_value={"couchdb": "Welcome"})
 
     couchdb_client._client = mock_client  # pylint: disable=protected-access
 
     result = await couchdb_client.health_check()
     assert result is True
-    mock_client.request.assert_called_with("GET", "/")
+    mock_client.info.assert_called_once()
 
 
 @pytest.mark.asyncio
@@ -131,12 +129,13 @@ async def test_couchdb_client_health_check_failure(couchdb_client: CouchDBClient
     couchdb_client : CouchDBClient
         An instance of CouchDBClient initialized with the provided configuration.
     """
-    mock_client = MagicMock()
-    mock_client.request.side_effect = Exception("error")
+    mock_client = MagicMock(spec=CouchDB)
+    mock_client.info = AsyncMock(side_effect=Exception("error"))
     couchdb_client._client = mock_client  # pylint: disable=protected-access
 
     result = await couchdb_client.health_check()
     assert result is False
+    mock_client.info.assert_called_once()
 
 
 @pytest.mark.asyncio
