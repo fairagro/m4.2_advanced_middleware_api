@@ -15,7 +15,7 @@ from middleware.api.schemas.arc_document import (
     ArcLifecycleStatus,
     ArcMetadata,
 )
-from middleware.api.utils import calculate_arc_id
+from middleware.api.utils import calculate_arc_id, extract_identifier
 
 from . import ArcStoreResult, DocumentStore
 
@@ -35,22 +35,6 @@ class CouchDB(DocumentStore):
         self._db_name = config.db_name
         self._client = CouchDBClient.from_config(config)
 
-    def _extract_identifier(self, arc_content: dict[str, Any]) -> str:
-        """Extract identifier from RO-Crate content."""
-        identifier = "unknown"
-        if "@graph" in arc_content:
-            for item in arc_content["@graph"]:
-                if item.get("@id") == "./":
-                    identifier = item.get("identifier", "unknown")
-                    if isinstance(identifier, list):
-                        identifier = identifier[0] if identifier else "unknown"
-                    break
-
-        if identifier == "unknown":
-            identifier = arc_content.get("identifier", "unknown")
-
-        return identifier
-
     def _calculate_content_hash(self, arc_content: dict[str, Any]) -> str:
         """Calculate SHA256 hash of ARC content."""
         # Use sort_keys=True for canonical JSON representation
@@ -65,7 +49,7 @@ class CouchDB(DocumentStore):
     ) -> ArcStoreResult:
         """Store ARC with change detection."""
         # Use the shared utility to calculate ARC ID
-        identifier = self._extract_identifier(arc_content)
+        identifier = extract_identifier(arc_content)
         arc_id = calculate_arc_id(identifier, rdi)
         doc_id = f"arc_{arc_id}"
 
