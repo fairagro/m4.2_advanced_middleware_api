@@ -36,8 +36,12 @@ class CouchDB(DocumentStore):
         self._client = CouchDBClient.from_config(config)
 
     def _calculate_content_hash(self, arc_content: dict[str, Any]) -> str:
-        """Calculate SHA256 hash of ARC content."""
-        # Use sort_keys=True for canonical JSON representation
+        """Calculate SHA256 hash of ARC content.
+
+        Note: We use sort_keys=True to ensure consistent hashing even if
+        the JSON dictionary order or whitespace changes.
+        """
+        # orjson is faster if available, but standard json is fine for relatively small dicts
         json_str = json.dumps(arc_content, sort_keys=True)
         return hashlib.sha256(json_str.encode("utf-8")).hexdigest()
 
@@ -50,6 +54,9 @@ class CouchDB(DocumentStore):
         """Store ARC with change detection."""
         # Use the shared utility to calculate ARC ID
         identifier = extract_identifier(arc_content)
+        if not identifier:
+            raise ValueError("ARC content must contain a valid identifier")
+
         arc_id = calculate_arc_id(identifier, rdi)
         doc_id = f"arc_{arc_id}"
 

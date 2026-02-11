@@ -200,7 +200,7 @@ class BusinessLogic:
             try:
                 # Fast validation: Ensure identifier is present
                 identifier = extract_identifier(arc)
-                if identifier == "unknown":
+                if identifier is None:
                     raise InvalidJsonSemanticError("RO-Crate JSON must contain an 'identifier' (e.g. in ISA object).")
 
                 # Store in CouchDB (fast) - identifiers and hashing are handled inside doc_store
@@ -278,7 +278,7 @@ class BusinessLogic:
             try:
                 # Calculate ARC ID using shared utility - fast and doesn't require full arctrl parse yet
                 identifier = extract_identifier(arc)
-                if identifier == "unknown":
+                if identifier is None:
                     raise InvalidJsonSemanticError("RO-Crate JSON must contain an 'identifier' (e.g. in ISA object).")
 
                 arc_id = calculate_arc_id(identifier, rdi)
