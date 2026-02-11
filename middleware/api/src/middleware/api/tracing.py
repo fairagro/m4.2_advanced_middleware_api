@@ -20,8 +20,7 @@ def instrument_app(app: "FastAPI") -> None:
     """Instrument a FastAPI application with OpenTelemetry.
 
     This includes:
-    - FastAPI instrumentation (which builds on Starlette)
-    - Starlette instrumentation directly (for extra coverage)
+    - FastAPI instrumentation
     - Redis instrumentation
     - Requests instrumentation
     """
