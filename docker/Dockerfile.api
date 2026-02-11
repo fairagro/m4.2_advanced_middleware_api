@@ -66,14 +66,12 @@ RUN pyinstaller --onedir \
     --hidden-import "celery.worker.consumer.delayed_delivery" \
     --hidden-import "celery.worker.strategy" \
     --hidden-import "kombu.transport.pyamqp" \
-    --hidden-import "uvicorn.workers" \
     --copy-metadata celery \
     --copy-metadata opentelemetry-api \
     --copy-metadata opentelemetry-instrumentation \
     --copy-metadata opentelemetry-instrumentation-fastapi \
     --copy-metadata opentelemetry-instrumentation-celery \
     --copy-metadata opentelemetry-instrumentation-redis \
-    --copy-metadata opentelemetry-instrumentation-starlette \
     --copy-metadata opentelemetry-instrumentation-requests \
     --copy-metadata opentelemetry-sdk \
     --copy-metadata requests \
@@ -81,7 +79,8 @@ RUN pyinstaller --onedir \
     --copy-metadata pydantic-core \
     --copy-metadata fastapi \
     --copy-metadata uvicorn \
-    --copy-metadata starlette \
+    --copy-metadata prompt-toolkit \
+    --copy-metadata click \
     --copy-metadata api \
     $(python -c "import middleware.api; print(middleware.api.__file__.replace('__init__.py', 'main.py'))")
 
@@ -93,11 +92,7 @@ WORKDIR /api
 
 ENV UVICORN_HOST=0.0.0.0
 ENV UVICORN_PORT=8000
-ENV GUNICORN_WORKERS=0
-ENV GUNICORN_LOG_LEVEL=info
-# Workaround for Pydantic v2 + PyInstaller + Python 3.12 crash
-# Disables Pydantic plugins which are not needed and cause metadata scan crashes
-ENV PYDANTIC_DISABLE_PLUGINS=1
+ENV UVICORN_LOG_LEVEL=info
 
 # Create non-root user and group and fix permissions
 RUN apk add --no-cache curl=8.17.0-r1 git=2.52.0-r0 tzdata && \

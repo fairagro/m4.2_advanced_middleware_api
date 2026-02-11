@@ -68,9 +68,10 @@ couchdb:
 
 # API deployment settings
 api:
+  # The application is scaled using vertical replicas only.
+  # Do NOT increase 'workers' (Uvicorn worker processes) as the PyInstaller-frozen
+  # environment on Python 3.12 has stability issues with multiple worker processes.
   replicaCount: 2
-  # Parallelism settings
-  workers: 2
   image:
     repository: zalf/fairagro-advanced-middleware-api
     pullPolicy: IfNotPresent
