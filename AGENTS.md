@@ -204,6 +204,14 @@ When editing files:
 - Updated all related tests (26/26 passing)
 - Updated configuration validation test
 
+### Session 4: PyInstaller & Scaling Strategy
+
+- Investigated and resolved `TypeError: stat` crash in frozen Python 3.12 environment.
+- Identified incompatibility between Pydantic v2's plugin scan and multiple Uvicorn workers in frozen state.
+- Decision: Enforce single worker per container; scale horizontally via Kubernetes replicas.
+- Improved Docker build by including metadata for `pydantic`, `fastapi`, `uvicorn`, `prompt-toolkit`, and `click`.
+- Fixed Celery worker crash caused by missing `prompt_toolkit` metadata.
+
 ## 📞 Questions to Ask
 
 Before making changes, consider:
