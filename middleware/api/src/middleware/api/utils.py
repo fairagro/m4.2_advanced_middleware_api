@@ -39,8 +39,8 @@ def extract_identifier(arc_content: dict[str, Any]) -> str | None:
         for item in graph:
             if item.get("@id") == "./":
                 identifier = item.get("identifier")
-                if isinstance(identifier, list) and identifier:
-                    return str(identifier[0])
+                if isinstance(identifier, list):
+                    identifier = identifier[0] if identifier else None
                 return str(identifier) if identifier else None
 
     return None

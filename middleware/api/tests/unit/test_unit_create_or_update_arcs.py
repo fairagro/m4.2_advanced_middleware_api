@@ -163,6 +163,14 @@ async def test_update_arc_success(service: BusinessLogic) -> None:
                 },
             ],
         },
+        {  # Empty string identifier
+            "@context": "https://w3id.org/ro/crate/1.1/context",
+            "@graph": [{"@id": "./", "identifier": ""}],
+        },
+        {  # List with empty string identifier
+            "@context": "https://w3id.org/ro/crate/1.1/context",
+            "@graph": [{"@id": "./", "identifier": [""]}],
+        },
     ],
 )
 async def test_element_missing(service: BusinessLogic, rocrate: dict[str, Any]) -> None:
