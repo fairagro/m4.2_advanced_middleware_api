@@ -14,7 +14,7 @@ import redis
 from arctrl import ARC  # type: ignore[import-untyped]
 from opentelemetry import trace
 
-from middleware.api.utils import calculate_arc_id
+from middleware.api.utils import calculate_arc_id, extract_identifier
 from middleware.shared.api_models.models import (
     ArcOperationResult,
     ArcResponse,
@@ -198,25 +198,16 @@ class BusinessLogic:
         ) as span:
             logger.info("Starting ARC creation/update: rdi=%s, client_id=%s", rdi, client_id)
             try:
-                with self._tracer.start_as_current_span("api.BusinessLogic.create_or_update_arc:json_serialize"):
-                    arc_json = json.dumps(arc)
+                # Fast validation: Ensure identifier is present
+                identifier = extract_identifier(arc)
+                if identifier is None:
+                    raise InvalidJsonSemanticError("RO-Crate JSON must contain an 'identifier' (e.g. in ISA object).")
 
-                with self._tracer.start_as_current_span("api.BusinessLogic.create_or_update_arc:arc_parse_rocrate"):
-                    try:
-                        arc_obj = ARC.from_rocrate_json_string(arc_json)
-                    except Exception as exc:
-                        raise InvalidJsonSemanticError(f"Failed to parse RO-Crate JSON: {str(exc)}") from exc
-
-                identifier = getattr(arc_obj, "Identifier", None)
-                if not identifier or identifier == "":
-                    raise InvalidJsonSemanticError("RO-Crate JSON must contain an 'Identifier' in the ISA object.")
-
-                # Calculate ARC ID using shared utility, not Store
-                arc_id = calculate_arc_id(identifier, rdi)
+                # Store in CouchDB (fast) - identifiers and hashing are handled inside doc_store
+                doc_result = await self._doc_store.store_arc(rdi, arc)
+                arc_id = doc_result.arc_id
                 span.set_attribute("arc_id", arc_id)
 
-                # Store in CouchDB (fast)
-                doc_result = await self._doc_store.store_arc(rdi, arc)
                 is_new = doc_result.is_new
                 has_changes = doc_result.has_changes
                 should_trigger_git = is_new or has_changes
@@ -285,17 +276,17 @@ class BusinessLogic:
         ) as span:
             logger.info("Starting GitLab sync for RDI: %s", rdi)
             try:
-                # Parse ARC
-                arc_json = json.dumps(arc)
-                arc_obj = ARC.from_rocrate_json_string(arc_json)
+                # Calculate ARC ID using shared utility - fast and doesn't require full arctrl parse yet
+                identifier = extract_identifier(arc)
+                if identifier is None:
+                    raise InvalidJsonSemanticError("RO-Crate JSON must contain an 'identifier' (e.g. in ISA object).")
 
-                identifier = getattr(arc_obj, "Identifier", None)
-                if not identifier or identifier == "":
-                    raise InvalidJsonSemanticError("RO-Crate JSON must contain an 'Identifier' in the ISA object.")
-
-                # Calculate ARC ID using shared utility
                 arc_id = calculate_arc_id(identifier, rdi)
                 span.set_attribute("arc_id", arc_id)
+
+                # Parse ARC for storage (slow, but fine in worker)
+                arc_json = json.dumps(arc)
+                arc_obj = ARC.from_rocrate_json_string(arc_json)
 
                 # Store in Git
                 logger.info("Triggering Git storage for ARC %s", arc_id)

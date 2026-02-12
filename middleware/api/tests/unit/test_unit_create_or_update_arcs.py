@@ -102,7 +102,7 @@ async def test_update_arc_success(service: BusinessLogic) -> None:
     mock_result = MagicMock()
     mock_result.is_new = False
     mock_result.has_changes = True
-    mock_result.id = "ARC-001"
+    mock_result.arc_id = "cd67f37475d4b47c093a778c1a938f36c53e071c5a93910c2657755f1f97a5b6"
     mock_result.rev = "2-abc"
     service._doc_store.store_arc = AsyncMock(return_value=mock_result)  # type: ignore[method-assign]   # pylint: disable=protected-access
 
@@ -162,6 +162,14 @@ async def test_update_arc_success(service: BusinessLogic) -> None:
                     "about": {"@id": "./"},
                 },
             ],
+        },
+        {  # Empty string identifier
+            "@context": "https://w3id.org/ro/crate/1.1/context",
+            "@graph": [{"@id": "./", "identifier": ""}],
+        },
+        {  # List with empty string identifier
+            "@context": "https://w3id.org/ro/crate/1.1/context",
+            "@graph": [{"@id": "./", "identifier": [""]}],
         },
     ],
 )
