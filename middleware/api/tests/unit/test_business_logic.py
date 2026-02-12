@@ -73,7 +73,7 @@ async def test_api_mode_create_or_update_success(
 ) -> None:
     """Test create_or_update_arc in API mode."""
     rdi = "test-rdi"
-    arc_data = {"@graph": [{"@id": "./", "identifier": "ABC"}]}
+    arc_data = {"@context": "https://w3id.org/ro/crate/1.1/context", "@graph": [{"@id": "./", "identifier": "ABC"}]}
     client_id = "test-client"
 
     # Mock doc_store result
@@ -203,7 +203,7 @@ def test_store_task_result(api_logic: BusinessLogic) -> None:
 async def test_worker_mode_sync_to_gitlab_success(worker_logic: BusinessLogic, mock_store: MagicMock) -> None:
     """Test sync_to_gitlab in Worker mode."""
     rdi = "test-rdi"
-    arc_data = {"@graph": [{"@id": "./", "identifier": "ABC"}]}
+    arc_data = {"@context": "https://w3id.org/ro/crate/1.1/context", "@graph": [{"@id": "./", "identifier": "ABC"}]}
 
     with patch("middleware.api.business_logic.ARC") as mock_arc_class:
         mock_arc_instance = MagicMock()
@@ -236,7 +236,7 @@ async def test_api_mode_skips_sync_if_no_changes(
     mock_doc_store.store_arc.return_value = ArcStoreResult(arc_id="arc_id", is_new=False, has_changes=False)
 
     rdi = "test-rdi"
-    arc_data = {"@graph": [{"@id": "./", "identifier": "ABC"}]}
+    arc_data = {"@context": "https://w3id.org/ro/crate/1.1/context", "@graph": [{"@id": "./", "identifier": "ABC"}]}
 
     with patch("middleware.api.business_logic.ARC") as mock_arc_class:
         mock_arc_instance = MagicMock()
@@ -274,62 +274,47 @@ def test_factory_create_api_mode() -> None:
 
 @pytest.mark.asyncio
 async def test_create_or_update_arc_parse_failure(api_logic: BusinessLogic) -> None:
-    """Test create_or_update_arc with parsing failure."""
-    with patch("middleware.api.business_logic.ARC") as mock_arc_class:
-        mock_arc_class.from_rocrate_json_string.side_effect = Exception("Parse error")
-
-        with pytest.raises(InvalidJsonSemanticError, match="Failed to parse RO-Crate JSON"):
-            await api_logic.create_or_update_arc("test_rdi", {}, "client_1")
+    """Test create_or_update_arc with missing identifier."""
+    # Since we now use fast validation, an empty dict fails the identifier check
+    with pytest.raises(InvalidJsonSemanticError, match="must contain an 'identifier'"):
+        await api_logic.create_or_update_arc("test_rdi", {}, "client_1")
 
 
 @pytest.mark.asyncio
 async def test_create_or_update_missing_identifier(api_logic: BusinessLogic) -> None:
-    """Test create_or_update_arc with missing Identifier."""
-    arc_data = {"@graph": [{"@id": "arc"}]}
+    """Test create_or_update_arc with missing Identifier in RO-Crate graph."""
+    # Data has @graph but no "@id": "./" element with identifier
+    arc_data = {"@context": "https://w3id.org/ro/crate/1.1/context", "@graph": [{"@id": "not-root"}]}
 
-    with patch("middleware.api.business_logic.ARC") as mock_arc_class:
-        mock_arc_obj = MagicMock()
-        mock_arc_obj.Identifier = None
-        mock_arc_class.from_rocrate_json_string.return_value = mock_arc_obj
-
-        with pytest.raises(InvalidJsonSemanticError, match="must contain an 'Identifier'"):
-            await api_logic.create_or_update_arc("test_rdi", arc_data, "client_1")
+    with pytest.raises(InvalidJsonSemanticError, match="must contain an 'identifier'"):
+        await api_logic.create_or_update_arc("test_rdi", arc_data, "client_1")
 
 
 @pytest.mark.asyncio
 async def test_create_or_update_generic_exception(api_logic: BusinessLogic, mock_doc_store: MagicMock) -> None:
     """Test create_or_update_arc with unexpected exception."""
     mock_doc_store.store_arc.side_effect = Exception("Unexpected failure")
-    arc_data = {"@graph": [{"Identifier": "test"}]}
+    # Valid data to pass the fast identifier check
+    arc_data = {"@context": "https://w3id.org/ro/crate/1.1/context", "@graph": [{"@id": "./", "identifier": "test"}]}
 
-    with patch("middleware.api.business_logic.ARC") as mock_arc_class:
-        mock_arc_obj = MagicMock()
-        mock_arc_obj.Identifier = "test"
-        mock_arc_class.from_rocrate_json_string.return_value = mock_arc_obj
-
-        with pytest.raises(BusinessLogicError, match="unexpected error encountered"):
-            await api_logic.create_or_update_arc("test_rdi", arc_data, "client_1")
+    with pytest.raises(BusinessLogicError, match="unexpected error encountered"):
+        await api_logic.create_or_update_arc("test_rdi", arc_data, "client_1")
 
 
 @pytest.mark.asyncio
 async def test_sync_to_gitlab_missing_identifier(worker_logic: BusinessLogic) -> None:
     """Test sync_to_gitlab with missing Identifier."""
-    arc_data = {"@graph": [{"@id": "arc"}]}
+    arc_data = {"@context": "https://w3id.org/ro/crate/1.1/context", "@graph": [{"@id": "arc"}]}
 
-    with patch("middleware.api.business_logic.ARC") as mock_arc_class:
-        mock_arc_obj = MagicMock()
-        mock_arc_obj.Identifier = ""
-        mock_arc_class.from_rocrate_json_string.return_value = mock_arc_obj
-
-        with pytest.raises(InvalidJsonSemanticError, match="must contain an 'Identifier'"):
-            await worker_logic.sync_to_gitlab("test_rdi", arc_data)
+    with pytest.raises(InvalidJsonSemanticError, match="must contain an 'identifier'"):
+        await worker_logic.sync_to_gitlab("test_rdi", arc_data)
 
 
 @pytest.mark.asyncio
 async def test_sync_to_gitlab_generic_exception(worker_logic: BusinessLogic, mock_store: MagicMock) -> None:
     """Test sync_to_gitlab with unexpected exception."""
     mock_store.create_or_update.side_effect = Exception("Git failure")
-    arc_data = {"@graph": [{"Identifier": "test"}]}
+    arc_data = {"@context": "https://w3id.org/ro/crate/1.1/context", "@graph": [{"@id": "./", "identifier": "test"}]}
 
     with patch("middleware.api.business_logic.ARC") as mock_arc_class:
         mock_arc_obj = MagicMock()

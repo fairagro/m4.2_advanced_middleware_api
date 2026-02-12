@@ -23,13 +23,17 @@ def extract_identifier(arc_content: dict[str, Any]) -> str | None:
 
     Following the RO-Crate/ARC specification, the identifier is located
     in the Root Data Entity (marked with "@id": "./") within the @graph.
+    Also ensures the basic RO-Crate structure (e.g., @context) is present.
 
     Args:
         arc_content: The ARC/RO-Crate content as a dictionary.
 
     Returns:
-        The extracted identifier or None if not found.
+        The extracted identifier or None if not found or invalid structure.
     """
+    if "@context" not in arc_content:
+        return None
+
     graph = arc_content.get("@graph")
     if isinstance(graph, list):
         for item in graph:

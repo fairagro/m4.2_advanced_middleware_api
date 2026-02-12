@@ -16,6 +16,8 @@ from middleware.api.api import Api
 from middleware.api.arc_store.gitlab_api import GitlabApi, GitlabApiConfig
 from middleware.api.business_logic import BusinessLogic
 from middleware.api.config import CeleryConfig, Config, CouchDBConfig
+from middleware.api.document_store import ArcStoreResult
+from middleware.api.utils import calculate_arc_id, extract_identifier
 from middleware.shared.config.config_base import OtelConfig
 
 
@@ -105,7 +107,13 @@ def service(config: Config) -> BusinessLogic:
     store.create_or_update = AsyncMock()
 
     doc_store = MagicMock()
-    doc_store.store_arc = AsyncMock()
+
+    async def mock_store_arc(rdi: str, arc: dict, _harvest_id: str | None = None) -> ArcStoreResult:
+        identifier = extract_identifier(arc)
+        arc_id = calculate_arc_id(identifier, rdi) if identifier else "mock-arc-id"
+        return ArcStoreResult(arc_id=arc_id, is_new=True, has_changes=True)
+
+    doc_store.store_arc = AsyncMock(side_effect=mock_store_arc)
     doc_store.health_check = AsyncMock(return_value=True)
     doc_store.connect = AsyncMock()
     doc_store.close = AsyncMock()

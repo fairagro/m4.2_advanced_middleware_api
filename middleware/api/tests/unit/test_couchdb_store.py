@@ -47,7 +47,10 @@ async def test_store_arc_new(store: CouchDB, mock_client_instance: MagicMock) ->
     """Test storing a new ARC."""
     # Setup
     rdi = "test_rdi"
-    arc_content = {"@graph": [{"@id": "./", "identifier": "arc_123"}]}
+    arc_content = {
+        "@context": "https://w3id.org/ro/crate/1.1/context",
+        "@graph": [{"@id": "./", "identifier": "arc_123"}],
+    }
 
     # Mock client methods
     mock_client_instance.get_document.return_value = None  # document not found -> new
@@ -135,7 +138,10 @@ async def test_store_arc_update_changed(store: CouchDB, mock_client_instance: Ma
     """Test updating an existing ARC with changes."""
     # Setup
     rdi = "test_rdi"
-    arc_content = {"@graph": [{"@id": "./", "identifier": "arc_123"}, {"@id": "dataset", "name": "Changed Name"}]}
+    arc_content = {
+        "@context": "https://w3id.org/ro/crate/1.1/context",
+        "@graph": [{"@id": "./", "identifier": "arc_123"}, {"@id": "dataset", "name": "Changed Name"}],
+    }
 
     # Existing document
     existing_hash = "old_hash"
@@ -177,7 +183,10 @@ async def test_store_arc_no_change(store: CouchDB, mock_client_instance: MagicMo
     """Test storing an unchanged ARC."""
     # Setup
     rdi = "test_rdi"
-    arc_content = {"@graph": [{"@id": "./", "identifier": "arc_123"}]}
+    arc_content = {
+        "@context": "https://w3id.org/ro/crate/1.1/context",
+        "@graph": [{"@id": "./", "identifier": "arc_123"}],
+    }
 
     # Calculate hash to match
     json_str = json.dumps(arc_content, sort_keys=True)
