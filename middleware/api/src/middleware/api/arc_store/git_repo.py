@@ -147,7 +147,7 @@ class GitContext:
                     logger.info("Git %s failed with transient error%s: %s", action, status_msg, exc)
                     span.record_exception(exc)
                     span.set_status(trace.Status(trace.StatusCode.ERROR, str(exc)))
-                    raise ArcStoreTransientError(f"Transient Git error during {action}: {exc}") from exc
+                    raise ArcStoreTransientError(f"Transient Git error during {action}: {exc.stderr.strip()}") from exc
                 else:
                     status = getattr(exc, "status", None)
                     status_msg = f" (status {status})" if status is not None else ""
