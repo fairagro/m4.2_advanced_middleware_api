@@ -21,7 +21,7 @@ from middleware.shared.api_models.models import (
     ArcStatus,
 )
 
-from .arc_store import ArcStore
+from .arc_store import ArcStore, ArcStoreTransientError
 from .celery_app import celery_app
 from .config import Config
 from .document_store import DocumentStore
@@ -42,6 +42,13 @@ class InvalidJsonSemanticError(BusinessLogicError):
 
 class SetupError(BusinessLogicError):
     """Arises when the business logic setup fails."""
+
+
+class TransientError(BusinessLogicError):
+    """Arises when a transient error occurs that may be resolved by retrying.
+
+    Examples: Server unreachable, maintenance mode, temporary network issues.
+    """
 
 
 @runtime_checkable
@@ -295,9 +302,15 @@ class BusinessLogic:
                 span.set_attribute("success", True)
                 logger.info("Successfully synced ARC %s to GitLab", arc_id)
 
+            except ArcStoreTransientError as e:
+                logger.info("Transient error during GitLab sync for ARC %s: %s", arc_id, e)
+                span.record_exception(e)
+                raise TransientError(str(e)) from e
+
             except Exception as e:
                 logger.error("Unexpected error while syncing ARC to GitLab: %s", e, exc_info=True)
                 span.record_exception(e)
+                raise
                 if isinstance(e, InvalidJsonSemanticError):
                     raise e
                 raise BusinessLogicError(f"unexpected error encountered: {str(e)}") from e
