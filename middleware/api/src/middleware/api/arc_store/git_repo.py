@@ -46,7 +46,6 @@ def is_transient_git_error(exc: GitCommandError) -> bool:
         "connection refused",
         "503 service unavailable",
         "502 bad gateway",
-        "403 forbidden",  # Sometimes returned during maintenance
         "connection timed out",
         "unexpected disconnect",
         "early eof",
