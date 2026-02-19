@@ -310,7 +310,8 @@ class BusinessLogic:
             except Exception as e:
                 logger.error("Unexpected error while syncing ARC to GitLab: %s", e, exc_info=True)
                 span.record_exception(e)
-                raise
                 if isinstance(e, InvalidJsonSemanticError):
+                    raise e
+                if isinstance(e, BusinessLogicError):
                     raise e
                 raise BusinessLogicError(f"unexpected error encountered: {str(e)}") from e
