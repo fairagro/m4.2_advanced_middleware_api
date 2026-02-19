@@ -24,7 +24,7 @@ class CeleryConfig(BaseModel):
     task_rate_limit: Annotated[str | None, Field(description="Rate limit for tasks (e.g. '10/m')")] = None
     retry_backoff: Annotated[bool, Field(description="Whether to use exponential backoff for retries")] = True
     retry_backoff_max: Annotated[int, Field(description="Max backoff time in seconds")] = 3600
-    max_retries: Annotated[int, Field(description="Max number of retries for transient errors")] = 15
+    max_retries: Annotated[int, Field(description="Max number of retries for transient errors")] = 120
 
 
 class CouchDBConfig(BaseModel):
