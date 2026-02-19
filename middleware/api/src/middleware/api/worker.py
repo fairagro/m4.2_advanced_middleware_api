@@ -1,7 +1,7 @@
 """Celery worker module for asynchronous ARC processing tasks.
 
 This module provides:
-- process_arc: Celery task for processing individual ARCs asynchronously
+- sync_arc_to_gitlab: Celery task for synchronizing individual ARCs to GitLab asynchronously
 """
 
 import asyncio
@@ -9,7 +9,7 @@ import logging
 import threading
 from typing import Any
 
-from middleware.api.business_logic import BusinessLogic
+from middleware.api.business_logic import BusinessLogic, TransientError
 
 from .business_logic_factory import BusinessLogicFactory
 from .celery_app import celery_app, loaded_config
@@ -41,7 +41,14 @@ class BusinessLogicManager:
         return cls._business_logic
 
 
-@celery_app.task(name="sync_arc_to_gitlab")
+@celery_app.task(
+    name="sync_arc_to_gitlab",
+    autoretry_for=(TransientError,),
+    retry_backoff=loaded_config.celery.retry_backoff,
+    retry_backoff_max=loaded_config.celery.retry_backoff_max,
+    retry_jitter=True,
+    max_retries=loaded_config.celery.max_retries,
+)
 def sync_arc_to_gitlab(rdi: str, arc_data: dict[str, Any]) -> dict[str, Any]:
     """Sync ARC to GitLab asynchronously.
 

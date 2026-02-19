@@ -6,11 +6,6 @@
 	"image": "mcr.microsoft.com/devcontainers/base:bookworm",
 	"features": {
 		"ghcr.io/devcontainers/features/docker-outside-of-docker:1": {},
-		"ghcr.io/devcontainers/features/git-lfs:1": {
-			"autoPull": true,
-			"installDirectlyFromGitHubRelease": true,
-			"version": "3.7.1"
-		},
 		"ghcr.io/devcontainers/features/github-cli:1": {
 			"installDirectlyFromGitHubRelease": true,
 			"version": "2.82.1"
@@ -98,7 +93,6 @@
 				"mhutchie.git-graph",
 				"donjayamanne.githistory",
 				"codezombiech.gitignore",
-				"github.copilot",
 				"github.copilot-chat",
 				"matangover.mypy",
 				"charliermarsh.ruff",

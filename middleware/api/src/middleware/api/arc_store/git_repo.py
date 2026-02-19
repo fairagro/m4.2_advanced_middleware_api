@@ -16,7 +16,7 @@ from git.exc import GitCommandError
 from opentelemetry import context, trace
 from pydantic import BaseModel, Field, SecretStr, field_validator
 
-from . import ArcStore
+from . import ArcStore, ArcStoreTransientError
 from .remote_git_provider import (
     RemoteGitProvider,
 )
@@ -34,6 +34,24 @@ def is_soft_git_error(exc: GitCommandError) -> bool:
         "not found",
     ]
     return any(p in stderr.lower() for p in soft_patterns)
+
+
+def is_transient_git_error(exc: GitCommandError) -> bool:
+    """Check if a GitCommandError is likely a transient network/availability issue."""
+    stderr = str(getattr(exc, "stderr", ""))
+    # Common messages for connection/availability issues
+    transient_patterns = [
+        "could not resolve host",
+        "failed to connect",
+        "connection refused",
+        "503 service unavailable",
+        "502 bad gateway",
+        "connection timed out",
+        "unexpected disconnect",
+        "early eof",
+        "the requested url returned error: 50",
+    ]
+    return any(p in stderr.lower() for p in transient_patterns)
 
 
 class GitRepoConfig(BaseModel):
@@ -123,6 +141,13 @@ class GitContext:
                     logger.log(level, "Git %s failed as expected: %s", action, exc)
                     span.add_event("git.expected_failure", attributes={"stderr": str(exc.stderr)})
                     span.set_status(trace.Status(trace.StatusCode.OK))
+                elif is_transient_git_error(exc):
+                    status = getattr(exc, "status", None)
+                    status_msg = f" (status {status})" if status is not None else ""
+                    logger.info("Git %s failed with transient error%s: %s", action, status_msg, exc)
+                    span.record_exception(exc)
+                    span.set_status(trace.Status(trace.StatusCode.ERROR, str(exc)))
+                    raise ArcStoreTransientError(f"Transient Git error during {action}: {exc.stderr.strip()}") from exc
                 else:
                     status = getattr(exc, "status", None)
                     status_msg = f" (status {status})" if status is not None else ""

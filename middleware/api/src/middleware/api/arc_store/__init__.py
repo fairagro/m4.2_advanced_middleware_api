@@ -15,6 +15,13 @@ class ArcStoreError(Exception):
     """Excpetion base class for all ArcStore errors."""
 
 
+class ArcStoreTransientError(ArcStoreError):
+    """Exception raised when a transient error occurs in the ArcStore.
+
+    This indicates that a retry might be successful.
+    """
+
+
 # ----------- Interface -----------
 
 
