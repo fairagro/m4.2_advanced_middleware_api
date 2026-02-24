@@ -10,9 +10,10 @@ from middleware.api.business_logic import (
     BusinessLogicError,
     InvalidJsonSemanticError,
     SetupError,
+    ArcSyncTask,
 )
 from middleware.api.document_store import ArcStoreResult
-from middleware.shared.api_models.models import ArcOperationResult, ArcResponse, ArcStatus
+from middleware.shared.api_models.common.models import ArcOperationResult, ArcResponse, ArcStatus
 
 
 @pytest.fixture
@@ -38,11 +39,11 @@ def mock_doc_store() -> MagicMock:
 
 
 @pytest.fixture
-def mock_task_sender() -> MagicMock:
-    """Mock Celery task sender."""
-    sender = MagicMock()
-    sender.delay = MagicMock()
-    return sender
+def mock_task_dispatcher() -> MagicMock:
+    """Mock TaskDispatcher."""
+    dispatcher = MagicMock()
+    dispatcher.dispatch_sync_arc = MagicMock()
+    return dispatcher
 
 
 @pytest.fixture
@@ -55,10 +56,10 @@ def mock_config() -> MagicMock:
 
 @pytest.fixture
 def api_logic(
-    mock_config: MagicMock, mock_store: MagicMock, mock_doc_store: MagicMock, mock_task_sender: MagicMock
+    mock_config: MagicMock, mock_store: MagicMock, mock_doc_store: MagicMock, mock_task_dispatcher: MagicMock
 ) -> BusinessLogic:
     """BusinessLogic in API mode."""
-    return BusinessLogic(config=mock_config, store=mock_store, doc_store=mock_doc_store, git_sync_task=mock_task_sender)
+    return BusinessLogic(config=mock_config, store=mock_store, doc_store=mock_doc_store, task_dispatcher=mock_task_dispatcher)
 
 
 @pytest.fixture
@@ -69,7 +70,7 @@ def worker_logic(mock_config: MagicMock, mock_store: MagicMock, mock_doc_store: 
 
 @pytest.mark.asyncio
 async def test_api_mode_create_or_update_success(
-    api_logic: BusinessLogic, mock_doc_store: MagicMock, mock_task_sender: MagicMock
+    api_logic: BusinessLogic, mock_doc_store: MagicMock, mock_task_dispatcher: MagicMock
 ) -> None:
     """Test create_or_update_arc in API mode."""
     rdi = "test-rdi"
@@ -94,7 +95,7 @@ async def test_api_mode_create_or_update_success(
 
     # Verify calls
     mock_doc_store.store_arc.assert_called_once()
-    mock_task_sender.delay.assert_called_once_with(rdi, arc_data)
+    mock_task_dispatcher.dispatch_sync_arc.assert_called_once_with(ArcSyncTask(rdi=rdi, arc=arc_data))
 
 
 @pytest.mark.asyncio
@@ -230,7 +231,7 @@ async def test_worker_mode_create_or_update_forbidden(worker_logic: BusinessLogi
 
 @pytest.mark.asyncio
 async def test_api_mode_skips_sync_if_no_changes(
-    api_logic: BusinessLogic, mock_doc_store: MagicMock, mock_task_sender: MagicMock
+    api_logic: BusinessLogic, mock_doc_store: MagicMock, mock_task_dispatcher: MagicMock
 ) -> None:
     """Test that GitLab sync is skipped if no changes."""
     mock_doc_store.store_arc.return_value = ArcStoreResult(arc_id="arc_id", is_new=False, has_changes=False)
@@ -247,7 +248,7 @@ async def test_api_mode_skips_sync_if_no_changes(
             await api_logic.create_or_update_arc(rdi, arc_data, "client")
 
     mock_doc_store.store_arc.assert_called_once()
-    mock_task_sender.delay.assert_not_called()
+    mock_task_dispatcher.dispatch_sync_arc.assert_not_called()
 
 
 def test_factory_create_api_mode() -> None:

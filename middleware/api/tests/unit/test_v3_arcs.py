@@ -1,0 +1,96 @@
+"""Unit tests for the v3/arcs endpoint."""
+
+import http
+from datetime import UTC, datetime
+from unittest.mock import AsyncMock, patch
+
+import pytest
+from fastapi.testclient import TestClient
+
+from middleware.api.api import Api
+from middleware.api.schemas import ArcEventType, ArcLifecycleStatus
+from middleware.api.schemas.arc_document import ArcEvent, ArcMetadata
+from middleware.shared.api_models.models import ArcOperationResult, ArcResponse, ArcStatus
+
+
+@pytest.mark.unit
+def test_create_or_update_arc_v3_success(
+    client: TestClient, cert: str, middleware_api: Api
+) -> None:
+    """Test creating a new ARC via the /v3/arcs endpoint."""
+    # Mock the BusinessLogic response
+    mock_result = ArcOperationResult(
+        client_id="test-client-cn",
+        rdi="rdi-1",
+        arc=ArcResponse(
+            id="arc-123",
+            status=ArcStatus.CREATED,
+            timestamp="2024-01-01T00:00:00Z",
+        ),
+    )
+
+    now = datetime.now(UTC)
+    mock_metadata = ArcMetadata(
+        arc_hash="fake-hash",
+        status=ArcLifecycleStatus.ACTIVE,
+        first_seen=now,
+        last_seen=now,
+        events=[
+            ArcEvent(timestamp=now, type=ArcEventType.ARC_CREATED, message="ARC first seen")
+        ]
+    )
+
+    rocrate = {
+        "@context": "https://w3id.org/ro/crate/1.1/context",
+        "@graph": [
+            {
+                "@id": "./",
+                "@type": "Dataset",
+                "identifier": "ARC-001",
+            }
+        ],
+    }
+
+    with (
+        patch.object(middleware_api.business_logic, "create_or_update_arc", new_callable=AsyncMock) as mock_create,
+        patch.object(middleware_api.business_logic._doc_store, "get_metadata", new_callable=AsyncMock) as mock_get_metadata,
+    ):
+        mock_create.return_value = mock_result
+        mock_get_metadata.return_value = mock_metadata
+
+        r = client.post(
+            "/v3/arcs",
+            headers={
+                "ssl-client-cert": cert,
+                "ssl-client-verify": "SUCCESS",
+                "content-type": "application/json",
+                "accept": "application/json",
+            },
+            json={"rdi": "rdi-1", "arc": rocrate},
+        )
+        
+        assert r.status_code == http.HTTPStatus.OK
+        body = r.json()
+        assert body["arc_id"] == "arc-123"
+        assert body["status"] == "created"
+        assert body["metadata"]["arc_hash"] == "fake-hash"
+        assert len(body["events"]) == 1
+        assert body["events"][0]["type"] == "ARC_CREATED"
+        # Verify it doesn't return a task_id
+        assert "task_id" not in body
+
+
+@pytest.mark.unit
+def test_create_or_update_arc_v3_rdi_not_authorized(client: TestClient, cert: str) -> None:
+    """Test that requesting an unauthorized RDI returns 403."""
+    r = client.post(
+        "/v3/arcs",
+        headers={
+            "ssl-client-cert": cert,
+            "ssl-client-verify": "SUCCESS",
+            "content-type": "application/json",
+            "accept": "application/json",
+        },
+        json={"rdi": "rdi-not-authorized", "arc": {"dummy": "crate"}},
+    )
+    assert r.status_code == http.HTTPStatus.FORBIDDEN

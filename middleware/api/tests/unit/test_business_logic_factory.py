@@ -29,14 +29,13 @@ def test_factory_creates_api_mode() -> None:
     with (
         patch("middleware.api.business_logic_factory.CouchDB") as mock_couch,
         patch("middleware.api.business_logic_factory.GitlabApi") as mock_gitlab_api,
-        patch("middleware.api.worker.sync_arc_to_gitlab") as mock_task,
+        patch("middleware.api.business_logic_factory.CeleryTaskDispatcher") as mock_dispatcher,
     ):
         bl = BusinessLogicFactory.create(config, mode="api")
 
         assert isinstance(bl, BusinessLogic)
         # pylint: disable=protected-access
-        assert bl._git_sync_task is not None
-        assert bl._git_sync_task == mock_task
+        assert bl._dispatcher == mock_dispatcher.return_value
         assert bl._doc_store == mock_couch.return_value
         assert bl._store == mock_gitlab_api.return_value
 
@@ -68,7 +67,7 @@ def test_factory_creates_worker_mode() -> None:
 
         assert isinstance(bl, BusinessLogic)
         # pylint: disable=protected-access
-        assert bl._git_sync_task is None
+        assert bl._dispatcher is None
         assert bl._doc_store == mock_couch.return_value
         assert bl._store == mock_gitlab_api.return_value
 

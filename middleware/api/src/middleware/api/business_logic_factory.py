@@ -6,11 +6,24 @@ from typing import Literal
 from .arc_store import ArcStore
 from .arc_store.git_repo import GitRepo
 from .arc_store.gitlab_api import GitlabApi
-from .business_logic import BusinessLogic
+from .business_logic import BusinessLogic, TaskDispatcher, ArcSyncTask
 from .config import Config
 from .document_store.couchdb import CouchDB
 
+from typing import Any, Literal
+
 logger = logging.getLogger(__name__)
+
+
+class CeleryTaskDispatcher:
+    """Dispatcher that uses Celery to send tasks by name."""
+
+    def __init__(self, celery_app):
+        self._celery_app = celery_app
+
+    def dispatch_sync_arc(self, task: ArcSyncTask) -> None:
+        """Dispatch sync_arc_to_gitlab task to Celery."""
+        self._celery_app.send_task("sync_arc_to_gitlab", args=(task.model_dump(),))
 
 
 class BusinessLogicFactory:
@@ -40,11 +53,10 @@ class BusinessLogicFactory:
         # Initialize Document Store
         doc_store = CouchDB(config.couchdb)
 
-        # For API mode, provide GitLab sync task sender
-        git_sync_task = None
+        # For API mode, provide task dispatcher
+        task_dispatcher = None
         if mode == "api":
-            from .worker import sync_arc_to_gitlab  # pylint: disable=import-outside-toplevel
+            from .celery_app import celery_app
+            task_dispatcher = CeleryTaskDispatcher(celery_app)
 
-            git_sync_task = sync_arc_to_gitlab
-
-        return BusinessLogic(config=config, store=store, doc_store=doc_store, git_sync_task=git_sync_task)
+        return BusinessLogic(config=config, store=store, doc_store=doc_store, task_dispatcher=task_dispatcher)

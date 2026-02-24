@@ -49,19 +49,22 @@ class BusinessLogicManager:
     retry_jitter=True,
     max_retries=loaded_config.celery.max_retries,
 )
-def sync_arc_to_gitlab(rdi: str, arc_data: dict[str, Any]) -> dict[str, Any]:
+def sync_arc_to_gitlab(task: ArcSyncTask) -> None:
     """Sync ARC to GitLab asynchronously.
 
     This task is responsible for the slow GitLab synchronization phase.
     It is triggered by the API after the ARC has been successfully stored in CouchDB.
 
     Args:
-        rdi: Research Data Infrastructure identifier.
-        arc_data: ARC data dictionary.
-
-    Returns:
-        Task result as dictionary.
+        task: Validated payload for the sync task.
     """
+    # Celery passes dicts after JSON deserialization
+    if isinstance(task, dict):
+        task = ArcSyncTask.model_validate(task)
+
+    rdi = task.rdi
+    arc_data = task.arc
+
     logger.info("Starting GitLab sync task for RDI %s", rdi)
 
     try:
@@ -74,11 +77,7 @@ def sync_arc_to_gitlab(rdi: str, arc_data: dict[str, Any]) -> dict[str, Any]:
 
         asyncio.run(_run_sync())
 
-        return {
-            "status": "synced",
-            "message": "Successfully synced to GitLab",
-            "rdi": rdi,
-        }
+        logger.info("Successfully completed GitLab sync task for RDI %s", rdi)
 
     except Exception as e:
         logger.error("GitLab sync task failed: %s", e, exc_info=True)

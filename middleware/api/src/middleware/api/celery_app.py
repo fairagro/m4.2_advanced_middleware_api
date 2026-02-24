@@ -34,7 +34,7 @@ if "pytest" in sys.modules or not config_path.is_file():
         "middleware_api",
         broker="memory://",
         backend="cache+memory://",
-        include=["middleware.api.worker"],
+        include=[],  # Avoid circular imports in test mode
     )
     # Use a dummy config in test mode to satisfy the non-optional type
     # This also allows the worker to initialize BusinessLogic in tests if needed.

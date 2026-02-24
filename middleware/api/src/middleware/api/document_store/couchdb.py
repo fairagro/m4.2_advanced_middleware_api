@@ -3,6 +3,7 @@
 import hashlib
 import json
 import logging
+import uuid
 from datetime import UTC, datetime
 from typing import Any
 
@@ -14,6 +15,11 @@ from middleware.api.schemas.arc_document import (
     ArcEvent,
     ArcLifecycleStatus,
     ArcMetadata,
+)
+from middleware.api.schemas.harvest_document import (
+    HarvestConfig,
+    HarvestDocument,
+    HarvestStatus,
 )
 from middleware.api.utils import calculate_arc_id, extract_identifier
 
@@ -206,3 +212,50 @@ class CouchDB(DocumentStore):
         """Close CouchDB connection."""
         await self._client.close()
         logger.info("CouchDB document store disconnected")
+
+    async def create_harvest(self, rdi: str, source: str, config: dict | None = None) -> str:
+        """Create a new harvest record."""
+        harvest_uuid = str(uuid.uuid4())
+        doc_id = f"harvest-{harvest_uuid}"
+        
+        harvest_config = HarvestConfig(**(config or {}))
+        
+        doc = HarvestDocument(
+            doc_id=doc_id,
+            rdi=rdi,
+            source=source,
+            started_at=datetime.now(UTC),
+            status=HarvestStatus.RUNNING,
+            config=harvest_config,
+        )
+        
+        doc_data = doc.model_dump(by_alias=True, exclude_none=True)
+        await self._client.save_document(doc_id, doc_data)
+        return doc_id
+
+    async def get_harvest(self, harvest_id: str) -> dict[str, Any] | None:
+        """Get harvest document."""
+        return await self._client.get_document(harvest_id)
+
+    async def update_harvest(self, harvest_id: str, updates: dict[str, Any]) -> None:
+        """Update a harvest record."""
+        doc_dict = await self._client.get_document(harvest_id)
+        if not doc_dict:
+            raise ValueError(f"Harvest {harvest_id} not found")
+        
+        # Merge updates
+        doc_dict.update(updates)
+        
+        # If completing, set completed_at if not provided
+        if doc_dict.get("status") == HarvestStatus.COMPLETED and not doc_dict.get("completed_at"):
+            doc_dict["completed_at"] = datetime.now(UTC).isoformat() + "Z"
+            
+        await self._client.save_document(harvest_id, doc_dict)
+
+    async def list_harvests(self, rdi: str | None = None) -> list[dict[str, Any]]:
+        """List harvest records."""
+        selector: dict[str, Any] = {"type": "harvest"}
+        if rdi:
+            selector["rdi"] = rdi
+        
+        return await self._client.find(selector)

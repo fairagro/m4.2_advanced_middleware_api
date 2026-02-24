@@ -6,8 +6,8 @@ Provides async access to CouchDB for ARC and Harvest document storage.
 import logging
 from typing import Any
 
-from aiocouch import CouchDB, Database
-from aiocouch.exception import NotFoundError
+# from aiocouch import CouchDB, Database
+# from aiocouch.exception import NotFoundError
 
 from .config import CouchDBConfig
 
@@ -28,11 +28,12 @@ class CouchDBClient:
         self.url = url
         self.user = user
         self.password = password
-        self._client: CouchDB | None = None
-        self._db: Database | None = None
+        self.password = password
+        self._client: Any = None
+        self._db: Any = None
 
     @property
-    def client(self) -> CouchDB | None:
+    def client(self) -> Any:
         """Get the underlying CouchDB client.
 
         Returns:
@@ -65,6 +66,9 @@ class CouchDBClient:
         """
         if self._client is not None:
             return
+
+        from aiocouch import CouchDB
+        from aiocouch.exception import NotFoundError
 
         try:
             self._client = CouchDB(
@@ -135,6 +139,7 @@ class CouchDBClient:
             if not self._client:
                 return False
             # Check the server info as a health check
+            # aiocouch's info() is async
             await self._client.info()
             return True
         except Exception as e:  # pylint: disable=broad-exception-caught
@@ -152,6 +157,8 @@ class CouchDBClient:
         """
         if not self._db:
             raise RuntimeError("Not connected to CouchDB")
+
+        from aiocouch.exception import NotFoundError
 
         try:
             doc = await self._db[doc_id]
@@ -171,6 +178,8 @@ class CouchDBClient:
         """
         if not self._db:
             raise RuntimeError("Not connected to CouchDB")
+
+        from aiocouch.exception import NotFoundError
 
         try:
             # Attempt to fetch the document
@@ -195,6 +204,8 @@ class CouchDBClient:
         """
         if not self._db:
             raise RuntimeError("Not connected to CouchDB")
+
+        from aiocouch.exception import NotFoundError
 
         try:
             doc = await self._db[doc_id]

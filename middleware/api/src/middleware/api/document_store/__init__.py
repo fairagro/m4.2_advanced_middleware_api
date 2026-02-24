@@ -114,3 +114,51 @@ class DocumentStore(ABC):
     async def close(self) -> None:
         """Close the connection to the document store."""
         raise NotImplementedError
+
+    @abstractmethod
+    async def create_harvest(self, rdi: str, source: str, config: dict | None = None) -> str:
+        """Create a new harvest record.
+
+        Args:
+            rdi: Research Data Infrastructure identifier
+            source: Source system identifier
+            config: Optional harvest configuration
+
+        Returns:
+            The harvest_id of the created harvest
+        """
+        raise NotImplementedError
+
+    @abstractmethod
+    async def get_harvest(self, harvest_id: str) -> dict[str, Any] | None:
+        """Get harvest document.
+
+        Args:
+            harvest_id: Harvest identifier
+
+        Returns:
+            Dict containing the harvest document or None if not found
+        """
+        raise NotImplementedError
+
+    @abstractmethod
+    async def update_harvest(self, harvest_id: str, updates: dict[str, Any]) -> None:
+        """Update a harvest record.
+
+        Args:
+            harvest_id: Harvest identifier
+            updates: Dictionary of fields to update
+        """
+        raise NotImplementedError
+
+    @abstractmethod
+    async def list_harvests(self, rdi: str | None = None) -> list[dict[str, Any]]:
+        """List harvest records.
+
+        Args:
+            rdi: Optional RDI to filter by
+
+        Returns:
+            List of harvest documents
+        """
+        raise NotImplementedError
