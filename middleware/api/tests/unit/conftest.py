@@ -12,11 +12,11 @@ from cryptography import x509
 from fastapi.testclient import TestClient
 from pydantic import HttpUrl, SecretStr
 
+from middleware.api.api.fastapi_app import Api
 from middleware.api.arc_store.gitlab_api import GitlabApi, GitlabApiConfig
 from middleware.api.business_logic import BusinessLogic
 from middleware.api.config import CeleryConfig, Config, CouchDBConfig
 from middleware.api.document_store import ArcStoreResult
-from middleware.api.fastapi_app import Api
 from middleware.api.utils import calculate_arc_id, extract_identifier
 from middleware.shared.config.config_base import OtelConfig
 

@@ -4,7 +4,7 @@ from typing import Annotated
 
 from pydantic import BaseModel, Field
 
-from ..common.models import ApiResponse, ArcOperationResult, ArcResponse, TaskStatus
+from ..common.models import ApiResponse, ArcOperationResult, TaskStatus
 
 
 class HealthResponse(BaseModel):

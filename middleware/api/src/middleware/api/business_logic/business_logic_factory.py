@@ -9,10 +9,10 @@ if TYPE_CHECKING:
 from ..arc_store import ArcStore
 from ..arc_store.git_repo import GitRepo
 from ..arc_store.gitlab_api import GitlabApi
-from ..celery_app import celery_app
 from ..config import Config
 from ..document_store.couchdb import CouchDB
 from ..schemas.celery_tasks import ArcSyncTask
+from ..worker.celery_app import celery_app
 from . import BusinessLogic
 
 logger = logging.getLogger(__name__)

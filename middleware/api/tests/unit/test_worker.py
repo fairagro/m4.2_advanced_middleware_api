@@ -4,7 +4,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from middleware.api.worker import sync_arc_to_gitlab
+from middleware.api.worker.worker import sync_arc_to_gitlab
 
 
 def test_sync_arc_to_gitlab_success() -> None:
@@ -12,7 +12,7 @@ def test_sync_arc_to_gitlab_success() -> None:
     # Mock business logic result (sync_to_gitlab returns None)
 
     # Mock get_business_logic
-    with patch("middleware.api.worker.BusinessLogicManager.get_business_logic") as mock_get_bl:
+    with patch("middleware.api.worker.worker.BusinessLogicManager.get_business_logic") as mock_get_bl:
         mock_bl = MagicMock()
         mock_get_bl.return_value = mock_bl
         # Mock context manager
@@ -33,7 +33,7 @@ def test_sync_arc_to_gitlab_success() -> None:
 
 def test_sync_arc_to_gitlab_failure() -> None:
     """Test task failure handling."""
-    with patch("middleware.api.worker.BusinessLogicManager.get_business_logic") as mock_get_bl:
+    with patch("middleware.api.worker.worker.BusinessLogicManager.get_business_logic") as mock_get_bl:
         mock_bl = MagicMock()
         mock_get_bl.return_value = mock_bl
         # Mock context manager
@@ -52,7 +52,7 @@ def test_sync_arc_to_gitlab_failure() -> None:
 def test_sync_arc_to_gitlab_no_business_logic() -> None:
     """Test task fails when business_logic is not initialized."""
     with (
-        patch("middleware.api.worker.BusinessLogicManager.get_business_logic", return_value=None),
+        patch("middleware.api.worker.worker.BusinessLogicManager.get_business_logic", return_value=None),
         pytest.raises(TypeError, match="'NoneType' object does not support the asynchronous context manager protocol"),
     ):
         sync_arc_to_gitlab.apply(

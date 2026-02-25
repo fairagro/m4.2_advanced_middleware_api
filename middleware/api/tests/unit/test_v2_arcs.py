@@ -6,7 +6,7 @@ from unittest.mock import AsyncMock, patch
 import pytest
 from fastapi.testclient import TestClient
 
-from middleware.api.fastapi_app import Api
+from middleware.api.api.fastapi_app import Api
 from middleware.api.schemas.sync_task import SyncTaskResult, SyncTaskStatus
 from middleware.shared.api_models.models import ArcOperationResult, ArcResponse, ArcStatus, TaskStatus
 

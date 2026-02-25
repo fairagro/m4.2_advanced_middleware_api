@@ -14,13 +14,13 @@ from arctrl import ARC  # type: ignore[import-untyped]
 from opentelemetry import trace
 
 from middleware.api.arc_store import ArcStore, ArcStoreTransientError
-from middleware.api.celery_app import celery_app
 from middleware.api.config import Config
 from middleware.api.document_store import DocumentStore
 from middleware.api.schemas import ArcEvent, ArcEventType, ArcMetadata
 from middleware.api.schemas.celery_tasks import ArcSyncTask
 from middleware.api.schemas.sync_task import SyncTaskResult, SyncTaskStatus
 from middleware.api.utils import calculate_arc_id, extract_identifier
+from middleware.api.worker.celery_app import celery_app
 from middleware.shared.api_models.common.models import (
     ArcOperationResult,
     ArcResponse,

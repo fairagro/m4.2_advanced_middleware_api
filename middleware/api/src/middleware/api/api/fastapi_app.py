@@ -18,15 +18,13 @@ from fastapi.responses import JSONResponse
 from opentelemetry.sdk._logs import LoggerProvider
 from opentelemetry.sdk.trace import TracerProvider
 
-from middleware.shared.tracing import initialize_logging, initialize_tracing
-
-from .api.common.dependencies import CommonApiDependencies
-from .api.v1 import arcs as arcs_v1, system as system_v1, tasks as tasks_v1
-from .api.v2 import arcs as arcs_v2, system as system_v2, tasks as tasks_v2
-from .api.v3 import arcs as arcs_v3, harvests as harvests_v3
-from .business_logic import BusinessLogicFactory
-from .config import Config
-from .tracing import instrument_app
+from ..business_logic import BusinessLogicFactory
+from ..config import Config
+from .common.dependencies import CommonApiDependencies
+from .tracing import setup_api_tracing
+from .v1 import arcs as arcs_v1, system as system_v1, tasks as tasks_v1
+from .v2 import arcs as arcs_v2, system as system_v2, tasks as tasks_v2
+from .v3 import arcs as arcs_v3, harvests as harvests_v3
 
 try:
     from importlib.metadata import PackageNotFoundError, version
@@ -126,21 +124,6 @@ class Api:
 
         logger.debug("API configuration: %s", self._config.model_dump())
 
-        # Initialize OpenTelemetry tracing with optional OTLP endpoint
-        otlp_endpoint = str(self._config.otel.endpoint) if self._config.otel.endpoint else None
-        self._tracer_provider, self._tracer = initialize_tracing(
-            service_name="middleware-api",
-            otlp_endpoint=otlp_endpoint,
-            log_console_spans=self._config.otel.log_console_spans,
-        )
-        # Initialize OTEL log export if configured
-        self._logger_provider = initialize_logging(
-            service_name="middleware-api",
-            otlp_endpoint=otlp_endpoint,
-            log_level=getattr(logging, self._config.log_level),
-            otlp_log_level=getattr(logging, self._config.otel.log_level),
-        )
-
         # Apply polling log filter to uvicorn access logger
         logging.getLogger("uvicorn.access").addFilter(PollingLogFilter())
 
@@ -176,12 +159,14 @@ class Api:
             lifespan=lifespan,
         )
 
+        # Initialize OpenTelemetry tracing and logging
+        _tracing = setup_api_tracing(self._app, self._config)
+        self._tracer_provider = _tracing.tracer_provider
+        self._logger_provider = _tracing.logger_provider
+
         # Map state for routers to access
         self._app.state.business_logic = self.business_logic
         self._app.state.common_deps = self.common_deps
-
-        # Instrument the FastAPI application with OpenTelemetry
-        instrument_app(self._app)
 
         self._setup_routes()
         self._setup_exception_handlers()

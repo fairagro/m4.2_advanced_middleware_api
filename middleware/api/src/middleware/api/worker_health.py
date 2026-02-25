@@ -18,8 +18,8 @@ import aiohttp
 from middleware.api.arc_store import ArcStore
 from middleware.api.arc_store.git_repo import GitRepo
 from middleware.api.arc_store.gitlab_api import GitlabApi
-from middleware.api.celery_app import celery_app
 from middleware.api.config import Config
+from middleware.api.worker.celery_app import celery_app
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")

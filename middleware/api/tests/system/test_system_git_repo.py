@@ -15,9 +15,9 @@ from cryptography import x509
 from fastapi.testclient import TestClient
 from git import Repo
 
+from middleware.api.api.fastapi_app import Api
 from middleware.api.config import Config
 from middleware.api.document_store import ArcStoreResult
-from middleware.api.fastapi_app import Api
 from middleware.shared.config.config_wrapper import ConfigWrapper
 
 

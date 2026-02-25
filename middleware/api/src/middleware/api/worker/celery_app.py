@@ -13,7 +13,8 @@ from pathlib import Path
 
 from celery import Celery
 
-from .config import Config
+from ..config import Config
+from .tracing import setup_worker_tracing
 
 logger = logging.getLogger(__name__)
 
@@ -38,14 +39,12 @@ if "pytest" in sys.modules or not config_path.is_file():
     )
     # Use a dummy config in test mode to satisfy the non-optional type
     # This also allows the worker to initialize BusinessLogic in tests if needed.
-    loaded_config = Config.from_data(
-        {
-            "couchdb": {"url": "http://localhost:5984"},
-            "celery": {"broker_url": "memory://", "result_backend": "memory://"},
-            "gitlab_api": {"url": "http://localhost", "group": "test", "token": "test"},  # nosec
-            "require_client_cert": False,
-        }
-    )
+    loaded_config = Config.from_data({
+        "couchdb": {"url": "http://localhost:5984"},
+        "celery": {"broker_url": "memory://", "result_backend": "memory://"},
+        "gitlab_api": {"url": "http://localhost", "group": "test", "token": "test"},  # nosec
+        "require_client_cert": False,
+    })
 else:
     loaded_config = Config.from_yaml_file(config_path)
 
@@ -65,14 +64,7 @@ else:
         include=["middleware.api.worker"],
     )
 
-    # Instrument the Celery app if OTLP endpoint is configured
-    try:
-        from .tracing import instrument_celery  # pylint: disable=import-outside-toplevel
-
-        instrument_celery(celery_app)
-    except ImportError:
-        # Graceful fallback if dependencies are missing or during build
-        pass
+    setup_worker_tracing(celery_app, loaded_config)
 
 celery_app.conf.update(
     task_serializer="json",

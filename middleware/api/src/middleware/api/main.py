@@ -41,7 +41,7 @@ def main() -> None:
         celery_main()
         sys.exit(0)
 
-    from middleware.api.fastapi_app import middleware_api  # pylint: disable=import-outside-toplevel
+    from middleware.api.api.fastapi_app import middleware_api  # pylint: disable=import-outside-toplevel
 
     # Construct the app path string
     app_path = f"{middleware_api.__module__}:middleware_api.app"

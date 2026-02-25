@@ -55,7 +55,7 @@ services:
     command: [
       "/api/middleware-api/middleware-api",
       "celery",
-      "-A", "middleware.api.celery_app",
+      "-A", "middleware.api.worker.celery_app",
       "worker",
       "--loglevel=info",
       "--concurrency=8",]
@@ -82,7 +82,7 @@ services:
       - ./middleware-api-config.yaml:/run/secrets/middleware-api-config:ro
     # Run uvicorn directly with reload for development
     command: >
-      sh -c "uv run uvicorn middleware.api.fastapi_app:app --host 0.0.0.0 --port 8000 --reload"
+      sh -c "uv run uvicorn middleware.api.api.fastapi_app:app --host 0.0.0.0 --port 8000 --reload"
     # command: sleep 3600
     restart: unless-stopped
 
