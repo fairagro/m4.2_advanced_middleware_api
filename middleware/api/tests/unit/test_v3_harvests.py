@@ -9,7 +9,7 @@ from fastapi.testclient import TestClient
 
 from middleware.api.api.fastapi_app import Api
 from middleware.api.schemas import HarvestDocument, HarvestStatistics, HarvestStatus
-from middleware.shared.api_models.models import ArcOperationResult, ArcResponse, ArcStatus
+from middleware.shared.api_models import ArcOperationResult, ArcResponse, ArcStatus
 
 
 @pytest.mark.unit
@@ -110,7 +110,7 @@ def test_submit_arc_in_harvest_success(client: TestClient, cert: str, middleware
                 "content-type": "application/json",
                 "accept": "application/json",
             },
-            json={"rdi": "rdi-1", "arc": rocrate},
+            json={"arc": rocrate},
         )
 
         assert r.status_code == http.HTTPStatus.OK

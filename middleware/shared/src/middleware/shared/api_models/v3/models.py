@@ -14,6 +14,24 @@ class CreateArcRequest(BaseModel):
     arc: Annotated[dict, Field(description="ARC definition in RO-Crate JSON format")]
 
 
+class SubmitHarvestArcRequest(BaseModel):
+    """Request model for submitting an ARC within an ongoing harvest run.
+
+    The ``rdi`` is not required here — it is resolved automatically from the
+    harvest identified by the ``harvest_id`` path parameter.
+    """
+
+    arc: Annotated[
+        dict,
+        Field(
+            description=(
+                "ARC definition in RO-Crate JSON format. "
+                "The RDI is taken from the harvest run identified by the path parameter."
+            )
+        ),
+    ]
+
+
 class ArcEventSummary(BaseModel):
     """Summary of an ARC event."""
 

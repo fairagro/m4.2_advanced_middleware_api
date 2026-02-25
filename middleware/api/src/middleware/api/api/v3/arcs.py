@@ -33,7 +33,6 @@ async def create_or_update_arc(
     __: Annotated[None, Depends(get_accept_type)],
 ) -> models.ArcResponse:
     """Process an ARC and return the result directly."""
-    # Note: RDI validation is currently missing here, let's add it based on request body or params if needed.
     rdi = request_body.rdi
     await deps.validate_rdi_authorized(rdi, request)
 

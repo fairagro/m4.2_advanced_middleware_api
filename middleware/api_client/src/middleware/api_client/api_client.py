@@ -9,7 +9,7 @@ from typing import TYPE_CHECKING, Any, cast
 import httpx
 from pydantic import BaseModel, ValidationError
 
-from middleware.shared.api_models.models import (
+from middleware.shared.api_models import (
     ArcOperationResult,
     CreateOrUpdateArcRequest,
     CreateOrUpdateArcResponse,

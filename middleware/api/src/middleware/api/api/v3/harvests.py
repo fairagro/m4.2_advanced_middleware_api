@@ -126,12 +126,15 @@ async def cancel_harvest(
 async def submit_arc_in_harvest(  # noqa: PLR0913, PLR0917
     request: Request,
     harvest_id: str,
-    request_body: v3_models.CreateArcRequest,
+    request_body: v3_models.SubmitHarvestArcRequest,
     bl: Annotated[BusinessLogic, Depends(get_business_logic)],
     deps: Annotated[CommonApiDependencies, Depends(get_common_deps)],
     client_id: Annotated[str, Depends(get_client_id)],
 ) -> v3_models.ArcResponse:
-    """Submit an ARC within a harvest context."""
+    """Submit an ARC within a harvest context.
+
+    The ``rdi`` is resolved automatically from the harvest run.
+    """
     harvest = await bl.harvest_manager.get_harvest(harvest_id)
     if not harvest:
         raise HTTPException(status_code=HTTPStatus.NOT_FOUND, detail="Harvest not found")

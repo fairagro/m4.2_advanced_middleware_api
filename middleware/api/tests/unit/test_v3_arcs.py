@@ -11,7 +11,7 @@ from middleware.api.api.common.dependencies import get_client_id
 from middleware.api.api.fastapi_app import Api
 from middleware.api.schemas import ArcEventType, ArcLifecycleStatus
 from middleware.api.schemas.arc_document import ArcEvent, ArcMetadata
-from middleware.shared.api_models.models import ArcOperationResult, ArcResponse, ArcStatus
+from middleware.shared.api_models import ArcOperationResult, ArcResponse, ArcStatus
 
 
 @pytest.mark.unit
