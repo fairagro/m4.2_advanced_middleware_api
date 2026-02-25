@@ -3,16 +3,17 @@
 
 This module provides functionality to verify the health of:
 - ArcStore backend (Git repository or GitLab API)
-- Redis (Celery result backend)
+- CouchDB (ARC and Harvest storage)
 - RabbitMQ (Celery message broker)
 """
 
 import logging
 import os
 import sys
+from http import HTTPStatus
 from pathlib import Path
 
-import redis
+import aiohttp
 
 from middleware.api.arc_store import ArcStore
 from middleware.api.arc_store.git_repo import GitRepo
@@ -25,7 +26,7 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name
 logger = logging.getLogger("worker_health")
 
 
-def check_worker_health() -> bool:
+async def check_worker_health() -> bool:
     """Check health of the worker and its dependencies."""
     try:
         # Load config
@@ -46,22 +47,22 @@ def check_worker_health() -> bool:
             logger.error("Invalid ArcStore configuration")
             return False
 
-        # Check backend (Git/GitLab)
+        # Check backend (Git/GitLab) - These are synchronous
         backend_reachable = False
         try:
             backend_reachable = store.check_health()
-        except Exception as e:  # pylint: disable=broad-exception-caught
+        except (ConnectionError, TimeoutError) as e:
             logger.error("Backend health check failed: %s", e)
 
-        # Check Redis (result backend)
-        redis_reachable = False
+        # Check CouchDB (doc store)
+        couchdb_reachable = False
         try:
-            redis_url = config.celery.result_backend.get_secret_value() if config.celery else "redis://localhost:6379/0"
-            r = redis.from_url(redis_url)
-            r.ping()
-            redis_reachable = True
-        except redis.RedisError as e:
-            logger.error("Redis health check failed: %s", e)
+            # We use a simple HTTP GET to avoid complex database setup during health check
+            timeout = aiohttp.ClientTimeout(total=5)
+            async with aiohttp.ClientSession(timeout=timeout) as session, session.get(config.couchdb.url) as resp:
+                couchdb_reachable = resp.status == HTTPStatus.OK
+        except Exception as e:  # noqa: BLE001
+            logger.error("CouchDB health check failed: %s", e)
 
         # Check RabbitMQ (broker)
         rabbitmq_reachable = False
@@ -69,12 +70,12 @@ def check_worker_health() -> bool:
             with celery_app.connection_or_acquire() as conn:
                 conn.ensure_connection(max_retries=1)
                 rabbitmq_reachable = True
-        except Exception as e:  # pylint: disable=broad-exception-caught
+        except Exception as e:  # noqa: BLE001
             logger.error("RabbitMQ health check failed: %s", e)
 
         health_status = {
             "backend_reachable": backend_reachable,
-            "redis_reachable": redis_reachable,
+            "couchdb_reachable": couchdb_reachable,
             "rabbitmq_reachable": rabbitmq_reachable,
         }
 
@@ -87,13 +88,15 @@ def check_worker_health() -> bool:
 
         return True
 
-    except Exception as e:  # pylint: disable=broad-exception-caught
+    except Exception as e:  # noqa: BLE001
         logger.error("Health check exception: %s", e)
         return False
 
 
 if __name__ == "__main__":
-    if check_worker_health():
+    import asyncio
+
+    if asyncio.run(check_worker_health()):
         sys.exit(0)
     else:
         sys.exit(1)

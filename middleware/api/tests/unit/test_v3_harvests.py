@@ -7,7 +7,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 from fastapi.testclient import TestClient
 
-from middleware.api.api import Api
+from middleware.api.fastapi_app import Api
 from middleware.api.schemas import HarvestDocument, HarvestStatistics, HarvestStatus
 from middleware.shared.api_models.models import ArcOperationResult, ArcResponse, ArcStatus
 

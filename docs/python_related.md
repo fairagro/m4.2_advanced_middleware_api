@@ -123,7 +123,7 @@ python -m middleware.api.main
 To run the middleware api via `uvicorn` command line tool:
 
 ```bash
-uvicorn middleware.api.api:app
+uvrun uvicorn middleware.api.fastapi_app:app
 ```
 
 ### Running via `fastapi`
@@ -131,7 +131,7 @@ uvicorn middleware.api.api:app
 To run the middleware api via `fastapi` command line tool:
 
 ```bash
-fastapi run middleware/api/src/middleware/api/api.py --app app
+fastapi run middleware/api/src/middleware/api/fastapi_app.py --app app
 ```
 
 ### Using a local docker image

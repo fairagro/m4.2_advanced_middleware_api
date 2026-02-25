@@ -6,7 +6,7 @@ from unittest.mock import AsyncMock, patch
 import pytest
 from fastapi.testclient import TestClient
 
-from middleware.api.api import Api
+from middleware.api.fastapi_app import Api
 from middleware.api.schemas.sync_task import SyncTaskResult, SyncTaskStatus
 from middleware.shared.api_models.models import ArcOperationResult, ArcResponse, ArcStatus, TaskStatus
 
@@ -54,7 +54,7 @@ def test_create_or_update_arc_success(
     with (
         patch.object(middleware_api.business_logic, "create_or_update_arc", new_callable=AsyncMock) as mock_create,
         patch.object(middleware_api.app.state.common_deps, "get_authorized_rdis", new_callable=AsyncMock) as mock_auth,
-        patch("middleware.api.v2.arcs.uuid.uuid4") as mock_uuid,
+        patch("middleware.api.api.v2.arcs.uuid.uuid4") as mock_uuid,
     ):
         mock_create.return_value = mock_result
         mock_auth.return_value = ["rdi-1"]

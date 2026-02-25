@@ -10,8 +10,8 @@ import pytest
 from cryptography import x509
 from fastapi.testclient import TestClient
 
-from middleware.api.api import Api
-from middleware.api.common.dependencies import get_client_id
+from middleware.api.api.common.dependencies import get_client_id
+from middleware.api.fastapi_app import Api
 from middleware.api.schemas.sync_task import SyncTaskResult, SyncTaskStatus
 from middleware.shared.api_models.models import (
     ArcOperationResult,
@@ -203,7 +203,7 @@ def test_create_or_update_arcs_success(
 
             # Mock uuid to get predictable task_id
             with unittest.mock.patch(
-                "middleware.api.v1.arcs.uuid.uuid4", return_value=uuid.UUID("12345678-1234-5678-1234-567812345678")
+                "middleware.api.api.v1.arcs.uuid.uuid4", return_value=uuid.UUID("12345678-1234-5678-1234-567812345678")
             ):
                 r = client.post(
                     "/v1/arcs",
@@ -258,7 +258,7 @@ def test_create_or_update_arcs_no_cert_allowed(client: TestClient, middleware_ap
 
         # Mock uuid to get predictable task_id
         with unittest.mock.patch(
-            "middleware.api.v1.arcs.uuid.uuid4", return_value=uuid.UUID("12345678-1234-5678-1234-567812345678")
+            "middleware.api.api.v1.arcs.uuid.uuid4", return_value=uuid.UUID("12345678-1234-5678-1234-567812345678")
         ):
             r = client.post(
                 "/v1/arcs",

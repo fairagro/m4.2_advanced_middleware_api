@@ -7,8 +7,7 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 
-from middleware.api.business_logic import ArcOperationResult, BusinessLogic
-from middleware.api.common.dependencies import (
+from middleware.api.api.common.dependencies import (
     CommonApiDependencies,
     get_accept_type,
     get_business_logic,
@@ -16,6 +15,7 @@ from middleware.api.common.dependencies import (
     get_common_deps,
     get_content_type,
 )
+from middleware.api.business_logic import ArcOperationResult, BusinessLogic
 from middleware.shared.api_models.v1 import models as v1_models
 
 logger = logging.getLogger(__name__)

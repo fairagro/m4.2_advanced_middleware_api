@@ -4,8 +4,8 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from middleware.api.api import Api
 from middleware.api.business_logic import SetupError
+from middleware.api.fastapi_app import Api
 
 
 @pytest.mark.asyncio
@@ -24,12 +24,12 @@ async def test_lifespan_setup_error_reraised() -> None:
     mock_config.model_dump.return_value = {}
 
     with (
-        patch("middleware.api.api.Config"),
-        patch("middleware.api.api.BusinessLogicFactory.create") as mock_factory,
-        patch("middleware.api.api.initialize_tracing", return_value=(MagicMock(), MagicMock())),
-        patch("middleware.api.api.initialize_logging"),
-        patch("middleware.api.api.instrument_app"),
-        patch("middleware.api.api.loaded_config", mock_config),
+        patch("middleware.api.fastapi_app.Config"),
+        patch("middleware.api.fastapi_app.BusinessLogicFactory.create") as mock_factory,
+        patch("middleware.api.fastapi_app.initialize_tracing", return_value=(MagicMock(), MagicMock())),
+        patch("middleware.api.fastapi_app.initialize_logging"),
+        patch("middleware.api.fastapi_app.instrument_app"),
+        patch("middleware.api.fastapi_app.loaded_config", mock_config),
     ):
         # Setup mock business logic that fails
         mock_bl = AsyncMock()
@@ -68,12 +68,12 @@ async def test_lifespan_generic_exception_reraised() -> None:
     mock_config.model_dump.return_value = {}
 
     with (
-        patch("middleware.api.api.Config"),
-        patch("middleware.api.api.BusinessLogicFactory.create") as mock_factory,
-        patch("middleware.api.api.initialize_tracing", return_value=(MagicMock(), MagicMock())),
-        patch("middleware.api.api.initialize_logging"),
-        patch("middleware.api.api.instrument_app"),
-        patch("middleware.api.api.loaded_config", mock_config),
+        patch("middleware.api.fastapi_app.Config"),
+        patch("middleware.api.fastapi_app.BusinessLogicFactory.create") as mock_factory,
+        patch("middleware.api.fastapi_app.initialize_tracing", return_value=(MagicMock(), MagicMock())),
+        patch("middleware.api.fastapi_app.initialize_logging"),
+        patch("middleware.api.fastapi_app.instrument_app"),
+        patch("middleware.api.fastapi_app.loaded_config", mock_config),
     ):
         # Setup mock business logic that fails with generic exception
         mock_bl = AsyncMock()

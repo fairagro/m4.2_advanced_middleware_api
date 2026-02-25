@@ -6,9 +6,10 @@ from typing import Any
 import pytest
 from fastapi.testclient import TestClient
 
-# Import from the API package
-from middleware.api.api import Api
 from middleware.api.config import Config as ApiConfig
+
+# Import from the API package
+from middleware.api.fastapi_app import Api
 
 # Import from the API client package
 from middleware.api_client.config import Config

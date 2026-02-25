@@ -1,7 +1,10 @@
 """Entry point for running the Middleware API with Uvicorn or Celery."""
 
+import asyncio
 import multiprocessing
 import sys
+
+from middleware.api.worker_health import check_worker_health
 
 
 def main() -> None:
@@ -28,9 +31,7 @@ def main() -> None:
     from celery.__main__ import main as celery_main  # pylint: disable=import-outside-toplevel
 
     if len(sys.argv) > 1 and sys.argv[1] == "worker-health":
-        from middleware.api.worker_health import check_worker_health  # pylint: disable=import-outside-toplevel
-
-        sys.exit(0 if check_worker_health() else 1)
+        sys.exit(0 if asyncio.run(check_worker_health()) else 1)
 
     if len(sys.argv) > 1 and sys.argv[1] == "celery":
         # Remove the executable name and the 'celery' command, so sys.argv[0] becomes 'celery'
@@ -40,7 +41,7 @@ def main() -> None:
         celery_main()
         sys.exit(0)
 
-    from middleware.api.api import middleware_api  # pylint: disable=import-outside-toplevel
+    from middleware.api.fastapi_app import middleware_api  # pylint: disable=import-outside-toplevel
 
     # Construct the app path string
     app_path = f"{middleware_api.__module__}:middleware_api.app"

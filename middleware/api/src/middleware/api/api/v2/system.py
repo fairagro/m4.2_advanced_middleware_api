@@ -6,11 +6,11 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends, Response
 
-from middleware.api.business_logic import BusinessLogic
-from middleware.api.common.dependencies import (
+from middleware.api.api.common.dependencies import (
     get_accept_type,
     get_business_logic,
 )
+from middleware.api.business_logic import BusinessLogic
 from middleware.shared.api_models.v2 import models as v2_models
 
 logger = logging.getLogger(__name__)

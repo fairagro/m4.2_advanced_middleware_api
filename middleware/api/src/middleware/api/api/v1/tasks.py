@@ -6,11 +6,11 @@ from typing import Annotated
 from fastapi import APIRouter, Depends
 from pydantic import ValidationError
 
-from middleware.api.business_logic import BusinessLogic
-from middleware.api.common.dependencies import (
+from middleware.api.api.common.dependencies import (
     get_accept_type,
     get_business_logic,
 )
+from middleware.api.business_logic import BusinessLogic
 from middleware.api.schemas.sync_task import SyncTaskStatus
 from middleware.shared.api_models.common.models import ArcOperationResult
 from middleware.shared.api_models.v1 import models as v1_models

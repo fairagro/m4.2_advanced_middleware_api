@@ -20,13 +20,13 @@ from opentelemetry.sdk.trace import TracerProvider
 
 from middleware.shared.tracing import initialize_logging, initialize_tracing
 
+from .api.common.dependencies import CommonApiDependencies
+from .api.v1 import arcs as arcs_v1, system as system_v1, tasks as tasks_v1
+from .api.v2 import arcs as arcs_v2, system as system_v2, tasks as tasks_v2
+from .api.v3 import arcs as arcs_v3, harvests as harvests_v3
 from .business_logic import BusinessLogicFactory
-from .common.dependencies import CommonApiDependencies
 from .config import Config
 from .tracing import instrument_app
-from .v1 import arcs as arcs_v1, system as system_v1, tasks as tasks_v1
-from .v2 import arcs as arcs_v2, system as system_v2, tasks as tasks_v2
-from .v3 import arcs as arcs_v3, harvests as harvests_v3
 
 try:
     from importlib.metadata import PackageNotFoundError, version
