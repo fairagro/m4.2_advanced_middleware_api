@@ -17,7 +17,7 @@ from middleware.shared.api_models.v1 import models as v1_models
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter(prefix="/v1/tasks", tags=["v1", "tasks"])
+router = APIRouter(prefix="/v1/tasks", tags=["v1", "tasks"], deprecated=True)
 
 
 @router.get("/{task_id}", response_model=v1_models.GetTaskStatusResponse)

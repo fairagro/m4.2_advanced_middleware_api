@@ -1,4 +1,11 @@
-"""Implements an ArcStore using Gitlab API as backend."""
+"""Implements an ArcStore using the GitLab API as backend.
+
+.. deprecated::
+    :class:`GitlabApi` (and its companion :class:`GitlabApiConfig`) are deprecated
+    and will be removed in a future release.  Use
+    :class:`~middleware.api.arc_store.git_repo.GitRepo` together with
+    :class:`~middleware.api.arc_store.git_repo.GitRepoConfig` instead.
+"""
 
 import asyncio
 import base64
@@ -16,6 +23,7 @@ from gitlab.exceptions import GitlabGetError
 from gitlab.v4.objects import Project, ProjectFile
 from opentelemetry import context
 from pydantic import BaseModel, Field, HttpUrl, SecretStr, field_validator
+from typing_extensions import deprecated
 
 from . import ArcStore
 
@@ -24,6 +32,7 @@ logger = logging.getLogger(__name__)
 T = TypeVar("T")
 
 
+@deprecated("GitlabApiConfig is deprecated. Use GitRepoConfig from middleware.api.arc_store.git_repo instead.")
 class GitlabApiConfig(BaseModel):
     """Configuration for Gitlab API ArcStore."""
 
@@ -72,8 +81,13 @@ class GitlabApiConfig(BaseModel):
         return v
 
 
+@deprecated("GitlabApi is deprecated. Use GitRepo from middleware.api.arc_store.git_repo instead.")
 class GitlabApi(ArcStore):
-    """Implements an ArcStore using Gitlab API as backend."""
+    """Implements an ArcStore using the GitLab API as backend.
+
+    .. deprecated::
+        Use :class:`~middleware.api.arc_store.git_repo.GitRepo` instead.
+    """
 
     def __init__(self, config: GitlabApiConfig) -> None:
         """Konstruktor.

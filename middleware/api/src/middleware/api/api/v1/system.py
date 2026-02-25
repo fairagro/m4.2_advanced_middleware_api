@@ -18,7 +18,7 @@ from middleware.shared.api_models.v1 import models as v1_models
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter(prefix="/v1", tags=["v1", "system"])
+router = APIRouter(prefix="/v1", tags=["v1", "system"], deprecated=True)
 
 
 @router.get("/whoami", response_model=v1_models.WhoamiResponse)

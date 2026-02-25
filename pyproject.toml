@@ -134,6 +134,14 @@ python_files = ["test_*.py"]
 python_classes = ["Test*"]
 python_functions = ["test_*"]
 
+# Suppress DeprecationWarnings from intentionally deprecated modules so tests
+# stay clean. Use pytest.warns(DeprecationWarning) to assert the warnings
+# explicitly where needed.
+filterwarnings = [
+    "ignore:GitlabApi.*is deprecated:DeprecationWarning",
+    "ignore:GitlabApiConfig.*is deprecated:DeprecationWarning",
+]
+
 # Output and behavior
 addopts = [
     "-v",                        # Verbose output
