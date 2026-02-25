@@ -35,9 +35,9 @@ def test_factory_creates_api_mode() -> None:
 
         assert isinstance(bl, BusinessLogic)
         # pylint: disable=protected-access
-        assert bl._dispatcher == mock_dispatcher.return_value  # noqa: SLF001
+        assert bl._arc_manager._dispatcher == mock_dispatcher.return_value  # noqa: SLF001
         assert bl._doc_store == mock_couch.return_value  # noqa: SLF001
-        assert bl._store == mock_gitlab_api.return_value  # noqa: SLF001
+        assert bl._arc_manager._store == mock_gitlab_api.return_value  # noqa: SLF001
 
 
 def test_factory_creates_worker_mode() -> None:
@@ -67,9 +67,9 @@ def test_factory_creates_worker_mode() -> None:
 
         assert isinstance(bl, BusinessLogic)
         # pylint: disable=protected-access
-        assert bl._dispatcher is None  # noqa: SLF001
+        assert bl._arc_manager._dispatcher is None  # noqa: SLF001
         assert bl._doc_store == mock_couch.return_value  # noqa: SLF001
-        assert bl._store == mock_gitlab_api.return_value  # noqa: SLF001
+        assert bl._arc_manager._store == mock_gitlab_api.return_value  # noqa: SLF001
 
 
 def test_factory_git_repo_config() -> None:
@@ -98,5 +98,5 @@ def test_factory_git_repo_config() -> None:
 
         assert isinstance(bl, BusinessLogic)
         # pylint: disable=protected-access
-        assert bl._store == mock_git_repo.return_value  # noqa: SLF001
+        assert bl._arc_manager._store == mock_git_repo.return_value  # noqa: SLF001
         assert bl._doc_store == mock_couch.return_value  # noqa: SLF001

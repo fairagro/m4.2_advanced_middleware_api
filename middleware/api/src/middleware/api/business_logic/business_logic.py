@@ -1,65 +1,47 @@
 """Business logic module for handling ARC (Automated Research Compendium) operations.
 
-This module provides unified business logic for ARC processing with two-phase operation:
+This module provides the ``BusinessLogic`` façade that coordinates all domain services:
+
+- :class:`ArcManager` — ARC creation, update, and GitLab synchronization
+- :class:`HarvestManager` — harvest-run lifecycle management
+- Health checks, task status, and infrastructure lifecycle
+
+For the two-phase operation:
 1. Fast CouchDB storage (used by API for immediate response)
 2. Slow GitLab sync (executed by background worker)
 """
 
-import json
 import logging
-from datetime import UTC, datetime
-from typing import Any, Protocol, Self, runtime_checkable
+from typing import Any, Self
 
-from arctrl import ARC  # type: ignore[import-untyped]
-from opentelemetry import trace
-
-from middleware.api.arc_store import ArcStore, ArcStoreTransientError
+from middleware.api.arc_store import ArcStore
 from middleware.api.config import Config
 from middleware.api.document_store import DocumentStore
-from middleware.api.schemas import ArcEvent, ArcEventType, ArcMetadata
-from middleware.api.schemas.celery_tasks import ArcSyncTask
+from middleware.api.schemas import ArcMetadata
 from middleware.api.schemas.sync_task import SyncTaskResult, SyncTaskStatus
-from middleware.api.utils import calculate_arc_id, extract_identifier
 from middleware.api.worker.celery_app import celery_app
-from middleware.shared.api_models.common.models import (
-    ArcOperationResult,
-    ArcResponse,
-    ArcStatus,
-)
+from middleware.shared.api_models.common.models import ArcOperationResult
 
+from .arc_manager import ArcManager
+from .exceptions import (
+    BusinessLogicError,
+    InvalidJsonSemanticError,
+    SetupError,
+    TaskDispatcher,
+    TransientError,
+)
 from .harvest_manager import HarvestManager
 
 logger = logging.getLogger(__name__)
 
-
-@runtime_checkable
-class TaskDispatcher(Protocol):
-    """Protocol for dispatching background tasks."""
-
-    def dispatch_sync_arc(self, task: ArcSyncTask) -> None:
-        """Dispatch a task to sync an ARC to GitLab."""
-
-
-class BusinessLogicError(Exception):
-    """Base exception class for all business logic errors."""
-
-
-class InvalidJsonSemanticError(BusinessLogicError):
-    """Arises when the ARC JSON syntax is valid but semantically incorrect.
-
-    For example, missing required fields or invalid values.
-    """
-
-
-class SetupError(BusinessLogicError):
-    """Arises when the business logic setup fails."""
-
-
-class TransientError(BusinessLogicError):
-    """Arises when a transient error occurs that may be resolved by retrying.
-
-    Examples: Server unreachable, maintenance mode, temporary network issues.
-    """
+__all__ = [
+    "BusinessLogic",
+    "BusinessLogicError",
+    "InvalidJsonSemanticError",
+    "SetupError",
+    "TaskDispatcher",
+    "TransientError",
+]
 
 
 class BusinessLogic:
@@ -89,11 +71,9 @@ class BusinessLogic:
             task_dispatcher: Optional task dispatcher for enqueueing GitLab sync jobs.
         """
         self._config = config
-        self._store = store
         self._doc_store = doc_store
-        self._dispatcher = task_dispatcher
         self._harvest_manager = HarvestManager.from_config(config.harvest, doc_store)
-        self._tracer = trace.get_tracer(__name__)
+        self._arc_manager = ArcManager(store=store, doc_store=doc_store, task_dispatcher=task_dispatcher)
 
     @property
     def harvest_manager(self) -> HarvestManager:
@@ -230,81 +210,14 @@ class BusinessLogic:
             InvalidJsonSemanticError: If the JSON is semantically incorrect.
             BusinessLogicError: If an error occurs during the operation or if not in API mode.
         """
-        # Ensure we are in API mode (dispatcher configured)
-        if not self._dispatcher:
-            raise BusinessLogicError("create_or_update_arc can only be called in API mode")
-
-        with self._tracer.start_as_current_span(
-            "api.BusinessLogic.create_or_update_arc",
-            attributes={"rdi": rdi, "client_id": client_id},
-        ) as span:
-            logger.info("[%s] Starting ARC creation/update: rdi=%s", client_id, rdi)
+        # If harvest_id is provided, validate that it belongs to the client
+        if harvest_id:
             try:
-                # If harvest_id is provided, validate that it belongs to the client
-                if harvest_id:
-                    # We can use the harvest_manager to validate
-                    try:
-                        await self._harvest_manager.validate_client_id(harvest_id, client_id)
-                    except ValueError as e:
-                        raise BusinessLogicError(str(e)) from e
+                await self._harvest_manager.validate_client_id(harvest_id, client_id)
+            except ValueError as e:
+                raise BusinessLogicError(str(e)) from e
 
-                # Fast validation: Ensure identifier is present
-                identifier = extract_identifier(arc)
-                if identifier is None:
-                    raise InvalidJsonSemanticError("RO-Crate JSON must contain an 'identifier' (e.g. in ISA object).")
-
-                # identifier is None:
-                #     raise InvalidJsonSemanticError("RO-Crate JSON must contain an 'identifier' (e.g. in ISA object).")
-
-                # Store in CouchDB (fast) - identifiers and hashing are handled inside doc_store
-                doc_result = await self._doc_store.store_arc(rdi, arc, harvest_id=harvest_id)
-                arc_id = doc_result.arc_id
-                span.set_attribute("arc_id", arc_id)
-
-                is_new = doc_result.is_new
-                has_changes = doc_result.has_changes
-                should_trigger_git = is_new or has_changes
-
-                logger.info(
-                    "[%s] Stored ARC %s in CouchDB: is_new=%s, has_changes=%s, trigger_git=%s",
-                    client_id,
-                    arc_id,
-                    is_new,
-                    has_changes,
-                    should_trigger_git,
-                )
-
-                # Enqueue GitLab sync if needed
-                if should_trigger_git:
-                    logger.info("[%s] Enqueueing GitLab sync task for ARC %s", client_id, arc_id)
-                    self._dispatcher.dispatch_sync_arc(ArcSyncTask(rdi=rdi, arc=arc, client_id=client_id))
-                else:
-                    logger.info("[%s] Skipping GitLab sync for ARC %s (unchanged)", client_id, arc_id)
-
-                status = ArcStatus.CREATED if is_new else ArcStatus.UPDATED
-                result = ArcResponse(
-                    id=arc_id,
-                    status=status,
-                    timestamp=datetime.now(UTC).isoformat() + "Z",
-                )
-
-                span.set_attribute("success", True)
-
-                return ArcOperationResult(
-                    client_id=client_id,
-                    rdi=rdi,
-                    message="Stored in CouchDB successfully",
-                    arc=result,
-                )
-
-            except Exception as e:
-                logger.error("[%s] Unexpected error while processing ARC: %s", client_id, e, exc_info=True)
-                span.record_exception(e)
-                if isinstance(e, InvalidJsonSemanticError):
-                    raise e
-                if isinstance(e, BusinessLogicError):
-                    raise e
-                raise BusinessLogicError(f"unexpected error encountered: {str(e)}") from e
+        return await self._arc_manager.create_or_update_arc(rdi, arc, client_id, harvest_id)
 
     async def sync_to_gitlab(self, rdi: str, arc: dict[str, Any]) -> None:
         """Synchronize ARC to GitLab storage.
@@ -320,74 +233,4 @@ class BusinessLogic:
             InvalidJsonSemanticError: If the JSON is semantically incorrect.
             BusinessLogicError: If an error occurs during the operation or if in API mode.
         """
-        # Ensure we are in Worker mode (task_dispatcher NOT configured)
-        if self._dispatcher:
-            raise BusinessLogicError("sync_to_gitlab must not be called in API mode")
-
-        with self._tracer.start_as_current_span(
-            "api.BusinessLogic.sync_to_gitlab",
-            attributes={"rdi": rdi},
-        ) as span:
-            logger.info("Starting GitLab sync for RDI: %s", rdi)
-            try:
-                # Calculate ARC ID using shared utility - fast and doesn't require full arctrl parse yet
-                identifier = extract_identifier(arc)
-                if identifier is None:
-                    raise InvalidJsonSemanticError("RO-Crate JSON must contain an 'identifier' (e.g. in ISA object).")
-
-                arc_id = calculate_arc_id(identifier, rdi)
-                span.set_attribute("arc_id", arc_id)
-
-                # Parse ARC for storage (slow, but fine in worker)
-                arc_json = json.dumps(arc)
-                arc_obj = ARC.from_rocrate_json_string(arc_json)
-
-                # Store in Git
-                logger.info("Triggering Git storage for ARC %s", arc_id)
-                await self._store.create_or_update(arc_id, arc_obj)
-
-                # Record success in CouchDB
-                await self._doc_store.add_event(
-                    arc_id,
-                    ArcEvent(
-                        timestamp=datetime.now(UTC),
-                        type=ArcEventType.GIT_PUSH_SUCCESS,
-                        message="Successfully synchronized to GitLab",
-                    ),
-                )
-
-                span.set_attribute("success", True)
-                logger.info("Successfully synced ARC %s to GitLab", arc_id)
-
-            except ArcStoreTransientError as e:
-                logger.info("Transient error during GitLab sync for ARC %s: %s", arc_id, e)
-                span.record_exception(e)
-                # Note: We don't always want to write an event for every retry-able transient error
-                # to avoid log spam, but for critical failures we do.
-                raise TransientError(str(e)) from e
-
-            except Exception as e:
-                logger.error("Unexpected error while syncing ARC to GitLab: %s", e, exc_info=True)
-                span.record_exception(e)
-
-                # Try to record failure in CouchDB if we have an arc_id
-                try:
-                    identifier = identifier or extract_identifier(arc)
-                    if identifier:
-                        arc_id = arc_id or calculate_arc_id(identifier, rdi)
-                        await self._doc_store.add_event(
-                            arc_id,
-                            ArcEvent(
-                                timestamp=datetime.now(UTC),
-                                type=ArcEventType.GIT_PUSH_FAILED,
-                                message=f"GitLab sync failed: {str(e)}",
-                            ),
-                        )
-                except Exception as log_error:  # noqa: BLE001
-                    logger.warning("Could not log sync failure to CouchDB: %s", log_error)
-
-                if isinstance(e, InvalidJsonSemanticError):
-                    raise e
-                if isinstance(e, BusinessLogicError):
-                    raise e
-                raise BusinessLogicError(f"unexpected error encountered: {str(e)}") from e
+        await self._arc_manager.sync_to_gitlab(rdi, arc)

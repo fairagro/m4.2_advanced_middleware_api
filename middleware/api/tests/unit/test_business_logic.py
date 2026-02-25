@@ -84,12 +84,12 @@ async def test_api_mode_create_or_update_success(
     mock_doc_store.store_arc.return_value = ArcStoreResult(arc_id="arc_id", is_new=True, has_changes=True)
 
     # Mock ARC
-    with patch("middleware.api.business_logic.business_logic.ARC") as mock_arc_class:
+    with patch("middleware.api.business_logic.arc_manager.ARC") as mock_arc_class:
         mock_arc_instance = MagicMock()
         mock_arc_instance.Identifier = "ABC"
         mock_arc_class.from_rocrate_json_string.return_value = mock_arc_instance
 
-        with patch("middleware.api.business_logic.business_logic.calculate_arc_id", return_value="arc_id"):
+        with patch("middleware.api.business_logic.arc_manager.calculate_arc_id", return_value="arc_id"):
             result = await api_logic.create_or_update_arc(rdi, arc_data, client_id)
 
     assert isinstance(result, ArcOperationResult)
@@ -196,12 +196,12 @@ async def test_worker_mode_sync_to_gitlab_success(worker_logic: BusinessLogic, m
     rdi = "test-rdi"
     arc_data = {"@context": "https://w3id.org/ro/crate/1.1/context", "@graph": [{"@id": "./", "identifier": "ABC"}]}
 
-    with patch("middleware.api.business_logic.business_logic.ARC") as mock_arc_class:
+    with patch("middleware.api.business_logic.arc_manager.ARC") as mock_arc_class:
         mock_arc_instance = MagicMock()
         mock_arc_instance.Identifier = "ABC"
         mock_arc_class.from_rocrate_json_string.return_value = mock_arc_instance
 
-        with patch("middleware.api.business_logic.business_logic.calculate_arc_id", return_value="arc_id"):
+        with patch("middleware.api.business_logic.arc_manager.calculate_arc_id", return_value="arc_id"):
             await worker_logic.sync_to_gitlab(rdi, arc_data)
 
     # Verify store called
@@ -229,12 +229,12 @@ async def test_api_mode_skips_sync_if_no_changes(
     rdi = "test-rdi"
     arc_data = {"@context": "https://w3id.org/ro/crate/1.1/context", "@graph": [{"@id": "./", "identifier": "ABC"}]}
 
-    with patch("middleware.api.business_logic.business_logic.ARC") as mock_arc_class:
+    with patch("middleware.api.business_logic.arc_manager.ARC") as mock_arc_class:
         mock_arc_instance = MagicMock()
         mock_arc_instance.Identifier = "ABC"
         mock_arc_class.from_rocrate_json_string.return_value = mock_arc_instance
 
-        with patch("middleware.api.business_logic.business_logic.calculate_arc_id", return_value="arc_id"):
+        with patch("middleware.api.business_logic.arc_manager.calculate_arc_id", return_value="arc_id"):
             await api_logic.create_or_update_arc(rdi, arc_data, "client")
 
     mock_doc_store.store_arc.assert_called_once()
@@ -307,7 +307,7 @@ async def test_sync_to_gitlab_generic_exception(worker_logic: BusinessLogic, moc
     mock_store.create_or_update.side_effect = Exception("Git failure")
     arc_data = {"@context": "https://w3id.org/ro/crate/1.1/context", "@graph": [{"@id": "./", "identifier": "test"}]}
 
-    with patch("middleware.api.business_logic.business_logic.ARC") as mock_arc_class:
+    with patch("middleware.api.business_logic.arc_manager.ARC") as mock_arc_class:
         mock_arc_obj = MagicMock()
         mock_arc_obj.Identifier = "test"
         mock_arc_class.from_rocrate_json_string.return_value = mock_arc_obj
