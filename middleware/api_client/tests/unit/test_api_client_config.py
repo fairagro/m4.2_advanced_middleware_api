@@ -115,7 +115,7 @@ def test_config_polling_defaults() -> None:
     assert config.polling_initial_delay == 1.0
     assert config.polling_max_delay == 30.0  # noqa: PLR2004
     assert config.polling_backoff_factor == 1.5  # noqa: PLR2004
-    assert config.polling_timeout == 90.0  #  noqa: PLR2004
+    assert config.polling_timeout == 90.0  # noqa: PLR2004
 
 
 def test_config_polling_validation() -> None:

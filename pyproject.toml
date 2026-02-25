@@ -70,8 +70,13 @@ lint.select = [
   "SIM", # flake8-simplify
   "A",   # flake8-builtins
   "ARG", # flake8-unused-arguments
+  "BLE", # flake8-blind-except (fängt zu generische Exceptions ab)
   "PLR", # Pylint Refactor (inkl. complexity rules wie too-many-return-statements)
+  "SLF", # flake8-self (Private member access)
 ]
+
+# Muss für PLR0917 aktiviert sein
+preview = true
 
 # Maximale Zeilenlänge wie in pylint (Standard: 100)
 line-length = 120
@@ -253,6 +258,15 @@ disable = [
     # Additional opinionated/style checks often handled by formatters
     "R0903",  # too-few-public-methods (opinionated, often not relevant)
     "R0913",  # too-many-arguments (opinionated, case-by-case basis)
+    "R0917",  # too-many-positional-arguments (handled by ruff PLR0917)
     "C0301",  # line-too-long (handled by ruff formatter)
     "R0801",  # duplicate-code (can be noisy in tests)
+    "R0914",  # too-many-locals (handled by ruff PLR0914)
+
+    # Exception checks (covered by ruff BLE001)
+    "W0718",  # broad-exception-caught
+    "W0703",  # broad-except
+
+    # Private member access
+    "W0212",  # protected-access
 ]

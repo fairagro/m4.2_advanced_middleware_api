@@ -17,8 +17,8 @@ from middleware.api.schemas.arc_document import (
     ArcMetadata,
 )
 from middleware.api.schemas.harvest_document import (
-    HarvestConfig,
     HarvestDocument,
+    HarvestStatistics,
     HarvestStatus,
 )
 from middleware.api.utils import calculate_arc_id, extract_identifier
@@ -41,7 +41,8 @@ class CouchDB(DocumentStore):
         self._db_name = config.db_name
         self._client = CouchDBClient.from_config(config)
 
-    def _calculate_content_hash(self, arc_content: dict[str, Any]) -> str:
+    @classmethod
+    def _calculate_content_hash(cls, arc_content: dict[str, Any]) -> str:
         """Calculate SHA256 hash of ARC content.
 
         Note: We use sort_keys=True to ensure consistent hashing even if
@@ -122,7 +123,7 @@ class CouchDB(DocumentStore):
                 # but we DO update last_seen (already done above).
 
                 # If it was marked MISSING/DELETED but is now back (restored), we should note that
-                if metadata.status in (ArcLifecycleStatus.MISSING, ArcLifecycleStatus.DELETED):
+                if metadata.status in {ArcLifecycleStatus.MISSING, ArcLifecycleStatus.DELETED}:
                     metadata.status = ArcLifecycleStatus.ACTIVE
                     metadata.missing_since = None
                     metadata.events.append(
@@ -194,18 +195,17 @@ class CouchDB(DocumentStore):
         """Check if document store is reachable."""
         return await self._client.health_check()
 
-    async def setup(self, setup_system: bool = False) -> None:
-        """Initialize CouchDB and ensure databases exist.
-
-        Args:
-            setup_system: Whether to ensure system databases exist.
-        """
-        await self._client.connect(db_name=self._db_name, setup_system=setup_system)
-        logger.info("CouchDB document store initialized (setup_system=%s)", setup_system)
+    async def setup(self) -> None:
+        """Initialize indices for the document store."""
+        # We assume connect() has been called before setup()
+        # Create indices for common queries
+        await self._client.create_index(["type", "rdi"], name="idx_type_rdi")
+        await self._client.create_index(["type", "metadata.last_harvest_id"], name="idx_type_harvest")
+        logger.info("CouchDB document store indices initialized")
 
     async def connect(self) -> None:
         """Connect to CouchDB."""
-        await self._client.connect(db_name=self._db_name)
+        await self._client.connect()
         logger.info("CouchDB document store connected")
 
     async def close(self) -> None:
@@ -213,49 +213,96 @@ class CouchDB(DocumentStore):
         await self._client.close()
         logger.info("CouchDB document store disconnected")
 
-    async def create_harvest(self, rdi: str, source: str, config: dict | None = None) -> str:
+    async def create_harvest(
+        self,
+        rdi: str,
+        client_id: str,
+        expected_datasets: int | None = None,
+    ) -> str:
         """Create a new harvest record."""
         harvest_uuid = str(uuid.uuid4())
         doc_id = f"harvest-{harvest_uuid}"
-        
-        harvest_config = HarvestConfig(**(config or {}))
-        
+
         doc = HarvestDocument(
             doc_id=doc_id,
             rdi=rdi,
-            source=source,
+            client_id=client_id,
             started_at=datetime.now(UTC),
             status=HarvestStatus.RUNNING,
-            config=harvest_config,
+            statistics=HarvestStatistics(expected_datasets=expected_datasets),
         )
-        
+
         doc_data = doc.model_dump(by_alias=True, exclude_none=True)
         await self._client.save_document(doc_id, doc_data)
         return doc_id
 
-    async def get_harvest(self, harvest_id: str) -> dict[str, Any] | None:
+    async def get_harvest(self, harvest_id: str) -> HarvestDocument | None:
         """Get harvest document."""
-        return await self._client.get_document(harvest_id)
+        doc = await self._client.get_document(harvest_id)
+        return HarvestDocument(**doc) if doc else None
 
     async def update_harvest(self, harvest_id: str, updates: dict[str, Any]) -> None:
         """Update a harvest record."""
         doc_dict = await self._client.get_document(harvest_id)
         if not doc_dict:
             raise ValueError(f"Harvest {harvest_id} not found")
-        
-        # Merge updates
-        doc_dict.update(updates)
-        
-        # If completing, set completed_at if not provided
-        if doc_dict.get("status") == HarvestStatus.COMPLETED and not doc_dict.get("completed_at"):
-            doc_dict["completed_at"] = datetime.now(UTC).isoformat() + "Z"
-            
-        await self._client.save_document(harvest_id, doc_dict)
 
-    async def list_harvests(self, rdi: str | None = None) -> list[dict[str, Any]]:
+        # Use model for validation during merge if possible, or just merge and save
+        # To be safe and respect Pydantic aliases/types:
+        doc = HarvestDocument(**doc_dict)
+
+        # Apply updates to the model
+        if "status" in updates:
+            doc.status = updates["status"]
+        if "statistics" in updates:
+            doc.statistics = HarvestStatistics(**updates["statistics"])
+        if "completed_at" in updates:
+            doc.completed_at = updates["completed_at"]
+
+        # If completing, set completed_at if not provided
+        if doc.status == HarvestStatus.COMPLETED and not doc.completed_at:
+            doc.completed_at = datetime.now(UTC)
+
+        doc_data = doc.model_dump(by_alias=True, exclude_none=True)
+        await self._client.save_document(harvest_id, doc_data)
+
+    async def list_harvests(self, rdi: str | None = None) -> list[HarvestDocument]:
         """List harvest records."""
         selector: dict[str, Any] = {"type": "harvest"}
         if rdi:
             selector["rdi"] = rdi
-        
-        return await self._client.find(selector)
+
+        docs = await self._client.find(selector)
+        return [HarvestDocument(**d) for d in docs]
+
+    async def get_harvest_statistics(self, harvest_id: str) -> HarvestStatistics:
+        """Calculate and return statistics for a specific harvest run."""
+        # Find all ARCs that were touched by this harvest run
+        # We search for documents where last_harvest_id in metadata matches
+        selector = {"type": "arc", "metadata.last_harvest_id": harvest_id}
+        docs = await self._client.find(selector)
+
+        stats = HarvestStatistics()
+        stats.arcs_submitted = len(docs)
+
+        for doc_dict in docs:
+            # We need to look at the event log to see what happened to this ARC during THIS harvest
+            events = doc_dict.get("metadata", {}).get("events", [])
+            harvest_events = [e for e in events if e.get("harvest_id") == harvest_id]
+
+            if not harvest_events:
+                # Should not happen based on selector, but let's be safe
+                stats.arcs_unchanged += 1
+                continue
+
+            # Check if it was created or updated
+            event_types = {e.get("type") for e in harvest_events}
+            if ArcEventType.ARC_CREATED in event_types:
+                stats.arcs_new += 1
+            elif ArcEventType.ARC_UPDATED in event_types:
+                stats.arcs_updated += 1
+            else:
+                # If no CREATED/UPDATED event, it was just "seen" but unchanged
+                stats.arcs_unchanged += 1
+
+        return stats

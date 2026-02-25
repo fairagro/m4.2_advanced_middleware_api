@@ -78,6 +78,7 @@ def middleware_api(config: Config, service: BusinessLogic) -> Api:
     """Provide the Middleware API instance for tests."""
     api = Api(config)
     api.business_logic = service
+    api.app.state.business_logic = service
     return api
 
 
@@ -108,7 +109,7 @@ def service(config: Config) -> BusinessLogic:
 
     doc_store = MagicMock()
 
-    async def mock_store_arc(rdi: str, arc: dict, _harvest_id: str | None = None) -> ArcStoreResult:
+    async def mock_store_arc(rdi: str, arc: dict, harvest_id: str | None = None) -> ArcStoreResult:  # noqa: ARG001
         identifier = extract_identifier(arc)
         arc_id = calculate_arc_id(identifier, rdi) if identifier else "mock-arc-id"
         return ArcStoreResult(arc_id=arc_id, is_new=True, has_changes=True)
@@ -122,7 +123,7 @@ def service(config: Config) -> BusinessLogic:
     git_sync_task = MagicMock()
 
     # Provide an instance in API mode (with task sender)
-    return BusinessLogic(config=config, store=store, doc_store=doc_store, git_sync_task=git_sync_task)
+    return BusinessLogic(config=config, store=store, doc_store=doc_store, task_dispatcher=git_sync_task)
 
 
 @pytest.fixture
@@ -130,5 +131,5 @@ def gitlab_api() -> GitlabApi:
     """Provide a GitlabApi instance with a mocked Gitlab client."""
     api_config = GitlabApiConfig(url=HttpUrl("http://gitlab"), token=SecretStr("token"), group="1", branch="main")  # nosec
     api = GitlabApi(api_config)
-    api._gitlab = MagicMock()  # pylint: disable=protected-access
+    api._gitlab = MagicMock()  # noqa: SLF001
     return api

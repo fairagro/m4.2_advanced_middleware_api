@@ -171,8 +171,12 @@ class ApiClient:
                 logger.debug("Sending %s request to %s (attempt %d)", method, path, attempt + 1)
                 resp = await client.request(method, path, **kwargs)
 
-                # Retry on 502, 503, 504
-                if resp.status_code in (502, 503, 504) and attempt < self._config.max_retries:
+                # Retry on transient HTTP errors
+                if (
+                    resp.status_code
+                    in {httpx.codes.BAD_GATEWAY, httpx.codes.SERVICE_UNAVAILABLE, httpx.codes.GATEWAY_TIMEOUT}
+                    and attempt < self._config.max_retries
+                ):
                     logger.warning("Transient HTTP error %d from server", resp.status_code)
                     continue
 
@@ -181,10 +185,18 @@ class ApiClient:
                 return resp.json()
             except httpx.HTTPStatusError as e:
                 # If we get here and it's not a retryable error, or we're out of retries
-                if e.response.status_code in (502, 503, 504) and attempt < self._config.max_retries:
+                if (
+                    e.response.status_code
+                    in {httpx.codes.BAD_GATEWAY, httpx.codes.SERVICE_UNAVAILABLE, httpx.codes.GATEWAY_TIMEOUT}
+                    and attempt < self._config.max_retries
+                ):
                     continue
 
-                if e.response.status_code in (502, 503, 504):
+                if e.response.status_code in {
+                    httpx.codes.BAD_GATEWAY,
+                    httpx.codes.SERVICE_UNAVAILABLE,
+                    httpx.codes.GATEWAY_TIMEOUT,
+                }:
                     error_msg = (
                         f"Request failed after {self._config.max_retries} retries: HTTP {e.response.status_code}"
                     )
@@ -241,7 +253,8 @@ class ApiClient:
         """
         return await self._request_with_retries("GET", path)
 
-    def _serialize_arc(self, arc: "ARC | dict[str, Any]") -> dict[str, Any]:
+    @classmethod
+    def _serialize_arc(cls, arc: "ARC | dict[str, Any]") -> dict[str, Any]:
         """Serialize ARC to RO-Crate JSON dict."""
         if isinstance(arc, dict):
             return arc
@@ -313,7 +326,7 @@ class ApiClient:
                     raise ApiClientError("Task succeeded but no result was returned")
                 return status_response.result
 
-            if status_response.status in (TaskStatus.FAILURE, TaskStatus.REVOKED):
+            if status_response.status in {TaskStatus.FAILURE, TaskStatus.REVOKED}:
                 error_msg = status_response.message or "Unknown error"
                 raise ApiClientError(f"Task {status_response.status.value}: {error_msg}")
 

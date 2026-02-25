@@ -8,7 +8,7 @@ import tempfile
 from collections.abc import Generator
 from pathlib import Path
 from typing import Any
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, patch
 
 import pytest
 from cryptography import x509
@@ -70,14 +70,15 @@ def api_client(git_repo_config: dict[str, Any]) -> Generator[TestClient, None, N
     config = Config.from_data(unwrapped_config)
     api = Api(config)
     # Mock BusinessLogic connection methods to avoid requiring a real CouchDB for system tests
-    api.business_logic.connect = AsyncMock()  # type: ignore[method-assign]
-    api.business_logic.close = AsyncMock()  # type: ignore[method-assign]
-    api.business_logic._doc_store.health_check = AsyncMock(return_value=True)  # type: ignore[method-assign] # pylint: disable=protected-access
-    # Mock store_arc to avoid requiring a real CouchDB
-    api.business_logic._doc_store.store_arc = AsyncMock(  # type: ignore[method-assign] # pylint: disable=protected-access
-        return_value=ArcStoreResult(arc_id="test-arc-id", is_new=True, has_changes=True)
-    )
-    with TestClient(api.app) as c:
+    with (
+        patch.object(api.business_logic._doc_store, "health_check", AsyncMock(return_value=True)),  # noqa: SLF001
+        patch.object(
+            api.business_logic._doc_store,  # noqa: SLF001
+            "store_arc",
+            AsyncMock(return_value=ArcStoreResult(arc_id="test-arc-id", is_new=True, has_changes=True)),
+        ),
+        TestClient(api.app) as c,
+    ):
         yield c
 
 

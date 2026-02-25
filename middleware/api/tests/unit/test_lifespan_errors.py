@@ -33,7 +33,7 @@ async def test_lifespan_setup_error_reraised() -> None:
     ):
         # Setup mock business logic that fails
         mock_bl = AsyncMock()
-        mock_bl.connect.side_effect = SetupError("Setup failed intentionally")
+        mock_bl.__aenter__.side_effect = SetupError("Setup failed intentionally")
         mock_factory.return_value = mock_bl
 
         api_instance = Api(mock_config)
@@ -51,7 +51,7 @@ async def test_lifespan_setup_error_reraised() -> None:
                 pass
 
         assert "Setup failed intentionally" in str(excinfo.value)
-        mock_bl.connect.assert_awaited_once()
+        mock_bl.__aenter__.assert_awaited_once()
 
 
 @pytest.mark.asyncio
@@ -77,7 +77,7 @@ async def test_lifespan_generic_exception_reraised() -> None:
     ):
         # Setup mock business logic that fails with generic exception
         mock_bl = AsyncMock()
-        mock_bl.connect.side_effect = ValueError("Unexpected error")
+        mock_bl.__aenter__.side_effect = ValueError("Unexpected error")
         mock_factory.return_value = mock_bl
 
         api_instance = Api(mock_config)
@@ -90,4 +90,4 @@ async def test_lifespan_generic_exception_reraised() -> None:
                 pass
 
         assert "Unexpected error" in str(excinfo.value)
-        mock_bl.connect.assert_awaited_once()
+        mock_bl.__aenter__.assert_awaited_once()

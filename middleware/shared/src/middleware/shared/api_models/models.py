@@ -38,4 +38,3 @@ ArcResponseV3 = v3.ArcResponse
 CreateHarvestRequest = v3.CreateHarvestRequest
 HarvestStatusV3 = v3.HarvestStatus
 HarvestResponse = v3.HarvestResponse
-CompleteHarvestRequest = v3.CompleteHarvestRequest

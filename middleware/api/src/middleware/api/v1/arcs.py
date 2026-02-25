@@ -2,10 +2,12 @@
 
 import logging
 import uuid
+from http import HTTPStatus
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Request
-from middleware.api.business_logic import BusinessLogic, ArcOperationResult
+
+from middleware.api.business_logic import ArcOperationResult, BusinessLogic
 from middleware.api.common.dependencies import (
     CommonApiDependencies,
     get_accept_type,
@@ -21,7 +23,7 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/v1/arcs", tags=["v1", "arcs"])
 
 
-@router.post("", status_code=202, response_model=v1_models.CreateOrUpdateArcsResponse)
+@router.post("", status_code=HTTPStatus.ACCEPTED, response_model=v1_models.CreateOrUpdateArcsResponse)
 async def create_or_update_arcs(
     request: Request,
     request_body: v1_models.CreateOrUpdateArcsRequest,
@@ -37,7 +39,7 @@ async def create_or_update_arcs(
 
     if len(request_body.arcs) != 1:
         raise HTTPException(
-            status_code=400, detail="Currently only single ARC submission is supported per request."
+            status_code=HTTPStatus.BAD_REQUEST, detail="Currently only single ARC submission is supported per request."
         )
 
     arc_data = request_body.arcs[0]
@@ -47,6 +49,6 @@ async def create_or_update_arcs(
     if isinstance(result, ArcOperationResult):
         bl.store_task_result(task_id, result)
     else:
-        raise HTTPException(status_code=500, detail="Unexpected result type")
+        raise HTTPException(status_code=HTTPStatus.INTERNAL_SERVER_ERROR, detail="Unexpected result type")
 
     return v1_models.CreateOrUpdateArcsResponse(task_id=task_id, status="processing")

@@ -7,12 +7,11 @@ This module provides:
 import asyncio
 import logging
 import threading
-from typing import Any
 
-from middleware.api.business_logic import BusinessLogic, TransientError
+from middleware.api.business_logic import BusinessLogic, BusinessLogicFactory, TransientError
 
-from .business_logic_factory import BusinessLogicFactory
 from .celery_app import celery_app, loaded_config
+from .schemas.celery_tasks import ArcSyncTask
 
 # Initialize logger
 logger = logging.getLogger(__name__)
@@ -37,6 +36,9 @@ class BusinessLogicManager:
                 if cls._business_logic is None:
                     cls._business_logic = BusinessLogicFactory.create(loaded_config, mode="worker")
                     logger.info("BusinessLogic initialized for worker")
+
+        if cls._business_logic is None:
+            raise RuntimeError("BusinessLogic failed to initialize")
 
         return cls._business_logic
 
@@ -64,22 +66,22 @@ def sync_arc_to_gitlab(task: ArcSyncTask) -> None:
 
     rdi = task.rdi
     arc_data = task.arc
+    client_id = task.client_id
 
-    logger.info("Starting GitLab sync task for RDI %s", rdi)
+    logger.info("[%s] Starting GitLab sync task for RDI %s", client_id, rdi)
 
     try:
 
         async def _run_sync() -> None:
-            logic: BusinessLogic = BusinessLogicManager.get_business_logic()
-            # pylint: disable=not-async-context-manager
-            async with logic:
+            logic = BusinessLogicManager.get_business_logic()
+            async with logic:  # pylint: disable=not-async-context-manager
                 await logic.sync_to_gitlab(rdi, arc_data)
 
         asyncio.run(_run_sync())
 
-        logger.info("Successfully completed GitLab sync task for RDI %s", rdi)
+        logger.info("[%s] Successfully completed GitLab sync task for RDI %s", client_id, rdi)
 
     except Exception as e:
-        logger.error("GitLab sync task failed: %s", e, exc_info=True)
+        logger.error("[%s] GitLab sync task failed: %s", client_id, e, exc_info=True)
         # Re-raise to mark task as failed in Celery
         raise e

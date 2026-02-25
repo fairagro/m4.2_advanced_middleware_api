@@ -3,7 +3,12 @@
 from abc import ABC, abstractmethod
 from typing import Any
 
-from middleware.api.schemas import ArcEvent, ArcMetadata
+from middleware.api.schemas import (
+    ArcEvent,
+    ArcMetadata,
+    HarvestDocument,
+    HarvestStatistics,
+)
 
 
 class DocumentStoreError(Exception):
@@ -97,12 +102,8 @@ class DocumentStore(ABC):
         raise NotImplementedError
 
     @abstractmethod
-    async def setup(self, setup_system: bool = False) -> None:
-        """Initialize the document store and its dependencies.
-
-        Args:
-            setup_system: Whether to ensure system databases exist.
-        """
+    async def setup(self) -> None:
+        """Initialize the document store and its dependencies."""
         raise NotImplementedError
 
     @abstractmethod
@@ -116,13 +117,18 @@ class DocumentStore(ABC):
         raise NotImplementedError
 
     @abstractmethod
-    async def create_harvest(self, rdi: str, source: str, config: dict | None = None) -> str:
+    async def create_harvest(
+        self,
+        rdi: str,
+        client_id: str,
+        expected_datasets: int | None = None,
+    ) -> str:
         """Create a new harvest record.
 
         Args:
             rdi: Research Data Infrastructure identifier
-            source: Source system identifier
-            config: Optional harvest configuration
+            client_id: Client identifier
+            expected_datasets: Optional number of datasets expected to be harvested.
 
         Returns:
             The harvest_id of the created harvest
@@ -130,14 +136,14 @@ class DocumentStore(ABC):
         raise NotImplementedError
 
     @abstractmethod
-    async def get_harvest(self, harvest_id: str) -> dict[str, Any] | None:
+    async def get_harvest(self, harvest_id: str) -> HarvestDocument | None:
         """Get harvest document.
 
         Args:
             harvest_id: Harvest identifier
 
         Returns:
-            Dict containing the harvest document or None if not found
+            The harvest document or None if not found
         """
         raise NotImplementedError
 
@@ -152,7 +158,7 @@ class DocumentStore(ABC):
         raise NotImplementedError
 
     @abstractmethod
-    async def list_harvests(self, rdi: str | None = None) -> list[dict[str, Any]]:
+    async def list_harvests(self, rdi: str | None = None) -> list[HarvestDocument]:
         """List harvest records.
 
         Args:
@@ -160,5 +166,17 @@ class DocumentStore(ABC):
 
         Returns:
             List of harvest documents
+        """
+        raise NotImplementedError
+
+    @abstractmethod
+    async def get_harvest_statistics(self, harvest_id: str) -> HarvestStatistics:
+        """Calculate statistics for a given harvest run.
+
+        Args:
+            harvest_id: The ID of the harvest run.
+
+        Returns:
+            The calculated harvest statistics.
         """
         raise NotImplementedError

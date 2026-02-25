@@ -2,10 +2,12 @@
 
 import logging
 import uuid
+from http import HTTPStatus
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Request
-from middleware.api.business_logic import BusinessLogic, ArcOperationResult
+
+from middleware.api.business_logic import ArcOperationResult, BusinessLogic
 from middleware.api.common.dependencies import (
     CommonApiDependencies,
     get_accept_type,
@@ -14,15 +16,15 @@ from middleware.api.common.dependencies import (
     get_common_deps,
     get_content_type,
 )
-from middleware.shared.api_models.v2 import models as v2_models
 from middleware.shared.api_models.common.models import TaskStatus
+from middleware.shared.api_models.v2 import models as v2_models
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/v2/arcs", tags=["v2", "arcs"])
 
 
-@router.post("", status_code=202, response_model=v2_models.CreateOrUpdateArcResponse)
+@router.post("", status_code=HTTPStatus.ACCEPTED, response_model=v2_models.CreateOrUpdateArcResponse)
 async def create_or_update_arc(
     request: Request,
     request_body: v2_models.CreateOrUpdateArcRequest,
@@ -42,7 +44,7 @@ async def create_or_update_arc(
     if isinstance(result, ArcOperationResult):
         bl.store_task_result(task_id, result)
     else:
-        raise HTTPException(status_code=500, detail="Unexpected result type")
+        raise HTTPException(status_code=HTTPStatus.INTERNAL_SERVER_ERROR, detail="Unexpected result type")
 
     return v2_models.CreateOrUpdateArcResponse(
         task_id=task_id,

@@ -15,6 +15,9 @@ dependencies = [
 [tool.hatch.build.targets.wheel]
 packages = ["src/middleware"]
 
+[tool.ruff]
+extend = "../../pyproject.toml"
+
 [tool.hatch.version]
 source = "vcs"
 raw-options = { root = "../..", fallback_version = "0.0.0" }

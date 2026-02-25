@@ -126,14 +126,12 @@ class GitlabApi(ArcStore):
                     return project
             logger.info("Creating new GitLab project for ARC: %s", arc_id)
             group = self._gitlab.groups.get(self._config.group)
-            new_project = self._gitlab.projects.create(
-                {
-                    "name": arc_id,
-                    "path": arc_id,
-                    "namespace_id": group.id,
-                    "initialize_with_readme": False,
-                }
-            )
+            new_project = self._gitlab.projects.create({
+                "name": arc_id,
+                "path": arc_id,
+                "namespace_id": group.id,
+                "initialize_with_readme": False,
+            })
             logger.info("Created project: %s (id=%s)", arc_id, new_project.id)
             return new_project
 
@@ -152,7 +150,8 @@ class GitlabApi(ArcStore):
             return result
 
     # -------------------------- Hashing --------------------------
-    def _compute_arc_hash(self, arc_dir: Path) -> str:
+    @classmethod
+    def _compute_arc_hash(cls, arc_dir: Path) -> str:
         sha = hashlib.sha256()
         for file_path in sorted(arc_dir.rglob("*")):
             if file_path.is_file():
@@ -234,7 +233,8 @@ class GitlabApi(ArcStore):
             "encoding": "base64",
         }
 
-    def _is_text_file(self, content_bytes: bytes) -> bool:
+    @classmethod
+    def _is_text_file(cls, content_bytes: bytes) -> bool:
         """Gibt True zurück, wenn Datei UTF-8-dekodierbar ist."""
         try:
             content_bytes.decode("utf-8")
@@ -242,7 +242,8 @@ class GitlabApi(ArcStore):
         except UnicodeDecodeError:
             return False
 
-    def _build_hash_action(self, old_hash: str | None, new_hash: str) -> dict[str, Any]:
+    @classmethod
+    def _build_hash_action(cls, old_hash: str | None, new_hash: str) -> dict[str, Any]:
         """Erstellt die Commit-Action für die .arc_hash Datei."""
         return {
             "action": "create" if not old_hash else "update",
@@ -356,7 +357,8 @@ class GitlabApi(ArcStore):
             file_path.parent.mkdir(parents=True, exist_ok=True)
             self._write_project_file(f, file_path)
 
-    def _write_project_file(self, f: ProjectFile, file_path: Path) -> None:
+    @classmethod
+    def _write_project_file(cls, f: ProjectFile, file_path: Path) -> None:
         content_bytes = base64.b64decode(f.content)
         if getattr(f, "encoding", None) == "base64":
             file_path.write_bytes(content_bytes)

@@ -5,7 +5,7 @@ from typing import Annotated, Any
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from . import ArcEventType, ArcLifecycleStatus
+from .enums import ArcEventType, ArcLifecycleStatus
 
 
 class ArcEvent(BaseModel):

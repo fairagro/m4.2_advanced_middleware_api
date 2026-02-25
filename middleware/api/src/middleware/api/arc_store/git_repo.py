@@ -430,7 +430,7 @@ class GitRepo(ArcStore):
 
         return await self._run_in_executor(_task)
 
-    async def _delete(self, arc_id: str) -> None:
+    async def _delete(self, arc_id: str) -> None:  # noqa: PLR6301
         """Delete ARC (Not supported via Git CLI easily without platform API)."""
         logger.warning(
             "Delete operation is not supported by GitRepo (CLI backend). Manual deletion required for %s",

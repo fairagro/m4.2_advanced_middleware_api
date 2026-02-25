@@ -14,12 +14,12 @@ def main() -> None:
     multiprocessing.freeze_support()
 
     # Handle --version flag
-    if len(sys.argv) > 1 and sys.argv[1] in ("--version", "-v"):
+    if len(sys.argv) > 1 and sys.argv[1] in {"--version", "-v"}:
         try:
-            from importlib.metadata import PackageNotFoundError, version  # pylint: disable=import-outside-toplevel
+            from importlib.metadata import version  # pylint: disable=import-outside-toplevel
 
             print(f"middleware-api version {version('api')}")
-        except (PackageNotFoundError, Exception):  # pylint: disable=broad-exception-caught
+        except Exception:  # noqa: BLE001
             print("middleware-api version unknown")
         sys.exit(0)
 
@@ -31,14 +31,6 @@ def main() -> None:
         from middleware.api.worker_health import check_worker_health  # pylint: disable=import-outside-toplevel
 
         sys.exit(0 if check_worker_health() else 1)
-
-    if len(sys.argv) > 1 and sys.argv[1] == "setup-couchdb":
-        import asyncio  # pylint: disable=import-outside-toplevel
-
-        from middleware.api.cli import setup_couchdb  # pylint: disable=import-outside-toplevel
-
-        asyncio.run(setup_couchdb())
-        sys.exit(0)
 
     if len(sys.argv) > 1 and sys.argv[1] == "celery":
         # Remove the executable name and the 'celery' command, so sys.argv[0] becomes 'celery'

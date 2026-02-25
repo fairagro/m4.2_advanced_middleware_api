@@ -8,15 +8,14 @@ import pytest
 from fastapi.testclient import TestClient
 
 from middleware.api.api import Api
+from middleware.api.common.dependencies import get_client_id
 from middleware.api.schemas import ArcEventType, ArcLifecycleStatus
 from middleware.api.schemas.arc_document import ArcEvent, ArcMetadata
 from middleware.shared.api_models.models import ArcOperationResult, ArcResponse, ArcStatus
 
 
 @pytest.mark.unit
-def test_create_or_update_arc_v3_success(
-    client: TestClient, cert: str, middleware_api: Api
-) -> None:
+def test_create_or_update_arc_v3_success(client: TestClient, cert: str, middleware_api: Api) -> None:
     """Test creating a new ARC via the /v3/arcs endpoint."""
     # Mock the BusinessLogic response
     mock_result = ArcOperationResult(
@@ -35,9 +34,7 @@ def test_create_or_update_arc_v3_success(
         status=ArcLifecycleStatus.ACTIVE,
         first_seen=now,
         last_seen=now,
-        events=[
-            ArcEvent(timestamp=now, type=ArcEventType.ARC_CREATED, message="ARC first seen")
-        ]
+        events=[ArcEvent(timestamp=now, type=ArcEventType.ARC_CREATED, message="ARC first seen")],
     )
 
     rocrate = {
@@ -53,9 +50,15 @@ def test_create_or_update_arc_v3_success(
 
     with (
         patch.object(middleware_api.business_logic, "create_or_update_arc", new_callable=AsyncMock) as mock_create,
-        patch.object(middleware_api.business_logic._doc_store, "get_metadata", new_callable=AsyncMock) as mock_get_metadata,
+        patch.object(middleware_api.app.state.common_deps, "get_authorized_rdis", new_callable=AsyncMock) as mock_auth,
+        patch.object(
+            middleware_api.business_logic._doc_store,  # noqa: SLF001
+            "get_metadata",
+            new_callable=AsyncMock,
+        ) as mock_get_metadata,
     ):
         mock_create.return_value = mock_result
+        mock_auth.return_value = ["rdi-1"]
         mock_get_metadata.return_value = mock_metadata
 
         r = client.post(
@@ -68,7 +71,7 @@ def test_create_or_update_arc_v3_success(
             },
             json={"rdi": "rdi-1", "arc": rocrate},
         )
-        
+
         assert r.status_code == http.HTTPStatus.OK
         body = r.json()
         assert body["arc_id"] == "arc-123"
@@ -81,16 +84,24 @@ def test_create_or_update_arc_v3_success(
 
 
 @pytest.mark.unit
-def test_create_or_update_arc_v3_rdi_not_authorized(client: TestClient, cert: str) -> None:
+def test_create_or_update_arc_v3_rdi_not_authorized(client: TestClient, cert: str, middleware_api: Api) -> None:
     """Test that requesting an unauthorized RDI returns 403."""
-    r = client.post(
-        "/v3/arcs",
-        headers={
-            "ssl-client-cert": cert,
-            "ssl-client-verify": "SUCCESS",
-            "content-type": "application/json",
-            "accept": "application/json",
-        },
-        json={"rdi": "rdi-not-authorized", "arc": {"dummy": "crate"}},
-    )
-    assert r.status_code == http.HTTPStatus.FORBIDDEN
+    # Use an RDI that is known (rdi-1 is in known_rdis) but mock auth to return empty
+    middleware_api.app.dependency_overrides[get_client_id] = lambda: "TestClient"
+
+    with patch.object(middleware_api.app.state.common_deps, "get_authorized_rdis", new_callable=AsyncMock) as mock_auth:
+        mock_auth.return_value = []
+
+        r = client.post(
+            "/v3/arcs",
+            headers={
+                "ssl-client-cert": cert,
+                "ssl-client-verify": "SUCCESS",
+                "content-type": "application/json",
+                "accept": "application/json",
+            },
+            json={"rdi": "rdi-1", "arc": {"dummy": "crate"}},
+        )
+        assert r.status_code == http.HTTPStatus.FORBIDDEN
+
+    middleware_api.app.dependency_overrides.clear()

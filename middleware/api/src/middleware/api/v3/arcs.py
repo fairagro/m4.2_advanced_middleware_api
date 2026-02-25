@@ -1,9 +1,11 @@
 """Modular V3 ARC endpoints using APIRouter."""
 
 import logging
+from http import HTTPStatus
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Request
+
 from middleware.api.business_logic import BusinessLogic
 from middleware.api.common.dependencies import (
     CommonApiDependencies,
@@ -35,16 +37,14 @@ async def create_or_update_arc(
     rdi = request_body.rdi
     await deps.validate_rdi_authorized(rdi, request)
 
-    logger.info("Received v3 ARC request for RDI %s", rdi)
-
     try:
         result = await bl.create_or_update_arc(rdi, request_body.arc, client_id)
-        
+
         arc_id = result.arc.id
-        metadata = await bl._doc_store.get_metadata(arc_id)
-        
+        metadata = await bl.get_metadata(arc_id)
+
         if not metadata:
-            raise HTTPException(status_code=500, detail="Failed to retrieve ARC metadata")
+            raise HTTPException(status_code=HTTPStatus.INTERNAL_SERVER_ERROR, detail="Failed to retrieve ARC metadata")
 
         return models.ArcResponse(
             client_id=client_id,
@@ -70,4 +70,4 @@ async def create_or_update_arc(
         logger.error("Error in v3 ARC endpoint: %s", e, exc_info=True)
         if isinstance(e, HTTPException):
             raise e
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=HTTPStatus.INTERNAL_SERVER_ERROR, detail=str(e)) from e

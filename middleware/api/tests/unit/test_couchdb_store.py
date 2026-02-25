@@ -30,6 +30,7 @@ def mock_client_instance() -> MagicMock:
     client.health_check = AsyncMock(return_value=True)
     client.get_document = AsyncMock()
     client.save_document = AsyncMock()
+    client.create_index = AsyncMock()
     return client
 
 
@@ -117,7 +118,7 @@ async def test_add_event_non_existent(store: CouchDB, mock_client_instance: Magi
 async def test_couchdb_store_lifecycle(store: CouchDB, mock_client_instance: MagicMock) -> None:
     """Test connect, close, and health_check calls client."""
     await store.connect()
-    mock_client_instance.connect.assert_called_with(db_name="arcs")
+    mock_client_instance.connect.assert_called_once()
 
     await store.close()
     mock_client_instance.close.assert_called_once()
@@ -128,9 +129,9 @@ async def test_couchdb_store_lifecycle(store: CouchDB, mock_client_instance: Mag
 
 @pytest.mark.asyncio
 async def test_couchdb_store_setup(store: CouchDB, mock_client_instance: MagicMock) -> None:
-    """Test setup calls client.connect with setup_system."""
-    await store.setup(setup_system=True)
-    mock_client_instance.connect.assert_called_with(db_name="arcs", setup_system=True)
+    """Test setup calls client.create_index."""
+    await store.setup()
+    assert mock_client_instance.create_index.call_count == 2  # noqa: PLR2004
 
 
 @pytest.mark.asyncio
@@ -227,7 +228,7 @@ async def test_add_event_trimming(store: CouchDB, mock_client_instance: MagicMoc
     """Test that event log is trimmed according to configuration."""
     limit = 2
     # Set a small limit (pylint: disable=protected-access)
-    store._config.max_event_log_size = limit
+    store._config.max_event_log_size = limit  # noqa: SLF001
 
     arc_id = "some_id"
 

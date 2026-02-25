@@ -17,7 +17,13 @@ class HealthResponse(BaseModel):
     """Response model for health check including backend status."""
 
     status: Annotated[str, Field(description="Overall service status (ok/error)")] = "ok"
-    redis_reachable: Annotated[bool, Field(description="True if Redis is reachable")]
+    redis_reachable: Annotated[
+        bool,
+        Field(
+            description="[DEPRECATED] Kept for backward compatibility. Always True as Redis is no longer used.",
+            deprecated=True,
+        ),
+    ] = True
     rabbitmq_reachable: Annotated[bool, Field(description="True if RabbitMQ is reachable")]
 
 

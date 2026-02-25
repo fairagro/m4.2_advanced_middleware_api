@@ -33,7 +33,7 @@ async def test_client_retries_on_503_then_success() -> None:
                 ),
             ]
 
-            result = await client._get("v2/tasks/123")  # pylint: disable=protected-access
+            result = await client._get("v2/tasks/123")  # noqa: SLF001
             assert result["status"] == "SUCCESS"
             max_retries_plus_one = config.max_retries + 1
             assert route.call_count == max_retries_plus_one
@@ -51,7 +51,7 @@ async def test_client_fails_after_max_retries() -> None:
             route.return_value = httpx.Response(503)
 
             with pytest.raises(ApiClientError, match="Request failed after 2 retries"):
-                await client._get("v2/tasks/123")  # pylint: disable=protected-access
+                await client._get("v2/tasks/123")  # noqa: SLF001
 
             assert route.call_count == max_retries_plus_one
 
@@ -72,6 +72,6 @@ async def test_client_retries_on_network_error() -> None:
                 ),
             ]
 
-            result = await client._get("v2/tasks/123")  # pylint: disable=protected-access
+            result = await client._get("v2/tasks/123")  # noqa: SLF001
             assert result["status"] == "SUCCESS"
             assert route.call_count == max_retries_plus_one

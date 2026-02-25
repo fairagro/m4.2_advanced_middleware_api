@@ -60,7 +60,7 @@ asyncio.run(main())
 ## Configuration Options
 
 | Option | Type | Required | Default | Description |
-|--------|------|----------|---------|-------------|
+| ------ | ---- | -------- | ------- | ----------- |
 | `log_level` | string | No | INFO | Logging level (DEBUG, INFO, WARNING, ERROR, CRITICAL) |
 | `api_url` | string | Yes | - | Base URL of the Middleware API |
 | `client_cert_path` | string | Yes | - | Path to client certificate (PEM format) |

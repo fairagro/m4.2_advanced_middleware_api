@@ -14,17 +14,6 @@ services:
       retries: 5
     restart: unless-stopped
 
-  redis:
-    image: redis:7
-    ports:
-      - "6379:6379"
-    healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
-      interval: 5s
-      timeout: 3s
-      retries: 5
-    restart: unless-stopped
-
   couchdb:
     image: couchdb:3.3
     ports:
@@ -41,24 +30,6 @@ services:
       retries: 5
     restart: unless-stopped
 
-  couchdb-init:
-    image: middleware-api:latest
-    build:
-      context: ..
-      dockerfile: docker/Dockerfile.api
-    depends_on:
-      couchdb:
-        condition: service_healthy
-    environment:
-      - MIDDLEWARE_API_CONFIG=/run/secrets/middleware-api-config
-      - COUCHDB_URL=http://couchdb:5984
-      - COUCHDB_USER
-      - COUCHDB_PASSWORD
-    volumes:
-      - ./middleware-api-config.yaml:/run/secrets/middleware-api-config:ro
-    command: ["/api/middleware-api/middleware-api", "setup-couchdb"]
-    restart: "no"
-
   celery-worker:
     image: middleware-api:latest
     build:
@@ -67,10 +38,6 @@ services:
     depends_on:
       rabbitmq:
         condition: service_healthy
-      redis:
-        condition: service_healthy
-      couchdb-init:
-        condition: service_completed_successfully
       middleware-api:
         condition: service_started
     environment:
@@ -102,10 +69,6 @@ services:
     depends_on:
       rabbitmq:
         condition: service_healthy
-      redis:
-        condition: service_healthy
-      couchdb-init:
-        condition: service_completed_successfully
     ports:
       - "8000:8000"
     environment:

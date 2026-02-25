@@ -2,7 +2,7 @@
 
 import logging
 import re
-from typing import Annotated, ClassVar, Self
+from typing import Annotated, Any, ClassVar, Self
 
 from cryptography import x509
 from pydantic import BaseModel, ConfigDict, Field, SecretStr, field_validator, model_validator
@@ -20,11 +20,24 @@ class CeleryConfig(BaseModel):
         SecretStr,
         Field(description="RabbitMQ broker URL"),
     ]
-    result_backend: Annotated[SecretStr, Field(description="Redis backend URL")]
+    result_backend: Annotated[
+        SecretStr,
+        Field(description="[DEPRECATED] Backend URL for results", deprecated=True),
+    ]
     task_rate_limit: Annotated[str | None, Field(description="Rate limit for tasks (e.g. '10/m')")] = None
     retry_backoff: Annotated[bool, Field(description="Whether to use exponential backoff for retries")] = True
     retry_backoff_max: Annotated[int, Field(description="Max backoff time in seconds")] = 3600
     max_retries: Annotated[int, Field(description="Max number of retries for transient errors")] = 120
+
+    @field_validator("result_backend", mode="before")
+    @classmethod
+    def warn_result_backend_deprecated(cls, v: Any) -> Any:
+        """Warn that result_backend is deprecated."""
+        logging.warning(
+            "Configuration setting 'celery.result_backend' is deprecated. "
+            "The result backend is now managed internally or no longer required."
+        )
+        return v
 
 
 class CouchDBConfig(BaseModel):
@@ -35,6 +48,13 @@ class CouchDBConfig(BaseModel):
     password: Annotated[SecretStr | None, Field(description="CouchDB password")] = None
     db_name: Annotated[str, Field(description="Name of the database for ARCs and harvests")] = "arcs"
     max_event_log_size: Annotated[int, Field(default=100, description="Maximum number of events in ARC metadata")] = 100
+
+
+class HarvestConfig(BaseModel):
+    """Configuration for a harvest run."""
+
+    grace_period_days: Annotated[int, Field(description="Days before marking ARC as deleted")] = 14
+    auto_mark_deleted: Annotated[bool, Field(description="Automatically mark ARCs as deleted")] = False
 
 
 class Config(ConfigBase):
@@ -50,6 +70,7 @@ class Config(ConfigBase):
     couchdb: Annotated[CouchDBConfig, Field(description="CouchDB configuration")]
 
     celery: Annotated[CeleryConfig, Field(description="Celery configuration")]
+    harvest: Annotated[HarvestConfig, Field(description="Default Harvest configuration")] = HarvestConfig()
 
     require_client_cert: Annotated[
         bool, Field(description="Require client certificate for API access (set to false for development)")

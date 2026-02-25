@@ -125,6 +125,9 @@ services:
   postgres:           # PostgreSQL database
   db-init:            # Database initialization with Edaphobase dump
   middleware-api:     # FastAPI REST API
+  celery-worker:      # Celery worker process
+  redis:              # Redis for Celery
+  couchdb:            # CouchDB for RDI storage
 ```
 
 **Configuration**: `dev_environment/config.yaml`
@@ -211,6 +214,15 @@ When editing files:
 - Decision: Enforce single worker per container; scale horizontally via Kubernetes replicas.
 - Improved Docker build by including metadata for `pydantic`, `fastapi`, `uvicorn`, `prompt-toolkit`, and `click`.
 - Fixed Celery worker crash caused by missing `prompt_toolkit` metadata.
+
+### Session 5: Architecture Simplification & Robustness
+
+- Removed redundant `couchdb-init` service and `setup-couchdb` CLI command.
+- Integrated automatic CouchDB system database initialization into `CouchDBClient.connect`.
+- Implemented race-condition-safe database creation in `CouchDBClient` to handle parallel service startups.
+- Fixed Pylint protected-access (W0212) issues in `system.py` by adding appropriate public getters to `BusinessLogic`.
+- Improved type safety by replacing `Any` with concrete types (`CouchDB`, `Database`) in `CouchDBClient`.
+- Cleaned up Helm Chart templates by removing `initContainers` for CouchDB initialization.
 
 ## 📞 Questions to Ask
 

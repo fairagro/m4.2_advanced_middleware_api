@@ -139,14 +139,12 @@ class GitlabGitProvider(RemoteGitProvider):
                 except GitlabGetError:
                     # 3. Create project if it doesn't exist
                     logger.info("Creating new GitLab project: %s in group %s", arc_id, self.group_name)
-                    self._gl.projects.create(
-                        {
-                            "name": arc_id,
-                            "path": arc_id,
-                            "namespace_id": group.id,
-                            "visibility": "private",
-                        }
-                    )
+                    self._gl.projects.create({
+                        "name": arc_id,
+                        "path": arc_id,
+                        "namespace_id": group.id,
+                        "visibility": "private",
+                    })
             except GitlabError as e:
                 msg = f"GitLab API error: {e}"
                 # Handle 401 specifically to help users find the cause (wrong token)
@@ -186,6 +184,6 @@ class GitlabGitProvider(RemoteGitProvider):
                 return bool(response.status < http.HTTPStatus.BAD_REQUEST)
         except (urllib.error.URLError, TimeoutError):
             return False
-        except Exception as e:  # pylint: disable=broad-exception-caught
+        except Exception as e:  # noqa: BLE001
             logger.warning("Unexpected error during health check for %s: %s", self.url, e)
             return False

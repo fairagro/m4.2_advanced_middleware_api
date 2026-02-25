@@ -8,28 +8,32 @@ import pytest
 from fastapi.testclient import TestClient
 
 from middleware.api.api import Api
-from middleware.api.schemas import HarvestStatus
+from middleware.api.schemas import HarvestDocument, HarvestStatistics, HarvestStatus
 from middleware.shared.api_models.models import ArcOperationResult, ArcResponse, ArcStatus
 
 
 @pytest.mark.unit
-def test_create_harvest_success(
-    client: TestClient, cert: str, middleware_api: Api
-) -> None:
+def test_create_harvest_success(client: TestClient, cert: str, middleware_api: Api) -> None:
     """Test starting a new harvest."""
     harvest_id = "harvest-123"
-    
-    with patch.object(middleware_api.business_logic.harvest_manager, "create_harvest", new_callable=AsyncMock) as mock_create, \
-         patch.object(middleware_api.business_logic.harvest_manager, "get_harvest", new_callable=AsyncMock) as mock_get:
-        
+
+    with (
+        patch.object(
+            middleware_api.business_logic.harvest_manager, "create_harvest", new_callable=AsyncMock
+        ) as mock_create,
+        patch.object(middleware_api.app.state.common_deps, "get_authorized_rdis", new_callable=AsyncMock) as mock_auth,
+        patch.object(middleware_api.business_logic.harvest_manager, "get_harvest", new_callable=AsyncMock) as mock_get,
+    ):
         mock_create.return_value = harvest_id
-        mock_get.return_value = {
-            "_id": harvest_id,
-            "rdi": "rdi-1",
-            "source": "test-source",
-            "status": HarvestStatus.RUNNING,
-            "started_at": datetime.now(UTC).isoformat() + "Z",
-        }
+        mock_auth.return_value = ["rdi-1"]
+        mock_get.return_value = HarvestDocument(
+            doc_id="harvest-123",
+            rdi="rdi-1",
+            client_id="test-client-cn",
+            status=HarvestStatus.RUNNING,
+            started_at=datetime.now(UTC),
+            statistics=HarvestStatistics(),  # Replace with an appropriate HarvestStatistics instance
+        )
 
         r = client.post(
             "/v3/harvests",
@@ -39,9 +43,9 @@ def test_create_harvest_success(
                 "content-type": "application/json",
                 "accept": "application/json",
             },
-            json={"rdi": "rdi-1", "source": "test-source"},
+            json={"rdi": "rdi-1"},
         )
-        
+
         assert r.status_code == http.HTTPStatus.OK
         body = r.json()
         assert body["harvest_id"] == harvest_id
@@ -49,18 +53,19 @@ def test_create_harvest_success(
 
 
 @pytest.mark.unit
-def test_submit_arc_in_harvest_success(
-    client: TestClient, cert: str, middleware_api: Api
-) -> None:
+def test_submit_arc_in_harvest_success(client: TestClient, cert: str, middleware_api: Api) -> None:
     """Test submitting an ARC within a harvest context."""
     harvest_id = "harvest-123"
-    
-    mock_harvest = {
-        "_id": harvest_id,
-        "rdi": "rdi-1",
-        "status": HarvestStatus.RUNNING,
-    }
-    
+
+    mock_harvest = HarvestDocument(
+        doc_id=harvest_id,
+        rdi="rdi-1",
+        client_id="test-client-cn",
+        status=HarvestStatus.RUNNING,
+        started_at=datetime.now(UTC),
+        statistics=HarvestStatistics(),  # Replace with an appropriate HarvestStatistics instance
+    )
+
     mock_result = ArcOperationResult(
         client_id="test-client-cn",
         rdi="rdi-1",
@@ -84,11 +89,16 @@ def test_submit_arc_in_harvest_success(
         "@graph": [{"@id": "./", "identifier": "ARC-001"}],
     }
 
-    with patch.object(middleware_api.business_logic.harvest_manager, "get_harvest", new_callable=AsyncMock) as mock_get_harvest, \
-         patch.object(middleware_api.business_logic, "create_or_update_arc", new_callable=AsyncMock) as mock_create_arc, \
-         patch.object(middleware_api.business_logic._doc_store, "get_metadata", new_callable=AsyncMock) as mock_get_metadata:
-        
+    with (
+        patch.object(
+            middleware_api.business_logic.harvest_manager, "get_harvest", new_callable=AsyncMock
+        ) as mock_get_harvest,
+        patch.object(middleware_api.app.state.common_deps, "get_authorized_rdis", new_callable=AsyncMock) as mock_auth,
+        patch.object(middleware_api.business_logic, "create_or_update_arc", new_callable=AsyncMock) as mock_create_arc,
+        patch.object(middleware_api.business_logic, "get_metadata", new_callable=AsyncMock) as mock_get_metadata,
+    ):
         mock_get_harvest.return_value = mock_harvest
+        mock_auth.return_value = ["rdi-1"]
         mock_create_arc.return_value = mock_result
         mock_get_metadata.return_value = mock_metadata
 
@@ -102,7 +112,7 @@ def test_submit_arc_in_harvest_success(
             },
             json={"rdi": "rdi-1", "arc": rocrate},
         )
-        
+
         assert r.status_code == http.HTTPStatus.OK
         body = r.json()
         assert body["arc_id"] == "arc-123"

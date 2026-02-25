@@ -1,16 +1,19 @@
 """Factory for creating BusinessLogic instances."""
 
 import logging
-from typing import Literal
+from typing import TYPE_CHECKING, Literal
 
-from .arc_store import ArcStore
-from .arc_store.git_repo import GitRepo
-from .arc_store.gitlab_api import GitlabApi
-from .business_logic import BusinessLogic, TaskDispatcher, ArcSyncTask
-from .config import Config
-from .document_store.couchdb import CouchDB
+if TYPE_CHECKING:
+    from celery import Celery
 
-from typing import Any, Literal
+from ..arc_store import ArcStore
+from ..arc_store.git_repo import GitRepo
+from ..arc_store.gitlab_api import GitlabApi
+from ..celery_app import celery_app
+from ..config import Config
+from ..document_store.couchdb import CouchDB
+from ..schemas.celery_tasks import ArcSyncTask
+from . import BusinessLogic
 
 logger = logging.getLogger(__name__)
 
@@ -18,7 +21,12 @@ logger = logging.getLogger(__name__)
 class CeleryTaskDispatcher:
     """Dispatcher that uses Celery to send tasks by name."""
 
-    def __init__(self, celery_app):
+    def __init__(self, celery_app: "Celery") -> None:
+        """Initialize the Celery task dispatcher.
+
+        Args:
+            celery_app: Celery application instance for sending tasks.
+        """
         self._celery_app = celery_app
 
     def dispatch_sync_arc(self, task: ArcSyncTask) -> None:
@@ -56,7 +64,6 @@ class BusinessLogicFactory:
         # For API mode, provide task dispatcher
         task_dispatcher = None
         if mode == "api":
-            from .celery_app import celery_app
             task_dispatcher = CeleryTaskDispatcher(celery_app)
 
         return BusinessLogic(config=config, store=store, doc_store=doc_store, task_dispatcher=task_dispatcher)

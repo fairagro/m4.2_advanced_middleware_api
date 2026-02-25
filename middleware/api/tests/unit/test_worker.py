@@ -22,7 +22,9 @@ def test_sync_arc_to_gitlab_success() -> None:
         mock_bl.sync_to_gitlab = AsyncMock()
 
         # Execute the task
-        result = sync_arc_to_gitlab.apply(args=({"rdi": "test-rdi", "arc": {"dummy": "data"}},)).get()
+        result = sync_arc_to_gitlab.apply(
+            args=({"rdi": "test-rdi", "arc": {"dummy": "data"}, "client_id": "test-client"},)
+        ).get()
 
         assert result is None
 
@@ -42,7 +44,9 @@ def test_sync_arc_to_gitlab_failure() -> None:
         mock_bl.sync_to_gitlab = AsyncMock(side_effect=ValueError("Processing failed"))
 
         with pytest.raises(ValueError, match="Processing failed"):
-            sync_arc_to_gitlab.apply(args=({"rdi": "test-rdi", "arc": {"dummy": "data"}},)).get()
+            sync_arc_to_gitlab.apply(
+                args=({"rdi": "test-rdi", "arc": {"dummy": "data"}, "client_id": "test-client"},)
+            ).get()
 
 
 def test_sync_arc_to_gitlab_no_business_logic() -> None:
@@ -51,4 +55,6 @@ def test_sync_arc_to_gitlab_no_business_logic() -> None:
         patch("middleware.api.worker.BusinessLogicManager.get_business_logic", return_value=None),
         pytest.raises(TypeError, match="'NoneType' object does not support the asynchronous context manager protocol"),
     ):
-        sync_arc_to_gitlab.apply(args=({"rdi": "test-rdi", "arc": {"dummy": "data"}},)).get()
+        sync_arc_to_gitlab.apply(
+            args=({"rdi": "test-rdi", "arc": {"dummy": "data"}, "client_id": "test-client"},)
+        ).get()

@@ -5,6 +5,7 @@ This module provides tests for:
 - GitlabGitProvider: manages repositories on GitLab using the GitLab API
 """
 
+from http import HTTPStatus
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
@@ -31,7 +32,8 @@ def temp_remote_dir(tmp_path: Path) -> Path:
 class TestFileSystemGitProvider:
     """Tests for FileSystemGitProvider."""
 
-    def test_ensure_repo_exists_creates_bare_repo(self, temp_remote_dir: Path) -> None:
+    @staticmethod
+    def test_ensure_repo_exists_creates_bare_repo(temp_remote_dir: Path) -> None:
         """Test that ensure_repo_exists creates a bare repository if it does not exist."""
         provider = FileSystemGitProvider(base_url=f"file://{temp_remote_dir}", group="my-group")
         arc_id = "test-arc"
@@ -46,13 +48,15 @@ class TestFileSystemGitProvider:
         repo = git.Repo(expected_path)
         assert repo.bare
 
-    def test_get_repo_url(self, temp_remote_dir: Path) -> None:
+    @staticmethod
+    def test_get_repo_url(temp_remote_dir: Path) -> None:
         """Test URL construction."""
         provider = FileSystemGitProvider(base_url=f"file://{temp_remote_dir}", group="my-group")
         url = provider.get_repo_url("test-arc")
         assert url == f"file://{temp_remote_dir}/my-group/test-arc.git"
 
-    def test_check_health(self) -> None:
+    @staticmethod
+    def test_check_health() -> None:
         """Test health check."""
         provider = FileSystemGitProvider(base_url="file:///tmp", group="g")
         assert provider.check_health() is True
@@ -64,8 +68,9 @@ class TestFileSystemGitProvider:
 class TestGitlabGitProvider:
     """Tests for GitlabGitProvider."""
 
+    @staticmethod
     @patch("middleware.api.arc_store.remote_git_provider.gitlab.Gitlab")
-    def test_ensure_repo_exists_calls_gitlab_api(self, mock_gitlab_class: MagicMock) -> None:
+    def test_ensure_repo_exists_calls_gitlab_api(mock_gitlab_class: MagicMock) -> None:
         """Test that ensure_repo_exists calls the GitLab API."""
         NAMESPACE_ID = 123  # noqa: N806
 
@@ -77,7 +82,7 @@ class TestGitlabGitProvider:
         mock_group.id = NAMESPACE_ID
         mock_gl.groups.get.return_value = mock_group
 
-        mock_gl.projects.get.side_effect = GitlabGetError("Not Found", response_code=404)
+        mock_gl.projects.get.side_effect = GitlabGetError("Not Found", response_code=HTTPStatus.NOT_FOUND)
 
         provider = GitlabGitProvider(url="https://gitlab.com", group_name="my-group", token="secret")  # nosec
         arc_id = "test-arc"
@@ -91,14 +96,15 @@ class TestGitlabGitProvider:
         assert args["name"] == arc_id
         assert args["namespace_id"] == NAMESPACE_ID
 
+    @staticmethod
     @patch("middleware.api.arc_store.remote_git_provider.gitlab.Gitlab")
-    def test_ensure_repo_exists_401(self, mock_gitlab_class: MagicMock) -> None:
+    def test_ensure_repo_exists_401(mock_gitlab_class: MagicMock) -> None:
         """Test that ensure_repo_exists handles 401 Unauthorized correctly."""
         mock_gl = MagicMock()
         mock_gitlab_class.return_value = mock_gl
 
         # Simulate 401 on group retrieval
-        err = GitlabAuthenticationError("401 Unauthorized", response_code=401)
+        err = GitlabAuthenticationError("401 Unauthorized", response_code=HTTPStatus.UNAUTHORIZED)
         mock_gl.groups.get.side_effect = err
 
         provider = GitlabGitProvider(url="https://gitlab.com", group_name="my-group", token="invalid")  # nosec
@@ -106,7 +112,8 @@ class TestGitlabGitProvider:
         with pytest.raises(ArcStoreError, match="401 Unauthorized"):
             provider.ensure_repo_exists("some-arc")
 
-    def test_get_repo_url(self) -> None:
+    @staticmethod
+    def test_get_repo_url() -> None:
         """Test URL construction with and without auth."""
         url = "https://gitlab.com"
         token = "secret-token"  # nosec
@@ -120,8 +127,9 @@ class TestGitlabGitProvider:
         plain_url = provider.get_repo_url("arc123", authenticated=False)
         assert plain_url == "https://gitlab.com/my-group/arc123.git"
 
+    @staticmethod
     @patch("middleware.api.arc_store.remote_git_provider.gitlab.Gitlab")
-    def test_check_health(self, mock_gitlab_class: MagicMock) -> None:
+    def test_check_health(mock_gitlab_class: MagicMock) -> None:
         """Test health check using auth() call."""
         mock_gl = MagicMock()
         mock_gitlab_class.return_value = mock_gl
@@ -138,22 +146,26 @@ class TestGitlabGitProvider:
 class TestRemoteGitProviderFactory:
     """Tests for RemoteGitProvider factory method."""
 
-    def test_from_url_file(self) -> None:
+    @staticmethod
+    def test_from_url_file() -> None:
         """Test factory with file URL."""
         provider = RemoteGitProvider.from_url("file:///tmp", "group")
         assert isinstance(provider, FileSystemGitProvider)
 
-    def test_from_url_https_defaults_to_gitlab(self) -> None:
+    @staticmethod
+    def test_from_url_https_defaults_to_gitlab() -> None:
         """Test factory with HTTPS URL defaults to GitLab."""
         provider = RemoteGitProvider.from_url("https://git.something.com", "group")
         assert isinstance(provider, GitlabGitProvider)
 
-    def test_from_url_http_defaults_to_gitlab(self) -> None:
+    @staticmethod
+    def test_from_url_http_defaults_to_gitlab() -> None:
         """Test factory with HTTP URL defaults to GitLab."""
         provider = RemoteGitProvider.from_url("http://localhost:8080", "group")
         assert isinstance(provider, GitlabGitProvider)
 
-    def test_from_url_unknown_fails(self) -> None:
+    @staticmethod
+    def test_from_url_unknown_fails() -> None:
         """Test that unknown protocols fail."""
         with pytest.raises(ValueError, match="Could not determine git provider"):
             RemoteGitProvider.from_url("ftp://server.local", "group")

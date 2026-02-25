@@ -7,29 +7,27 @@ This module provides unified business logic for ARC processing with two-phase op
 
 import json
 import logging
-from abc import ABC, abstractmethod
 from datetime import UTC, datetime
-from typing import Any, Protocol, runtime_checkable
+from typing import Any, Protocol, Self, runtime_checkable
 
-import redis
 from arctrl import ARC  # type: ignore[import-untyped]
 from opentelemetry import trace
 
+from middleware.api.arc_store import ArcStore, ArcStoreTransientError
+from middleware.api.celery_app import celery_app
+from middleware.api.config import Config
+from middleware.api.document_store import DocumentStore
+from middleware.api.schemas import ArcEvent, ArcEventType, ArcMetadata
+from middleware.api.schemas.celery_tasks import ArcSyncTask
+from middleware.api.schemas.sync_task import SyncTaskResult, SyncTaskStatus
 from middleware.api.utils import calculate_arc_id, extract_identifier
 from middleware.shared.api_models.common.models import (
     ArcOperationResult,
     ArcResponse,
     ArcStatus,
-    ArcSyncTask,
 )
 
-from .schemas import ArcEvent, ArcEventType
-
-from .arc_store import ArcStore, ArcStoreTransientError
-from .celery_app import celery_app
-from .config import Config
-from .document_store import DocumentStore
-from .services.harvest_manager import HarvestManager
+from .harvest_manager import HarvestManager
 
 logger = logging.getLogger(__name__)
 
@@ -40,7 +38,6 @@ class TaskDispatcher(Protocol):
 
     def dispatch_sync_arc(self, task: ArcSyncTask) -> None:
         """Dispatch a task to sync an ARC to GitLab."""
-        ...
 
 
 class BusinessLogicError(Exception):
@@ -63,6 +60,7 @@ class TransientError(BusinessLogicError):
 
     Examples: Server unreachable, maintenance mode, temporary network issues.
     """
+
 
 class BusinessLogic:
     """Unified business logic for ARC processing.
@@ -94,13 +92,29 @@ class BusinessLogic:
         self._store = store
         self._doc_store = doc_store
         self._dispatcher = task_dispatcher
-        self._harvest_manager = HarvestManager(doc_store)
+        self._harvest_manager = HarvestManager.from_config(config.harvest, doc_store)
         self._tracer = trace.get_tracer(__name__)
 
     @property
     def harvest_manager(self) -> HarvestManager:
         """Get the harvest manager service."""
         return self._harvest_manager
+
+    @property
+    def config(self) -> Config:
+        """Get the configuration."""
+        return self._config
+
+    async def get_metadata(self, arc_id: str) -> ArcMetadata | None:
+        """Get metadata for an ARC.
+
+        Args:
+            arc_id: The ID of the ARC.
+
+        Returns:
+            The ArcMetadata for the ARC, or None if not found.
+        """
+        return await self._doc_store.get_metadata(arc_id)
 
     async def health_check(self) -> dict[str, bool]:
         """Check health of stores and message broker."""
@@ -112,42 +126,46 @@ class BusinessLogic:
             with celery_app.connection_or_acquire() as conn:
                 conn.ensure_connection(max_retries=1)
                 rabbitmq_ok = True
-        except (ConnectionError, redis.ConnectionError) as e:
+        except ConnectionError as e:
             logger.error("RabbitMQ health check failed: %s", e)
-
-        # Check Redis (result backend) via celery_app
-        redis_ok = False
-        try:
-            backend_url = self._config.celery.result_backend.get_secret_value()
-            if "redis" in backend_url:
-                # Use redis library to ping
-                r = redis.from_url(backend_url)
-                r.ping()
-                redis_ok = True
-            else:
-                # If it's not redis (e.g. memory in tests), consider it ok
-                redis_ok = True
-        except (redis.ConnectionError, redis.TimeoutError) as e:
-            logger.error("Redis health check failed: %s", e)
 
         return {
             "couchdb_reachable": couchdb_ok,
             "rabbitmq": rabbitmq_ok,
-            "redis": redis_ok,
+            "redis": True,  # Kept for backward compatibility, Redis is no longer used
         }
 
-    def get_task_status(self, task_id: str) -> Any:
-        """Get the status and result of a Celery task.
+    @classmethod
+    def get_task_status(cls, task_id: str) -> SyncTaskResult:
+        """Get the status of an ARC GitLab sync task.
+
+        Maps the internal Celery task state to a domain-specific SyncTaskResult,
+        keeping Celery details fully encapsulated within this method.
 
         Args:
             task_id: The ID of the task to check.
 
         Returns:
-            The Celery AsyncResult for the task.
+            SyncTaskResult with a domain-specific status and optional result or error.
         """
-        return celery_app.AsyncResult(task_id)
+        async_result = celery_app.AsyncResult(task_id)
+        state = async_result.state
 
-    def store_task_result(self, task_id: str, result: ArcOperationResult) -> None:
+        if state == "SUCCESS":
+            result = async_result.result
+            return SyncTaskResult(
+                status=SyncTaskStatus.SUCCESS,
+                result=result if isinstance(result, dict) else None,
+            )
+        if state in {"FAILURE", "REVOKED"}:
+            return SyncTaskResult(status=SyncTaskStatus.FAILURE, error=str(async_result.result))
+        if state in {"STARTED", "RETRY"}:
+            return SyncTaskResult(status=SyncTaskStatus.RUNNING)
+        # PENDING and any unknown state
+        return SyncTaskResult(status=SyncTaskStatus.PENDING)
+
+    @classmethod
+    def store_task_result(cls, task_id: str, result: ArcOperationResult) -> None:
         """Store an operation result in the task backend.
 
         Args:
@@ -160,34 +178,40 @@ class BusinessLogic:
             state="SUCCESS",
         )
 
-    async def setup(self) -> None:
-        """Set up stores and apply migrations."""
+    async def _setup(self) -> None:
+        """Initialize business logic and its underlying stores.
+
+        This ensures connections are established and required infrastructure
+        (like database indices) is present.
+        """
         try:
-            # We enforce system database creation during setup
-            await self._doc_store.setup(setup_system=True)
-            # Future: await apply_migrations(self._doc_store)
+            await self._doc_store.connect()
+            await self._doc_store.setup()
         except Exception as e:
-            logger.error("Failed to setup CouchDB store: %s", e, exc_info=True)
-            raise SetupError(f"Failed to setup CouchDB store: {e}") from e
+            logger.error("Failed to setup business logic: %s", e, exc_info=True)
+            raise SetupError(f"Failed to setup business logic: {e}") from e
 
-    async def connect(self) -> None:
-        """Connect to stores."""
-        await self._doc_store.connect()
-
-    async def close(self) -> None:
-        """Close store connections."""
+    async def _shutdown(self) -> None:
+        """Close all background connections and perform cleanup."""
         await self._doc_store.close()
 
-    async def __aenter__(self) -> "BusinessLogic":
-        """Enter async context."""
-        await self.connect()
+    async def __aenter__(self) -> Self:
+        """Enter async context, ensuring setup is complete.
+
+        This allows using BusinessLogic with an 'async with' block.
+        """
+        await self._setup()
         return self
 
-    async def __aexit__(self, exc_type: Any, exc_val: Any, exc_tb: Any) -> None:
-        """Exit async context."""
-        await self.close()
+    async def __aexit__(
+        self, exc_type: type[BaseException] | None, exc_val: BaseException | None, exc_tb: Any | None
+    ) -> None:
+        """Exit async context, ensuring shutdown is performed."""
+        await self._shutdown()
 
-    async def create_or_update_arc(self, rdi: str, arc: dict[str, Any], client_id: str, harvest_id: str | None = None) -> ArcOperationResult:
+    async def create_or_update_arc(
+        self, rdi: str, arc: dict[str, Any], client_id: str, harvest_id: str | None = None
+    ) -> ArcOperationResult:
         """Create or update an ARC with fast CouchDB storage and async GitLab sync.
 
         This method performs fast CouchDB storage and enqueues GitLab sync.
@@ -214,8 +238,16 @@ class BusinessLogic:
             "api.BusinessLogic.create_or_update_arc",
             attributes={"rdi": rdi, "client_id": client_id},
         ) as span:
-            logger.info("Starting ARC creation/update: rdi=%s, client_id=%s", rdi, client_id)
+            logger.info("[%s] Starting ARC creation/update: rdi=%s", client_id, rdi)
             try:
+                # If harvest_id is provided, validate that it belongs to the client
+                if harvest_id:
+                    # We can use the harvest_manager to validate
+                    try:
+                        await self._harvest_manager.validate_client_id(harvest_id, client_id)
+                    except ValueError as e:
+                        raise BusinessLogicError(str(e)) from e
+
                 # Fast validation: Ensure identifier is present
                 identifier = extract_identifier(arc)
                 if identifier is None:
@@ -234,7 +266,8 @@ class BusinessLogic:
                 should_trigger_git = is_new or has_changes
 
                 logger.info(
-                    "Stored ARC %s in CouchDB: is_new=%s, has_changes=%s, trigger_git=%s",
+                    "[%s] Stored ARC %s in CouchDB: is_new=%s, has_changes=%s, trigger_git=%s",
+                    client_id,
                     arc_id,
                     is_new,
                     has_changes,
@@ -243,10 +276,10 @@ class BusinessLogic:
 
                 # Enqueue GitLab sync if needed
                 if should_trigger_git:
-                    logger.info("Enqueueing GitLab sync task for ARC %s", arc_id)
-                    self._dispatcher.dispatch_sync_arc(ArcSyncTask(rdi=rdi, arc=arc))
+                    logger.info("[%s] Enqueueing GitLab sync task for ARC %s", client_id, arc_id)
+                    self._dispatcher.dispatch_sync_arc(ArcSyncTask(rdi=rdi, arc=arc, client_id=client_id))
                 else:
-                    logger.info("Skipping GitLab sync for ARC %s (unchanged)", arc_id)
+                    logger.info("[%s] Skipping GitLab sync for ARC %s (unchanged)", client_id, arc_id)
 
                 status = ArcStatus.CREATED if is_new else ArcStatus.UPDATED
                 result = ArcResponse(
@@ -265,7 +298,7 @@ class BusinessLogic:
                 )
 
             except Exception as e:
-                logger.error("Unexpected error while processing ARC: %s", e, exc_info=True)
+                logger.error("[%s] Unexpected error while processing ARC: %s", client_id, e, exc_info=True)
                 span.record_exception(e)
                 if isinstance(e, InvalidJsonSemanticError):
                     raise e
@@ -350,7 +383,7 @@ class BusinessLogic:
                                 message=f"GitLab sync failed: {str(e)}",
                             ),
                         )
-                except Exception as log_error:
+                except Exception as log_error:  # noqa: BLE001
                     logger.warning("Could not log sync failure to CouchDB: %s", log_error)
 
                 if isinstance(e, InvalidJsonSemanticError):
