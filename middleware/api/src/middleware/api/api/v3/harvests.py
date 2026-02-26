@@ -14,7 +14,7 @@ from middleware.api.api.common.dependencies import (
     get_common_deps,
     get_content_type,
 )
-from middleware.api.business_logic import BusinessLogic
+from middleware.api.business_logic import BusinessLogic, InvalidJsonSemanticError
 from middleware.api.document_store.harvest_document import HarvestDocument
 from middleware.shared.api_models.v3 import models as v3_models
 
@@ -96,12 +96,7 @@ async def complete_harvest(  # noqa: PLR0913, PLR0917
 
     await deps.validate_rdi_authorized(harvest.rdi, request)
 
-    await bl.harvest_manager.complete_harvest(harvest_id, client_id=client_id)
-
-    # Reload
-    harvest = await bl.harvest_manager.get_harvest(harvest_id)
-    if not harvest:
-        raise HTTPException(status_code=HTTPStatus.NOT_FOUND, detail="Harvest no longer found")
+    harvest = await bl.harvest_manager.complete_harvest(harvest_id, client_id=client_id)
     return _map_harvest(harvest)
 
 
@@ -171,6 +166,8 @@ async def submit_arc_in_harvest(  # noqa: PLR0913, PLR0917
                 for event in metadata.events
             ],
         )
+    except InvalidJsonSemanticError as e:
+        raise HTTPException(status_code=HTTPStatus.UNPROCESSABLE_ENTITY, detail=str(e)) from e
     except Exception as e:
         logger.error("Error in v3 harvest/arcs endpoint: %s", e, exc_info=True)
         if isinstance(e, HTTPException):

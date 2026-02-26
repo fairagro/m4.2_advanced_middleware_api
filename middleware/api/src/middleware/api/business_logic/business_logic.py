@@ -158,7 +158,7 @@ class BusinessLogic:
             state="SUCCESS",
         )
 
-    async def _setup(self) -> None:
+    async def startup(self) -> None:
         """Initialize business logic and its underlying stores.
 
         This ensures connections are established and required infrastructure
@@ -171,7 +171,7 @@ class BusinessLogic:
             logger.error("Failed to setup business logic: %s", e, exc_info=True)
             raise SetupError(f"Failed to setup business logic: {e}") from e
 
-    async def _shutdown(self) -> None:
+    async def shutdown(self) -> None:
         """Close all background connections and perform cleanup."""
         await self._doc_store.close()
 
@@ -180,14 +180,14 @@ class BusinessLogic:
 
         This allows using BusinessLogic with an 'async with' block.
         """
-        await self._setup()
+        await self.startup()
         return self
 
     async def __aexit__(
         self, exc_type: type[BaseException] | None, exc_val: BaseException | None, exc_tb: Any | None
     ) -> None:
         """Exit async context, ensuring shutdown is performed."""
-        await self._shutdown()
+        await self.shutdown()
 
     async def create_or_update_arc(
         self, rdi: str, arc: dict[str, Any], client_id: str, harvest_id: str | None = None

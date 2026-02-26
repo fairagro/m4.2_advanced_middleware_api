@@ -14,7 +14,7 @@ from middleware.api.api.common.dependencies import (
     get_common_deps,
     get_content_type,
 )
-from middleware.api.business_logic import BusinessLogic
+from middleware.api.business_logic import BusinessLogic, InvalidJsonSemanticError
 from middleware.shared.api_models.v3 import models
 
 logger = logging.getLogger(__name__)
@@ -65,6 +65,8 @@ async def create_or_update_arc(
                 for event in metadata.events
             ],
         )
+    except InvalidJsonSemanticError as e:
+        raise HTTPException(status_code=HTTPStatus.UNPROCESSABLE_ENTITY, detail=str(e)) from e
     except Exception as e:
         logger.error("Error in v3 ARC endpoint: %s", e, exc_info=True)
         if isinstance(e, HTTPException):

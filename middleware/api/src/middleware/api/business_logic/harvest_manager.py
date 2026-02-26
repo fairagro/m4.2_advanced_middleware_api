@@ -59,16 +59,23 @@ class HarvestManager:
             )
             raise ValueError(f"Harvest {harvest_id} does not belong to client {client_id}")
 
-    async def complete_harvest(self, harvest_id: str, client_id: str) -> None:
-        """Mark a harvest as completed."""
-        await self.validate_client_id(harvest_id, client_id)
+    async def complete_harvest(self, harvest_id: str, client_id: str) -> HarvestDocument:
+        """Mark a harvest as completed and return the updated document."""
+        # Single fetch: used for both client_id validation and expected_datasets
+        harvest = await self.get_harvest(harvest_id)
+        if not harvest:
+            raise ValueError(f"Harvest {harvest_id} not found")
+        if harvest.client_id != client_id:
+            logger.warning(
+                "[%s] Client ID mismatch for harvest %s: expected %s", client_id, harvest_id, harvest.client_id
+            )
+            raise ValueError(f"Harvest {harvest_id} does not belong to client {client_id}")
 
         # Calculate statistics server-side from stored ARCs
         statistics = await self._doc_store.get_harvest_statistics(harvest_id)
 
-        # Get existing harvest to preserve expected_datasets if set
-        harvest = await self.get_harvest(harvest_id)
-        if harvest and harvest.statistics and harvest.statistics.expected_datasets is not None:
+        # Preserve expected_datasets if already set
+        if harvest.statistics and harvest.statistics.expected_datasets is not None:
             statistics.expected_datasets = harvest.statistics.expected_datasets
 
         updates: dict[str, Any] = {
@@ -76,12 +83,21 @@ class HarvestManager:
             "statistics": statistics.model_dump(),
         }
 
-        await self._doc_store.update_harvest(harvest_id, updates)
+        updated = await self._doc_store.update_harvest(harvest_id, updates)
         logger.info("[%s] Completed harvest: %s", client_id, harvest_id)
+        return updated
 
     async def cancel_harvest(self, harvest_id: str, client_id: str) -> None:
         """Cancel a harvest run."""
-        await self.validate_client_id(harvest_id, client_id)
+        # Single fetch: used for both client_id validation and RDI auth (endpoint does it first)
+        harvest = await self.get_harvest(harvest_id)
+        if not harvest:
+            raise ValueError(f"Harvest {harvest_id} not found")
+        if harvest.client_id != client_id:
+            logger.warning(
+                "[%s] Client ID mismatch for harvest %s: expected %s", client_id, harvest_id, harvest.client_id
+            )
+            raise ValueError(f"Harvest {harvest_id} does not belong to client {client_id}")
 
         updates = {
             "status": HarvestStatus.CANCELLED,

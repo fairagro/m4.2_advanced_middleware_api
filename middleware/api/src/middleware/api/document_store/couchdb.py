@@ -70,7 +70,7 @@ class CouchDB(DocumentStore):
 
         # Check existing document
         existing_doc_dict = await self._client.get_document(doc_id)
-        existing_doc = ArcDocument(**existing_doc_dict) if existing_doc_dict else None
+        existing_doc = ArcDocument.model_validate(existing_doc_dict) if existing_doc_dict else None
 
         is_new = existing_doc is None
         has_changes = True  # Default to true for new
@@ -179,7 +179,7 @@ class CouchDB(DocumentStore):
             logger.warning("Attempted to add event to non-existent ARC %s", arc_id)
             return
 
-        doc = ArcDocument(**doc_dict)
+        doc = ArcDocument.model_validate(doc_dict)
         doc.metadata.events.append(event)
 
         # Trim events
@@ -237,23 +237,21 @@ class CouchDB(DocumentStore):
     async def get_harvest(self, harvest_id: str) -> HarvestDocument | None:
         """Get harvest document."""
         doc = await self._client.get_document(harvest_id)
-        return HarvestDocument(**doc) if doc else None
+        return HarvestDocument.model_validate(doc) if doc else None
 
-    async def update_harvest(self, harvest_id: str, updates: dict[str, Any]) -> None:
-        """Update a harvest record."""
+    async def update_harvest(self, harvest_id: str, updates: dict[str, Any]) -> HarvestDocument:
+        """Update a harvest record and return the updated document."""
         doc_dict = await self._client.get_document(harvest_id)
         if not doc_dict:
             raise ValueError(f"Harvest {harvest_id} not found")
 
-        # Use model for validation during merge if possible, or just merge and save
-        # To be safe and respect Pydantic aliases/types:
-        doc = HarvestDocument(**doc_dict)
+        doc = HarvestDocument.model_validate(doc_dict)
 
         # Apply updates to the model
         if "status" in updates:
             doc.status = updates["status"]
         if "statistics" in updates:
-            doc.statistics = HarvestStatistics(**updates["statistics"])
+            doc.statistics = HarvestStatistics.model_validate(updates["statistics"])
         if "completed_at" in updates:
             doc.completed_at = updates["completed_at"]
 
@@ -263,6 +261,7 @@ class CouchDB(DocumentStore):
 
         doc_data = doc.model_dump(by_alias=True, exclude_none=True)
         await self._client.save_document(harvest_id, doc_data)
+        return doc
 
     async def list_harvests(self, rdi: str | None = None) -> list[HarvestDocument]:
         """List harvest records."""
@@ -271,7 +270,7 @@ class CouchDB(DocumentStore):
             selector["rdi"] = rdi
 
         docs = await self._client.find(selector)
-        return [HarvestDocument(**d) for d in docs]
+        return [HarvestDocument.model_validate(d) for d in docs]
 
     async def get_harvest_statistics(self, harvest_id: str) -> HarvestStatistics:
         """Calculate and return statistics for a specific harvest run."""

@@ -160,7 +160,7 @@ async def test_setup_failure(api_logic: BusinessLogic, mock_doc_store: MagicMock
     """Test setup failure."""
     mock_doc_store.setup.side_effect = Exception("DB Fail")
     with pytest.raises(SetupError, match="Failed to setup business logic"):
-        await api_logic._setup()  # noqa: SLF001
+        await api_logic.startup()
 
 
 def test_get_task_status(api_logic: BusinessLogic) -> None:

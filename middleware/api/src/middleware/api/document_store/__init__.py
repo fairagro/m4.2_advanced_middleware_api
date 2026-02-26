@@ -144,7 +144,7 @@ class DocumentStore(ABC):
         raise NotImplementedError
 
     @abstractmethod
-    async def update_harvest(self, harvest_id: str, updates: dict[str, Any]) -> None:
+    async def update_harvest(self, harvest_id: str, updates: dict[str, Any]) -> HarvestDocument:
         """Update a harvest record.
 
         Args:

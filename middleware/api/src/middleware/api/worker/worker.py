@@ -17,30 +17,46 @@ from .tasks import ArcSyncTask
 logger = logging.getLogger(__name__)
 
 
-# Lazy initialization of BusinessLogic
 class BusinessLogicManager:
-    """Manages the lazy initialization and retrieval of the BusinessLogic instance for the worker."""
+    """Manages a single, long-lived BusinessLogic instance per worker process.
+
+    Celery prefork workers execute each task in a regular (non-async) thread.
+    Rather than connecting to CouchDB on every task invocation, this class
+    owns a persistent event loop and a persistent CouchDB connection that are
+    created once and reused across all tasks in the process lifetime.
+
+    Thread-safety is ensured by double-checked locking during initialization.
+    """
 
     _business_logic: BusinessLogic | None = None
+    _loop: asyncio.AbstractEventLoop | None = None
     _lock = threading.Lock()
 
     @classmethod
-    def get_business_logic(cls) -> BusinessLogic:
-        """Get or initialize the BusinessLogic instance for the worker.
+    def get(cls) -> tuple[BusinessLogic, asyncio.AbstractEventLoop]:
+        """Return the shared BusinessLogic and event loop, initializing once if needed.
 
-        This method is thread-safe.
+        CouchDB connection is established during the first call and then kept
+        alive for the lifetime of the worker process.
         """
         if cls._business_logic is None:
             with cls._lock:
-                # Double-checked locking to ensure it's created only once
+                # Double-checked locking: only the first thread initializes.
                 if cls._business_logic is None:
-                    cls._business_logic = BusinessLogicFactory.create(loaded_config, mode="worker")
-                    logger.info("BusinessLogic initialized for worker")
+                    loop = asyncio.new_event_loop()
+                    asyncio.set_event_loop(loop)
+                    bl = BusinessLogicFactory.create(loaded_config, mode="worker")
+                    loop.run_until_complete(bl.startup())
+                    # Set _loop before _business_logic: the outer check uses
+                    # _business_logic as the sentinel, so once it is set the
+                    # _loop is guaranteed to be set too.
+                    cls._loop = loop
+                    cls._business_logic = bl
+                    logger.info("BusinessLogic initialized and connected for worker process")
 
-        if cls._business_logic is None:
-            raise RuntimeError("BusinessLogic failed to initialize")
-
-        return cls._business_logic
+        assert cls._business_logic is not None  # noqa: S101
+        assert cls._loop is not None  # noqa: S101
+        return cls._business_logic, cls._loop
 
 
 @celery_app.task(
@@ -71,17 +87,9 @@ def sync_arc_to_gitlab(task: ArcSyncTask) -> None:
     logger.info("[%s] Starting GitLab sync task for RDI %s", client_id, rdi)
 
     try:
-
-        async def _run_sync() -> None:
-            logic = BusinessLogicManager.get_business_logic()
-            async with logic:  # pylint: disable=not-async-context-manager
-                await logic.sync_to_gitlab(rdi, arc_data)
-
-        asyncio.run(_run_sync())
-
+        logic, loop = BusinessLogicManager.get()
+        loop.run_until_complete(logic.sync_to_gitlab(rdi, arc_data))
         logger.info("[%s] Successfully completed GitLab sync task for RDI %s", client_id, rdi)
-
-    except Exception as e:
-        logger.error("[%s] GitLab sync task failed: %s", client_id, e, exc_info=True)
-        # Re-raise to mark task as failed in Celery
-        raise e
+    except Exception:
+        logger.error("[%s] GitLab sync task failed for RDI %s", client_id, rdi, exc_info=True)
+        raise
