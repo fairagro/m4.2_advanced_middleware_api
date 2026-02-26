@@ -17,6 +17,8 @@ from pydantic import ValidationError
 
 from middleware.api.config import Config
 
+pytestmark = pytest.mark.filterwarnings("ignore:gitlab_api configuration is deprecated.*:DeprecationWarning")
+
 
 def _git_repo(tmp_path: Path, group: str = "g") -> dict[str, str]:
     repo_dir = tmp_path / "repo"

@@ -12,6 +12,8 @@ from middleware.api.business_logic import (
     InvalidJsonSemanticError,
 )
 
+pytestmark = pytest.mark.filterwarnings("ignore:gitlab_api configuration is deprecated.*:DeprecationWarning")
+
 SHA256_LENGTH = 64
 
 

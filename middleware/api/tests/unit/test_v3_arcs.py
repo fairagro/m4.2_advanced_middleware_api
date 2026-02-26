@@ -13,6 +13,8 @@ from middleware.api.document_store.arc_document import ArcEvent, ArcMetadata
 from middleware.shared.api_models import ArcOperationResult, ArcResponse, ArcStatus
 from middleware.shared.api_models.common.models import ArcEventType, ArcLifecycleStatus
 
+pytestmark = pytest.mark.filterwarnings("ignore:gitlab_api configuration is deprecated.*:DeprecationWarning")
+
 
 @pytest.mark.unit
 def test_create_or_update_arc_v3_success(client: TestClient, cert: str, middleware_api: Api) -> None:

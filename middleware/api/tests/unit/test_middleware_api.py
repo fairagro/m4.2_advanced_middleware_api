@@ -19,6 +19,8 @@ from middleware.shared.api_models import (
     ArcStatus,
 )
 
+pytestmark = pytest.mark.filterwarnings("ignore:gitlab_api configuration is deprecated.*:DeprecationWarning")
+
 
 def test_whoami_success(client: TestClient, middleware_api: Api, cert: str) -> None:
     """Test the /v1/whoami endpoint with a valid certificate and accept header."""

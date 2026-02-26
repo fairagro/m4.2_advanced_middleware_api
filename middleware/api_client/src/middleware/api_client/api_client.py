@@ -4,6 +4,7 @@ import asyncio
 import json
 import logging
 import ssl
+from collections.abc import AsyncGenerator, AsyncIterator
 from http import HTTPStatus
 from typing import TYPE_CHECKING, Any, cast
 
@@ -368,6 +369,71 @@ class ApiClient:
         request = SubmitHarvestArcRequest(arc=serialized)
         data = await self._post(f"v3/harvests/{harvest_id}/arcs", request)
         return self._parse_arc_response(data)
+
+    async def harvest_arcs(
+        self,
+        rdi: str,
+        arcs: "AsyncGenerator[ARC | dict[str, Any], None] | AsyncIterator[ARC | dict[str, Any]]",
+        expected_datasets: int | None = None,
+        cancel_on_error: bool = True,
+    ) -> HarvestResult:
+        """Create a harvest, upload all ARCs from an async generator, then complete it.
+
+        The method:
+
+        1. Creates a new harvest for *rdi*.
+        2. Iterates *arcs*, submitting each one as part of that harvest.
+        3. Calls :meth:`complete_harvest` when the generator is exhausted.
+
+        If an error occurs during ARC submission and *cancel_on_error* is
+        ``True`` (the default), the harvest is cancelled before re-raising
+        the exception.  Pass ``cancel_on_error=False`` to leave the harvest
+        open for manual inspection.
+
+        Args:
+            rdi: RDI identifier for the harvest.
+            arcs: Async generator or async iterator yielding ARC objects or
+                pre-serialised RO-Crate dicts.
+            expected_datasets: Optional hint about the total number of ARCs.
+            cancel_on_error: Cancel the harvest when an exception is raised
+                during submission (default: ``True``).
+
+        Returns:
+            :class:`HarvestResult` of the completed harvest.
+
+        Raises:
+            ApiClientError: On any HTTP or serialization error.  When
+                *cancel_on_error* is ``True``, the harvest is cancelled before
+                the exception propagates.
+
+        Example::
+
+            async def my_arcs() -> AsyncGenerator[dict, None]:
+                for arc in source:
+                    yield arc
+
+            async with ApiClient(config) as client:
+                result = await client.harvest_arcs("my-rdi", my_arcs())
+        """
+        harvest = await self.create_harvest(rdi, expected_datasets=expected_datasets)
+        harvest_id = harvest.harvest_id
+        logger.info("[%s] Started harvest %s for RDI %s", rdi, harvest_id, rdi)
+
+        try:
+            async for arc in arcs:
+                await self.submit_arc_in_harvest(harvest_id, arc)
+        except Exception:
+            if cancel_on_error:
+                logger.warning("[%s] Error during ARC submission, cancelling harvest %s", rdi, harvest_id)
+                try:
+                    await self.cancel_harvest(harvest_id)
+                except ApiClientError:
+                    logger.warning("[%s] Failed to cancel harvest %s", rdi, harvest_id)
+            raise
+
+        result = await self.complete_harvest(harvest_id)
+        logger.info("[%s] Completed harvest %s", rdi, harvest_id)
+        return result
 
     # ------------------------------------------------------------------
     # Lifecycle

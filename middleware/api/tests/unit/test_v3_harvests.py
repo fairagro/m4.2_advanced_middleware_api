@@ -13,6 +13,8 @@ from middleware.api.document_store.harvest_document import HarvestDocument, Harv
 from middleware.shared.api_models import ArcOperationResult, ArcResponse, ArcStatus
 from middleware.shared.api_models.common.models import HarvestStatus
 
+pytestmark = pytest.mark.filterwarnings("ignore:gitlab_api configuration is deprecated.*:DeprecationWarning")
+
 
 @pytest.mark.unit
 def test_create_harvest_success(client: TestClient, cert: str, middleware_api: Api) -> None:

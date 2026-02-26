@@ -2,7 +2,9 @@
 
 import http
 import ssl
+from collections.abc import AsyncGenerator
 from pathlib import Path
+from typing import Any
 from unittest.mock import AsyncMock, patch
 
 import httpx
@@ -422,3 +424,118 @@ async def test_submit_arc_in_harvest_invalid_response(client_config: Config) -> 
     async with ApiClient(client_config) as client:
         with pytest.raises(ApiClientError, match="Invalid ARC response"):
             await client.submit_arc_in_harvest("harvest-456", arc={"id": "mock"})
+
+
+# ---------------------------------------------------------------------------
+# harvest_arcs
+# ---------------------------------------------------------------------------
+
+
+async def _arc_gen(*arcs: "dict[str, Any]") -> AsyncGenerator["dict[str, Any]", None]:
+    """Yield the provided arc dicts as an async generator."""
+    for arc in arcs:
+        yield arc
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_harvest_arcs_success(client_config: Config) -> None:
+    """harvest_arcs creates a harvest, submits all ARCs, then completes it."""
+    completed_response = {**_HARVEST_RESPONSE, "status": "COMPLETED", "completed_at": "2024-01-01T01:00:00Z"}
+    respx.post(f"{client_config.api_url}v3/harvests").mock(
+        return_value=httpx.Response(http.HTTPStatus.OK, json=_HARVEST_RESPONSE)
+    )
+    respx.post(f"{client_config.api_url}v3/harvests/harvest-456/arcs").mock(
+        return_value=httpx.Response(http.HTTPStatus.OK, json=_ARC_RESPONSE)
+    )
+    respx.post(f"{client_config.api_url}v3/harvests/harvest-456/complete").mock(
+        return_value=httpx.Response(http.HTTPStatus.OK, json=completed_response)
+    )
+
+    arcs = _arc_gen({"id": "arc-1"}, {"id": "arc-2"}, {"id": "arc-3"})
+    async with ApiClient(client_config) as client:
+        result = await client.harvest_arcs("test-rdi", arcs, expected_datasets=3)
+
+    assert isinstance(result, HarvestResult)
+    assert result.status == "COMPLETED"
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_harvest_arcs_empty_generator(client_config: Config) -> None:
+    """harvest_arcs with an empty generator creates and immediately completes the harvest."""
+    completed_response = {**_HARVEST_RESPONSE, "status": "COMPLETED", "completed_at": "2024-01-01T01:00:00Z"}
+    respx.post(f"{client_config.api_url}v3/harvests").mock(
+        return_value=httpx.Response(http.HTTPStatus.OK, json=_HARVEST_RESPONSE)
+    )
+    respx.post(f"{client_config.api_url}v3/harvests/harvest-456/complete").mock(
+        return_value=httpx.Response(http.HTTPStatus.OK, json=completed_response)
+    )
+
+    async with ApiClient(client_config) as client:
+        result = await client.harvest_arcs("test-rdi", _arc_gen())
+
+    assert isinstance(result, HarvestResult)
+    assert result.status == "COMPLETED"
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_harvest_arcs_cancels_on_error(client_config: Config) -> None:
+    """harvest_arcs cancels the harvest when ARC submission fails."""
+    respx.post(f"{client_config.api_url}v3/harvests").mock(
+        return_value=httpx.Response(http.HTTPStatus.OK, json=_HARVEST_RESPONSE)
+    )
+    respx.post(f"{client_config.api_url}v3/harvests/harvest-456/arcs").mock(
+        return_value=httpx.Response(http.HTTPStatus.INTERNAL_SERVER_ERROR, text="server error")
+    )
+    cancel_route = respx.delete(f"{client_config.api_url}v3/harvests/harvest-456").mock(
+        return_value=httpx.Response(http.HTTPStatus.NO_CONTENT)
+    )
+
+    async with ApiClient(client_config) as client:
+        with pytest.raises(ApiClientError):
+            await client.harvest_arcs("test-rdi", _arc_gen({"id": "arc-1"}), cancel_on_error=True)
+
+    assert cancel_route.called
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_harvest_arcs_no_cancel_on_error(client_config: Config) -> None:
+    """harvest_arcs does NOT cancel the harvest when cancel_on_error=False."""
+    respx.post(f"{client_config.api_url}v3/harvests").mock(
+        return_value=httpx.Response(http.HTTPStatus.OK, json=_HARVEST_RESPONSE)
+    )
+    respx.post(f"{client_config.api_url}v3/harvests/harvest-456/arcs").mock(
+        return_value=httpx.Response(http.HTTPStatus.INTERNAL_SERVER_ERROR, text="server error")
+    )
+    cancel_route = respx.delete(f"{client_config.api_url}v3/harvests/harvest-456").mock(
+        return_value=httpx.Response(http.HTTPStatus.NO_CONTENT)
+    )
+
+    async with ApiClient(client_config) as client:
+        with pytest.raises(ApiClientError):
+            await client.harvest_arcs("test-rdi", _arc_gen({"id": "arc-1"}), cancel_on_error=False)
+
+    assert not cancel_route.called
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_harvest_arcs_cancel_failure_does_not_mask_original_error(client_config: Config) -> None:
+    """If cancel itself raises, the original submission error is still propagated."""
+    respx.post(f"{client_config.api_url}v3/harvests").mock(
+        return_value=httpx.Response(http.HTTPStatus.OK, json=_HARVEST_RESPONSE)
+    )
+    respx.post(f"{client_config.api_url}v3/harvests/harvest-456/arcs").mock(
+        return_value=httpx.Response(http.HTTPStatus.INTERNAL_SERVER_ERROR, text="arc error")
+    )
+    # Also make the cancel fail
+    respx.delete(f"{client_config.api_url}v3/harvests/harvest-456").mock(
+        return_value=httpx.Response(http.HTTPStatus.INTERNAL_SERVER_ERROR, text="cancel error")
+    )
+
+    async with ApiClient(client_config) as client:
+        with pytest.raises(ApiClientError, match="HTTP error 500"):
+            await client.harvest_arcs("test-rdi", _arc_gen({"id": "arc-1"}))

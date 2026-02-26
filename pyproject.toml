@@ -140,6 +140,10 @@ python_functions = ["test_*"]
 filterwarnings = [
     "ignore:GitlabApi.*is deprecated:DeprecationWarning",
     "ignore:GitlabApiConfig.*is deprecated:DeprecationWarning",
+    # Pydantic emits a bare 'deprecated' warning whenever a deprecated field
+    # is *accessed* on a model instance.  In tests we intentionally exercise
+    # paths that touch the deprecated gitlab_api field; suppress the noise.
+    "ignore:deprecated:DeprecationWarning:middleware\\.api\\.config",
 ]
 
 # Output and behavior
