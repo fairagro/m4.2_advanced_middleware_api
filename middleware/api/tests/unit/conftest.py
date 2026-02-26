@@ -35,7 +35,6 @@ git_repo:
   branch: main
 celery:
   broker_url: amqp://guest:guest@localhost:5672//
-  result_backend: redis://localhost:6379/0
 """
     with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml", delete=False) as f:
         f.write(config_content)
@@ -64,7 +63,6 @@ def config(oid: x509.ObjectIdentifier, known_rdis: list[str]) -> Config:
         ),
         celery=CeleryConfig(
             broker_url=SecretStr("amqp://guest:guest@localhost:5672//"),
-            result_backend=SecretStr("redis://localhost:6379/0"),
         ),
         couchdb=CouchDBConfig(url="http://localhost:5984"),
         otel=OtelConfig(),

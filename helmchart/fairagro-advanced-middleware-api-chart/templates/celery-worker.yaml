@@ -1,4 +1,4 @@
-{{- if and .Values.celery.worker.enabled .Values.rabbitmq.enabled .Values.redis.enabled }}
+{{- if and .Values.celery.worker.enabled .Values.rabbitmq.enabled }}
 {{- $repo := default .Values.api.image.repository .Values.celery.image.repository -}}
 {{- $tag := default .Chart.AppVersion (default .Values.api.image.tag .Values.celery.image.tag) -}}
 {{- $pull := default .Values.api.image.pullPolicy .Values.celery.image.pullPolicy -}}
@@ -47,8 +47,6 @@ spec:
           env:
             - name: CELERY_BROKER_URL
               value: {{ include "fairagro-advanced-middleware-api-chart.celeryBrokerUrl" . | quote }}
-            - name: CELERY_RESULT_BACKEND
-              value: {{ include "fairagro-advanced-middleware-api-chart.celeryResultBackend" . | quote }}
             {{- include "fairagro-advanced-middleware-api-chart.couchdbEnvVars" . | nindent 12 }}
             - name: MIDDLEWARE_API_CONFIG
               value: /run/secrets/middleware-api-config

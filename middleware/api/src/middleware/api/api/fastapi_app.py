@@ -51,7 +51,6 @@ if "pytest" in sys.modules:
         "log_level": "DEBUG",
         "celery": {
             "broker_url": "memory://",
-            "result_backend": "cache+memory://",
         },
         "couchdb": {
             "url": "http://localhost:5984",

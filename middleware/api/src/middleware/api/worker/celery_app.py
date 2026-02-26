@@ -41,7 +41,7 @@ if "pytest" in sys.modules or not config_path.is_file():
     # This also allows the worker to initialize BusinessLogic in tests if needed.
     loaded_config = Config.from_data({
         "couchdb": {"url": "http://localhost:5984"},
-        "celery": {"broker_url": "memory://", "result_backend": "memory://"},
+        "celery": {"broker_url": "memory://"},
         "git_repo": {"url": "http://localhost", "group": "test"},  # nosec
         "require_client_cert": False,
     })
@@ -53,7 +53,11 @@ else:
         raise ValueError("Celery configuration missing in config file")
 
     broker_url = loaded_config.celery.broker_url.get_secret_value()
-    backend_url = loaded_config.celery.result_backend.get_secret_value()
+    backend_url = (
+        loaded_config.celery.result_backend.get_secret_value()
+        if loaded_config.celery.result_backend is not None
+        else None
+    )
 
     logger.info("Celery configured with broker: %s", broker_url)
 

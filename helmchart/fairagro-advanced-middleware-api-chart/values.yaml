@@ -32,33 +32,24 @@ config:
 rabbitmq:
   enabled: true
   image: rabbitmq:3.12-management
-  # auth:
-  #   username: guest
-  #   password: guest
-  #   erlang_cookie: ""
-  #   existingSecret: ""  # if set, the secret must contain keys: username, password, erlang_cookie
+  auth:
+    username: ~
+    password: ~
+    erlang_cookie: ~
+    existingSecret: ~  # if set, the secret must contain keys: username, password, erlang_cookie
   service:
     port: 5672
     managementPort: 15672
 
-redis:
-  enabled: true
-  image: redis:7
-  # auth:
-  #   password: ""
-  #   existingSecret: ""  # if set, the secret must contain key: password
-  service:
-    port: 6379
-
 couchdb:
   enabled: true
   image: couchdb:3.3
-  # auth:
-  #   username: admin
-  #   password: password
-  #   existingSecret: ""  # if set, the secret must contain keys: username, password
-  #   usernameKey: username
-  #   passwordKey: password
+  auth:
+    username: ~
+    password: ~
+    existingSecret: ~  # if set, the secret must contain keys: username, password
+    usernameKey: ~
+    passwordKey: ~
   service:
     port: 5984
   persistence:

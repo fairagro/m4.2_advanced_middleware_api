@@ -126,7 +126,6 @@ services:
   db-init:            # Database initialization with Edaphobase dump
   middleware-api:     # FastAPI REST API
   celery-worker:      # Celery worker process
-  redis:              # Redis for Celery
   couchdb:            # CouchDB for RDI storage
 ```
 
