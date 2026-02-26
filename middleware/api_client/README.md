@@ -47,12 +47,23 @@ async def main():
 
     # Use client with context manager
     async with ApiClient(config) as client:
-        # Send request
-        response = await client.create_or_update_arcs(
+        # Send a single ARC
+        response = await client.create_or_update_arc(
             rdi="my-rdi",
-            arcs=[arc]
+            arc=arc,
         )
-        print(f"Created/Updated {len(response.arcs)} ARCs")
+        print(f"ARC status: {response.status}")
+
+        # Or run a harvest workflow
+        async def arc_stream():
+            yield arc
+
+        harvest = await client.harvest_arcs(
+            rdi="my-rdi",
+            arcs=arc_stream(),
+            expected_datasets=1,
+        )
+        print(f"Harvest status: {harvest.status}")
 
 asyncio.run(main())
 ```
@@ -63,26 +74,27 @@ asyncio.run(main())
 | ------ | ---- | -------- | ------- | ----------- |
 | `log_level` | string | No | INFO | Logging level (DEBUG, INFO, WARNING, ERROR, CRITICAL) |
 | `api_url` | string | Yes | - | Base URL of the Middleware API |
-| `client_cert_path` | string | Yes | - | Path to client certificate (PEM format) |
-| `client_key_path` | string | Yes | - | Path to client private key (PEM format) |
+| `client_cert_path` | string | No | null | Path to client certificate (PEM format) |
+| `client_key_path` | string | No | null | Path to client private key (PEM format) |
 | `ca_cert_path` | string | No | null | Path to CA certificate for server verification |
 | `timeout` | float | No | 30.0 | Request timeout in seconds |
 | `verify_ssl` | bool | No | true | Enable SSL certificate verification |
+| `harvest_arcs_max_concurrency` | int | No | 10 | Default concurrent uploads for `harvest_arcs` |
 
 ## API Methods
 
-### `create_or_update_arcs(rdi: str, arcs: list[ARC]) -> CreateOrUpdateArcsResponse`
+### `create_or_update_arc(rdi: str, arc: ARC | dict) -> ArcResult`
 
-Create or update ARCs in the Middleware API.
+Create or update one ARC in the Middleware API.
 
 **Parameters:**
 
 - `rdi` (str): The RDI identifier (e.g., "edaphobase").
-- `arcs` (list[ARC]): List of ARC objects from arctrl library.
+- `arc` (ARC | dict): ARC object from arctrl or pre-serialised RO-Crate dict.
 
 **Returns:**
 
-- `CreateOrUpdateArcsResponse`: Contains the result of the operation.
+- `ArcResult`: Contains the result of the operation.
 
 **Raises:**
 
@@ -96,11 +108,18 @@ from arctrl import ARC, ArcInvestigation
 inv = ArcInvestigation.create(identifier="my-arc-001", title="My ARC")
 arc = ARC.from_arc_investigation(inv)
 
-response = await client.create_or_update_arcs(
+response = await client.create_or_update_arc(
     rdi="edaphobase",
-    arcs=[arc]
+    arc=arc,
 )
 ```
+
+### `harvest_arcs(rdi: str, arcs: AsyncIterator[ARC | dict], expected_datasets: int | None = None, cancel_on_error: bool = True, max_concurrency: int | None = None) -> HarvestResult`
+
+Convenience workflow to create a harvest, upload all ARCs from an async iterator, and complete the harvest.
+
+- Uses `config.harvest_arcs_max_concurrency` by default.
+- `max_concurrency` can override this per call.
 
 All errors are raised as `ApiClientError` exceptions:
 
@@ -108,9 +127,9 @@ All errors are raised as `ApiClientError` exceptions:
 from middleware.api_client import ApiClientError
 
 try:
-    response = await client.create_or_update_arcs(
+    response = await client.create_or_update_arc(
         rdi="my-rdi",
-        arcs=[arc]
+        arc=arc,
     )
 except ApiClientError as e:
     print(f"API Error: {e}")

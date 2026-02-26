@@ -37,6 +37,10 @@ class Config(ConfigBase):
     timeout: Annotated[float, Field(description="Request timeout in seconds", gt=0)] = 30.0
     verify_ssl: Annotated[bool, Field(description="Enable SSL certificate verification")] = True
     follow_redirects: Annotated[bool, Field(description="Follow HTTP redirects for API requests")] = True
+    harvest_arcs_max_concurrency: Annotated[
+        int,
+        Field(description="Default maximum concurrency for ApiClient.harvest_arcs uploads", ge=1),
+    ] = 10
 
     # Retry parameters
     max_retries: Annotated[int, Field(description="Maximum number of retries for transient HTTP errors", ge=0)] = 3

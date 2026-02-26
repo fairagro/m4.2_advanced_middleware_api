@@ -43,6 +43,8 @@ _HARVEST_RESPONSE: dict[str, str | None | dict] = {
     "statistics": {},
 }
 
+EXPECTED_ARC_UPLOADS = 3
+
 
 @pytest.fixture
 def client_config(test_config_dict: dict) -> Config:
@@ -239,13 +241,14 @@ async def test_create_or_update_arc_http_error(client_config: Config) -> None:
 @pytest.mark.asyncio
 @respx.mock
 async def test_create_or_update_arc_network_error(client_config: Config) -> None:
-    """Test create_or_update_arc with a network error."""
+    """Test create_or_update_arc with a network error (no retry for POST)."""
     client_config.retry_backoff_factor = 0.01
-    respx.post(f"{client_config.api_url}v3/arcs").mock(side_effect=httpx.ConnectError("Connection refused"))
+    route = respx.post(f"{client_config.api_url}v3/arcs").mock(side_effect=httpx.ConnectError("Connection refused"))
     arc = ARC.from_arc_investigation(ArcInvestigation.create(identifier="test", title="Test"))
     async with ApiClient(client_config) as client:
-        with pytest.raises(ApiClientError, match="Request failed after 3 retries"):
+        with pytest.raises(ApiClientError, match="Request failed: Connection refused"):
             await client.create_or_update_arc(rdi="test-rdi", arc=arc)
+    assert route.call_count == 1
 
 
 @pytest.mark.asyncio
@@ -304,6 +307,29 @@ async def test_get_network_error(client_config: Config) -> None:
         await client._get("v3/harvests")  # noqa: SLF001
 
 
+@pytest.mark.asyncio
+@respx.mock
+async def test_get_timeout_not_retried(client_config: Config) -> None:
+    """Timeouts are not retried, even for GET requests."""
+    route = respx.get(f"{client_config.api_url}v3/harvests").mock(side_effect=httpx.TimeoutException("Timed out"))
+    client = ApiClient(client_config)
+    with pytest.raises(ApiClientError, match="Request failed: Timed out"):
+        await client._get("v3/harvests")  # noqa: SLF001
+    assert route.call_count == 1
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_get_invalid_json_wrapped(client_config: Config) -> None:
+    """Invalid JSON body is surfaced as ApiClientError."""
+    respx.get(f"{client_config.api_url}v3/harvests/harvest-456").mock(
+        return_value=httpx.Response(http.HTTPStatus.OK, text="not-json")
+    )
+    async with ApiClient(client_config) as client:
+        with pytest.raises(ApiClientError, match="Invalid JSON response from API"):
+            await client.get_harvest("harvest-456")
+
+
 # ---------------------------------------------------------------------------
 # Harvest endpoints
 # ---------------------------------------------------------------------------
@@ -333,6 +359,19 @@ async def test_create_harvest_without_expected_datasets(client_config: Config) -
     async with ApiClient(client_config) as client:
         harvest = await client.create_harvest(rdi="test-rdi")
     assert isinstance(harvest, HarvestResult)
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_create_harvest_503_not_retried(client_config: Config) -> None:
+    """POST create_harvest is not retried on transient server errors."""
+    route = respx.post(f"{client_config.api_url}v3/harvests").mock(
+        return_value=httpx.Response(http.HTTPStatus.SERVICE_UNAVAILABLE, text="Busy")
+    )
+    async with ApiClient(client_config) as client:
+        with pytest.raises(ApiClientError, match="HTTP error 503"):
+            await client.create_harvest(rdi="test-rdi")
+    assert route.call_count == 1
 
 
 @pytest.mark.asyncio
@@ -458,6 +497,63 @@ async def test_harvest_arcs_success(client_config: Config) -> None:
 
     assert isinstance(result, HarvestResult)
     assert result.status == "COMPLETED"
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_harvest_arcs_success_with_parallelism(client_config: Config) -> None:
+    """harvest_arcs supports bounded parallel uploads when requested."""
+    completed_response = {**_HARVEST_RESPONSE, "status": "COMPLETED", "completed_at": "2024-01-01T01:00:00Z"}
+    respx.post(f"{client_config.api_url}v3/harvests").mock(
+        return_value=httpx.Response(http.HTTPStatus.OK, json=_HARVEST_RESPONSE)
+    )
+    route_submit = respx.post(f"{client_config.api_url}v3/harvests/harvest-456/arcs").mock(
+        return_value=httpx.Response(http.HTTPStatus.OK, json=_ARC_RESPONSE)
+    )
+    respx.post(f"{client_config.api_url}v3/harvests/harvest-456/complete").mock(
+        return_value=httpx.Response(http.HTTPStatus.OK, json=completed_response)
+    )
+
+    arcs = _arc_gen({"id": "arc-1"}, {"id": "arc-2"}, {"id": "arc-3"})
+    async with ApiClient(client_config) as client:
+        result = await client.harvest_arcs("test-rdi", arcs, max_concurrency=2)
+
+    assert isinstance(result, HarvestResult)
+    assert route_submit.call_count == EXPECTED_ARC_UPLOADS
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_harvest_arcs_uses_config_default_concurrency(client_config: Config) -> None:
+    """harvest_arcs uses config.harvest_arcs_max_concurrency when no override is passed."""
+    client_config.harvest_arcs_max_concurrency = 2
+
+    completed_response = {**_HARVEST_RESPONSE, "status": "COMPLETED", "completed_at": "2024-01-01T01:00:00Z"}
+    respx.post(f"{client_config.api_url}v3/harvests").mock(
+        return_value=httpx.Response(http.HTTPStatus.OK, json=_HARVEST_RESPONSE)
+    )
+    route_submit = respx.post(f"{client_config.api_url}v3/harvests/harvest-456/arcs").mock(
+        return_value=httpx.Response(http.HTTPStatus.OK, json=_ARC_RESPONSE)
+    )
+    respx.post(f"{client_config.api_url}v3/harvests/harvest-456/complete").mock(
+        return_value=httpx.Response(http.HTTPStatus.OK, json=completed_response)
+    )
+
+    arcs = _arc_gen({"id": "arc-1"}, {"id": "arc-2"}, {"id": "arc-3"})
+    async with ApiClient(client_config) as client:
+        result = await client.harvest_arcs("test-rdi", arcs)
+
+    assert isinstance(result, HarvestResult)
+    assert route_submit.call_count == EXPECTED_ARC_UPLOADS
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_harvest_arcs_invalid_max_concurrency(client_config: Config) -> None:
+    """harvest_arcs validates max_concurrency."""
+    async with ApiClient(client_config) as client:
+        with pytest.raises(ValueError, match="max_concurrency must be >= 1"):
+            await client.harvest_arcs("test-rdi", _arc_gen({"id": "arc-1"}), max_concurrency=0)
 
 
 @pytest.mark.asyncio

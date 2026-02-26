@@ -56,6 +56,83 @@ class ApiClient:
             await client.complete_harvest(harvest.harvest_id)
     """
 
+    _IDEMPOTENT_METHODS = frozenset({"GET", "HEAD", "OPTIONS", "DELETE"})
+    _HTTP_ERROR_BODY_MAX_CHARS = 500
+
+    @classmethod
+    def _should_retry_http_status(cls, method: str, status_code: int) -> bool:
+        """Return whether a response status is retryable for a method."""
+        transient = {httpx.codes.BAD_GATEWAY, httpx.codes.SERVICE_UNAVAILABLE, httpx.codes.GATEWAY_TIMEOUT}
+        return method in cls._IDEMPOTENT_METHODS and status_code in transient
+
+    @classmethod
+    def _should_retry_request_error(cls, method: str, error: httpx.RequestError) -> bool:
+        """Return whether a request error is retryable for a method."""
+        if method not in cls._IDEMPOTENT_METHODS:
+            return False
+        return not isinstance(error, httpx.TimeoutException)
+
+    @classmethod
+    def _format_http_error_message(cls, status_code: int, response_text: str) -> str:
+        """Build a safe and concise HTTP error message."""
+        response_excerpt = " ".join(response_text.splitlines()).strip()
+        if len(response_excerpt) > cls._HTTP_ERROR_BODY_MAX_CHARS:
+            response_excerpt = response_excerpt[: cls._HTTP_ERROR_BODY_MAX_CHARS] + "..."
+        return f"HTTP error {status_code}: {response_excerpt}"
+
+    @classmethod
+    def _parse_json_response(cls, resp: httpx.Response, method: str, path: str) -> Any:
+        """Parse and return JSON response body with normalized client errors."""
+        if resp.status_code == HTTPStatus.NO_CONTENT:
+            return None
+        try:
+            return resp.json()
+        except ValueError as e:
+            msg = f"Invalid JSON response from API for {method} {path}"
+            logger.error(msg)
+            raise ApiClientError(msg, status_code=resp.status_code) from e
+
+    async def _cancel_harvest_safely(self, rdi: str, harvest_id: str) -> None:
+        """Try cancelling a harvest and suppress cancellation failures."""
+        try:
+            await self.cancel_harvest(harvest_id)
+        except ApiClientError:
+            logger.warning("[%s] Failed to cancel harvest %s", rdi, harvest_id)
+
+    async def _submit_arcs_parallel(
+        self,
+        harvest_id: str,
+        arcs: "AsyncGenerator[ARC | dict[str, Any], None] | AsyncIterator[ARC | dict[str, Any]]",
+        max_concurrency: int,
+    ) -> None:
+        """Submit all ARCs in bounded parallelism."""
+        pending_tasks: set[asyncio.Task[None]] = set()
+
+        async def submit_one(arc_item: "ARC | dict[str, Any]") -> None:
+            await self.submit_arc_in_harvest(harvest_id, arc_item)
+
+        try:
+            async for arc in arcs:
+                task = asyncio.create_task(submit_one(arc))
+                pending_tasks.add(task)
+
+                if len(pending_tasks) >= max_concurrency:
+                    done, pending = await asyncio.wait(pending_tasks, return_when=asyncio.FIRST_COMPLETED)
+                    pending_tasks = pending
+                    for done_task in done:
+                        done_task.result()
+
+            if pending_tasks:
+                done, _ = await asyncio.wait(pending_tasks)
+                for done_task in done:
+                    done_task.result()
+        except Exception:
+            if pending_tasks:
+                for task in pending_tasks:
+                    task.cancel()
+                await asyncio.gather(*pending_tasks, return_exceptions=True)
+            raise
+
     def __init__(self, config: Config) -> None:
         """Initialize the ApiClient.
 
@@ -142,8 +219,6 @@ class ApiClient:
         path = path.lstrip("/")
         method = method.upper()
 
-        _transient = {httpx.codes.BAD_GATEWAY, httpx.codes.SERVICE_UNAVAILABLE, httpx.codes.GATEWAY_TIMEOUT}
-
         for attempt in range(self._config.max_retries + 1):
             if attempt > 0:
                 delay = self._config.retry_backoff_factor * (2 ** (attempt - 1))
@@ -157,32 +232,36 @@ class ApiClient:
                 resp = await client.request(method, path, **kwargs)
 
                 # Retry on transient server-side errors before raising
-                if resp.status_code in _transient and attempt < self._config.max_retries:
+                if self._should_retry_http_status(method, resp.status_code) and attempt < self._config.max_retries:
                     logger.warning("Transient HTTP error %d from server, will retry", resp.status_code)
                     continue
 
                 resp.raise_for_status()
                 logger.debug("%s %s succeeded with status %d", method, path, resp.status_code)
 
-                if resp.status_code == HTTPStatus.NO_CONTENT:
-                    return None
-                return resp.json()
+                return self._parse_json_response(resp, method, path)
 
             except httpx.HTTPStatusError as e:
-                if e.response.status_code in _transient and attempt < self._config.max_retries:
+                if (
+                    self._should_retry_http_status(method, e.response.status_code)
+                    and attempt < self._config.max_retries
+                ):
                     continue
-                if e.response.status_code in _transient:
+                if self._should_retry_http_status(method, e.response.status_code):
                     msg = f"Request failed after {self._config.max_retries} retries: HTTP {e.response.status_code}"
                 else:
-                    msg = f"HTTP error {e.response.status_code}: {e.response.text}"
+                    msg = self._format_http_error_message(e.response.status_code, e.response.text)
                 logger.error(msg)
                 raise ApiClientError(msg, status_code=e.response.status_code) from e
 
             except httpx.RequestError as e:
-                if attempt < self._config.max_retries:
+                if self._should_retry_request_error(method, e) and attempt < self._config.max_retries:
                     logger.warning("Request error: %s. Retrying...", e)
                     continue
-                msg = f"Request failed after {self._config.max_retries} retries: {e}"
+                if self._should_retry_request_error(method, e):
+                    msg = f"Request failed after {self._config.max_retries} retries: {e}"
+                else:
+                    msg = f"Request failed: {e}"
                 logger.error(msg)
                 raise ApiClientError(msg) from e
 
@@ -205,9 +284,9 @@ class ApiClient:
             headers={"content-type": "application/json"},
         )
 
-    async def _get(self, path: str) -> Any:
+    async def _get(self, path: str, *, params: dict[str, str] | None = None) -> Any:
         """GET request."""
-        return await self._request_with_retries("GET", path)
+        return await self._request_with_retries("GET", path, params=params)
 
     async def _delete(self, path: str) -> None:
         """DELETE request, ignoring a 204 No Content response."""
@@ -301,10 +380,10 @@ class ApiClient:
         Returns:
             List of :class:`HarvestResult` objects.
         """
-        path = "v3/harvests"
+        params: dict[str, str] | None = None
         if rdi:
-            path += f"?rdi={rdi}"
-        data = await self._get(path)
+            params = {"rdi": rdi}
+        data = await self._get("v3/harvests", params=params)
         try:
             return [HarvestResult.model_validate(d) for d in data]
         except ValidationError as e:
@@ -376,6 +455,7 @@ class ApiClient:
         arcs: "AsyncGenerator[ARC | dict[str, Any], None] | AsyncIterator[ARC | dict[str, Any]]",
         expected_datasets: int | None = None,
         cancel_on_error: bool = True,
+        max_concurrency: int | None = None,
     ) -> HarvestResult:
         """Create a harvest, upload all ARCs from an async generator, then complete it.
 
@@ -397,6 +477,9 @@ class ApiClient:
             expected_datasets: Optional hint about the total number of ARCs.
             cancel_on_error: Cancel the harvest when an exception is raised
                 during submission (default: ``True``).
+            max_concurrency: Optional override for number of ARC uploads to run
+                concurrently. If omitted, uses
+                ``config.harvest_arcs_max_concurrency``.
 
         Returns:
             :class:`HarvestResult` of the completed harvest.
@@ -415,20 +498,22 @@ class ApiClient:
             async with ApiClient(config) as client:
                 result = await client.harvest_arcs("my-rdi", my_arcs())
         """
+        effective_max_concurrency = (
+            self._config.harvest_arcs_max_concurrency if max_concurrency is None else max_concurrency
+        )
+        if effective_max_concurrency < 1:
+            raise ValueError("max_concurrency must be >= 1")
+
         harvest = await self.create_harvest(rdi, expected_datasets=expected_datasets)
         harvest_id = harvest.harvest_id
         logger.info("[%s] Started harvest %s for RDI %s", rdi, harvest_id, rdi)
 
         try:
-            async for arc in arcs:
-                await self.submit_arc_in_harvest(harvest_id, arc)
+            await self._submit_arcs_parallel(harvest_id, arcs, effective_max_concurrency)
         except Exception:
             if cancel_on_error:
                 logger.warning("[%s] Error during ARC submission, cancelling harvest %s", rdi, harvest_id)
-                try:
-                    await self.cancel_harvest(harvest_id)
-                except ApiClientError:
-                    logger.warning("[%s] Failed to cancel harvest %s", rdi, harvest_id)
+                await self._cancel_harvest_safely(rdi, harvest_id)
             raise
 
         result = await self.complete_harvest(harvest_id)
