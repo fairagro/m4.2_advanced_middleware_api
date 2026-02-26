@@ -32,10 +32,12 @@ class BusinessLogicFactory:
         """
         # Initialize Stores (both API and Worker need these)
         store: ArcStore
-        if config.gitlab_api:
-            store = GitlabApi(config.gitlab_api)
-        elif config.git_repo:
+        if config.git_repo:
             store = GitRepo(config.git_repo)
+        elif config.gitlab_api:
+            # GitlabApi is deprecated, but we keep it for backward compatibility
+            # until removed from Config.
+            store = GitlabApi(config.gitlab_api)
         else:
             raise ValueError("Invalid ArcStore configuration")
 

@@ -2,6 +2,7 @@
 
 import logging
 import re
+import warnings
 from typing import Annotated, Any, ClassVar, Self
 
 from cryptography import x509
@@ -66,7 +67,10 @@ class Config(ConfigBase):
     )
 
     git_repo: Annotated[GitRepoConfig | None, Field(description="GitRepo storage backend configuration")] = None
-    gitlab_api: Annotated[GitlabApiConfig | None, Field(description="GitLab API storage backend configuration")] = None
+    gitlab_api: Annotated[
+        GitlabApiConfig | None,
+        Field(description="GitLab API storage backend configuration", deprecated=True),
+    ] = None
     couchdb: Annotated[CouchDBConfig, Field(description="CouchDB configuration")]
 
     celery: Annotated[CeleryConfig, Field(description="Celery configuration")]
@@ -112,3 +116,25 @@ class Config(ConfigBase):
         if self.git_repo is not None and self.gitlab_api is not None:
             raise ValueError("Only one of git_repo or gitlab_api can be configured")
         return self
+
+    @field_validator("gitlab_api")
+    @classmethod
+    def warn_deprecated_gitlab_api(cls, gitlab_api: GitlabApiConfig | None) -> GitlabApiConfig | None:
+        """
+        Warn about the deprecation of the GitLab API configuration.
+
+        Parameters
+        ----------
+        gitlab_api : GitlabApiConfig | None
+            The GitLab API configuration to validate.
+
+        Returns
+        -------
+        GitlabApiConfig | None
+            The validated GitLab API configuration, or None if not provided.
+        """
+        if gitlab_api is not None:
+            message = "gitlab_api configuration is deprecated; prefer git_repo instead."
+            logging.warning(message)
+            warnings.warn(message, DeprecationWarning, stacklevel=2)
+        return gitlab_api

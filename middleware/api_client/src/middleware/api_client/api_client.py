@@ -1,20 +1,21 @@
-"""Client for the FAIRagro Middleware API."""
+"""Client for the FAIRagro Middleware API (v3)."""
 
 import asyncio
 import json
 import logging
 import ssl
+from http import HTTPStatus
 from typing import TYPE_CHECKING, Any, cast
 
 import httpx
 from pydantic import BaseModel, ValidationError
 
-from middleware.shared.api_models import (
-    ArcOperationResult,
-    CreateOrUpdateArcRequest,
-    CreateOrUpdateArcResponse,
-    GetTaskStatusResponseV2,
-    TaskStatus,
+from middleware.shared.api_models.v3.models import (
+    ArcResponse,
+    CreateArcRequest,
+    CreateHarvestRequest,
+    HarvestResponse,
+    SubmitHarvestArcRequest,
 )
 
 from .config import Config
@@ -35,35 +36,31 @@ class ApiClientError(Exception):
 
 
 class ApiClient:
-    """Client for the FAIRagro Middleware API.
+    """Client for the FAIRagro Middleware API (v3).
 
-    This client provides access to the Middleware API with certificate-based
-    authentication (mTLS). It supports creating and updating ARCs.
+    The v3 API is synchronous from the client's perspective: every call
+    returns the final result immediately — no task polling required.
+    GitLab synchronisation is triggered in the background by the server.
 
-    Example:
-        ```python
-        from pathlib import Path
-        from middleware.api_client import Config, ApiClient
+    Example::
 
-        # Load configuration from YAML file
-        config = Config.from_yaml_file(Path("config.yaml"))
-
-        # Create client instance
+        config = Config(api_url="https://api.example.com")
         async with ApiClient(config) as client:
-            # Send request
-            response = await client.create_or_update_arcs(
-                rdi="my-rdi",
-                arcs=[{"@context": "...", "@id": "...", ...}]
-            )
-            print(f"Created/Updated {len(response.arcs)} ARCs")
-        ```
+            # Simple ARC submission
+            arc_response = await client.create_or_update_arc("my-rdi", arc_dict)
+
+            # Harvest-based batch submission
+            harvest = await client.create_harvest("my-rdi", expected_datasets=42)
+            for arc in arcs:
+                await client.submit_arc_in_harvest(harvest.harvest_id, arc)
+            await client.complete_harvest(harvest.harvest_id)
     """
 
     def __init__(self, config: Config) -> None:
         """Initialize the ApiClient.
 
         Args:
-            config (Config): Configuration object containing API URL and certificate paths.
+            config: Configuration object containing API URL and certificate paths.
 
         Raises:
             ApiClientError: If certificate or key files don't exist.
@@ -71,18 +68,15 @@ class ApiClient:
         self._config = config
         self._client: httpx.AsyncClient | None = None
 
-        # Validate certificate files exist (if provided)
         cert_path = config.client_cert_path
         key_path = config.client_key_path
+        ca_path = config.ca_cert_path
 
         if cert_path is not None and not cert_path.exists():
             raise ApiClientError(f"Client certificate not found: {cert_path}")
         if key_path is not None and not key_path.exists():
             raise ApiClientError(f"Client key not found: {key_path}")
-
-        # Validate CA cert if provided
-        ca_path = config.ca_cert_path
-        if ca_path and not ca_path.exists():
+        if ca_path is not None and not ca_path.exists():
             raise ApiClientError(f"CA certificate not found: {ca_path}")
 
         logger.debug(
@@ -92,20 +86,17 @@ class ApiClient:
             key_path,
         )
 
-    def _get_client(self) -> httpx.AsyncClient:
-        """Get or create the HTTP client instance.
+    # ------------------------------------------------------------------
+    # HTTP infrastructure
+    # ------------------------------------------------------------------
 
-        Returns:
-            httpx.AsyncClient: Configured async HTTP client.
-        """
+    def _get_client(self) -> httpx.AsyncClient:
+        """Return the shared httpx.AsyncClient, creating it on first call."""
         if self._client is None:
-            # Prepare verify parameter
             if not self._config.verify_ssl:
                 verify: bool | ssl.SSLContext = False
             elif self._config.ca_cert_path:
-                # Create SSL context with CA certificate
                 ctx = ssl.create_default_context(cafile=str(self._config.ca_cert_path))
-                # Load client certificate chain for mTLS
                 if self._config.client_cert_path and self._config.client_key_path:
                     ctx.load_cert_chain(
                         str(self._config.client_cert_path),
@@ -113,7 +104,6 @@ class ApiClient:
                     )
                 verify = ctx
             elif self._config.client_cert_path and self._config.client_key_path:
-                # No CA cert, but load client certs if available
                 ctx = ssl.create_default_context()
                 ctx.load_cert_chain(
                     str(self._config.client_cert_path),
@@ -128,9 +118,7 @@ class ApiClient:
                 verify=verify,
                 timeout=self._config.timeout,
                 follow_redirects=self._config.follow_redirects,
-                headers={
-                    "accept": "application/json",
-                },
+                headers={"accept": "application/json"},
             )
             logger.debug("Created new httpx.AsyncClient instance")
 
@@ -142,22 +130,19 @@ class ApiClient:
         path: str,
         **kwargs: Any,
     ) -> Any:
-        """Send an HTTP request to the API with retries.
-
-        Args:
-            method (str): HTTP method (GET, POST, etc.).
-            path (str): API endpoint path.
-            **kwargs: Additional arguments passed to httpx client.
+        """Send an HTTP request with retry logic for transient errors.
 
         Returns:
-            Any: JSON response data.
+            Parsed JSON body for responses with content, or ``None`` for 204.
 
         Raises:
-            ApiClientError: If the request fails after all retries.
+            ApiClientError: On permanent HTTP errors or exhausted retries.
         """
         client = self._get_client()
         path = path.lstrip("/")
         method = method.upper()
+
+        _transient = {httpx.codes.BAD_GATEWAY, httpx.codes.SERVICE_UNAVAILABLE, httpx.codes.GATEWAY_TIMEOUT}
 
         for attempt in range(self._config.max_retries + 1):
             if attempt > 0:
@@ -171,195 +156,235 @@ class ApiClient:
                 logger.debug("Sending %s request to %s (attempt %d)", method, path, attempt + 1)
                 resp = await client.request(method, path, **kwargs)
 
-                # Retry on transient HTTP errors
-                if (
-                    resp.status_code
-                    in {httpx.codes.BAD_GATEWAY, httpx.codes.SERVICE_UNAVAILABLE, httpx.codes.GATEWAY_TIMEOUT}
-                    and attempt < self._config.max_retries
-                ):
-                    logger.warning("Transient HTTP error %d from server", resp.status_code)
+                # Retry on transient server-side errors before raising
+                if resp.status_code in _transient and attempt < self._config.max_retries:
+                    logger.warning("Transient HTTP error %d from server, will retry", resp.status_code)
                     continue
 
                 resp.raise_for_status()
-                logger.debug("%s request successful, status code: %s", method, resp.status_code)
+                logger.debug("%s %s succeeded with status %d", method, path, resp.status_code)
+
+                if resp.status_code == HTTPStatus.NO_CONTENT:
+                    return None
                 return resp.json()
+
             except httpx.HTTPStatusError as e:
-                # If we get here and it's not a retryable error, or we're out of retries
-                if (
-                    e.response.status_code
-                    in {httpx.codes.BAD_GATEWAY, httpx.codes.SERVICE_UNAVAILABLE, httpx.codes.GATEWAY_TIMEOUT}
-                    and attempt < self._config.max_retries
-                ):
+                if e.response.status_code in _transient and attempt < self._config.max_retries:
                     continue
-
-                if e.response.status_code in {
-                    httpx.codes.BAD_GATEWAY,
-                    httpx.codes.SERVICE_UNAVAILABLE,
-                    httpx.codes.GATEWAY_TIMEOUT,
-                }:
-                    error_msg = (
-                        f"Request failed after {self._config.max_retries} retries: HTTP {e.response.status_code}"
-                    )
+                if e.response.status_code in _transient:
+                    msg = f"Request failed after {self._config.max_retries} retries: HTTP {e.response.status_code}"
                 else:
-                    error_msg = f"HTTP error {e.response.status_code}: {e.response.text}"
+                    msg = f"HTTP error {e.response.status_code}: {e.response.text}"
+                logger.error(msg)
+                raise ApiClientError(msg, status_code=e.response.status_code) from e
 
-                logger.error(error_msg)
-                raise ApiClientError(error_msg, status_code=e.response.status_code) from e
             except httpx.RequestError as e:
                 if attempt < self._config.max_retries:
-                    logger.warning("Request error: %s. Retrying...", str(e))
+                    logger.warning("Request error: %s. Retrying...", e)
                     continue
-                error_msg = f"Request failed after {self._config.max_retries} retries: {str(e)}"
-                logger.error(error_msg)
-                raise ApiClientError(error_msg) from e
+                msg = f"Request failed after {self._config.max_retries} retries: {e}"
+                logger.error(msg)
+                raise ApiClientError(msg) from e
 
-        raise ApiClientError("Request failed for an unknown reason")
+        raise ApiClientError("Request failed for an unknown reason")  # pragma: no cover
 
-    async def _post(
-        self,
-        path: str,
-        body: BaseModel,
-    ) -> Any:
-        """Send a POST request to the API with retries.
-
-        Args:
-            path (str): API endpoint path.
-            body (BaseModel): Request body as Pydantic model.
-
-        Returns:
-            Any: JSON response data.
-
-        Raises:
-            ApiClientError: If the request fails after all retries.
-        """
+    async def _post(self, path: str, body: BaseModel) -> Any:
+        """POST with a Pydantic request body."""
         return await self._request_with_retries(
             "POST",
             path,
-            json=body.model_dump(),
+            content=body.model_dump_json(),
+            headers={"content-type": "application/json"},
+        )
+
+    async def _post_empty(self, path: str) -> Any:
+        """POST with an empty body (e.g. trigger endpoints)."""
+        return await self._request_with_retries(
+            "POST",
+            path,
             headers={"content-type": "application/json"},
         )
 
     async def _get(self, path: str) -> Any:
-        """Send a GET request to the API with retries.
-
-        Args:
-            path (str): API endpoint path.
-
-        Returns:
-            Any: JSON response data.
-
-        Raises:
-            ApiClientError: If the request fails after all retries.
-        """
+        """GET request."""
         return await self._request_with_retries("GET", path)
+
+    async def _delete(self, path: str) -> None:
+        """DELETE request, ignoring a 204 No Content response."""
+        await self._request_with_retries("DELETE", path)
+
+    # ------------------------------------------------------------------
+    # Helper
+    # ------------------------------------------------------------------
 
     @classmethod
     def _serialize_arc(cls, arc: "ARC | dict[str, Any]") -> dict[str, Any]:
-        """Serialize ARC to RO-Crate JSON dict."""
+        """Serialize an ARC object to a plain RO-Crate JSON dict."""
         if isinstance(arc, dict):
             return arc
         return cast(dict[str, Any], json.loads(arc.ToROCrateJsonString()))
+
+    @classmethod
+    def _parse_arc_response(cls, data: Any) -> ArcResponse:
+        try:
+            return ArcResponse.model_validate(data)
+        except ValidationError as e:
+            raise ApiClientError(f"Invalid ARC response from API: {e}") from e
+
+    @classmethod
+    def _parse_harvest_response(cls, data: Any) -> HarvestResponse:
+        try:
+            return HarvestResponse.model_validate(data)
+        except ValidationError as e:
+            raise ApiClientError(f"Invalid harvest response from API: {e}") from e
+
+    # ------------------------------------------------------------------
+    # ARC endpoints (v3)
+    # ------------------------------------------------------------------
 
     async def create_or_update_arc(
         self,
         rdi: str,
         arc: "ARC | dict[str, Any]",
-    ) -> ArcOperationResult:
-        """Create or update a single ARC in the FAIRagro Middleware API.
+    ) -> ArcResponse:
+        """Create or update an ARC.
+
+        Uses ``POST /v3/arcs``.  The server stores the ARC synchronously and
+        triggers the GitLab synchronisation in the background — no polling
+        required.
 
         Args:
-            rdi: The RDI identifier.
-            arc: ARC object or already serialized ARC (as dict).
+            rdi: RDI identifier.
+            arc: ARC object or a pre-serialised RO-Crate JSON dict.
 
         Returns:
-            The response containing the result of the operation.
-
-        Raises:
-            ApiClientError: If the request fails.
+            :class:`ArcResponse` with the result of the operation.
         """
         logger.info("Creating/updating ARC for RDI: %s", rdi)
-        serialized_arc = self._serialize_arc(arc)
+        serialized = self._serialize_arc(arc)
+        request = CreateArcRequest(rdi=rdi, arc=serialized)
+        data = await self._post("v3/arcs", request)
+        return self._parse_arc_response(data)
 
-        # Prepare and submit request
-        request = CreateOrUpdateArcRequest(rdi=rdi, arc=serialized_arc)
-        response_data = await self._post("v2/arcs", request)
-        try:
-            submission = CreateOrUpdateArcResponse.model_validate(response_data)
-        except ValidationError as e:
-            raise ApiClientError(f"Invalid response from API during submission: {str(e)}") from e
+    # ------------------------------------------------------------------
+    # Harvest endpoints (v3)
+    # ------------------------------------------------------------------
 
-        logger.info("Task submitted, ID: %s. Polling for results...", submission.task_id)
+    async def create_harvest(
+        self,
+        rdi: str,
+        expected_datasets: int | None = None,
+    ) -> HarvestResponse:
+        """Start a new harvest run.
 
-        # Poll for results
-        return await self._poll_for_result(submission.task_id)
-
-    async def _poll_for_result(self, task_id: str) -> ArcOperationResult:
-        """Poll the API for the result of a background task.
+        Uses ``POST /v3/harvests``.
 
         Args:
-            task_id: The ID of the task to poll.
+            rdi: RDI identifier.
+            expected_datasets: Optional hint about how many datasets will be submitted.
 
         Returns:
-            The result of the operation.
-
-        Raises:
-            ApiClientError: If the task fails or times out.
+            :class:`HarvestResponse` with the newly created harvest.
         """
-        delay = self._config.polling_initial_delay
-        time_waited = 0.0
-        timeout_seconds = self._config.polling_timeout * 60
+        request = CreateHarvestRequest(rdi=rdi, expected_datasets=expected_datasets)
+        data = await self._post("v3/harvests", request)
+        return self._parse_harvest_response(data)
 
-        while time_waited < timeout_seconds:
-            await asyncio.sleep(delay)
-            time_waited += delay
+    async def list_harvests(self, rdi: str | None = None) -> list[HarvestResponse]:
+        """List harvest runs.
 
-            status_data = await self._get(f"v2/tasks/{task_id}")
-            try:
-                status_response = GetTaskStatusResponseV2.model_validate(status_data)
-            except ValidationError as e:
-                raise ApiClientError(f"Invalid response from API during polling: {str(e)}") from e
+        Uses ``GET /v3/harvests``.
 
-            logger.debug("Task %s status: %s (next poll in %.1fs)", task_id, status_response.status, delay)
+        Args:
+            rdi: Optional RDI filter.
 
-            if status_response.status == TaskStatus.SUCCESS:
-                if status_response.result is None:
-                    raise ApiClientError("Task succeeded but no result was returned")
-                return status_response.result
+        Returns:
+            List of :class:`HarvestResponse` objects.
+        """
+        path = "v3/harvests"
+        if rdi:
+            path += f"?rdi={rdi}"
+        data = await self._get(path)
+        try:
+            return [HarvestResponse.model_validate(d) for d in data]
+        except ValidationError as e:
+            raise ApiClientError(f"Invalid harvest list response from API: {e}") from e
 
-            if status_response.status in {TaskStatus.FAILURE, TaskStatus.REVOKED}:
-                error_msg = status_response.message or "Unknown error"
-                raise ApiClientError(f"Task {status_response.status.value}: {error_msg}")
+    async def get_harvest(self, harvest_id: str) -> HarvestResponse:
+        """Get a single harvest run by ID.
 
-            # Increase delay with exponential backoff
-            delay = min(delay * self._config.polling_backoff_factor, self._config.polling_max_delay)
+        Uses ``GET /v3/harvests/{harvest_id}``.
 
-        raise ApiClientError(f"Polling for task {task_id} timed out after {self._config.polling_timeout} minutes.")
+        Args:
+            harvest_id: Harvest identifier.
+
+        Returns:
+            :class:`HarvestResponse`.
+        """
+        data = await self._get(f"v3/harvests/{harvest_id}")
+        return self._parse_harvest_response(data)
+
+    async def complete_harvest(self, harvest_id: str) -> HarvestResponse:
+        """Mark a harvest run as completed.
+
+        Uses ``POST /v3/harvests/{harvest_id}/complete``.
+
+        Args:
+            harvest_id: Harvest identifier.
+
+        Returns:
+            Updated :class:`HarvestResponse`.
+        """
+        data = await self._post_empty(f"v3/harvests/{harvest_id}/complete")
+        return self._parse_harvest_response(data)
+
+    async def cancel_harvest(self, harvest_id: str) -> None:
+        """Cancel (delete) a harvest run.
+
+        Uses ``DELETE /v3/harvests/{harvest_id}``.
+
+        Args:
+            harvest_id: Harvest identifier.
+        """
+        await self._delete(f"v3/harvests/{harvest_id}")
+
+    async def submit_arc_in_harvest(
+        self,
+        harvest_id: str,
+        arc: "ARC | dict[str, Any]",
+    ) -> ArcResponse:
+        """Submit an ARC within an active harvest run.
+
+        Uses ``POST /v3/harvests/{harvest_id}/arcs``.  The RDI is resolved
+        automatically from the harvest run on the server side.
+
+        Args:
+            harvest_id: Harvest identifier.
+            arc: ARC object or a pre-serialised RO-Crate JSON dict.
+
+        Returns:
+            :class:`ArcResponse` with the result of the operation.
+        """
+        serialized = self._serialize_arc(arc)
+        request = SubmitHarvestArcRequest(arc=serialized)
+        data = await self._post(f"v3/harvests/{harvest_id}/arcs", request)
+        return self._parse_arc_response(data)
+
+    # ------------------------------------------------------------------
+    # Lifecycle
+    # ------------------------------------------------------------------
 
     async def aclose(self) -> None:
-        """Close the underlying HTTP client connection.
-
-        This should be called to properly clean up resources when the client
-        is no longer needed.
-        """
+        """Close the underlying HTTP client and release connections."""
         if self._client is not None:
             logger.debug("Closing httpx.AsyncClient")
             await self._client.aclose()
             self._client = None
 
     async def __aenter__(self) -> "ApiClient":
-        """Async context manager entry.
-
-        Returns:
-            ApiClient: This client instance.
-        """
+        """Async context manager entry."""
         return self
 
     async def __aexit__(self, exc_type: Any, exc_val: Any, exc_tb: Any) -> None:
-        """Async context manager exit.
-
-        Args:
-            exc_type: Exception type if an error occurred.
-            exc_val: Exception value if an error occurred.
-            exc_tb: Exception traceback if an error occurred.
-        """
+        """Async context manager exit — closes the client."""
         await self.aclose()

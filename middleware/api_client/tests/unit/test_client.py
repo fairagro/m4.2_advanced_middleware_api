@@ -1,4 +1,4 @@
-"""Unit tests for the ApiClient class."""
+"""Unit tests for the ApiClient class (v3 API)."""
 
 import http
 import ssl
@@ -11,13 +11,47 @@ import respx
 from arctrl import ARC, ArcInvestigation  # type: ignore[import-untyped]
 
 from middleware.api_client import ApiClient, ApiClientError, Config
-from middleware.shared.api_models import ArcOperationResult
+from middleware.shared.api_models.v3.models import ArcResponse, HarvestResponse
+
+# ---------------------------------------------------------------------------
+# Helpers
+# ---------------------------------------------------------------------------
+
+_ARC_RESPONSE = {
+    "client_id": "test-client",
+    "message": "ARC processed successfully",
+    "arc_id": "arc-123",
+    "status": "created",
+    "metadata": {
+        "arc_hash": "abc123",
+        "status": "ACTIVE",
+        "first_seen": "2024-01-01T00:00:00Z",
+        "last_seen": "2024-01-01T00:00:00Z",
+    },
+    "events": [],
+}
+
+_HARVEST_RESPONSE: dict[str, str | None | dict] = {
+    "client_id": "test-client",
+    "message": "Harvest created",
+    "harvest_id": "harvest-456",
+    "rdi": "test-rdi",
+    "status": "RUNNING",
+    "started_at": "2024-01-01T00:00:00Z",
+    "completed_at": None,
+    "statistics": {},
+}
 
 
 @pytest.fixture
 def client_config(test_config_dict: dict) -> Config:
     """Create a Config instance for testing."""
     return Config.from_data(test_config_dict)
+
+
+# ---------------------------------------------------------------------------
+# Initialization
+# ---------------------------------------------------------------------------
 
 
 @pytest.mark.asyncio
@@ -31,10 +65,8 @@ async def test_client_initialization_success(client_config: Config) -> None:
 @pytest.mark.asyncio
 async def test_client_initialization_missing_cert(test_config_dict: dict, temp_dir: Path) -> None:
     """Test client initialization fails when certificate file is missing."""
-    # Point to non-existent certificate
     test_config_dict["client_cert_path"] = str(temp_dir / "nonexistent-cert.pem")
     config = Config.from_data(test_config_dict)
-
     with pytest.raises(ApiClientError, match="Client certificate not found"):
         ApiClient(config)
 
@@ -42,10 +74,8 @@ async def test_client_initialization_missing_cert(test_config_dict: dict, temp_d
 @pytest.mark.asyncio
 async def test_client_initialization_missing_key(test_config_dict: dict, temp_dir: Path) -> None:
     """Test client initialization fails when key file is missing."""
-    # Point to non-existent key
     test_config_dict["client_key_path"] = str(temp_dir / "nonexistent-key.pem")
     config = Config.from_data(test_config_dict)
-
     with pytest.raises(ApiClientError, match="Client key not found"):
         ApiClient(config)
 
@@ -53,196 +83,35 @@ async def test_client_initialization_missing_key(test_config_dict: dict, temp_di
 @pytest.mark.asyncio
 async def test_client_initialization_missing_ca_cert(test_config_dict: dict, temp_dir: Path) -> None:
     """Test client initialization fails when CA cert is specified but missing."""
-    # Point to non-existent CA cert
     test_config_dict["ca_cert_path"] = str(temp_dir / "nonexistent-ca.pem")
     config = Config.from_data(test_config_dict)
-
     with pytest.raises(ApiClientError, match="CA certificate not found"):
         ApiClient(config)
 
 
-@pytest.mark.asyncio
-@respx.mock
-async def test_create_or_update_arc_success(client_config: Config) -> None:
-    """Test successful create_or_update_arc request."""
-    # Set low polling delay for tests to speed up
-    client_config.polling_initial_delay = 0.01
-
-    # Mock the API response
-    # Mock the API response (Task submission)
-    task_response = {"task_id": "task-123", "status": "PENDING"}
-
-    # Mock the Task Status response
-    status_response = {
-        "status": "SUCCESS",
-        "result": {
-            "client_id": "TestClient",
-            "message": "ARC created successfully",
-            "rdi": "test-rdi",
-            "arc": {
-                "id": "test-arc-123",
-                "status": "created",
-                "timestamp": "2024-01-01T12:00:00Z",
-            },
-        },
-    }
-
-    route_post = respx.post(f"{client_config.api_url}v2/arcs").mock(
-        return_value=httpx.Response(http.HTTPStatus.ACCEPTED, json=task_response)
-    )
-
-    route_get = respx.get(f"{client_config.api_url}v2/tasks/task-123").mock(
-        return_value=httpx.Response(http.HTTPStatus.OK, json=status_response)
-    )
-
-    # Send request with ARC object
-    arc = ARC.from_arc_investigation(ArcInvestigation.create(identifier="test-arc", title="Test ARC"))
-    async with ApiClient(client_config) as client:
-        response = await client.create_or_update_arc(
-            rdi="test-rdi",
-            arc=arc,
-        )
-
-    # Verify
-    assert route_post.called
-    assert route_get.called
-    assert isinstance(response, ArcOperationResult)
-    assert response.rdi == "test-rdi"
-    assert response.arc.id == "test-arc-123"
-    assert response.arc.status == "created"
-
-
-@pytest.mark.asyncio
-@respx.mock
-async def test_create_or_update_arc_http_error(client_config: Config) -> None:
-    """Test create_or_update_arc with HTTP error response."""
-    # Mock an error response
-    respx.post(f"{client_config.api_url}v2/arcs").mock(
-        return_value=httpx.Response(http.HTTPStatus.FORBIDDEN, text="Forbidden")
-    )
-
-    # Should raise ApiClientError
-    arc = ARC.from_arc_investigation(ArcInvestigation.create(identifier="test", title="Test"))
-    async with ApiClient(client_config) as client:
-        with pytest.raises(ApiClientError, match=f"HTTP error {http.HTTPStatus.FORBIDDEN.value}"):
-            await client.create_or_update_arc(
-                rdi="test-rdi",
-                arc=arc,
-            )
-
-
-@pytest.mark.asyncio
-@respx.mock
-async def test_create_or_update_arc_network_error(client_config: Config) -> None:
-    """Test create_or_update_arc with network error."""
-    # Set low backoff for tests to speed up
-    client_config.retry_backoff_factor = 0.01
-
-    # Mock a network error
-    respx.post(f"{client_config.api_url}v2/arcs").mock(side_effect=httpx.ConnectError("Connection refused"))
-
-    # Should raise ApiClientError
-    arc = ARC.from_arc_investigation(ArcInvestigation.create(identifier="test", title="Test"))
-    async with ApiClient(client_config) as client:
-        with pytest.raises(ApiClientError, match="Request failed after 3 retries"):
-            await client.create_or_update_arc(
-                rdi="test-rdi",
-                arc=arc,
-            )
-
-
-@pytest.mark.asyncio
-async def test_async_context_manager(client_config: Config) -> None:
-    """Test that async context manager properly initializes and cleans up."""
-    async with ApiClient(client_config) as client:
-        assert isinstance(client, ApiClient)
-
-    # After context exit, client should be closed
-    # (we can't easily verify this without accessing private attributes)
-
-
-@pytest.mark.asyncio
-async def test_manual_close(client_config: Config) -> None:
-    """Test manual close of the client."""
-    client = ApiClient(client_config)
-
-    # Create the HTTP client by calling _get_client
-    http_client = client._get_client()  # noqa: SLF001
-    assert http_client is not None
-
-    # Close manually
-    await client.aclose()
-
-    # Client should be None after close
-    assert client._client is None  # noqa: SLF001
+# ---------------------------------------------------------------------------
+# SSL / certificate wiring
+# ---------------------------------------------------------------------------
 
 
 @pytest.mark.asyncio
 async def test_client_uses_certificates(test_config_dict: dict, test_cert_pem: tuple[Path, Path]) -> None:
-    """Test that client is configured with the correct certificates."""
+    """Test that the client is configured with the correct certificates."""
     cert_path, key_path = test_cert_pem
-
-    # Update config to use the test certificates
     test_config_dict["client_cert_path"] = str(cert_path)
     test_config_dict["client_key_path"] = str(key_path)
     config = Config.from_data(test_config_dict)
 
-    # Patch httpx.AsyncClient to capture the cert argument
     with patch("middleware.api_client.api_client.httpx.AsyncClient") as mock_client_class:
-        # Configure the mock to return an AsyncMock instance with an async aclose method
         mock_instance = AsyncMock()
         mock_client_class.return_value = mock_instance
-
         client = ApiClient(config)
         client._get_client()  # noqa: SLF001
-
-        # Verify AsyncClient was called with the correct verify parameter
         mock_client_class.assert_called_once()
         call_kwargs = mock_client_class.call_args.kwargs
-
-        # httpx now expects verify as an ssl.SSLContext with loaded cert chain
         assert "verify" in call_kwargs
-        verify_param = call_kwargs["verify"]
-        assert isinstance(verify_param, ssl.SSLContext)
-
+        assert isinstance(call_kwargs["verify"], ssl.SSLContext)
         await client.aclose()
-
-
-@pytest.mark.asyncio
-@respx.mock
-async def test_client_headers(client_config: Config) -> None:
-    """Test that client sends correct headers."""
-    # Set low polling delay for tests to speed up
-    client_config.polling_initial_delay = 0.01
-
-    task_response = {"task_id": "task-headers", "status": "PENDING"}
-    status_response = {
-        "status": "SUCCESS",
-        "result": {
-            "client_id": "test",
-            "message": "ok",
-            "rdi": "test",
-            "arc": {"id": "arc-1", "status": "created", "timestamp": "2024-01-01T00:00:00Z"},
-        },
-    }
-
-    route_post = respx.post(f"{client_config.api_url}v2/arcs").mock(
-        return_value=httpx.Response(http.HTTPStatus.ACCEPTED, json=task_response)
-    )
-
-    respx.get(f"{client_config.api_url}v2/tasks/task-headers").mock(
-        return_value=httpx.Response(http.HTTPStatus.OK, json=status_response)
-    )
-
-    async with ApiClient(client_config) as client:
-        # Use a dict so it's treated as pre-serialized, avoiding JSON serialization issues with Mock
-        await client.create_or_update_arc(rdi="test", arc={"id": "mock-arc"})
-
-    # Verify headers
-    assert route_post.called
-    last_request = route_post.calls.last.request
-    assert last_request.headers["accept"] == "application/json"
-    assert last_request.headers["content-type"] == "application/json"
 
 
 @pytest.mark.asyncio
@@ -251,10 +120,8 @@ async def test_client_verify_ssl_false(test_config_dict: dict) -> None:
     test_config_dict["verify_ssl"] = "false"
     config = Config.from_data(test_config_dict)
     client = ApiClient(config)
-
     with patch("httpx.AsyncClient") as mock_client:
         client._get_client()  # noqa: SLF001
-        mock_client.assert_called_once()
         _, kwargs = mock_client.call_args
         assert kwargs["verify"] is False
 
@@ -267,7 +134,6 @@ async def test_client_with_ca_cert(test_config_dict: dict, temp_dir: Path) -> No
     test_config_dict["ca_cert_path"] = str(ca_cert)
     config = Config.from_data(test_config_dict)
     client = ApiClient(config)
-
     with patch("httpx.AsyncClient") as mock_client, patch("ssl.create_default_context") as mock_ssl:
         mock_ctx = mock_ssl.return_value
         client._get_client()  # noqa: SLF001
@@ -285,14 +151,11 @@ async def test_client_with_ca_and_mtls_cert(test_config_dict: dict, temp_dir: Pa
     cert_path.write_text("fake-cert")
     key_path = temp_dir / "client.key"
     key_path.write_text("fake-key")
-
     test_config_dict["ca_cert_path"] = str(ca_cert)
     test_config_dict["client_cert_path"] = str(cert_path)
     test_config_dict["client_key_path"] = str(key_path)
-
     config = Config.from_data(test_config_dict)
     client = ApiClient(config)
-
     with patch("httpx.AsyncClient") as mock_client, patch("ssl.create_default_context") as mock_ssl:
         mock_ctx = mock_ssl.return_value
         client._get_client()  # noqa: SLF001
@@ -302,83 +165,261 @@ async def test_client_with_ca_and_mtls_cert(test_config_dict: dict, temp_dir: Pa
         assert kwargs["verify"] == mock_ctx
 
 
+# ---------------------------------------------------------------------------
+# Lifecycle
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_async_context_manager(client_config: Config) -> None:
+    """Test that async context manager works correctly."""
+    async with ApiClient(client_config) as client:
+        assert isinstance(client, ApiClient)
+
+
+@pytest.mark.asyncio
+async def test_manual_close(client_config: Config) -> None:
+    """Test manual close of the client."""
+    client = ApiClient(client_config)
+    http_client = client._get_client()  # noqa: SLF001
+    assert http_client is not None
+    await client.aclose()
+    assert client._client is None  # noqa: SLF001
+
+
+# ---------------------------------------------------------------------------
+# create_or_update_arc  (POST v3/arcs)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_create_or_update_arc_success(client_config: Config) -> None:
+    """Test successful create_or_update_arc with v3 endpoint."""
+    route = respx.post(f"{client_config.api_url}v3/arcs").mock(
+        return_value=httpx.Response(http.HTTPStatus.OK, json=_ARC_RESPONSE)
+    )
+
+    arc = ARC.from_arc_investigation(ArcInvestigation.create(identifier="test-arc", title="Test ARC"))
+    async with ApiClient(client_config) as client:
+        response = await client.create_or_update_arc(rdi="test-rdi", arc=arc)
+
+    assert route.called
+    assert isinstance(response, ArcResponse)
+    assert response.arc_id == "arc-123"
+    assert response.status == "created"
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_create_or_update_arc_with_dict(client_config: Config) -> None:
+    """Test create_or_update_arc with a pre-serialised dict."""
+    respx.post(f"{client_config.api_url}v3/arcs").mock(
+        return_value=httpx.Response(http.HTTPStatus.OK, json=_ARC_RESPONSE)
+    )
+    async with ApiClient(client_config) as client:
+        response = await client.create_or_update_arc(rdi="test-rdi", arc={"id": "mock-arc"})
+    assert isinstance(response, ArcResponse)
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_create_or_update_arc_http_error(client_config: Config) -> None:
+    """Test create_or_update_arc with an HTTP error response."""
+    respx.post(f"{client_config.api_url}v3/arcs").mock(
+        return_value=httpx.Response(http.HTTPStatus.FORBIDDEN, text="Forbidden")
+    )
+    arc = ARC.from_arc_investigation(ArcInvestigation.create(identifier="test", title="Test"))
+    async with ApiClient(client_config) as client:
+        with pytest.raises(ApiClientError, match=f"HTTP error {http.HTTPStatus.FORBIDDEN.value}"):
+            await client.create_or_update_arc(rdi="test-rdi", arc=arc)
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_create_or_update_arc_network_error(client_config: Config) -> None:
+    """Test create_or_update_arc with a network error."""
+    client_config.retry_backoff_factor = 0.01
+    respx.post(f"{client_config.api_url}v3/arcs").mock(side_effect=httpx.ConnectError("Connection refused"))
+    arc = ARC.from_arc_investigation(ArcInvestigation.create(identifier="test", title="Test"))
+    async with ApiClient(client_config) as client:
+        with pytest.raises(ApiClientError, match="Request failed after 3 retries"):
+            await client.create_or_update_arc(rdi="test-rdi", arc=arc)
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_create_or_update_arc_invalid_response(client_config: Config) -> None:
+    """Test create_or_update_arc raises when the server returns unexpected JSON."""
+    respx.post(f"{client_config.api_url}v3/arcs").mock(
+        return_value=httpx.Response(http.HTTPStatus.OK, json={"unexpected": "data"})
+    )
+    async with ApiClient(client_config) as client:
+        with pytest.raises(ApiClientError, match="Invalid ARC response"):
+            await client.create_or_update_arc(rdi="test-rdi", arc={"id": "mock"})
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_create_or_update_arc_sends_correct_headers(client_config: Config) -> None:
+    """Test that the correct Content-Type and Accept headers are sent."""
+    route = respx.post(f"{client_config.api_url}v3/arcs").mock(
+        return_value=httpx.Response(http.HTTPStatus.OK, json=_ARC_RESPONSE)
+    )
+    async with ApiClient(client_config) as client:
+        await client.create_or_update_arc(rdi="test", arc={"id": "mock-arc"})
+
+    assert route.called
+    req = route.calls.last.request
+    assert req.headers["accept"] == "application/json"
+    assert req.headers["content-type"] == "application/json"
+
+
+# ---------------------------------------------------------------------------
+# Generic _get / error paths
+# ---------------------------------------------------------------------------
+
+
 @pytest.mark.asyncio
 @respx.mock
 async def test_get_http_error(client_config: Config) -> None:
     """Test _get with an HTTP error."""
-    respx.get(f"{client_config.api_url}v2/test").mock(return_value=httpx.Response(http.HTTPStatus.NOT_FOUND))
+    respx.get(f"{client_config.api_url}v3/harvests/missing").mock(
+        return_value=httpx.Response(http.HTTPStatus.NOT_FOUND)
+    )
     client = ApiClient(client_config)
     with pytest.raises(ApiClientError, match="HTTP error 404"):
-        await client._get("v2/test")  # noqa: SLF001
+        await client._get("v3/harvests/missing")  # noqa: SLF001
 
 
 @pytest.mark.asyncio
 @respx.mock
 async def test_get_network_error(client_config: Config) -> None:
     """Test _get with a network error."""
-    # Set low backoff for tests to speed up
     client_config.retry_backoff_factor = 0.01
-
-    respx.get(f"{client_config.api_url}v2/test").mock(side_effect=httpx.RequestError("Network error"))
+    respx.get(f"{client_config.api_url}v3/harvests").mock(side_effect=httpx.RequestError("Network error"))
     client = ApiClient(client_config)
     with pytest.raises(ApiClientError, match="Request failed after 3 retries: Network error"):
-        await client._get("v2/test")  # noqa: SLF001
+        await client._get("v3/harvests")  # noqa: SLF001
+
+
+# ---------------------------------------------------------------------------
+# Harvest endpoints
+# ---------------------------------------------------------------------------
 
 
 @pytest.mark.asyncio
 @respx.mock
-async def test_create_or_update_arc_no_task_id(client_config: Config) -> None:
-    """Test create_or_update_arc when API returns no task_id."""
-    respx.post(f"{client_config.api_url}v2/arcs").mock(return_value=httpx.Response(http.HTTPStatus.ACCEPTED, json={}))
-    client = ApiClient(client_config)
-    with pytest.raises(ApiClientError, match="Invalid response from API during submission"):
-        await client.create_or_update_arc(rdi="test", arc={"id": "mock-arc"})
-
-
-@pytest.mark.asyncio
-@respx.mock
-async def test_create_or_update_arc_task_failure(client_config: Config) -> None:
-    """Test create_or_update_arc when poll returns FAILURE."""
-    task_response = {"task_id": "failed-task", "status": "PENDING"}
-    status_response = {
-        "status": "FAILURE",
-        "message": "Something went wrong",
-    }
-
-    respx.post(f"{client_config.api_url}v2/arcs").mock(
-        return_value=httpx.Response(http.HTTPStatus.ACCEPTED, json=task_response)
+async def test_create_harvest_success(client_config: Config) -> None:
+    """Test successful harvest creation."""
+    respx.post(f"{client_config.api_url}v3/harvests").mock(
+        return_value=httpx.Response(http.HTTPStatus.OK, json=_HARVEST_RESPONSE)
     )
-    respx.get(f"{client_config.api_url}v2/tasks/failed-task").mock(
-        return_value=httpx.Response(http.HTTPStatus.OK, json=status_response)
-    )
-
-    client = ApiClient(client_config)
-    with (
-        patch("asyncio.sleep", return_value=None),
-        pytest.raises(ApiClientError, match="Task FAILURE: Something went wrong"),
-    ):
-        await client.create_or_update_arc(rdi="test", arc={"id": "mock-arc"})
-
-
-@pytest.mark.asyncio
-@respx.mock
-async def test_poll_for_result_timeout(client_config: Config) -> None:
-    """Test that _poll_for_result raises ApiClientError on timeout."""
-    # Set a short timeout for the test (in minutes)
-    client_config.polling_timeout = 0.01  # 0.6 seconds
-    client_config.polling_initial_delay = 0.2
-
-    # Mock the Task Status response to stay PENDING
-    status_response = {"status": "PENDING"}
-
-    respx.get(f"{client_config.api_url}v2/tasks/task-timeout").mock(
-        return_value=httpx.Response(http.HTTPStatus.OK, json=status_response)
-    )
-
     async with ApiClient(client_config) as client:
-        # We mock asyncio.sleep to avoid waiting during the test
-        # but the logic still increments time_waited based on 'delay'
-        with patch("asyncio.sleep", return_value=None) as mock_sleep:
-            with pytest.raises(ApiClientError, match="timed out after 0.01 minutes"):
-                await client._poll_for_result("task-timeout")  # noqa: SLF001
-            assert mock_sleep.called
+        harvest = await client.create_harvest(rdi="test-rdi", expected_datasets=10)
+    assert isinstance(harvest, HarvestResponse)
+    assert harvest.harvest_id == "harvest-456"
+    assert harvest.rdi == "test-rdi"
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_create_harvest_without_expected_datasets(client_config: Config) -> None:
+    """Test harvest creation without expected_datasets."""
+    respx.post(f"{client_config.api_url}v3/harvests").mock(
+        return_value=httpx.Response(http.HTTPStatus.OK, json=_HARVEST_RESPONSE)
+    )
+    async with ApiClient(client_config) as client:
+        harvest = await client.create_harvest(rdi="test-rdi")
+    assert isinstance(harvest, HarvestResponse)
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_list_harvests(client_config: Config) -> None:
+    """Test listing harvest runs."""
+    respx.get(f"{client_config.api_url}v3/harvests").mock(
+        return_value=httpx.Response(http.HTTPStatus.OK, json=[_HARVEST_RESPONSE, _HARVEST_RESPONSE])
+    )
+    async with ApiClient(client_config) as client:
+        harvests = await client.list_harvests()
+    assert len(harvests) == 2  # noqa: PLR2004
+    assert all(isinstance(h, HarvestResponse) for h in harvests)
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_list_harvests_with_rdi_filter(client_config: Config) -> None:
+    """Test listing harvest runs filtered by RDI."""
+    route = respx.get(f"{client_config.api_url}v3/harvests").mock(
+        return_value=httpx.Response(http.HTTPStatus.OK, json=[_HARVEST_RESPONSE])
+    )
+    async with ApiClient(client_config) as client:
+        await client.list_harvests(rdi="test-rdi")
+    assert "rdi=test-rdi" in str(route.calls.last.request.url)
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_get_harvest(client_config: Config) -> None:
+    """Test getting a single harvest run."""
+    respx.get(f"{client_config.api_url}v3/harvests/harvest-456").mock(
+        return_value=httpx.Response(http.HTTPStatus.OK, json=_HARVEST_RESPONSE)
+    )
+    async with ApiClient(client_config) as client:
+        harvest = await client.get_harvest("harvest-456")
+    assert isinstance(harvest, HarvestResponse)
+    assert harvest.harvest_id == "harvest-456"
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_complete_harvest(client_config: Config) -> None:
+    """Test completing a harvest run."""
+    completed_response = {**_HARVEST_RESPONSE, "status": "COMPLETED", "completed_at": "2024-01-01T01:00:00Z"}
+    respx.post(f"{client_config.api_url}v3/harvests/harvest-456/complete").mock(
+        return_value=httpx.Response(http.HTTPStatus.OK, json=completed_response)
+    )
+    async with ApiClient(client_config) as client:
+        harvest = await client.complete_harvest("harvest-456")
+    assert isinstance(harvest, HarvestResponse)
+    assert harvest.status == "COMPLETED"
+    assert harvest.completed_at is not None
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_cancel_harvest(client_config: Config) -> None:
+    """Test cancelling a harvest run."""
+    route = respx.delete(f"{client_config.api_url}v3/harvests/harvest-456").mock(
+        return_value=httpx.Response(http.HTTPStatus.NO_CONTENT)
+    )
+    async with ApiClient(client_config) as client:
+        await client.cancel_harvest("harvest-456")
+    assert route.called
+    assert route.called
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_submit_arc_in_harvest(client_config: Config) -> None:
+    """Test submitting an ARC within a harvest run."""
+    respx.post(f"{client_config.api_url}v3/harvests/harvest-456/arcs").mock(
+        return_value=httpx.Response(http.HTTPStatus.OK, json=_ARC_RESPONSE)
+    )
+    async with ApiClient(client_config) as client:
+        response = await client.submit_arc_in_harvest("harvest-456", arc={"id": "mock-arc"})
+    assert isinstance(response, ArcResponse)
+    assert response.arc_id == "arc-123"
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_submit_arc_in_harvest_invalid_response(client_config: Config) -> None:
+    """Test submit_arc_in_harvest raises on unexpected JSON."""
+    respx.post(f"{client_config.api_url}v3/harvests/harvest-456/arcs").mock(
+        return_value=httpx.Response(http.HTTPStatus.OK, json={"bad": "response"})
+    )
+    async with ApiClient(client_config) as client:
+        with pytest.raises(ApiClientError, match="Invalid ARC response"):
+            await client.submit_arc_in_harvest("harvest-456", arc={"id": "mock"})

@@ -1,9 +1,11 @@
 """Configuration module for the Middleware API Client."""
 
+import logging
+import warnings
 from pathlib import Path
-from typing import Annotated
+from typing import Annotated, ClassVar, Self
 
-from pydantic import Field, field_validator
+from pydantic import Field, field_validator, model_validator
 
 from middleware.shared.config.config_base import ConfigBase
 
@@ -16,6 +18,13 @@ class Config(ConfigBase):
     """
 
     api_url: Annotated[str, Field(description="Base URL of the Middleware API (e.g., https://api.example.com)")]
+    _polling_warning_emitted: ClassVar[bool] = False
+    _polling_fields: ClassVar[set[str]] = {
+        "polling_initial_delay",
+        "polling_max_delay",
+        "polling_backoff_factor",
+        "polling_timeout",
+    }
     client_cert_path: Annotated[
         Path | None, Field(description="Path to the client certificate file in PEM format (optional)")
     ] = None
@@ -32,16 +41,31 @@ class Config(ConfigBase):
     # Retry parameters
     max_retries: Annotated[int, Field(description="Maximum number of retries for transient HTTP errors", ge=0)] = 3
     retry_backoff_factor: Annotated[float, Field(description="Backoff factor for retries", gt=0)] = 2.0
-
-    # Polling parameters
+    # Polling parameters (deprecated)
     polling_initial_delay: Annotated[
-        float, Field(description="Initial delay in seconds between polling requests", gt=0)
+        float,
+        Field(
+            description="Initial delay in seconds between polling requests",
+            gt=0,
+            deprecated=True,
+        ),
     ] = 1.0
     polling_max_delay: Annotated[
-        float, Field(description="Maximum delay in seconds between polling requests", gt=0)
+        float,
+        Field(
+            description="Maximum delay in seconds between polling requests",
+            gt=0,
+            deprecated=True,
+        ),
     ] = 30.0
-    polling_backoff_factor: Annotated[float, Field(description="Factor to increase delay between polls", gt=1.0)] = 1.5
-    polling_timeout: Annotated[float, Field(description="Total timeout for polling in minutes", gt=0)] = 90.0
+    polling_backoff_factor: Annotated[
+        float,
+        Field(description="Factor to increase delay between polls", gt=1.0, deprecated=True),
+    ] = 1.5
+    polling_timeout: Annotated[
+        float,
+        Field(description="Total timeout for polling in minutes", gt=0, deprecated=True),
+    ] = 90.0
 
     @field_validator("api_url")
     @classmethod
@@ -50,3 +74,19 @@ class Config(ConfigBase):
         if not v.endswith("/"):
             return v + "/"
         return v
+
+    @model_validator(mode="after")
+    def warn_deprecated_polling(self: Self) -> Self:
+        """Warn about deprecated polling configuration if any deprecated fields were set.
+
+        This method checks if any deprecated polling-related fields are present in the configuration
+        and emits a warning message if they are used. It ensures that the warning is logged only once
+        during the application's runtime.
+        """
+        cls = type(self)
+        if not cls._polling_warning_emitted and cls._polling_fields.intersection(self.__pydantic_fields_set__):
+            message = "Polling configuration is deprecated; the client no longer polls tasks."
+            logging.warning(message)
+            warnings.warn(message, DeprecationWarning, stacklevel=2)
+            cls._polling_warning_emitted = True
+        return self
