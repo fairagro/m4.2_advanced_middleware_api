@@ -8,8 +8,8 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 from pydantic import SecretStr
 
-from middleware.api.config import CouchDBConfig
 from middleware.api.document_store.arc_document import ArcDocument, ArcEvent, ArcMetadata
+from middleware.api.document_store.config import CouchDBConfig
 from middleware.api.document_store.couchdb import CouchDB
 from middleware.shared.api_models.common.models import ArcEventType, ArcLifecycleStatus
 

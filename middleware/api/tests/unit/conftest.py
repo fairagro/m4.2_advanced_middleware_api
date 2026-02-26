@@ -16,9 +16,11 @@ from middleware.api.api.fastapi_app import Api
 from middleware.api.arc_store.git_repo import GitRepoConfig
 from middleware.api.arc_store.gitlab_api import GitlabApi, GitlabApiConfig
 from middleware.api.business_logic import BusinessLogic
-from middleware.api.config import CeleryConfig, Config, CouchDBConfig
+from middleware.api.config import Config
 from middleware.api.document_store import ArcStoreResult
+from middleware.api.document_store.config import CouchDBConfig
 from middleware.api.utils import calculate_arc_id, extract_identifier
+from middleware.api.worker.config import CeleryConfig
 from middleware.shared.config.config_base import OtelConfig
 
 

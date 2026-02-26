@@ -7,7 +7,7 @@ from aiocouch import CouchDB
 from aiocouch.exception import NotFoundError, PreconditionFailedError
 from pydantic import SecretStr
 
-from middleware.api.config import CouchDBConfig
+from middleware.api.document_store.config import CouchDBConfig
 from middleware.api.document_store.couchdb_client import CouchDBClient
 
 

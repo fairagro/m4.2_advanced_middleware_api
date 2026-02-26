@@ -7,7 +7,7 @@ import uuid
 from datetime import UTC, datetime
 from typing import Any
 
-from middleware.api.config import CouchDBConfig
+from middleware.api.document_store.config import CouchDBConfig
 from middleware.api.document_store.couchdb_client import CouchDBClient
 from middleware.api.utils import calculate_arc_id, extract_identifier
 from middleware.shared.api_models.common.models import ArcEventType, ArcLifecycleStatus, HarvestStatus

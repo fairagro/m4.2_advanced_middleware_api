@@ -3,61 +3,18 @@
 import logging
 import re
 import warnings
-from typing import Annotated, Any, ClassVar, Self
+from typing import Annotated, ClassVar, Self
 
 from cryptography import x509
-from pydantic import BaseModel, ConfigDict, Field, SecretStr, field_validator, model_validator
+from pydantic import ConfigDict, Field, field_validator, model_validator
 
 from middleware.shared.config.config_base import ConfigBase
 
 from .arc_store.git_repo import GitRepoConfig
 from .arc_store.gitlab_api import GitlabApiConfig
-
-
-class CeleryConfig(BaseModel):
-    """Configuration for Celery worker."""
-
-    broker_url: Annotated[
-        SecretStr,
-        Field(description="RabbitMQ broker URL"),
-    ]
-    result_backend: Annotated[
-        SecretStr | None,
-        Field(description="[DEPRECATED] Backend URL for results", deprecated=True),
-    ] = None
-    task_rate_limit: Annotated[str | None, Field(description="Rate limit for tasks (e.g. '10/m')")] = None
-    retry_backoff: Annotated[bool, Field(description="Whether to use exponential backoff for retries")] = True
-    retry_backoff_max: Annotated[int, Field(description="Max backoff time in seconds")] = 3600
-    max_retries: Annotated[int, Field(description="Max number of retries for transient errors")] = 120
-
-    @field_validator("result_backend", mode="before")
-    @classmethod
-    def warn_result_backend_deprecated(cls, v: Any) -> Any:
-        """Warn that result_backend is deprecated."""
-        if v is None:
-            return v
-        logging.warning(
-            "Configuration setting 'celery.result_backend' is deprecated. "
-            "The result backend is now managed internally or no longer required."
-        )
-        return v
-
-
-class CouchDBConfig(BaseModel):
-    """Configuration for CouchDB."""
-
-    url: Annotated[str, Field(description="CouchDB URL")]
-    user: Annotated[str | None, Field(description="CouchDB username")] = None
-    password: Annotated[SecretStr | None, Field(description="CouchDB password")] = None
-    db_name: Annotated[str, Field(description="Name of the database for ARCs and harvests")] = "arcs"
-    max_event_log_size: Annotated[int, Field(default=100, description="Maximum number of events in ARC metadata")] = 100
-
-
-class HarvestConfig(BaseModel):
-    """Configuration for a harvest run."""
-
-    grace_period_days: Annotated[int, Field(description="Days before marking ARC as deleted")] = 14
-    auto_mark_deleted: Annotated[bool, Field(description="Automatically mark ARCs as deleted")] = False
+from .document_store.config import CouchDBConfig
+from .harvest.config import HarvestConfig
+from .worker.config import CeleryConfig
 
 
 class Config(ConfigBase):
