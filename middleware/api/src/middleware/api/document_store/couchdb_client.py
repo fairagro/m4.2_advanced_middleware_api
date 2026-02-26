@@ -11,7 +11,7 @@ import aiohttp
 from aiocouch import CouchDB, Database
 from aiocouch.exception import NotFoundError, PreconditionFailedError
 
-from .config import CouchDBConfig
+from middleware.api.config import CouchDBConfig
 
 logger = logging.getLogger(__name__)
 DEFAULT_QUERY_LIMIT = 100

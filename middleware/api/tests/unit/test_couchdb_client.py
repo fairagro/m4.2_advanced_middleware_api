@@ -8,7 +8,7 @@ from aiocouch.exception import NotFoundError, PreconditionFailedError
 from pydantic import SecretStr
 
 from middleware.api.config import CouchDBConfig
-from middleware.api.couchdb_client import CouchDBClient
+from middleware.api.document_store.couchdb_client import CouchDBClient
 
 
 @pytest.fixture
@@ -49,7 +49,7 @@ async def test_couchdb_client_connect_success(couchdb_client: CouchDBClient) -> 
     couchdb_client : CouchDBClient
         An instance of CouchDBClient initialized with the provided configuration.
     """
-    with patch("middleware.api.couchdb_client.CouchDB") as mock_couchdb:
+    with patch("middleware.api.document_store.couchdb_client.CouchDB") as mock_couchdb:
         mock_instance = mock_couchdb.return_value
         mock_db = AsyncMock()
 
@@ -76,7 +76,7 @@ async def test_couchdb_client_connect_create_db(couchdb_client: CouchDBClient) -
     couchdb_client : CouchDBClient
         An instance of CouchDBClient initialized with the provided configuration.
     """
-    with patch("middleware.api.couchdb_client.CouchDB") as mock_couchdb:
+    with patch("middleware.api.document_store.couchdb_client.CouchDB") as mock_couchdb:
         mock_instance = mock_couchdb.return_value
         # Succeed for system dbs, fail for test_db
         mock_instance.__getitem__ = AsyncMock(
@@ -102,7 +102,7 @@ async def test_couchdb_client_connect_failure(couchdb_client: CouchDBClient) -> 
         An instance of CouchDBClient initialized with the provided configuration.
     """
     with (
-        patch("middleware.api.couchdb_client.CouchDB", side_effect=Exception("Connection Failed")),
+        patch("middleware.api.document_store.couchdb_client.CouchDB", side_effect=Exception("Connection Failed")),
         pytest.raises(Exception, match="Connection Failed"),
     ):
         await couchdb_client.connect()
@@ -319,7 +319,7 @@ async def test_couchdb_client_find(couchdb_client: CouchDBClient) -> None:
 @pytest.mark.asyncio
 async def test_couchdb_client_ensure_system_databases(couchdb_client: CouchDBClient) -> None:
     """Test ensuring system databases exist."""
-    with patch("middleware.api.couchdb_client.CouchDB") as mock_couchdb:
+    with patch("middleware.api.document_store.couchdb_client.CouchDB") as mock_couchdb:
         mock_instance = mock_couchdb.return_value
         # One exists, one missing, one fails
         mock_instance.__getitem__ = AsyncMock(
@@ -343,7 +343,7 @@ async def test_couchdb_client_ensure_system_databases(couchdb_client: CouchDBCli
 @pytest.mark.asyncio
 async def test_couchdb_client_ensure_system_databases_race(couchdb_client: CouchDBClient) -> None:
     """Test ensuring system databases where create fails because it already exists."""
-    with patch("middleware.api.couchdb_client.CouchDB") as mock_couchdb:
+    with patch("middleware.api.document_store.couchdb_client.CouchDB") as mock_couchdb:
         mock_instance = mock_couchdb.return_value
         # All missing
         mock_instance.__getitem__ = AsyncMock(side_effect=NotFoundError("Not Found"))
@@ -369,7 +369,7 @@ async def test_couchdb_client_ensure_system_databases_not_connected(couchdb_clie
 @pytest.mark.asyncio
 async def test_couchdb_client_connect_race_condition(couchdb_client: CouchDBClient) -> None:
     """Test connection with race condition where DB is created between check and create."""
-    with patch("middleware.api.couchdb_client.CouchDB") as mock_couchdb:
+    with patch("middleware.api.document_store.couchdb_client.CouchDB") as mock_couchdb:
         mock_instance = mock_couchdb.return_value
         mock_db = AsyncMock()
 
