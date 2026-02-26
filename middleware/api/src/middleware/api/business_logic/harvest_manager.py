@@ -3,9 +3,9 @@
 import logging
 from typing import Any, Self
 
+from middleware.api.business_logic.config import HarvestConfig
 from middleware.api.document_store import DocumentStore
 from middleware.api.document_store.harvest_document import HarvestDocument
-from middleware.api.harvest.config import HarvestConfig
 from middleware.shared.api_models.common.models import HarvestStatus
 
 logger = logging.getLogger(__name__)

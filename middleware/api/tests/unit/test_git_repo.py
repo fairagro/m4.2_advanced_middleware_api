@@ -12,7 +12,8 @@ import pytest
 from git.exc import GitCommandError
 from pydantic import SecretStr
 
-from middleware.api.arc_store.git_repo import GitContext, GitContextConfig, GitRepo, GitRepoConfig, is_soft_git_error
+from middleware.api.arc_store.config import GitRepoConfig
+from middleware.api.arc_store.git_repo import GitContext, GitContextConfig, GitRepo, is_soft_git_error
 
 
 @pytest.fixture

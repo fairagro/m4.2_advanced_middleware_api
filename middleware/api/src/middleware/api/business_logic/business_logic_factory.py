@@ -6,10 +6,10 @@ from typing import Literal
 from ..arc_store import ArcStore
 from ..arc_store.git_repo import GitRepo
 from ..arc_store.gitlab_api import GitlabApi
-from ..config import Config
 from ..document_store.couchdb import CouchDB
 from ..worker.celery_app import celery_app
-from . import BusinessLogic
+from .business_logic import BusinessLogic
+from .config import BusinessLogicFactoryConfig
 from .task_dispatcher import CeleryTaskDispatcher
 
 logger = logging.getLogger(__name__)
@@ -19,7 +19,7 @@ class BusinessLogicFactory:
     """Factory to assemble BusinessLogic instances."""
 
     @staticmethod
-    def create(config: Config, mode: Literal["api", "worker"]) -> BusinessLogic:
+    def create(config: BusinessLogicFactoryConfig, mode: Literal["api", "worker"]) -> BusinessLogic:
         """Create a BusinessLogic instance provided a config and mode.
 
         Args:

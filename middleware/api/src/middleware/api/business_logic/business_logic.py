@@ -15,13 +15,13 @@ import logging
 from typing import Any, Self
 
 from middleware.api.arc_store import ArcStore
-from middleware.api.config import Config
 from middleware.api.document_store import DocumentStore
 from middleware.api.document_store.arc_document import ArcMetadata
 from middleware.api.worker.celery_app import celery_app
 from middleware.shared.api_models.common.models import ArcOperationResult
 
 from .arc_manager import ArcManager
+from .config import BusinessLogicConfig
 from .exceptions import (
     BusinessLogicError,
     InvalidJsonSemanticError,
@@ -57,7 +57,7 @@ class BusinessLogic:
 
     def __init__(
         self,
-        config: Config,
+        config: BusinessLogicConfig,
         store: ArcStore,
         doc_store: DocumentStore,
         task_dispatcher: TaskDispatcher | None = None,
@@ -81,7 +81,7 @@ class BusinessLogic:
         return self._harvest_manager
 
     @property
-    def config(self) -> Config:
+    def config(self) -> BusinessLogicConfig:
         """Get the configuration."""
         return self._config
 

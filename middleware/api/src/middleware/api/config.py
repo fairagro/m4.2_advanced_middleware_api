@@ -10,10 +10,10 @@ from pydantic import ConfigDict, Field, field_validator, model_validator
 
 from middleware.shared.config.config_base import ConfigBase
 
-from .arc_store.git_repo import GitRepoConfig
+from .arc_store.config import GitRepoConfig
 from .arc_store.gitlab_api import GitlabApiConfig
+from .business_logic.config import HarvestConfig
 from .document_store.config import CouchDBConfig
-from .harvest.config import HarvestConfig
 from .worker.config import CeleryConfig
 
 

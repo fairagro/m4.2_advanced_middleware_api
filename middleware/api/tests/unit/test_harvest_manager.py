@@ -5,9 +5,9 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
+from middleware.api.business_logic.config import HarvestConfig
 from middleware.api.business_logic.harvest_manager import HarvestManager
 from middleware.api.document_store.harvest_document import HarvestDocument, HarvestStatistics
-from middleware.api.harvest.config import HarvestConfig
 from middleware.shared.api_models.common.models import HarvestStatus
 
 

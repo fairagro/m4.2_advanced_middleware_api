@@ -4,7 +4,7 @@
     :class:`GitlabApi` (and its companion :class:`GitlabApiConfig`) are deprecated
     and will be removed in a future release.  Use
     :class:`~middleware.api.arc_store.git_repo.GitRepo` together with
-    :class:`~middleware.api.arc_store.git_repo.GitRepoConfig` instead.
+    :class:`~middleware.api.arc_store.config.GitRepoConfig` instead.
 """
 
 import asyncio
@@ -32,7 +32,7 @@ logger = logging.getLogger(__name__)
 T = TypeVar("T")
 
 
-@deprecated("GitlabApiConfig is deprecated. Use GitRepoConfig from middleware.api.arc_store.git_repo instead.")
+@deprecated("GitlabApiConfig is deprecated. Use GitRepoConfig from middleware.api.arc_store.config instead.")
 class GitlabApiConfig(BaseModel):
     """Configuration for Gitlab API ArcStore."""
 
