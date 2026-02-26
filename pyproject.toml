@@ -98,6 +98,9 @@ known-first-party = ["middleware"]
 force-single-line = false
 combine-as-imports = true
 
+[tool.ruff.lint.per-file-ignores]
+"middleware/*/tests/**/*.py" = ["SLF001"]
+
 # Black and isort replaced by ruff format - configurations removed to avoid conflicts
 
 [tool.mypy]
