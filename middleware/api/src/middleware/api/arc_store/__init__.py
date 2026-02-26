@@ -32,8 +32,8 @@ class ArcStore(ABC):
         """Initialize ArcStore with tracer."""
         self._tracer = trace.get_tracer(__name__)
 
-    @classmethod
-    def arc_id(cls, identifier: str, rdi: str) -> str:
+    @staticmethod
+    def arc_id(identifier: str, rdi: str) -> str:
         """Generate ARC ID."""
         return calculate_arc_id(identifier, rdi)
 
