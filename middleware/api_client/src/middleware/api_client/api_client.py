@@ -4,7 +4,9 @@ import asyncio
 import json
 import logging
 import ssl
+import threading
 from collections.abc import AsyncGenerator, AsyncIterator
+from contextlib import asynccontextmanager
 from http import HTTPStatus
 from typing import TYPE_CHECKING, Any, cast
 
@@ -58,6 +60,49 @@ class ApiClient:
 
     _IDEMPOTENT_METHODS = frozenset({"GET", "HEAD", "OPTIONS", "DELETE"})
     _HTTP_ERROR_BODY_MAX_CHARS = 500
+    _global_request_limiter: asyncio.Semaphore | None = None
+    _global_max_concurrency: int | None = None
+    _global_in_flight_requests: int = 0
+    _global_state_lock = threading.Lock()
+
+    @classmethod
+    def _configure_global_request_limiter(cls, max_concurrency: int) -> None:
+        """Configure the package-wide request concurrency limiter."""
+        with cls._global_state_lock:
+            if (
+                cls._global_max_concurrency is not None
+                and cls._global_max_concurrency != max_concurrency
+                and cls._global_in_flight_requests > 0
+            ):
+                msg = (
+                    "Cannot change ApiClient max_concurrency while requests are in flight. "
+                    "Please reuse one max_concurrency value per process or wait for ongoing requests to finish."
+                )
+                raise ApiClientError(msg)
+
+            if cls._global_request_limiter is None or cls._global_max_concurrency != max_concurrency:
+                cls._global_request_limiter = asyncio.Semaphore(max_concurrency)
+                cls._global_max_concurrency = max_concurrency
+
+    @classmethod
+    @asynccontextmanager
+    async def _acquire_request_slot(cls) -> AsyncGenerator[None, None]:
+        """Acquire one slot from the package-wide request limiter."""
+        limiter = cls._global_request_limiter
+        if limiter is None:
+            msg = "ApiClient request limiter is not configured"
+            raise ApiClientError(msg)
+
+        await limiter.acquire()
+        with cls._global_state_lock:
+            cls._global_in_flight_requests += 1
+
+        try:
+            yield
+        finally:
+            with cls._global_state_lock:
+                cls._global_in_flight_requests -= 1
+            limiter.release()
 
     @classmethod
     def _should_retry_http_status(cls, method: str, status_code: int) -> bool:
@@ -145,6 +190,8 @@ class ApiClient:
         self._config = config
         self._client: httpx.AsyncClient | None = None
 
+        self._configure_global_request_limiter(config.max_concurrency)
+
         cert_path = config.client_cert_path
         key_path = config.client_key_path
         ca_path = config.ca_cert_path
@@ -229,7 +276,8 @@ class ApiClient:
 
             try:
                 logger.debug("Sending %s request to %s (attempt %d)", method, path, attempt + 1)
-                resp = await client.request(method, path, **kwargs)
+                async with self._acquire_request_slot():
+                    resp = await client.request(method, path, **kwargs)
 
                 # Retry on transient server-side errors before raising
                 if self._should_retry_http_status(method, resp.status_code) and attempt < self._config.max_retries:
@@ -455,7 +503,6 @@ class ApiClient:
         arcs: "AsyncGenerator[ARC | dict[str, Any], None] | AsyncIterator[ARC | dict[str, Any]]",
         expected_datasets: int | None = None,
         cancel_on_error: bool = True,
-        max_concurrency: int | None = None,
     ) -> HarvestResult:
         """Create a harvest, upload all ARCs from an async generator, then complete it.
 
@@ -477,9 +524,6 @@ class ApiClient:
             expected_datasets: Optional hint about the total number of ARCs.
             cancel_on_error: Cancel the harvest when an exception is raised
                 during submission (default: ``True``).
-            max_concurrency: Optional override for number of ARC uploads to run
-                concurrently. If omitted, uses
-                ``config.harvest_arcs_max_concurrency``.
 
         Returns:
             :class:`HarvestResult` of the completed harvest.
@@ -498,18 +542,12 @@ class ApiClient:
             async with ApiClient(config) as client:
                 result = await client.harvest_arcs("my-rdi", my_arcs())
         """
-        effective_max_concurrency = (
-            self._config.harvest_arcs_max_concurrency if max_concurrency is None else max_concurrency
-        )
-        if effective_max_concurrency < 1:
-            raise ValueError("max_concurrency must be >= 1")
-
         harvest = await self.create_harvest(rdi, expected_datasets=expected_datasets)
         harvest_id = harvest.harvest_id
         logger.info("[%s] Started harvest %s for RDI %s", rdi, harvest_id, rdi)
 
         try:
-            await self._submit_arcs_parallel(harvest_id, arcs, effective_max_concurrency)
+            await self._submit_arcs_parallel(harvest_id, arcs, self._config.max_concurrency)
         except Exception:
             if cancel_on_error:
                 logger.warning("[%s] Error during ARC submission, cancelling harvest %s", rdi, harvest_id)

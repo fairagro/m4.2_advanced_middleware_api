@@ -79,7 +79,7 @@ asyncio.run(main())
 | `ca_cert_path` | string | No | null | Path to CA certificate for server verification |
 | `timeout` | float | No | 30.0 | Request timeout in seconds |
 | `verify_ssl` | bool | No | true | Enable SSL certificate verification |
-| `harvest_arcs_max_concurrency` | int | No | 10 | Default concurrent uploads for `harvest_arcs` |
+| `max_concurrency` | int | No | 10 | Maximum concurrent API requests (also default for `harvest_arcs`) |
 
 ## API Methods
 
@@ -114,12 +114,11 @@ response = await client.create_or_update_arc(
 )
 ```
 
-### `harvest_arcs(rdi: str, arcs: AsyncIterator[ARC | dict], expected_datasets: int | None = None, cancel_on_error: bool = True, max_concurrency: int | None = None) -> HarvestResult`
+### `harvest_arcs(rdi: str, arcs: AsyncIterator[ARC | dict], expected_datasets: int | None = None, cancel_on_error: bool = True) -> HarvestResult`
 
 Convenience workflow to create a harvest, upload all ARCs from an async iterator, and complete the harvest.
 
-- Uses `config.harvest_arcs_max_concurrency` by default.
-- `max_concurrency` can override this per call.
+- Uses `config.max_concurrency` by default.
 
 All errors are raised as `ApiClientError` exceptions:
 

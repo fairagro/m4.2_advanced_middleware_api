@@ -59,19 +59,19 @@ def test_config_with_defaults() -> None:
     assert config.timeout == 30.0  # noqa: PLR2004
     assert config.verify_ssl is True
     assert config.follow_redirects is True
-    assert config.harvest_arcs_max_concurrency == 10  # noqa: PLR2004
+    assert config.max_concurrency == 10  # noqa: PLR2004
 
 
-def test_config_harvest_arcs_max_concurrency_validation() -> None:
-    """Test that harvest_arcs_max_concurrency must be >= 1."""
+def test_config_max_concurrency_validation() -> None:
+    """Test that max_concurrency must be >= 1."""
     with pytest.raises(ValidationError) as exc_info:
         Config(
             api_url="https://api.example.com",
-            harvest_arcs_max_concurrency=0,
+            max_concurrency=0,
             otel=OtelConfig(),
         )
 
-    assert "harvest_arcs_max_concurrency" in str(exc_info.value)
+    assert "max_concurrency" in str(exc_info.value)
 
 
 def test_config_trailing_slash_validator() -> None:
