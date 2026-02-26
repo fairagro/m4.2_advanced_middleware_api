@@ -31,14 +31,12 @@ def _create_test_cert(oid: x509.ObjectIdentifier, rdis: list[str]) -> str:
     private_key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
 
     # Generate certificate
-    subject = issuer = x509.Name(
-        [
-            x509.NameAttribute(NameOID.COUNTRY_NAME, "DE"),
-            x509.NameAttribute(NameOID.STATE_OR_PROVINCE_NAME, "Some-State"),
-            x509.NameAttribute(NameOID.ORGANIZATION_NAME, "Internet Widgits Pty Ltd"),
-            x509.NameAttribute(NameOID.COMMON_NAME, "TestClient"),
-        ]
-    )
+    subject = issuer = x509.Name([
+        x509.NameAttribute(NameOID.COUNTRY_NAME, "DE"),
+        x509.NameAttribute(NameOID.STATE_OR_PROVINCE_NAME, "Some-State"),
+        x509.NameAttribute(NameOID.ORGANIZATION_NAME, "Internet Widgits Pty Ltd"),
+        x509.NameAttribute(NameOID.COMMON_NAME, "TestClient"),
+    ])
 
     # Create custom extension with RDIs as SEQUENCE of UTF8Strings
     utf8_bytes = b"".join(UTF8String(rdi).dump() for rdi in rdis)
@@ -56,7 +54,8 @@ def _create_test_cert(oid: x509.ObjectIdentifier, rdis: list[str]) -> str:
     custom_extension = x509.UnrecognizedExtension(oid, extension_value)
 
     the_cert = (
-        x509.CertificateBuilder()
+        x509
+        .CertificateBuilder()
         .subject_name(subject)
         .issuer_name(issuer)
         .public_key(private_key.public_key())

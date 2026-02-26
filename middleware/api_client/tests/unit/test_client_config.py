@@ -78,13 +78,11 @@ def test_config_default_values() -> None:
         cert_path.write_text("fake cert")
         key_path.write_text("fake key")
 
-        config = Config.from_data(
-            {
-                "api_url": "https://api.example.com",
-                "client_cert_path": str(cert_path),
-                "client_key_path": str(key_path),
-            }
-        )
+        config = Config.from_data({
+            "api_url": "https://api.example.com",
+            "client_cert_path": str(cert_path),
+            "client_key_path": str(key_path),
+        })
 
         assert config.log_level == "INFO"  # Default from ConfigBase
         assert config.timeout == 30.0  # noqa: PLR2004
@@ -102,14 +100,12 @@ def test_config_invalid_timeout() -> None:
         key_path.write_text("fake key")
 
         with pytest.raises(ValidationError):  # Pydantic ValidationError
-            Config.from_data(
-                {
-                    "api_url": "https://api.example.com",
-                    "client_cert_path": str(cert_path),
-                    "client_key_path": str(key_path),
-                    "timeout": "-1.0",  # Invalid: must be > 0
-                }
-            )
+            Config.from_data({
+                "api_url": "https://api.example.com",
+                "client_cert_path": str(cert_path),
+                "client_key_path": str(key_path),
+                "timeout": "-1.0",  # Invalid: must be > 0
+            })
 
 
 def test_config_missing_required_fields() -> None:
@@ -117,12 +113,10 @@ def test_config_missing_required_fields() -> None:
 
     Client certificates are now optional, so only api_url is required.
     """
-    config = Config.from_data(
-        {
-            "api_url": "https://api.example.com",
-            # client_cert_path and client_key_path are optional
-        }
-    )
+    config = Config.from_data({
+        "api_url": "https://api.example.com",
+        # client_cert_path and client_key_path are optional
+    })
     assert config.api_url == "https://api.example.com/"
     assert config.client_cert_path is None
     assert config.client_key_path is None
@@ -131,8 +125,6 @@ def test_config_missing_required_fields() -> None:
 def test_config_missing_api_url() -> None:
     """Test configuration with missing required api_url field."""
     with pytest.raises(ValidationError):  # Pydantic ValidationError
-        Config.from_data(
-            {
-                # Missing api_url (the only required field)
-            }
-        )
+        Config.from_data({
+            # Missing api_url (the only required field)
+        })
