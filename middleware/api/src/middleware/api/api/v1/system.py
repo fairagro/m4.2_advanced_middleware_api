@@ -61,8 +61,7 @@ async def health_check(
     if not is_healthy:
         response.status_code = HTTPStatus.SERVICE_UNAVAILABLE
 
-    return v1_models.HealthResponse(
-        status="ok" if is_healthy else "error",
-        redis_reachable=services.get("redis", False),
-        rabbitmq_reachable=services.get("rabbitmq", False),
-    )
+    return v1_models.HealthResponse.model_validate({
+        "status": "ok" if is_healthy else "error",
+        "rabbitmq_reachable": services.get("rabbitmq", False),
+    })

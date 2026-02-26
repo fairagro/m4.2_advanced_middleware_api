@@ -112,7 +112,6 @@ class BusinessLogic:
         return {
             "couchdb_reachable": couchdb_ok,
             "rabbitmq": rabbitmq_ok,
-            "redis": True,  # Kept for backward compatibility, Redis is no longer used
         }
 
     @classmethod

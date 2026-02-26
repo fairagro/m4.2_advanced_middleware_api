@@ -79,7 +79,7 @@ def test_health_check_success(client: TestClient, middleware_api: Api, cert: str
     with unittest.mock.patch.object(
         middleware_api.business_logic,
         "health_check",
-        side_effect=AsyncMock(return_value={"couchdb_reachable": True, "redis": True, "rabbitmq": True}),
+        side_effect=AsyncMock(return_value={"couchdb_reachable": True, "rabbitmq": True}),
     ):
         r = client.get(
             "/v1/health",
@@ -102,7 +102,7 @@ def test_health_check_failure(client: TestClient, middleware_api: Api, cert: str
     with unittest.mock.patch.object(
         middleware_api.business_logic,
         "health_check",
-        side_effect=AsyncMock(return_value={"couchdb_reachable": False, "redis": False, "rabbitmq": False}),
+        side_effect=AsyncMock(return_value={"couchdb_reachable": False, "rabbitmq": False}),
     ):
         r = client.get(
             "/v1/health",
@@ -115,7 +115,7 @@ def test_health_check_failure(client: TestClient, middleware_api: Api, cert: str
         assert r.status_code == http.HTTPStatus.SERVICE_UNAVAILABLE
         assert r.json() == {
             "status": "error",
-            "redis_reachable": False,
+            "redis_reachable": True,
             "rabbitmq_reachable": False,
         }
 
@@ -125,7 +125,7 @@ def test_health_check_v2_success(client: TestClient, middleware_api: Api, cert: 
     with unittest.mock.patch.object(
         middleware_api.business_logic,
         "health_check",
-        side_effect=AsyncMock(return_value={"couchdb_reachable": True, "redis": True, "rabbitmq": True}),
+        side_effect=AsyncMock(return_value={"couchdb_reachable": True, "rabbitmq": True}),
     ):
         r = client.get(
             "/v2/health",
@@ -139,7 +139,6 @@ def test_health_check_v2_success(client: TestClient, middleware_api: Api, cert: 
         assert r.json() == {
             "status": "ok",
             "services": {
-                "redis": True,
                 "rabbitmq": True,
                 "couchdb_reachable": True,
             },
@@ -151,7 +150,7 @@ def test_health_check_v2_couchdb_failure(client: TestClient, middleware_api: Api
     with unittest.mock.patch.object(
         middleware_api.business_logic,
         "health_check",
-        side_effect=AsyncMock(return_value={"couchdb_reachable": False, "redis": True, "rabbitmq": True}),
+        side_effect=AsyncMock(return_value={"couchdb_reachable": False, "rabbitmq": True}),
     ):
         r = client.get(
             "/v2/health",

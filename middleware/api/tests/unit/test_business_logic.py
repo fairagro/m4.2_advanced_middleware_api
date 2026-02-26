@@ -112,7 +112,7 @@ async def test_api_mode_sync_to_gitlab_forbidden(api_logic: BusinessLogic) -> No
 
 @pytest.mark.asyncio
 async def test_health_check(api_logic: BusinessLogic, mock_doc_store: MagicMock) -> None:
-    """Test health_check includes all systems."""
+    """Test health_check includes only real dependencies."""
     mock_doc_store.health_check.return_value = True
 
     # Mock rabbitmq success via celery_app
@@ -125,7 +125,6 @@ async def test_health_check(api_logic: BusinessLogic, mock_doc_store: MagicMock)
         assert result == {
             "couchdb_reachable": True,
             "rabbitmq": True,
-            "redis": True,  # Now always True for compatibility
         }
 
 
@@ -141,7 +140,6 @@ async def test_health_check_failures(api_logic: BusinessLogic, mock_doc_store: M
         status = await api_logic.health_check()
         assert status["couchdb_reachable"] is False
         assert status["rabbitmq"] is False
-        assert status["redis"] is True  # Always True even if other systems fail
 
 
 @pytest.mark.asyncio
