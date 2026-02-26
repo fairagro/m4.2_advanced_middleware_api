@@ -114,11 +114,13 @@ response = await client.create_or_update_arc(
 )
 ```
 
-### `harvest_arcs(rdi: str, arcs: AsyncIterator[ARC | dict], expected_datasets: int | None = None, cancel_on_error: bool = True) -> HarvestResult`
+### `harvest_arcs(rdi: str, arcs: AsyncIterator[ARC | dict], expected_datasets: int | None = None) -> HarvestResult`
 
 Convenience workflow to create a harvest, upload all ARCs from an async iterator, and complete the harvest.
 
 - Uses `config.max_concurrency` by default.
+- Continues on item-level submission errors and skips failed items.
+- Cancels the harvest only for catastrophic errors.
 
 All errors are raised as `ApiClientError` exceptions:
 

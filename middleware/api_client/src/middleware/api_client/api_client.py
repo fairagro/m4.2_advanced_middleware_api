@@ -137,6 +137,27 @@ class ApiClient:
             logger.error(msg)
             raise ApiClientError(msg, status_code=resp.status_code) from e
 
+    @classmethod
+    def _is_catastrophic_harvest_error(cls, error: Exception) -> bool:
+        """Return whether a harvest submission error should abort the whole harvest."""
+        if not isinstance(error, ApiClientError):
+            return True
+
+        status_code = error.status_code
+        if status_code is None:
+            return True
+
+        return (
+            status_code
+            in {
+                HTTPStatus.UNAUTHORIZED,
+                HTTPStatus.FORBIDDEN,
+                HTTPStatus.NOT_FOUND,
+                HTTPStatus.CONFLICT,
+            }
+            or status_code >= HTTPStatus.INTERNAL_SERVER_ERROR
+        )
+
     async def _cancel_harvest_safely(self, rdi: str, harvest_id: str) -> None:
         """Try cancelling a harvest and suppress cancellation failures."""
         try:
@@ -144,39 +165,66 @@ class ApiClient:
         except ApiClientError:
             logger.warning("[%s] Failed to cancel harvest %s", rdi, harvest_id)
 
+    @classmethod
+    async def _cancel_pending_arc_tasks(cls, pending_tasks: set[asyncio.Task[None]]) -> None:
+        """Cancel and await remaining ARC submission tasks."""
+        for pending_task in pending_tasks:
+            pending_task.cancel()
+        await asyncio.gather(*pending_tasks, return_exceptions=True)
+
+    def _process_completed_arc_tasks(
+        self,
+        harvest_id: str,
+        done_tasks: set[asyncio.Task[None]],
+    ) -> tuple[int, Exception | None]:
+        """Return (failed_count, catastrophic_error) for completed submission tasks."""
+        failed_submissions = 0
+
+        for done_task in done_tasks:
+            try:
+                done_task.result()
+            except Exception as e:  # noqa: BLE001
+                if self._is_catastrophic_harvest_error(e):
+                    return failed_submissions, e
+                failed_submissions += 1
+                logger.warning("Skipping failed ARC submission in harvest %s: %s", harvest_id, e)
+
+        return failed_submissions, None
+
     async def _submit_arcs_parallel(
         self,
         harvest_id: str,
         arcs: "AsyncGenerator[ARC | dict[str, Any], None] | AsyncIterator[ARC | dict[str, Any]]",
         max_concurrency: int,
-    ) -> None:
-        """Submit all ARCs in bounded parallelism."""
+    ) -> int:
+        """Submit all ARCs in bounded parallelism and return number of skipped ARC submissions."""
         pending_tasks: set[asyncio.Task[None]] = set()
+        failed_submissions = 0
 
         async def submit_one(arc_item: "ARC | dict[str, Any]") -> None:
             await self.submit_arc_in_harvest(harvest_id, arc_item)
 
-        try:
-            async for arc in arcs:
-                task = asyncio.create_task(submit_one(arc))
-                pending_tasks.add(task)
+        async for arc in arcs:
+            task = asyncio.create_task(submit_one(arc))
+            pending_tasks.add(task)
 
-                if len(pending_tasks) >= max_concurrency:
-                    done, pending = await asyncio.wait(pending_tasks, return_when=asyncio.FIRST_COMPLETED)
-                    pending_tasks = pending
-                    for done_task in done:
-                        done_task.result()
+            if len(pending_tasks) >= max_concurrency:
+                done, pending = await asyncio.wait(pending_tasks, return_when=asyncio.FIRST_COMPLETED)
+                pending_tasks = pending
+                failed_delta, catastrophic_error = self._process_completed_arc_tasks(harvest_id, done)
+                failed_submissions += failed_delta
+                if catastrophic_error is not None:
+                    await self._cancel_pending_arc_tasks(pending_tasks)
+                    raise catastrophic_error
 
-            if pending_tasks:
-                done, _ = await asyncio.wait(pending_tasks)
-                for done_task in done:
-                    done_task.result()
-        except Exception:
-            if pending_tasks:
-                for task in pending_tasks:
-                    task.cancel()
-                await asyncio.gather(*pending_tasks, return_exceptions=True)
-            raise
+        if pending_tasks:
+            done, _ = await asyncio.wait(pending_tasks)
+            failed_delta, catastrophic_error = self._process_completed_arc_tasks(harvest_id, done)
+            failed_submissions += failed_delta
+            if catastrophic_error is not None:
+                raise catastrophic_error
+
+        return failed_submissions
 
     def __init__(self, config: Config) -> None:
         """Initialize the ApiClient.
@@ -502,7 +550,6 @@ class ApiClient:
         rdi: str,
         arcs: "AsyncGenerator[ARC | dict[str, Any], None] | AsyncIterator[ARC | dict[str, Any]]",
         expected_datasets: int | None = None,
-        cancel_on_error: bool = True,
     ) -> HarvestResult:
         """Create a harvest, upload all ARCs from an async generator, then complete it.
 
@@ -512,26 +559,22 @@ class ApiClient:
         2. Iterates *arcs*, submitting each one as part of that harvest.
         3. Calls :meth:`complete_harvest` when the generator is exhausted.
 
-        If an error occurs during ARC submission and *cancel_on_error* is
-        ``True`` (the default), the harvest is cancelled before re-raising
-        the exception.  Pass ``cancel_on_error=False`` to leave the harvest
-        open for manual inspection.
+        ARC submission is best-effort: item-level errors are logged and skipped,
+        and the harvest continues with remaining items. Catastrophic errors
+        (for example auth or harvest-state failures) abort the harvest.
 
         Args:
             rdi: RDI identifier for the harvest.
             arcs: Async generator or async iterator yielding ARC objects or
                 pre-serialised RO-Crate dicts.
             expected_datasets: Optional hint about the total number of ARCs.
-            cancel_on_error: Cancel the harvest when an exception is raised
-                during submission (default: ``True``).
 
         Returns:
             :class:`HarvestResult` of the completed harvest.
 
         Raises:
-            ApiClientError: On any HTTP or serialization error.  When
-                *cancel_on_error* is ``True``, the harvest is cancelled before
-                the exception propagates.
+            ApiClientError: On catastrophic HTTP or serialization errors. The
+                harvest is cancelled before the exception propagates.
 
         Example::
 
@@ -547,12 +590,19 @@ class ApiClient:
         logger.info("[%s] Started harvest %s for RDI %s", rdi, harvest_id, rdi)
 
         try:
-            await self._submit_arcs_parallel(harvest_id, arcs, self._config.max_concurrency)
+            failed_submissions = await self._submit_arcs_parallel(harvest_id, arcs, self._config.max_concurrency)
         except Exception:
-            if cancel_on_error:
-                logger.warning("[%s] Error during ARC submission, cancelling harvest %s", rdi, harvest_id)
-                await self._cancel_harvest_safely(rdi, harvest_id)
+            logger.warning("[%s] Catastrophic error during ARC submission, cancelling harvest %s", rdi, harvest_id)
+            await self._cancel_harvest_safely(rdi, harvest_id)
             raise
+
+        if failed_submissions > 0:
+            logger.warning(
+                "[%s] Harvest %s completed with %d skipped ARC submissions",
+                rdi,
+                harvest_id,
+                failed_submissions,
+            )
 
         result = await self.complete_harvest(harvest_id)
         logger.info("[%s] Completed harvest %s", rdi, harvest_id)
