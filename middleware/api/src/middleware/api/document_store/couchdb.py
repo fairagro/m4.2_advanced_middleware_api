@@ -39,8 +39,8 @@ class CouchDB(DocumentStore):
         self._db_name = config.db_name
         self._client = CouchDBClient.from_config(config)
 
-    @classmethod
-    def _calculate_content_hash(cls, arc_content: dict[str, Any]) -> str:
+    @staticmethod
+    def _calculate_content_hash(arc_content: dict[str, Any]) -> str:
         """Calculate SHA256 hash of ARC content.
 
         Note: We use sort_keys=True to ensure consistent hashing even if

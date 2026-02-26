@@ -164,8 +164,8 @@ class GitlabApi(ArcStore):
             return result
 
     # -------------------------- Hashing --------------------------
-    @classmethod
-    def _compute_arc_hash(cls, arc_dir: Path) -> str:
+    @staticmethod
+    def _compute_arc_hash(arc_dir: Path) -> str:
         sha = hashlib.sha256()
         for file_path in sorted(arc_dir.rglob("*")):
             if file_path.is_file():
