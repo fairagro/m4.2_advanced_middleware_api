@@ -6,7 +6,7 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from celery import Celery
 
-from middleware.api.schemas.celery_tasks import ArcSyncTask
+from middleware.api.worker.tasks import ArcSyncTask
 
 logger = logging.getLogger(__name__)
 

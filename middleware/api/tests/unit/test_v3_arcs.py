@@ -9,9 +9,9 @@ from fastapi.testclient import TestClient
 
 from middleware.api.api.common.dependencies import get_client_id
 from middleware.api.api.fastapi_app import Api
-from middleware.api.schemas import ArcEventType, ArcLifecycleStatus
-from middleware.api.schemas.arc_document import ArcEvent, ArcMetadata
+from middleware.api.document_store.arc_document import ArcEvent, ArcMetadata
 from middleware.shared.api_models import ArcOperationResult, ArcResponse, ArcStatus
+from middleware.shared.api_models.common.models import ArcEventType, ArcLifecycleStatus
 
 
 @pytest.mark.unit

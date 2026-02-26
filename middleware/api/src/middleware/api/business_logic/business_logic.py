@@ -17,8 +17,7 @@ from typing import Any, Self
 from middleware.api.arc_store import ArcStore
 from middleware.api.config import Config
 from middleware.api.document_store import DocumentStore
-from middleware.api.schemas import ArcMetadata
-from middleware.api.schemas.sync_task import SyncTaskResult, SyncTaskStatus
+from middleware.api.document_store.arc_document import ArcMetadata
 from middleware.api.worker.celery_app import celery_app
 from middleware.shared.api_models.common.models import ArcOperationResult
 
@@ -31,6 +30,7 @@ from .exceptions import (
     TransientError,
 )
 from .harvest_manager import HarvestManager
+from .sync_task import SyncTaskResult, SyncTaskStatus
 
 logger = logging.getLogger(__name__)
 

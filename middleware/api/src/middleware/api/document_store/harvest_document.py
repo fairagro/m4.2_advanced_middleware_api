@@ -5,7 +5,7 @@ from typing import Annotated
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from .enums import HarvestStatus
+from middleware.shared.api_models.common.models import HarvestStatus
 
 
 class HarvestStatistics(BaseModel):

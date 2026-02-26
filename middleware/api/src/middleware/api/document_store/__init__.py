@@ -3,12 +3,8 @@
 from abc import ABC, abstractmethod
 from typing import Any
 
-from middleware.api.schemas import (
-    ArcEvent,
-    ArcMetadata,
-    HarvestDocument,
-    HarvestStatistics,
-)
+from .arc_document import ArcEvent, ArcMetadata
+from .harvest_document import HarvestDocument, HarvestStatistics
 
 
 class DocumentStoreError(Exception):

@@ -10,9 +10,9 @@ from middleware.api.business_logic import (
     InvalidJsonSemanticError,
     SetupError,
 )
+from middleware.api.business_logic.sync_task import SyncTaskResult, SyncTaskStatus
 from middleware.api.document_store import ArcStoreResult
-from middleware.api.schemas.celery_tasks import ArcSyncTask
-from middleware.api.schemas.sync_task import SyncTaskResult, SyncTaskStatus
+from middleware.api.worker.tasks import ArcSyncTask
 from middleware.shared.api_models.common.models import ArcOperationResult, ArcResponse, ArcStatus
 
 

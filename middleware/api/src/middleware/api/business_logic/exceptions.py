@@ -2,7 +2,7 @@
 
 from typing import Protocol, runtime_checkable
 
-from middleware.api.schemas.celery_tasks import ArcSyncTask
+from middleware.api.worker.tasks import ArcSyncTask
 
 
 @runtime_checkable

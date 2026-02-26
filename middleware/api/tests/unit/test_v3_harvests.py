@@ -8,8 +8,9 @@ import pytest
 from fastapi.testclient import TestClient
 
 from middleware.api.api.fastapi_app import Api
-from middleware.api.schemas import HarvestDocument, HarvestStatistics, HarvestStatus
+from middleware.api.document_store.harvest_document import HarvestDocument, HarvestStatistics
 from middleware.shared.api_models import ArcOperationResult, ArcResponse, ArcStatus
+from middleware.shared.api_models.common.models import HarvestStatus
 
 
 @pytest.mark.unit

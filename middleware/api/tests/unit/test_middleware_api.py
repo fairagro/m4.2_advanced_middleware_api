@@ -12,7 +12,7 @@ from fastapi.testclient import TestClient
 
 from middleware.api.api.common.dependencies import get_client_id
 from middleware.api.api.fastapi_app import Api
-from middleware.api.schemas.sync_task import SyncTaskResult, SyncTaskStatus
+from middleware.api.business_logic.sync_task import SyncTaskResult, SyncTaskStatus
 from middleware.shared.api_models import (
     ArcOperationResult,
     ArcResponse,

@@ -10,9 +10,9 @@ from opentelemetry import trace
 
 from middleware.api.arc_store import ArcStore, ArcStoreTransientError
 from middleware.api.document_store import DocumentStore
-from middleware.api.schemas import ArcEvent, ArcEventType
-from middleware.api.schemas.celery_tasks import ArcSyncTask
+from middleware.api.document_store.arc_document import ArcEvent, ArcEventType
 from middleware.api.utils import calculate_arc_id, extract_identifier
+from middleware.api.worker.tasks import ArcSyncTask
 from middleware.shared.api_models.common.models import ArcOperationResult, ArcResponse, ArcStatus
 
 from .exceptions import (

@@ -5,7 +5,7 @@ from typing import Annotated, Any
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from .enums import ArcEventType, ArcLifecycleStatus
+from middleware.shared.api_models.common.models import ArcEventType, ArcLifecycleStatus
 
 
 class ArcEvent(BaseModel):

@@ -15,7 +15,7 @@ from middleware.api.api.common.dependencies import (
     get_content_type,
 )
 from middleware.api.business_logic import BusinessLogic
-from middleware.api.schemas.harvest_document import HarvestDocument
+from middleware.api.document_store.harvest_document import HarvestDocument
 from middleware.shared.api_models.v3 import models as v3_models
 
 logger = logging.getLogger(__name__)

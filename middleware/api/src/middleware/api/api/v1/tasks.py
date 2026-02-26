@@ -11,7 +11,7 @@ from middleware.api.api.common.dependencies import (
     get_business_logic,
 )
 from middleware.api.business_logic import BusinessLogic
-from middleware.api.schemas.sync_task import SyncTaskStatus
+from middleware.api.business_logic.sync_task import SyncTaskStatus
 from middleware.shared.api_models.common.models import ArcOperationResult
 from middleware.shared.api_models.v1 import models as v1_models
 

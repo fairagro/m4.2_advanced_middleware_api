@@ -9,21 +9,19 @@ from typing import Any
 
 from middleware.api.config import CouchDBConfig
 from middleware.api.couchdb_client import CouchDBClient
-from middleware.api.schemas import ArcEventType
-from middleware.api.schemas.arc_document import (
-    ArcDocument,
-    ArcEvent,
-    ArcLifecycleStatus,
-    ArcMetadata,
-)
-from middleware.api.schemas.harvest_document import (
-    HarvestDocument,
-    HarvestStatistics,
-    HarvestStatus,
-)
 from middleware.api.utils import calculate_arc_id, extract_identifier
+from middleware.shared.api_models.common.models import ArcEventType, ArcLifecycleStatus, HarvestStatus
 
 from . import ArcStoreResult, DocumentStore
+from .arc_document import (
+    ArcDocument,
+    ArcEvent,
+    ArcMetadata,
+)
+from .harvest_document import (
+    HarvestDocument,
+    HarvestStatistics,
+)
 
 logger = logging.getLogger(__name__)
 

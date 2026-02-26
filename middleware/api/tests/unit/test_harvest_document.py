@@ -7,8 +7,8 @@ aliasing behavior of the HarvestDocument schema.
 
 from datetime import datetime
 
-from middleware.api.schemas import HarvestStatus
-from middleware.api.schemas.harvest_document import HarvestDocument, HarvestStatistics
+from middleware.api.document_store.harvest_document import HarvestDocument, HarvestStatistics
+from middleware.shared.api_models.common.models import HarvestStatus
 
 ARCS_SUBMITTED = 10
 GRACE_PERIOD_DAYS = 7
