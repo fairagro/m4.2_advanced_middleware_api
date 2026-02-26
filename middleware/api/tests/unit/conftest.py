@@ -13,6 +13,7 @@ from fastapi.testclient import TestClient
 from pydantic import HttpUrl, SecretStr
 
 from middleware.api.api.fastapi_app import Api
+from middleware.api.arc_store.git_repo import GitRepoConfig
 from middleware.api.arc_store.gitlab_api import GitlabApi, GitlabApiConfig
 from middleware.api.business_logic import BusinessLogic
 from middleware.api.config import CeleryConfig, Config, CouchDBConfig
@@ -28,9 +29,8 @@ def setup_test_config() -> Generator[None, None, None]:
     config_content = """
 log_level: DEBUG
 known_rdis: []
-gitlab_api:
+git_repo:
   url: http://localhost
-  token: test-token
   group: test-group
   branch: main
 celery:
@@ -57,9 +57,8 @@ def config(oid: x509.ObjectIdentifier, known_rdis: list[str]) -> Config:
         log_level="DEBUG",
         client_auth_oid=oid,
         known_rdis=known_rdis,
-        gitlab_api=GitlabApiConfig(
-            url=HttpUrl("http://localhost:8080"),
-            token=SecretStr("test-token"),
+        git_repo=GitRepoConfig(
+            url="http://localhost:8080",
             group="test-group",
             branch="main",
         ),

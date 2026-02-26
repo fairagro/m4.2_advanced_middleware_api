@@ -39,10 +39,10 @@ async def check_worker_health() -> bool:
 
         # Initialize ArcStore
         store: ArcStore
-        if config.gitlab_api:
-            store = GitlabApi(config.gitlab_api)
-        elif config.git_repo:
+        if config.git_repo:
             store = GitRepo(config.git_repo)
+        elif config.gitlab_api:
+            store = GitlabApi(config.gitlab_api)
         else:
             logger.error("Invalid ArcStore configuration")
             return False

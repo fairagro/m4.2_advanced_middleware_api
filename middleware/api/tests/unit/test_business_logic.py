@@ -244,12 +244,12 @@ async def test_api_mode_skips_sync_if_no_changes(
 def test_factory_create_api_mode() -> None:
     """Test factory creates API mode BusinessLogic."""
     config = MagicMock()
-    config.gitlab_api = MagicMock()
+    config.git_repo = MagicMock()
     config.couchdb = MagicMock()
 
     with (
         patch("middleware.api.business_logic.business_logic_factory.CouchDB"),
-        patch("middleware.api.business_logic.business_logic_factory.GitlabApi"),
+        patch("middleware.api.business_logic.business_logic_factory.GitRepo"),
         patch.dict("sys.modules", {"middleware.api.worker": MagicMock()}),
     ):
         # Actually, simpler to verify the result has a task sender

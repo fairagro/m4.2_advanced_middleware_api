@@ -56,10 +56,9 @@ if "pytest" in sys.modules:
         "couchdb": {
             "url": "http://localhost:5984",
         },
-        "gitlab_api": {
+        "git_repo": {
             "url": "https://localhost/",
             "branch": "dummy",
-            "token": "dummy-token",  # nosec B105
             "group": "dummy-group",
         },
     })

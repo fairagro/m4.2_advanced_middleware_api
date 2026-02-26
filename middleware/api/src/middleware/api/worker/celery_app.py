@@ -42,7 +42,7 @@ if "pytest" in sys.modules or not config_path.is_file():
     loaded_config = Config.from_data({
         "couchdb": {"url": "http://localhost:5984"},
         "celery": {"broker_url": "memory://", "result_backend": "memory://"},
-        "gitlab_api": {"url": "http://localhost", "group": "test", "token": "test"},  # nosec
+        "git_repo": {"url": "http://localhost", "group": "test"},  # nosec
         "require_client_cert": False,
     })
 else:

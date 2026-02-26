@@ -11,14 +11,13 @@ import httpx
 from pydantic import BaseModel, ValidationError
 
 from middleware.shared.api_models.v3.models import (
-    ArcResponse,
     CreateArcRequest,
     CreateHarvestRequest,
-    HarvestResponse,
     SubmitHarvestArcRequest,
 )
 
 from .config import Config
+from .models import ArcResult, HarvestResult
 
 if TYPE_CHECKING:
     from arctrl import ARC  # type: ignore[import-untyped]
@@ -225,16 +224,16 @@ class ApiClient:
         return cast(dict[str, Any], json.loads(arc.ToROCrateJsonString()))
 
     @classmethod
-    def _parse_arc_response(cls, data: Any) -> ArcResponse:
+    def _parse_arc_response(cls, data: Any) -> ArcResult:
         try:
-            return ArcResponse.model_validate(data)
+            return ArcResult.model_validate(data)
         except ValidationError as e:
             raise ApiClientError(f"Invalid ARC response from API: {e}") from e
 
     @classmethod
-    def _parse_harvest_response(cls, data: Any) -> HarvestResponse:
+    def _parse_harvest_response(cls, data: Any) -> HarvestResult:
         try:
-            return HarvestResponse.model_validate(data)
+            return HarvestResult.model_validate(data)
         except ValidationError as e:
             raise ApiClientError(f"Invalid harvest response from API: {e}") from e
 
@@ -246,7 +245,7 @@ class ApiClient:
         self,
         rdi: str,
         arc: "ARC | dict[str, Any]",
-    ) -> ArcResponse:
+    ) -> ArcResult:
         """Create or update an ARC.
 
         Uses ``POST /v3/arcs``.  The server stores the ARC synchronously and
@@ -258,7 +257,7 @@ class ApiClient:
             arc: ARC object or a pre-serialised RO-Crate JSON dict.
 
         Returns:
-            :class:`ArcResponse` with the result of the operation.
+            :class:`ArcResult` with the result of the operation.
         """
         logger.info("Creating/updating ARC for RDI: %s", rdi)
         serialized = self._serialize_arc(arc)
@@ -274,7 +273,7 @@ class ApiClient:
         self,
         rdi: str,
         expected_datasets: int | None = None,
-    ) -> HarvestResponse:
+    ) -> HarvestResult:
         """Start a new harvest run.
 
         Uses ``POST /v3/harvests``.
@@ -284,13 +283,13 @@ class ApiClient:
             expected_datasets: Optional hint about how many datasets will be submitted.
 
         Returns:
-            :class:`HarvestResponse` with the newly created harvest.
+            :class:`HarvestResult` with the newly created harvest.
         """
         request = CreateHarvestRequest(rdi=rdi, expected_datasets=expected_datasets)
         data = await self._post("v3/harvests", request)
         return self._parse_harvest_response(data)
 
-    async def list_harvests(self, rdi: str | None = None) -> list[HarvestResponse]:
+    async def list_harvests(self, rdi: str | None = None) -> list[HarvestResult]:
         """List harvest runs.
 
         Uses ``GET /v3/harvests``.
@@ -299,18 +298,18 @@ class ApiClient:
             rdi: Optional RDI filter.
 
         Returns:
-            List of :class:`HarvestResponse` objects.
+            List of :class:`HarvestResult` objects.
         """
         path = "v3/harvests"
         if rdi:
             path += f"?rdi={rdi}"
         data = await self._get(path)
         try:
-            return [HarvestResponse.model_validate(d) for d in data]
+            return [HarvestResult.model_validate(d) for d in data]
         except ValidationError as e:
             raise ApiClientError(f"Invalid harvest list response from API: {e}") from e
 
-    async def get_harvest(self, harvest_id: str) -> HarvestResponse:
+    async def get_harvest(self, harvest_id: str) -> HarvestResult:
         """Get a single harvest run by ID.
 
         Uses ``GET /v3/harvests/{harvest_id}``.
@@ -319,12 +318,12 @@ class ApiClient:
             harvest_id: Harvest identifier.
 
         Returns:
-            :class:`HarvestResponse`.
+            :class:`HarvestResult`.
         """
         data = await self._get(f"v3/harvests/{harvest_id}")
         return self._parse_harvest_response(data)
 
-    async def complete_harvest(self, harvest_id: str) -> HarvestResponse:
+    async def complete_harvest(self, harvest_id: str) -> HarvestResult:
         """Mark a harvest run as completed.
 
         Uses ``POST /v3/harvests/{harvest_id}/complete``.
@@ -333,7 +332,7 @@ class ApiClient:
             harvest_id: Harvest identifier.
 
         Returns:
-            Updated :class:`HarvestResponse`.
+            Updated :class:`HarvestResult`.
         """
         data = await self._post_empty(f"v3/harvests/{harvest_id}/complete")
         return self._parse_harvest_response(data)
@@ -352,7 +351,7 @@ class ApiClient:
         self,
         harvest_id: str,
         arc: "ARC | dict[str, Any]",
-    ) -> ArcResponse:
+    ) -> ArcResult:
         """Submit an ARC within an active harvest run.
 
         Uses ``POST /v3/harvests/{harvest_id}/arcs``.  The RDI is resolved
@@ -363,7 +362,7 @@ class ApiClient:
             arc: ARC object or a pre-serialised RO-Crate JSON dict.
 
         Returns:
-            :class:`ArcResponse` with the result of the operation.
+            :class:`ArcResult` with the result of the operation.
         """
         serialized = self._serialize_arc(arc)
         request = SubmitHarvestArcRequest(arc=serialized)

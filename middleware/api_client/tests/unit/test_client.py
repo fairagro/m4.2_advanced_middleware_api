@@ -10,8 +10,7 @@ import pytest
 import respx
 from arctrl import ARC, ArcInvestigation  # type: ignore[import-untyped]
 
-from middleware.api_client import ApiClient, ApiClientError, Config
-from middleware.shared.api_models.v3.models import ArcResponse, HarvestResponse
+from middleware.api_client import ApiClient, ApiClientError, ArcResult, Config, HarvestResult
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -205,7 +204,7 @@ async def test_create_or_update_arc_success(client_config: Config) -> None:
         response = await client.create_or_update_arc(rdi="test-rdi", arc=arc)
 
     assert route.called
-    assert isinstance(response, ArcResponse)
+    assert isinstance(response, ArcResult)
     assert response.arc_id == "arc-123"
     assert response.status == "created"
 
@@ -219,7 +218,7 @@ async def test_create_or_update_arc_with_dict(client_config: Config) -> None:
     )
     async with ApiClient(client_config) as client:
         response = await client.create_or_update_arc(rdi="test-rdi", arc={"id": "mock-arc"})
-    assert isinstance(response, ArcResponse)
+    assert isinstance(response, ArcResult)
 
 
 @pytest.mark.asyncio
@@ -317,7 +316,7 @@ async def test_create_harvest_success(client_config: Config) -> None:
     )
     async with ApiClient(client_config) as client:
         harvest = await client.create_harvest(rdi="test-rdi", expected_datasets=10)
-    assert isinstance(harvest, HarvestResponse)
+    assert isinstance(harvest, HarvestResult)
     assert harvest.harvest_id == "harvest-456"
     assert harvest.rdi == "test-rdi"
 
@@ -331,7 +330,7 @@ async def test_create_harvest_without_expected_datasets(client_config: Config) -
     )
     async with ApiClient(client_config) as client:
         harvest = await client.create_harvest(rdi="test-rdi")
-    assert isinstance(harvest, HarvestResponse)
+    assert isinstance(harvest, HarvestResult)
 
 
 @pytest.mark.asyncio
@@ -344,7 +343,7 @@ async def test_list_harvests(client_config: Config) -> None:
     async with ApiClient(client_config) as client:
         harvests = await client.list_harvests()
     assert len(harvests) == 2  # noqa: PLR2004
-    assert all(isinstance(h, HarvestResponse) for h in harvests)
+    assert all(isinstance(h, HarvestResult) for h in harvests)
 
 
 @pytest.mark.asyncio
@@ -368,7 +367,7 @@ async def test_get_harvest(client_config: Config) -> None:
     )
     async with ApiClient(client_config) as client:
         harvest = await client.get_harvest("harvest-456")
-    assert isinstance(harvest, HarvestResponse)
+    assert isinstance(harvest, HarvestResult)
     assert harvest.harvest_id == "harvest-456"
 
 
@@ -382,7 +381,7 @@ async def test_complete_harvest(client_config: Config) -> None:
     )
     async with ApiClient(client_config) as client:
         harvest = await client.complete_harvest("harvest-456")
-    assert isinstance(harvest, HarvestResponse)
+    assert isinstance(harvest, HarvestResult)
     assert harvest.status == "COMPLETED"
     assert harvest.completed_at is not None
 
@@ -409,7 +408,7 @@ async def test_submit_arc_in_harvest(client_config: Config) -> None:
     )
     async with ApiClient(client_config) as client:
         response = await client.submit_arc_in_harvest("harvest-456", arc={"id": "mock-arc"})
-    assert isinstance(response, ArcResponse)
+    assert isinstance(response, ArcResult)
     assert response.arc_id == "arc-123"
 
 
