@@ -39,5 +39,7 @@
   ],
   "pylint.importStrategy": "fromEnvironment",
 
-  "python-envs.defaultEnvManager": "ms-python.python:venv"
+  "python-envs.defaultEnvManager": "ms-python.python:venv",
+
+  "remote.autoForwardPortsSource": "process"
 }

@@ -195,7 +195,6 @@ class ApiClient:
         self,
         harvest_id: str,
         arcs: "AsyncGenerator[ARC | dict[str, Any], None] | AsyncIterator[ARC | dict[str, Any]]",
-        max_concurrency: int,
     ) -> int:
         """Submit all ARCs in bounded parallelism and return number of skipped ARC submissions."""
         pending_tasks: set[asyncio.Task[None]] = set()
@@ -208,7 +207,7 @@ class ApiClient:
             task = asyncio.create_task(submit_one(arc))
             pending_tasks.add(task)
 
-            if len(pending_tasks) >= max_concurrency:
+            if len(pending_tasks) >= self._config.max_concurrency:
                 done, pending = await asyncio.wait(pending_tasks, return_when=asyncio.FIRST_COMPLETED)
                 pending_tasks = pending
                 failed_delta, catastrophic_error = self._process_completed_arc_tasks(harvest_id, done)
@@ -590,7 +589,7 @@ class ApiClient:
         logger.info("[%s] Started harvest %s for RDI %s", rdi, harvest_id, rdi)
 
         try:
-            failed_submissions = await self._submit_arcs_parallel(harvest_id, arcs, self._config.max_concurrency)
+            failed_submissions = await self._submit_arcs_parallel(harvest_id, arcs)
         except Exception:
             logger.warning("[%s] Catastrophic error during ARC submission, cancelling harvest %s", rdi, harvest_id)
             await self._cancel_harvest_safely(rdi, harvest_id)

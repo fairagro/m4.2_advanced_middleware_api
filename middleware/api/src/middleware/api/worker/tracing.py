@@ -13,7 +13,7 @@ from middleware.shared.tracing import initialize_logging, initialize_tracing
 if TYPE_CHECKING:
     from celery import Celery
 
-    from ..config import Config
+    from .config import WorkerConfig
 
 logger = logging.getLogger(__name__)
 
@@ -25,7 +25,7 @@ class WorkerTracingResult(NamedTuple):
     logger_provider: LoggerProvider
 
 
-def setup_worker_tracing(app: "Celery", config: "Config") -> WorkerTracingResult:
+def setup_worker_tracing(app: "Celery", config: "WorkerConfig") -> WorkerTracingResult:
     """Set up tracing and logging for the Celery worker.
 
     Args:

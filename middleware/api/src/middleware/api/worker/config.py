@@ -1,9 +1,17 @@
 """Configuration models for worker-related components."""
 
 import logging
+import warnings
 from typing import Annotated, Any
 
 from pydantic import BaseModel, Field, SecretStr, field_validator
+
+from middleware.shared.config.config_base import ConfigBase
+
+from ..arc_store.config import GitRepoConfig
+from ..arc_store.gitlab_api import GitlabApiConfig
+from ..business_logic.config import HarvestConfig
+from ..document_store.config import CouchDBConfig
 
 
 class CeleryConfig(BaseModel):
@@ -33,3 +41,26 @@ class CeleryConfig(BaseModel):
             "The result backend is now managed internally or no longer required."
         )
         return v
+
+
+class WorkerConfig(ConfigBase):
+    """Worker runtime configuration projection from the shared flat config file."""
+
+    git_repo: Annotated[GitRepoConfig | None, Field(description="GitRepo storage backend configuration")] = None
+    gitlab_api: Annotated[
+        GitlabApiConfig | None,
+        Field(description="GitLab API storage backend configuration", deprecated=True),
+    ] = None
+    couchdb: Annotated[CouchDBConfig, Field(description="CouchDB configuration")]
+    celery: Annotated[CeleryConfig, Field(description="Celery configuration")]
+    harvest: Annotated[HarvestConfig, Field(description="Default harvest configuration")] = HarvestConfig()
+
+    @field_validator("gitlab_api")
+    @classmethod
+    def warn_deprecated_gitlab_api(cls, gitlab_api: GitlabApiConfig | None) -> GitlabApiConfig | None:
+        """Warn about deprecated gitlab_api configuration."""
+        if gitlab_api is not None:
+            message = "gitlab_api configuration is deprecated; prefer git_repo instead."
+            logging.warning(message)
+            warnings.warn(message, DeprecationWarning, stacklevel=2)
+        return gitlab_api
