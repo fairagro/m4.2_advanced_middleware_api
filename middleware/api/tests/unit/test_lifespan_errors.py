@@ -4,7 +4,8 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from middleware.api.api import Api
+from middleware.api.api.fastapi_app import Api
+from middleware.api.api.tracing import ApiTracingResult
 from middleware.api.business_logic import SetupError
 
 
@@ -23,17 +24,16 @@ async def test_lifespan_setup_error_reraised() -> None:
     # Ensure model_dump is not a coroutine
     mock_config.model_dump.return_value = {}
 
+    _mock_tracing = ApiTracingResult(tracer_provider=MagicMock(), logger_provider=MagicMock())
     with (
-        patch("middleware.api.api.Config"),
-        patch("middleware.api.api.BusinessLogicFactory.create") as mock_factory,
-        patch("middleware.api.api.initialize_tracing", return_value=(MagicMock(), MagicMock())),
-        patch("middleware.api.api.initialize_logging"),
-        patch("middleware.api.api.instrument_app"),
-        patch("middleware.api.api.loaded_config", mock_config),
+        patch("middleware.api.api.fastapi_app.Config"),
+        patch("middleware.api.api.fastapi_app.BusinessLogicFactory.create") as mock_factory,
+        patch("middleware.api.api.fastapi_app.setup_api_tracing", return_value=_mock_tracing),
+        patch("middleware.api.api.fastapi_app.loaded_config", mock_config),
     ):
         # Setup mock business logic that fails
         mock_bl = AsyncMock()
-        mock_bl.connect.side_effect = SetupError("Setup failed intentionally")
+        mock_bl.__aenter__.side_effect = SetupError("Setup failed intentionally")
         mock_factory.return_value = mock_bl
 
         api_instance = Api(mock_config)
@@ -51,7 +51,7 @@ async def test_lifespan_setup_error_reraised() -> None:
                 pass
 
         assert "Setup failed intentionally" in str(excinfo.value)
-        mock_bl.connect.assert_awaited_once()
+        mock_bl.__aenter__.assert_awaited_once()
 
 
 @pytest.mark.asyncio
@@ -67,17 +67,16 @@ async def test_lifespan_generic_exception_reraised() -> None:
     mock_config.celery.result_backend = "cache+memory://"
     mock_config.model_dump.return_value = {}
 
+    _mock_tracing = ApiTracingResult(tracer_provider=MagicMock(), logger_provider=MagicMock())
     with (
-        patch("middleware.api.api.Config"),
-        patch("middleware.api.api.BusinessLogicFactory.create") as mock_factory,
-        patch("middleware.api.api.initialize_tracing", return_value=(MagicMock(), MagicMock())),
-        patch("middleware.api.api.initialize_logging"),
-        patch("middleware.api.api.instrument_app"),
-        patch("middleware.api.api.loaded_config", mock_config),
+        patch("middleware.api.api.fastapi_app.Config"),
+        patch("middleware.api.api.fastapi_app.BusinessLogicFactory.create") as mock_factory,
+        patch("middleware.api.api.fastapi_app.setup_api_tracing", return_value=_mock_tracing),
+        patch("middleware.api.api.fastapi_app.loaded_config", mock_config),
     ):
         # Setup mock business logic that fails with generic exception
         mock_bl = AsyncMock()
-        mock_bl.connect.side_effect = ValueError("Unexpected error")
+        mock_bl.__aenter__.side_effect = ValueError("Unexpected error")
         mock_factory.return_value = mock_bl
 
         api_instance = Api(mock_config)
@@ -90,4 +89,4 @@ async def test_lifespan_generic_exception_reraised() -> None:
                 pass
 
         assert "Unexpected error" in str(excinfo.value)
-        mock_bl.connect.assert_awaited_once()
+        mock_bl.__aenter__.assert_awaited_once()

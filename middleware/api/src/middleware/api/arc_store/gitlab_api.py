@@ -1,4 +1,11 @@
-"""Implements an ArcStore using Gitlab API as backend."""
+"""Implements an ArcStore using the GitLab API as backend.
+
+.. deprecated::
+    :class:`GitlabApi` (and its companion :class:`GitlabApiConfig`) are deprecated
+    and will be removed in a future release.  Use
+    :class:`~middleware.api.arc_store.git_repo.GitRepo` together with
+    :class:`~middleware.api.arc_store.config.GitRepoConfig` instead.
+"""
 
 import asyncio
 import base64
@@ -16,6 +23,7 @@ from gitlab.exceptions import GitlabGetError
 from gitlab.v4.objects import Project, ProjectFile
 from opentelemetry import context
 from pydantic import BaseModel, Field, HttpUrl, SecretStr, field_validator
+from typing_extensions import deprecated
 
 from . import ArcStore
 
@@ -24,6 +32,7 @@ logger = logging.getLogger(__name__)
 T = TypeVar("T")
 
 
+@deprecated("GitlabApiConfig is deprecated. Use GitRepoConfig from middleware.api.arc_store.config instead.")
 class GitlabApiConfig(BaseModel):
     """Configuration for Gitlab API ArcStore."""
 
@@ -72,8 +81,13 @@ class GitlabApiConfig(BaseModel):
         return v
 
 
+@deprecated("GitlabApi is deprecated. Use GitRepo from middleware.api.arc_store.git_repo instead.")
 class GitlabApi(ArcStore):
-    """Implements an ArcStore using Gitlab API as backend."""
+    """Implements an ArcStore using the GitLab API as backend.
+
+    .. deprecated::
+        Use :class:`~middleware.api.arc_store.git_repo.GitRepo` instead.
+    """
 
     def __init__(self, config: GitlabApiConfig) -> None:
         """Konstruktor.
@@ -126,14 +140,12 @@ class GitlabApi(ArcStore):
                     return project
             logger.info("Creating new GitLab project for ARC: %s", arc_id)
             group = self._gitlab.groups.get(self._config.group)
-            new_project = self._gitlab.projects.create(
-                {
-                    "name": arc_id,
-                    "path": arc_id,
-                    "namespace_id": group.id,
-                    "initialize_with_readme": False,
-                }
-            )
+            new_project = self._gitlab.projects.create({
+                "name": arc_id,
+                "path": arc_id,
+                "namespace_id": group.id,
+                "initialize_with_readme": False,
+            })
             logger.info("Created project: %s (id=%s)", arc_id, new_project.id)
             return new_project
 
@@ -152,7 +164,8 @@ class GitlabApi(ArcStore):
             return result
 
     # -------------------------- Hashing --------------------------
-    def _compute_arc_hash(self, arc_dir: Path) -> str:
+    @staticmethod
+    def _compute_arc_hash(arc_dir: Path) -> str:
         sha = hashlib.sha256()
         for file_path in sorted(arc_dir.rglob("*")):
             if file_path.is_file():
@@ -234,7 +247,8 @@ class GitlabApi(ArcStore):
             "encoding": "base64",
         }
 
-    def _is_text_file(self, content_bytes: bytes) -> bool:
+    @classmethod
+    def _is_text_file(cls, content_bytes: bytes) -> bool:
         """Gibt True zurück, wenn Datei UTF-8-dekodierbar ist."""
         try:
             content_bytes.decode("utf-8")
@@ -242,7 +256,8 @@ class GitlabApi(ArcStore):
         except UnicodeDecodeError:
             return False
 
-    def _build_hash_action(self, old_hash: str | None, new_hash: str) -> dict[str, Any]:
+    @classmethod
+    def _build_hash_action(cls, old_hash: str | None, new_hash: str) -> dict[str, Any]:
         """Erstellt die Commit-Action für die .arc_hash Datei."""
         return {
             "action": "create" if not old_hash else "update",
@@ -356,7 +371,8 @@ class GitlabApi(ArcStore):
             file_path.parent.mkdir(parents=True, exist_ok=True)
             self._write_project_file(f, file_path)
 
-    def _write_project_file(self, f: ProjectFile, file_path: Path) -> None:
+    @classmethod
+    def _write_project_file(cls, f: ProjectFile, file_path: Path) -> None:
         content_bytes = base64.b64decode(f.content)
         if getattr(f, "encoding", None) == "base64":
             file_path.write_bytes(content_bytes)

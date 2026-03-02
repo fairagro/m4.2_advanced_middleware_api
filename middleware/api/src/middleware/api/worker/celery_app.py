@@ -13,7 +13,8 @@ from pathlib import Path
 
 from celery import Celery
 
-from .config import Config
+from .config import WorkerConfig
+from .tracing import setup_worker_tracing
 
 logger = logging.getLogger(__name__)
 
@@ -21,7 +22,7 @@ logger = logging.getLogger(__name__)
 config_path = Path(os.environ.get("MIDDLEWARE_API_CONFIG", "/run/secrets/middleware-api-config"))
 
 # Global config instance
-loaded_config: Config
+loaded_config: WorkerConfig
 
 # Declare celery_app type for mypy
 celery_app: Celery
@@ -34,27 +35,28 @@ if "pytest" in sys.modules or not config_path.is_file():
         "middleware_api",
         broker="memory://",
         backend="cache+memory://",
-        include=["middleware.api.worker"],
+        include=[],  # Avoid circular imports in test mode
     )
     # Use a dummy config in test mode to satisfy the non-optional type
     # This also allows the worker to initialize BusinessLogic in tests if needed.
-    loaded_config = Config.from_data(
-        {
-            "couchdb": {"url": "http://localhost:5984"},
-            "celery": {"broker_url": "memory://", "result_backend": "memory://"},
-            "gitlab_api": {"url": "http://localhost", "group": "test", "token": "test"},  # nosec
-            "require_client_cert": False,
-        }
-    )
+    loaded_config = WorkerConfig.from_data({
+        "couchdb": {"url": "http://localhost:5984"},
+        "celery": {"broker_url": "memory://"},
+        "git_repo": {"url": "http://localhost", "group": "test"},  # nosec
+    })
 else:
-    loaded_config = Config.from_yaml_file(config_path)
+    loaded_config = WorkerConfig.from_yaml_file(config_path)
 
     if not loaded_config.celery:
         logger.error("Celery configuration missing in config file")
         raise ValueError("Celery configuration missing in config file")
 
     broker_url = loaded_config.celery.broker_url.get_secret_value()
-    backend_url = loaded_config.celery.result_backend.get_secret_value()
+    backend_url = (
+        loaded_config.celery.result_backend.get_secret_value()
+        if loaded_config.celery.result_backend is not None
+        else None
+    )
 
     logger.info("Celery configured with broker: %s", broker_url)
 
@@ -65,14 +67,7 @@ else:
         include=["middleware.api.worker"],
     )
 
-    # Instrument the Celery app if OTLP endpoint is configured
-    try:
-        from .tracing import instrument_celery  # pylint: disable=import-outside-toplevel
-
-        instrument_celery(celery_app)
-    except ImportError:
-        # Graceful fallback if dependencies are missing or during build
-        pass
+    setup_worker_tracing(celery_app, loaded_config)
 
 celery_app.conf.update(
     task_serializer="json",

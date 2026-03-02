@@ -54,7 +54,6 @@ RUN pyinstaller --onedir \
     --hidden-import "celery.app.events" \
     --hidden-import "celery.app.log" \
     --hidden-import "celery.apps.worker" \
-    --hidden-import "celery.backends.redis" \
     --hidden-import "celery.concurrency.prefork" \
     --hidden-import "celery.events.state" \
     --hidden-import "celery.fixups" \
@@ -71,7 +70,6 @@ RUN pyinstaller --onedir \
     --copy-metadata opentelemetry-instrumentation \
     --copy-metadata opentelemetry-instrumentation-fastapi \
     --copy-metadata opentelemetry-instrumentation-celery \
-    --copy-metadata opentelemetry-instrumentation-redis \
     --copy-metadata opentelemetry-instrumentation-requests \
     --copy-metadata opentelemetry-sdk \
     --copy-metadata requests \

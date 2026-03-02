@@ -9,7 +9,8 @@ from middleware.shared.config.logging import configure_logging
 class TestConfigureLogging:
     """Test suite for configure_logging function."""
 
-    def test_configure_logging_with_existing_handlers(self) -> None:
+    @staticmethod
+    def test_configure_logging_with_existing_handlers() -> None:
         """Test configure_logging with existing handlers."""
         # Setup
         root_logger = logging.getLogger()
@@ -28,7 +29,8 @@ class TestConfigureLogging:
             root_logger.level = original_level
             root_logger.handlers = []
 
-    def test_configure_logging_with_multiple_handlers(self) -> None:
+    @staticmethod
+    def test_configure_logging_with_multiple_handlers() -> None:
         """Test configure_logging with multiple existing handlers."""
         # Setup
         root_logger = logging.getLogger()
@@ -49,7 +51,8 @@ class TestConfigureLogging:
             root_logger.level = original_level
             root_logger.handlers = []
 
-    def test_configure_logging_without_existing_handlers(self) -> None:
+    @staticmethod
+    def test_configure_logging_without_existing_handlers() -> None:
         """Test configure_logging when no handlers exist."""
         # Setup
         root_logger = logging.getLogger()
@@ -66,7 +69,8 @@ class TestConfigureLogging:
         finally:
             root_logger.handlers = original_handlers
 
-    def test_configure_logging_different_levels(self) -> None:
+    @staticmethod
+    def test_configure_logging_different_levels() -> None:
         """Test configure_logging with different log levels."""
         # Setup
         root_logger = logging.getLogger()

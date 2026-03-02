@@ -18,9 +18,9 @@ def test_compute_arc_hash(tmp_path: Path, gitlab_api: Any) -> None:
     """Tests the hash computation for ARC directories."""
     file = tmp_path / "f.txt"
     file.write_text("hello")
-    h1 = gitlab_api._compute_arc_hash(tmp_path)
+    h1 = gitlab_api._compute_arc_hash(tmp_path)  # noqa: SLF001
     file.write_text("world")
-    h2 = gitlab_api._compute_arc_hash(tmp_path)
+    h2 = gitlab_api._compute_arc_hash(tmp_path)  # noqa: SLF001
     assert h1 != h2  # nosec
 
 
@@ -28,20 +28,20 @@ def test_get_or_create_project_found(gitlab_api: Any) -> None:
     """Tests finding an existing GitLab project."""
     project = MagicMock()
     project.path = "arc1"
-    gitlab_api._gitlab.projects.list.return_value = [project]
-    result = gitlab_api._get_or_create_project("arc1")
+    gitlab_api._gitlab.projects.list.return_value = [project]  # noqa: SLF001
+    result = gitlab_api._get_or_create_project("arc1")  # noqa: SLF001
     assert result == project  # nosec
 
 
 def test_get_or_create_project_create(gitlab_api: Any) -> None:
     """Tests creating a new GitLab project if not found."""
-    gitlab_api._gitlab.projects.list.return_value = []
+    gitlab_api._gitlab.projects.list.return_value = []  # noqa: SLF001
     group = MagicMock()
     group.id = 1
-    gitlab_api._gitlab.groups.get.return_value = group
+    gitlab_api._gitlab.groups.get.return_value = group  # noqa: SLF001
     project = MagicMock()
-    gitlab_api._gitlab.projects.create.return_value = project
-    result = gitlab_api._get_or_create_project("arc1")
+    gitlab_api._gitlab.projects.create.return_value = project  # noqa: SLF001
+    result = gitlab_api._get_or_create_project("arc1")  # noqa: SLF001
     assert result == project  # nosec
 
 
@@ -57,8 +57,8 @@ async def test_create_or_update_no_changes(gitlab_api: Any) -> None:
     project = MagicMock()
     # .arc_hash mit "dummyhash" vorhanden
     project.files.get.return_value.content = base64.b64encode(b"dummyhash").decode()
-    gitlab_api._get_or_create_project = lambda _arc_id: project
-    gitlab_api._compute_arc_hash = lambda _path: "dummyhash"
+    gitlab_api._get_or_create_project = lambda _arc_id: project  # noqa: SLF001
+    gitlab_api._compute_arc_hash = lambda _path: "dummyhash"  # noqa: SLF001
 
     await gitlab_api.create_or_update("arc1", arc)
     project.commits.create.assert_not_called()
@@ -77,8 +77,8 @@ async def test_create_or_update_with_changes(gitlab_api: Any) -> None:
         raise GitlabGetError("not found", response_code=http.HTTPStatus.NOT_FOUND)
 
     project.files.get.side_effect = raise_get
-    gitlab_api._get_or_create_project = lambda _arc_id: project
-    gitlab_api._compute_arc_hash = lambda _path: "newhash"
+    gitlab_api._get_or_create_project = lambda _arc_id: project  # noqa: SLF001
+    gitlab_api._compute_arc_hash = lambda _path: "newhash"  # noqa: SLF001
 
     await gitlab_api.create_or_update("arc1", arc)
     project.commits.create.assert_called_once()

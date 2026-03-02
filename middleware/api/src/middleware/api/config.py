@@ -2,39 +2,19 @@
 
 import logging
 import re
+import warnings
 from typing import Annotated, ClassVar, Self
 
 from cryptography import x509
-from pydantic import BaseModel, ConfigDict, Field, SecretStr, field_validator, model_validator
+from pydantic import ConfigDict, Field, field_validator, model_validator
 
 from middleware.shared.config.config_base import ConfigBase
 
-from .arc_store.git_repo import GitRepoConfig
+from .arc_store.config import GitRepoConfig
 from .arc_store.gitlab_api import GitlabApiConfig
-
-
-class CeleryConfig(BaseModel):
-    """Configuration for Celery worker."""
-
-    broker_url: Annotated[
-        SecretStr,
-        Field(description="RabbitMQ broker URL"),
-    ]
-    result_backend: Annotated[SecretStr, Field(description="Redis backend URL")]
-    task_rate_limit: Annotated[str | None, Field(description="Rate limit for tasks (e.g. '10/m')")] = None
-    retry_backoff: Annotated[bool, Field(description="Whether to use exponential backoff for retries")] = True
-    retry_backoff_max: Annotated[int, Field(description="Max backoff time in seconds")] = 3600
-    max_retries: Annotated[int, Field(description="Max number of retries for transient errors")] = 120
-
-
-class CouchDBConfig(BaseModel):
-    """Configuration for CouchDB."""
-
-    url: Annotated[str, Field(description="CouchDB URL")]
-    user: Annotated[str | None, Field(description="CouchDB username")] = None
-    password: Annotated[SecretStr | None, Field(description="CouchDB password")] = None
-    db_name: Annotated[str, Field(description="Name of the database for ARCs and harvests")] = "arcs"
-    max_event_log_size: Annotated[int, Field(default=100, description="Maximum number of events in ARC metadata")] = 100
+from .business_logic.config import HarvestConfig
+from .document_store.config import CouchDBConfig
+from .worker.config import CeleryConfig
 
 
 class Config(ConfigBase):
@@ -46,10 +26,14 @@ class Config(ConfigBase):
     )
 
     git_repo: Annotated[GitRepoConfig | None, Field(description="GitRepo storage backend configuration")] = None
-    gitlab_api: Annotated[GitlabApiConfig | None, Field(description="GitLab API storage backend configuration")] = None
+    gitlab_api: Annotated[
+        GitlabApiConfig | None,
+        Field(description="GitLab API storage backend configuration", deprecated=True),
+    ] = None
     couchdb: Annotated[CouchDBConfig, Field(description="CouchDB configuration")]
 
     celery: Annotated[CeleryConfig, Field(description="Celery configuration")]
+    harvest: Annotated[HarvestConfig, Field(description="Default Harvest configuration")] = HarvestConfig()
 
     require_client_cert: Annotated[
         bool, Field(description="Require client certificate for API access (set to false for development)")
@@ -91,3 +75,25 @@ class Config(ConfigBase):
         if self.git_repo is not None and self.gitlab_api is not None:
             raise ValueError("Only one of git_repo or gitlab_api can be configured")
         return self
+
+    @field_validator("gitlab_api")
+    @classmethod
+    def warn_deprecated_gitlab_api(cls, gitlab_api: GitlabApiConfig | None) -> GitlabApiConfig | None:
+        """
+        Warn about the deprecation of the GitLab API configuration.
+
+        Parameters
+        ----------
+        gitlab_api : GitlabApiConfig | None
+            The GitLab API configuration to validate.
+
+        Returns
+        -------
+        GitlabApiConfig | None
+            The validated GitLab API configuration, or None if not provided.
+        """
+        if gitlab_api is not None:
+            message = "gitlab_api configuration is deprecated; prefer git_repo instead."
+            logging.warning(message)
+            warnings.warn(message, DeprecationWarning, stacklevel=2)
+        return gitlab_api

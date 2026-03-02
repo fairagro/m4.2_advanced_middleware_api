@@ -4,19 +4,19 @@ import asyncio
 import concurrent.futures
 import logging
 import shutil
-import tempfile
 from collections.abc import Callable
 from pathlib import Path
-from typing import Annotated, Any, TypeVar
+from typing import Any, TypeVar
 
 import git.cmd
 from arctrl import ARC  # type: ignore[import-untyped]
 from git import Repo
 from git.exc import GitCommandError
 from opentelemetry import context, trace
-from pydantic import BaseModel, Field, SecretStr, field_validator
+from pydantic import BaseModel, SecretStr
 
 from . import ArcStore, ArcStoreTransientError
+from .config import GitRepoConfig
 from .remote_git_provider import (
     RemoteGitProvider,
 )
@@ -52,46 +52,6 @@ def is_transient_git_error(exc: GitCommandError) -> bool:
         "the requested url returned error: 50",
     ]
     return any(p in stderr.lower() for p in transient_patterns)
-
-
-class GitRepoConfig(BaseModel):
-    """Configuration for Git CLI based ArcStore."""
-
-    url: Annotated[str, Field(description="Base URL of the git server (e.g. https://gitlab.com)")]
-    group: Annotated[str, Field(description="The group/namespace the ARC repos belong to")]
-    branch: Annotated[str, Field(description="The git branch to use for ARC repos")] = "main"
-    token: Annotated[SecretStr | None, Field(description="Auth token (for HTTPS auth)")] = None
-    user_name: Annotated[str, Field(description="Git user.name")] = "Middleware API"
-    user_email: Annotated[str, Field(description="Git user.email")] = "middleware@fairagro.net"
-    max_workers: Annotated[int, Field(description="Max threads for git operations")] = 5
-    command_timeout: Annotated[float | None, Field(description="Timeout (s) for git commands")] = None
-    http_low_speed_limit: Annotated[int | None, Field(description="http.lowSpeedLimit in bytes/sec")] = None
-    http_low_speed_time: Annotated[int | None, Field(description="http.lowSpeedTime in seconds")] = None
-    cache_dir: Annotated[
-        Path,
-        Field(
-            description="Local directory to cache git repos.",
-            validate_default=True,
-        ),
-    ] = None  # type: ignore[assignment]
-
-    @field_validator("url")
-    @classmethod
-    def validate_url_scheme(cls, v: str) -> str:
-        """Ensure URL uses HTTP, HTTPS or FILE (for tests)."""
-        valid_schemes = ("https://", "file://", "http://")
-        if not v.lower().startswith(valid_schemes):
-            msg = f"Git URL must start with one of: {valid_schemes}"
-            raise ValueError(msg)
-        return v
-
-    @field_validator("cache_dir", mode="before")
-    @classmethod
-    def set_default_cache_dir(cls, v: Path | str | None) -> Path | str:
-        """Set default cache dir if None."""
-        if v is None:
-            return Path(tempfile.gettempdir()) / "middleware_git_cache"
-        return v
 
 
 class GitContextConfig(BaseModel):
@@ -430,7 +390,7 @@ class GitRepo(ArcStore):
 
         return await self._run_in_executor(_task)
 
-    async def _delete(self, arc_id: str) -> None:
+    async def _delete(self, arc_id: str) -> None:  # noqa: PLR6301
         """Delete ARC (Not supported via Git CLI easily without platform API)."""
         logger.warning(
             "Delete operation is not supported by GitRepo (CLI backend). Manual deletion required for %s",

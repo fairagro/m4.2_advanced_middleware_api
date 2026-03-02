@@ -3,7 +3,7 @@
 import os
 from collections.abc import Generator
 from typing import Any
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, patch
 
 import pytest
 from cryptography import x509
@@ -11,7 +11,7 @@ from dotenv import load_dotenv
 from fastapi.testclient import TestClient
 from gitlab import Gitlab, GitlabError
 
-from middleware.api.api import Api
+from middleware.api.api.fastapi_app import Api
 from middleware.api.config import Config
 from middleware.api.document_store import ArcStoreResult
 from middleware.shared.config.config_wrapper import ConfigWrapper, DictType, ListType
@@ -23,25 +23,23 @@ load_dotenv()
 @pytest.fixture(scope="session")
 def config(oid: x509.ObjectIdentifier, known_rdis: list[str]) -> "DictType | ListType":
     """Provide configuration for tests."""
-    config_wrapper = ConfigWrapper.from_data(
-        {
-            "log_level": "DEBUG",
-            "known_rdis": list(known_rdis),
-            "client_auth_oid": oid.dotted_string,
-            "gitlab_api": {
-                "url": "https://datahub-dev.ipk-gatersleben.de",
-                "group": "FAIRagro-advanced-middleware-integration-tests",
-                "token": os.getenv("GITLAB_API_TOKEN", ""),
-            },
-            "celery": {
-                "broker_url": "memory://",
-                "result_backend": "cache+memory://",
-            },
-            "couchdb": {
-                "url": "http://localhost:5984",
-            },
-        }
-    )
+    config_wrapper = ConfigWrapper.from_data({
+        "log_level": "DEBUG",
+        "known_rdis": list(known_rdis),
+        "client_auth_oid": oid.dotted_string,
+        "gitlab_api": {
+            "url": "https://datahub-dev.ipk-gatersleben.de",
+            "group": "FAIRagro-advanced-middleware-integration-tests",
+            "token": os.getenv("GITLAB_API_TOKEN", ""),
+        },
+        "celery": {
+            "broker_url": "memory://",
+            "result_backend": "cache+memory://",
+        },
+        "couchdb": {
+            "url": "http://localhost:5984",
+        },
+    })
     return config_wrapper.unwrap()
 
 
@@ -72,17 +70,15 @@ def middleware_api(
     """Provide the Middleware API instance for tests."""
     config_validated = Config.from_data(config)
     api = Api(config_validated)
-    # Mock BusinessLogic connection methods to avoid requiring a real CouchDB for system tests
-
-    api.business_logic.connect = AsyncMock()  # type: ignore[method-assign]
-    api.business_logic.close = AsyncMock()  # type: ignore[method-assign]
 
     # Mock health_check and store_arc to avoid requiring a real CouchDB
-    # pylint: disable=protected-access
-    api.business_logic._doc_store.health_check = AsyncMock(return_value=True)  # type: ignore[method-assign]
-    api.business_logic._doc_store.store_arc = AsyncMock(  # type: ignore[method-assign]
-        return_value=ArcStoreResult(arc_id="test-arc-id", is_new=True, has_changes=True)
-    )
+    doc_store = api.business_logic._doc_store  # noqa: SLF001
+    patch.object(doc_store, "health_check", new=AsyncMock(return_value=True)).start()
+    patch.object(
+        doc_store,
+        "store_arc",
+        new=AsyncMock(return_value=ArcStoreResult(arc_id="test-arc-id", is_new=True, has_changes=True)),
+    ).start()
     return api
 
 

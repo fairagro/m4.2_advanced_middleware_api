@@ -19,13 +19,13 @@ def create_mock_arc_store() -> ArcStore:
         async def _delete(self, *_args: object, **_kwargs: object) -> None:
             pass
 
-        async def _exists(self, *_args: object, **_kwargs: object) -> bool:
+        async def _exists(self, *_args: object, **_kwargs: object) -> bool:  # noqa: PLR6301
             return False
 
         async def _get(self, *_args: object, **_kwargs: object) -> object:
             pass
 
-        def _check_health(self) -> bool:
+        def _check_health(self) -> bool:  # noqa: PLR6301
             return True
 
     return ConcreteArcStore()
@@ -34,12 +34,14 @@ def create_mock_arc_store() -> ArcStore:
 class TestArcStoreError:
     """Test suite for ArcStoreError exception."""
 
-    def test_arc_store_error_is_exception(self) -> None:
+    @staticmethod
+    def test_arc_store_error_is_exception() -> None:
         """Test that ArcStoreError is an Exception."""
         error = ArcStoreError("Test error")
         assert isinstance(error, Exception)
 
-    def test_arc_store_error_message(self) -> None:
+    @staticmethod
+    def test_arc_store_error_message() -> None:
         """Test ArcStoreError message."""
         message = "Test error message"
         error = ArcStoreError(message)
@@ -50,7 +52,8 @@ class TestArcStoreWrapperMethods:
     """Test suite for ArcStore wrapper methods that handle errors."""
 
     @pytest.mark.asyncio
-    async def test_create_or_update_arc_store_error_passthrough(self) -> None:
+    @staticmethod
+    async def test_create_or_update_arc_store_error_passthrough() -> None:
         """Test create_or_update passes through ArcStoreError."""
         store = create_mock_arc_store()
         with patch.object(store, "_create_or_update") as mock_impl:
@@ -59,14 +62,16 @@ class TestArcStoreWrapperMethods:
                 await store.create_or_update("test_id", MagicMock())
 
     @pytest.mark.asyncio
-    async def test_get_arc_store_error_passthrough(self) -> None:
+    @staticmethod
+    async def test_get_arc_store_error_passthrough() -> None:
         """Test get passes through ArcStoreError."""
         store = create_mock_arc_store()
         with patch.object(store, "_get", side_effect=ArcStoreError("Test error")), pytest.raises(ArcStoreError):
             await store.get("test_id")
 
     @pytest.mark.asyncio
-    async def test_get_generic_exception_logged_and_wrapped(self) -> None:
+    @staticmethod
+    async def test_get_generic_exception_logged_and_wrapped() -> None:
         """Test get logs and wraps generic exceptions."""
         store = create_mock_arc_store()
         with (
@@ -79,14 +84,16 @@ class TestArcStoreWrapperMethods:
             mock_logger.exception.assert_called_once()
 
     @pytest.mark.asyncio
-    async def test_delete_arc_store_error_passthrough(self) -> None:
+    @staticmethod
+    async def test_delete_arc_store_error_passthrough() -> None:
         """Test delete passes through ArcStoreError."""
         store = create_mock_arc_store()
         with patch.object(store, "_delete", side_effect=ArcStoreError("Test error")), pytest.raises(ArcStoreError):
             await store.delete("test_id")
 
     @pytest.mark.asyncio
-    async def test_delete_generic_exception_wrapped(self) -> None:
+    @staticmethod
+    async def test_delete_generic_exception_wrapped() -> None:
         """Test delete wraps generic exceptions in ArcStoreError."""
         store = create_mock_arc_store()
         with patch.object(store, "_delete", side_effect=RuntimeError("Generic error")):
@@ -95,14 +102,16 @@ class TestArcStoreWrapperMethods:
             assert "general exception caught" in str(exc_info.value).lower()
 
     @pytest.mark.asyncio
-    async def test_exists_arc_store_error_passthrough(self) -> None:
+    @staticmethod
+    async def test_exists_arc_store_error_passthrough() -> None:
         """Test exists passes through ArcStoreError."""
         store = create_mock_arc_store()
         with patch.object(store, "_exists", side_effect=ArcStoreError("Test error")), pytest.raises(ArcStoreError):
             await store.exists("test_id")
 
     @pytest.mark.asyncio
-    async def test_exists_generic_exception_wrapped(self) -> None:
+    @staticmethod
+    async def test_exists_generic_exception_wrapped() -> None:
         """Test exists wraps generic exceptions in ArcStoreError."""
         store = create_mock_arc_store()
         with patch.object(store, "_exists", side_effect=OSError("Generic error")):
@@ -111,7 +120,8 @@ class TestArcStoreWrapperMethods:
             assert "exception" in str(exc_info.value).lower()
 
     @pytest.mark.asyncio
-    async def test_exists_generic_exception_logged(self) -> None:
+    @staticmethod
+    async def test_exists_generic_exception_logged() -> None:
         """Test exists logs exceptions."""
         store = create_mock_arc_store()
         with (

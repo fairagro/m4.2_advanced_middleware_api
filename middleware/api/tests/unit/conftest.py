@@ -12,12 +12,15 @@ from cryptography import x509
 from fastapi.testclient import TestClient
 from pydantic import HttpUrl, SecretStr
 
-from middleware.api.api import Api
+from middleware.api.api.fastapi_app import Api
+from middleware.api.arc_store.config import GitRepoConfig
 from middleware.api.arc_store.gitlab_api import GitlabApi, GitlabApiConfig
 from middleware.api.business_logic import BusinessLogic
-from middleware.api.config import CeleryConfig, Config, CouchDBConfig
+from middleware.api.config import Config
 from middleware.api.document_store import ArcStoreResult
+from middleware.api.document_store.config import CouchDBConfig
 from middleware.api.utils import calculate_arc_id, extract_identifier
+from middleware.api.worker.config import CeleryConfig
 from middleware.shared.config.config_base import OtelConfig
 
 
@@ -28,14 +31,12 @@ def setup_test_config() -> Generator[None, None, None]:
     config_content = """
 log_level: DEBUG
 known_rdis: []
-gitlab_api:
+git_repo:
   url: http://localhost
-  token: test-token
   group: test-group
   branch: main
 celery:
   broker_url: amqp://guest:guest@localhost:5672//
-  result_backend: redis://localhost:6379/0
 """
     with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml", delete=False) as f:
         f.write(config_content)
@@ -57,15 +58,13 @@ def config(oid: x509.ObjectIdentifier, known_rdis: list[str]) -> Config:
         log_level="DEBUG",
         client_auth_oid=oid,
         known_rdis=known_rdis,
-        gitlab_api=GitlabApiConfig(
-            url=HttpUrl("http://localhost:8080"),
-            token=SecretStr("test-token"),
+        git_repo=GitRepoConfig(
+            url="http://localhost:8080",
             group="test-group",
             branch="main",
         ),
         celery=CeleryConfig(
             broker_url=SecretStr("amqp://guest:guest@localhost:5672//"),
-            result_backend=SecretStr("redis://localhost:6379/0"),
         ),
         couchdb=CouchDBConfig(url="http://localhost:5984"),
         otel=OtelConfig(),
@@ -78,6 +77,7 @@ def middleware_api(config: Config, service: BusinessLogic) -> Api:
     """Provide the Middleware API instance for tests."""
     api = Api(config)
     api.business_logic = service
+    api.app.state.business_logic = service
     return api
 
 
@@ -108,7 +108,7 @@ def service(config: Config) -> BusinessLogic:
 
     doc_store = MagicMock()
 
-    async def mock_store_arc(rdi: str, arc: dict, _harvest_id: str | None = None) -> ArcStoreResult:
+    async def mock_store_arc(rdi: str, arc: dict, harvest_id: str | None = None) -> ArcStoreResult:  # noqa: ARG001
         identifier = extract_identifier(arc)
         arc_id = calculate_arc_id(identifier, rdi) if identifier else "mock-arc-id"
         return ArcStoreResult(arc_id=arc_id, is_new=True, has_changes=True)
@@ -122,7 +122,7 @@ def service(config: Config) -> BusinessLogic:
     git_sync_task = MagicMock()
 
     # Provide an instance in API mode (with task sender)
-    return BusinessLogic(config=config, store=store, doc_store=doc_store, git_sync_task=git_sync_task)
+    return BusinessLogic(config=config, store=store, doc_store=doc_store, task_dispatcher=git_sync_task)
 
 
 @pytest.fixture
@@ -130,5 +130,5 @@ def gitlab_api() -> GitlabApi:
     """Provide a GitlabApi instance with a mocked Gitlab client."""
     api_config = GitlabApiConfig(url=HttpUrl("http://gitlab"), token=SecretStr("token"), group="1", branch="main")  # nosec
     api = GitlabApi(api_config)
-    api._gitlab = MagicMock()  # pylint: disable=protected-access
+    api._gitlab = MagicMock()  # noqa: SLF001
     return api

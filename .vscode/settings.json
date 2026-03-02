@@ -27,18 +27,19 @@
   "sops-edit.onlyUseButtons": false,
   "sops-edit.tempFilePreExtension": "decrypted",
 
-  "mypy.dmypyExecutable": "${workspaceFolder}/.venv/bin/dmypy",
+  "mypy.configFile": "pyproject.toml",
 
   // Ruff Extension Settings - ensure consistency with script
-  "ruff.configuration": "./pyproject.toml",
   "ruff.path": ["uv", "run", "ruff"],
   "ruff.importStrategy": "fromEnvironment",
 
   // Pylint Extension Settings
   "pylint.args": [
-    "--rcfile=${workspaceFolder}/pyproject.toml"
+    "--rcfile=pyproject.toml"
   ],
   "pylint.importStrategy": "fromEnvironment",
 
-  "python-envs.defaultEnvManager": "ms-python.python:venv"
+  "python-envs.defaultEnvManager": "ms-python.python:venv",
+
+  "remote.autoForwardPortsSource": "process"
 }

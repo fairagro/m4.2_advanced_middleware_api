@@ -1,6 +1,6 @@
 """Unit tests for shared API models."""
 
-from middleware.shared.api_models.models import (
+from middleware.shared.api_models import (
     ArcStatus,
     CreateOrUpdateArcsRequest,
     LivenessResponse,

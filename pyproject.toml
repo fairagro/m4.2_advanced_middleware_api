@@ -70,8 +70,13 @@ lint.select = [
   "SIM", # flake8-simplify
   "A",   # flake8-builtins
   "ARG", # flake8-unused-arguments
+  "BLE", # flake8-blind-except (fängt zu generische Exceptions ab)
   "PLR", # Pylint Refactor (inkl. complexity rules wie too-many-return-statements)
+  "SLF", # flake8-self (Private member access)
 ]
+
+# Muss für PLR0917 aktiviert sein
+preview = true
 
 # Maximale Zeilenlänge wie in pylint (Standard: 100)
 line-length = 120
@@ -92,6 +97,9 @@ max-complexity = 10
 known-first-party = ["middleware"]
 force-single-line = false
 combine-as-imports = true
+
+[tool.ruff.lint.per-file-ignores]
+"middleware/*/tests/**/*.py" = ["SLF001"]
 
 # Black and isort replaced by ruff format - configurations removed to avoid conflicts
 
@@ -128,6 +136,18 @@ testpaths = ["middleware/*/tests"]
 python_files = ["test_*.py"]
 python_classes = ["Test*"]
 python_functions = ["test_*"]
+
+# Suppress DeprecationWarnings from intentionally deprecated modules so tests
+# stay clean. Use pytest.warns(DeprecationWarning) to assert the warnings
+# explicitly where needed.
+filterwarnings = [
+    "ignore:GitlabApi.*is deprecated:DeprecationWarning",
+    "ignore:GitlabApiConfig.*is deprecated:DeprecationWarning",
+    # Pydantic emits a bare 'deprecated' warning whenever a deprecated field
+    # is *accessed* on a model instance.  In tests we intentionally exercise
+    # paths that touch the deprecated gitlab_api field; suppress the noise.
+    "ignore:deprecated:DeprecationWarning:middleware\\.api\\.config",
+]
 
 # Output and behavior
 addopts = [
@@ -253,6 +273,15 @@ disable = [
     # Additional opinionated/style checks often handled by formatters
     "R0903",  # too-few-public-methods (opinionated, often not relevant)
     "R0913",  # too-many-arguments (opinionated, case-by-case basis)
+    "R0917",  # too-many-positional-arguments (handled by ruff PLR0917)
     "C0301",  # line-too-long (handled by ruff formatter)
     "R0801",  # duplicate-code (can be noisy in tests)
+    "R0914",  # too-many-locals (handled by ruff PLR0914)
+
+    # Exception checks (covered by ruff BLE001)
+    "W0718",  # broad-exception-caught
+    "W0703",  # broad-except
+
+    # Private member access
+    "W0212",  # protected-access
 ]

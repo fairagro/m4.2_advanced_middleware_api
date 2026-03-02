@@ -7,7 +7,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 # Import from the API package
-from middleware.api.api import Api
+from middleware.api.api.fastapi_app import Api
 from middleware.api.config import Config as ApiConfig
 
 # Import from the API client package

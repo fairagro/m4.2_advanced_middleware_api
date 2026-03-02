@@ -32,7 +32,7 @@ logger = logging.getLogger(__name__)
 class SimpleConsoleSpanExporter(SpanExporter):
     """Simple span exporter that logs to console."""
 
-    def export(self, spans: Sequence[ReadableSpan]) -> SpanExportResult:
+    def export(self, spans: Sequence[ReadableSpan]) -> SpanExportResult:  # noqa: PLR6301
         """Export spans to console."""
         for span in spans:
             if span.end_time is not None and span.start_time is not None:
@@ -52,7 +52,7 @@ class SimpleConsoleSpanExporter(SpanExporter):
         """Shutdown the exporter."""
         pass
 
-    def force_flush(self, timeout_millis: int = 30000) -> bool:  # noqa: ARG002
+    def force_flush(self, _timeout_millis: int = 30000) -> bool:  # noqa: PLR6301
         """Flush any pending spans."""
         return True
 
@@ -74,12 +74,10 @@ def initialize_tracing(
         Tuple of (TracerProvider, Tracer) for use in the application
     """
     # Create a resource describing this service
-    resource = Resource.create(
-        {
-            "service.name": service_name,
-            "service.version": "0.0.0",
-        }
-    )
+    resource = Resource.create({
+        "service.name": service_name,
+        "service.version": "0.0.0",
+    })
 
     # Create a tracer provider
     tracer_provider = TracerProvider(resource=resource)

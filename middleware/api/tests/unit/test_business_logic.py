@@ -3,7 +3,6 @@
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
-import redis
 
 from middleware.api.business_logic import (
     BusinessLogic,
@@ -11,8 +10,10 @@ from middleware.api.business_logic import (
     InvalidJsonSemanticError,
     SetupError,
 )
+from middleware.api.business_logic.sync_task import SyncTaskResult, SyncTaskStatus
 from middleware.api.document_store import ArcStoreResult
-from middleware.shared.api_models.models import ArcOperationResult, ArcResponse, ArcStatus
+from middleware.api.worker.tasks import ArcSyncTask
+from middleware.shared.api_models.common.models import ArcOperationResult, ArcResponse, ArcStatus
 
 
 @pytest.fixture
@@ -30,6 +31,7 @@ def mock_doc_store() -> MagicMock:
     """Mock DocumentStore."""
     doc_store = MagicMock()
     doc_store.store_arc = AsyncMock()
+    doc_store.add_event = AsyncMock()
     doc_store.health_check = AsyncMock(return_value=True)
     doc_store.setup = AsyncMock()
     doc_store.connect = AsyncMock()
@@ -38,11 +40,11 @@ def mock_doc_store() -> MagicMock:
 
 
 @pytest.fixture
-def mock_task_sender() -> MagicMock:
-    """Mock Celery task sender."""
-    sender = MagicMock()
-    sender.delay = MagicMock()
-    return sender
+def mock_task_dispatcher() -> MagicMock:
+    """Mock TaskDispatcher."""
+    dispatcher = MagicMock()
+    dispatcher.dispatch_sync_arc = MagicMock()
+    return dispatcher
 
 
 @pytest.fixture
@@ -55,21 +57,23 @@ def mock_config() -> MagicMock:
 
 @pytest.fixture
 def api_logic(
-    mock_config: MagicMock, mock_store: MagicMock, mock_doc_store: MagicMock, mock_task_sender: MagicMock
+    mock_config: MagicMock, mock_store: MagicMock, mock_doc_store: MagicMock, mock_task_dispatcher: MagicMock
 ) -> BusinessLogic:
     """BusinessLogic in API mode."""
-    return BusinessLogic(config=mock_config, store=mock_store, doc_store=mock_doc_store, git_sync_task=mock_task_sender)
+    return BusinessLogic(
+        config=mock_config, store=mock_store, doc_store=mock_doc_store, task_dispatcher=mock_task_dispatcher
+    )
 
 
 @pytest.fixture
 def worker_logic(mock_config: MagicMock, mock_store: MagicMock, mock_doc_store: MagicMock) -> BusinessLogic:
     """BusinessLogic in Worker mode."""
-    return BusinessLogic(config=mock_config, store=mock_store, doc_store=mock_doc_store, git_sync_task=None)
+    return BusinessLogic(config=mock_config, store=mock_store, doc_store=mock_doc_store, task_dispatcher=None)
 
 
 @pytest.mark.asyncio
 async def test_api_mode_create_or_update_success(
-    api_logic: BusinessLogic, mock_doc_store: MagicMock, mock_task_sender: MagicMock
+    api_logic: BusinessLogic, mock_doc_store: MagicMock, mock_task_dispatcher: MagicMock
 ) -> None:
     """Test create_or_update_arc in API mode."""
     rdi = "test-rdi"
@@ -80,12 +84,12 @@ async def test_api_mode_create_or_update_success(
     mock_doc_store.store_arc.return_value = ArcStoreResult(arc_id="arc_id", is_new=True, has_changes=True)
 
     # Mock ARC
-    with patch("middleware.api.business_logic.ARC") as mock_arc_class:
+    with patch("middleware.api.business_logic.arc_manager.ARC") as mock_arc_class:
         mock_arc_instance = MagicMock()
         mock_arc_instance.Identifier = "ABC"
         mock_arc_class.from_rocrate_json_string.return_value = mock_arc_instance
 
-        with patch("middleware.api.business_logic.calculate_arc_id", return_value="arc_id"):
+        with patch("middleware.api.business_logic.arc_manager.calculate_arc_id", return_value="arc_id"):
             result = await api_logic.create_or_update_arc(rdi, arc_data, client_id)
 
     assert isinstance(result, ArcOperationResult)
@@ -94,7 +98,9 @@ async def test_api_mode_create_or_update_success(
 
     # Verify calls
     mock_doc_store.store_arc.assert_called_once()
-    mock_task_sender.delay.assert_called_once_with(rdi, arc_data)
+    mock_task_dispatcher.dispatch_sync_arc.assert_called_once_with(
+        ArcSyncTask(rdi=rdi, arc=arc_data, client_id=client_id)
+    )
 
 
 @pytest.mark.asyncio
@@ -106,87 +112,70 @@ async def test_api_mode_sync_to_gitlab_forbidden(api_logic: BusinessLogic) -> No
 
 @pytest.mark.asyncio
 async def test_health_check(api_logic: BusinessLogic, mock_doc_store: MagicMock) -> None:
-    """Test health_check includes all systems."""
+    """Test health_check includes only real dependencies."""
     mock_doc_store.health_check.return_value = True
 
-    # Mock celery_app and redis
-    with (
-        patch("middleware.api.celery_app.celery_app") as mock_celery,
-        patch("redis.from_url") as mock_redis_lib,
-    ):
+    # Mock rabbitmq success via celery_app
+    with patch("middleware.api.business_logic.business_logic.celery_app") as mock_celery:
         mock_conn = MagicMock()
         mock_celery.connection_or_acquire.return_value.__enter__.return_value = mock_conn
-
-        mock_redis_instance = MagicMock()
-        mock_redis_lib.return_value = mock_redis_instance
 
         result = await api_logic.health_check()
 
         assert result == {
             "couchdb_reachable": True,
             "rabbitmq": True,
-            "redis": True,
         }
 
 
 @pytest.mark.asyncio
-async def test_health_check_failures(
-    api_logic: BusinessLogic, mock_doc_store: MagicMock, mock_config: MagicMock
-) -> None:
+async def test_health_check_failures(api_logic: BusinessLogic, mock_doc_store: MagicMock) -> None:
     """Test aggregated health check with failures."""
     mock_doc_store.health_check.return_value = False
 
-    # Mock Redis and Celery App
-    with (
-        patch("middleware.api.business_logic.celery_app") as mock_celery,
-        patch("middleware.api.business_logic.redis.from_url") as mock_redis_from_url,
-    ):
-        # Mock RabbitMQ failure
+    # Mock RabbitMQ failure
+    with patch("middleware.api.business_logic.business_logic.celery_app") as mock_celery:
         mock_celery.connection_or_acquire.side_effect = ConnectionError("Connection failed")
-
-        # Mock Redis failure
-        mock_config.celery.result_backend.get_secret_value.return_value = "redis://some-host"
-        mock_redis_from_url.return_value.ping.side_effect = redis.ConnectionError("Ping failed")
 
         status = await api_logic.health_check()
         assert status["couchdb_reachable"] is False
         assert status["rabbitmq"] is False
-        assert status["redis"] is False
 
 
 @pytest.mark.asyncio
 async def test_lifecycle_methods(api_logic: BusinessLogic, mock_doc_store: MagicMock) -> None:
-    """Test setup, connect, close and context manager."""
-    await api_logic.setup()
-    mock_doc_store.setup.assert_called_once_with(setup_system=True)
-
-    await api_logic.connect()
-    mock_doc_store.connect.assert_called_once()
-
-    await api_logic.close()
-    mock_doc_store.close.assert_called_once()
-
+    """Test lifecycle methods through the business logic."""
     async with api_logic as ctx:
         assert ctx == api_logic
-        assert mock_doc_store.connect.call_count == 2  # noqa: PLR2004
+        mock_doc_store.setup.assert_called_once()
+        mock_doc_store.connect.assert_called_once()
 
-    assert mock_doc_store.close.call_count == 2  # noqa: PLR2004
+    mock_doc_store.close.assert_called_once()
 
 
 @pytest.mark.asyncio
 async def test_setup_failure(api_logic: BusinessLogic, mock_doc_store: MagicMock) -> None:
     """Test setup failure."""
     mock_doc_store.setup.side_effect = Exception("DB Fail")
-    with pytest.raises(SetupError, match="Failed to setup CouchDB store"):
-        await api_logic.setup()
+    with pytest.raises(SetupError, match="Failed to setup business logic"):
+        await api_logic.startup()
 
 
 def test_get_task_status(api_logic: BusinessLogic) -> None:
-    """Test get_task_status wraps celery AsyncResult."""
-    with patch("middleware.api.business_logic.celery_app") as mock_celery:
-        mock_celery.AsyncResult.return_value = "task_result"
-        assert api_logic.get_task_status("task-1") == "task_result"
-        mock_celery.AsyncResult.assert_called_once_with("task-1")
+    """Test get_task_status returns a domain SyncTaskResult, hiding Celery internals."""
+    mock_async_result = MagicMock()
+    mock_async_result.state = "SUCCESS"
+    mock_async_result.result = {"some": "data"}
+
+    with patch("middleware.api.business_logic.business_logic.celery_app") as mock_celery:
+        mock_celery.AsyncResult.return_value = mock_async_result
+        result = api_logic.get_task_status("task-1")
+
+    assert isinstance(result, SyncTaskResult)
+    assert result.status == SyncTaskStatus.SUCCESS
+    assert result.result == {"some": "data"}
+    assert result.error is None
+    mock_celery.AsyncResult.assert_called_once_with("task-1")
 
 
 def test_store_task_result(api_logic: BusinessLogic) -> None:
@@ -194,7 +183,7 @@ def test_store_task_result(api_logic: BusinessLogic) -> None:
     mock_res = ArcOperationResult(
         rdi="rdi", arc=ArcResponse(id="1", status=ArcStatus.CREATED, timestamp="2024-01-01T00:00:00Z")
     )
-    with patch("middleware.api.business_logic.celery_app") as mock_celery:
+    with patch("middleware.api.business_logic.business_logic.celery_app") as mock_celery:
         api_logic.store_task_result("task-1", mock_res)
         mock_celery.backend.store_result.assert_called_once()
 
@@ -205,12 +194,12 @@ async def test_worker_mode_sync_to_gitlab_success(worker_logic: BusinessLogic, m
     rdi = "test-rdi"
     arc_data = {"@context": "https://w3id.org/ro/crate/1.1/context", "@graph": [{"@id": "./", "identifier": "ABC"}]}
 
-    with patch("middleware.api.business_logic.ARC") as mock_arc_class:
+    with patch("middleware.api.business_logic.arc_manager.ARC") as mock_arc_class:
         mock_arc_instance = MagicMock()
         mock_arc_instance.Identifier = "ABC"
         mock_arc_class.from_rocrate_json_string.return_value = mock_arc_instance
 
-        with patch("middleware.api.business_logic.calculate_arc_id", return_value="arc_id"):
+        with patch("middleware.api.business_logic.arc_manager.calculate_arc_id", return_value="arc_id"):
             await worker_logic.sync_to_gitlab(rdi, arc_data)
 
     # Verify store called
@@ -230,7 +219,7 @@ async def test_worker_mode_create_or_update_forbidden(worker_logic: BusinessLogi
 
 @pytest.mark.asyncio
 async def test_api_mode_skips_sync_if_no_changes(
-    api_logic: BusinessLogic, mock_doc_store: MagicMock, mock_task_sender: MagicMock
+    api_logic: BusinessLogic, mock_doc_store: MagicMock, mock_task_dispatcher: MagicMock
 ) -> None:
     """Test that GitLab sync is skipped if no changes."""
     mock_doc_store.store_arc.return_value = ArcStoreResult(arc_id="arc_id", is_new=False, has_changes=False)
@@ -238,27 +227,27 @@ async def test_api_mode_skips_sync_if_no_changes(
     rdi = "test-rdi"
     arc_data = {"@context": "https://w3id.org/ro/crate/1.1/context", "@graph": [{"@id": "./", "identifier": "ABC"}]}
 
-    with patch("middleware.api.business_logic.ARC") as mock_arc_class:
+    with patch("middleware.api.business_logic.arc_manager.ARC") as mock_arc_class:
         mock_arc_instance = MagicMock()
         mock_arc_instance.Identifier = "ABC"
         mock_arc_class.from_rocrate_json_string.return_value = mock_arc_instance
 
-        with patch("middleware.api.business_logic.calculate_arc_id", return_value="arc_id"):
+        with patch("middleware.api.business_logic.arc_manager.calculate_arc_id", return_value="arc_id"):
             await api_logic.create_or_update_arc(rdi, arc_data, "client")
 
     mock_doc_store.store_arc.assert_called_once()
-    mock_task_sender.delay.assert_not_called()
+    mock_task_dispatcher.dispatch_sync_arc.assert_not_called()
 
 
 def test_factory_create_api_mode() -> None:
     """Test factory creates API mode BusinessLogic."""
     config = MagicMock()
-    config.gitlab_api = MagicMock()
+    config.git_repo = MagicMock()
     config.couchdb = MagicMock()
 
     with (
-        patch("middleware.api.business_logic_factory.CouchDB"),
-        patch("middleware.api.business_logic_factory.GitlabApi"),
+        patch("middleware.api.business_logic.business_logic_factory.CouchDB"),
+        patch("middleware.api.business_logic.business_logic_factory.GitRepo"),
         patch.dict("sys.modules", {"middleware.api.worker": MagicMock()}),
     ):
         # Actually, simpler to verify the result has a task sender
@@ -316,7 +305,7 @@ async def test_sync_to_gitlab_generic_exception(worker_logic: BusinessLogic, moc
     mock_store.create_or_update.side_effect = Exception("Git failure")
     arc_data = {"@context": "https://w3id.org/ro/crate/1.1/context", "@graph": [{"@id": "./", "identifier": "test"}]}
 
-    with patch("middleware.api.business_logic.ARC") as mock_arc_class:
+    with patch("middleware.api.business_logic.arc_manager.ARC") as mock_arc_class:
         mock_arc_obj = MagicMock()
         mock_arc_obj.Identifier = "test"
         mock_arc_class.from_rocrate_json_string.return_value = mock_arc_obj

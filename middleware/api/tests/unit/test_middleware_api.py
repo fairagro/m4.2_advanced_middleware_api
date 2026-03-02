@@ -4,18 +4,22 @@ import http
 import unittest.mock
 import uuid
 from collections.abc import Callable
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock, patch
 
 import pytest
 from cryptography import x509
 from fastapi.testclient import TestClient
 
-from middleware.api.api import Api
-from middleware.shared.api_models.models import (
+from middleware.api.api.common.dependencies import get_client_id
+from middleware.api.api.fastapi_app import Api
+from middleware.api.business_logic.sync_task import SyncTaskResult, SyncTaskStatus
+from middleware.shared.api_models import (
     ArcOperationResult,
     ArcResponse,
     ArcStatus,
 )
+
+pytestmark = pytest.mark.filterwarnings("ignore:gitlab_api configuration is deprecated.*:DeprecationWarning")
 
 
 def test_whoami_success(client: TestClient, middleware_api: Api, cert: str) -> None:
@@ -70,14 +74,21 @@ def test_whoami_cert_verify_not_success(client: TestClient, cert: str, verify_st
     assert r.status_code == http.HTTPStatus.UNAUTHORIZED
 
 
-def test_health_check_success(client: TestClient, middleware_api: Api) -> None:
+def test_health_check_success(client: TestClient, middleware_api: Api, cert: str) -> None:
     """Test /v1/health success."""
     with unittest.mock.patch.object(
         middleware_api.business_logic,
         "health_check",
-        side_effect=AsyncMock(return_value={"couchdb_reachable": True, "redis": True, "rabbitmq": True}),
+        side_effect=AsyncMock(return_value={"couchdb_reachable": True, "rabbitmq": True}),
     ):
-        r = client.get("/v1/health", headers={"accept": "application/json"})
+        r = client.get(
+            "/v1/health",
+            headers={
+                "ssl-client-cert": cert,
+                "ssl-client-verify": "SUCCESS",
+                "accept": "application/json",
+            },
+        )
         assert r.status_code == http.HTTPStatus.OK
         assert r.json() == {
             "status": "ok",
@@ -86,49 +97,69 @@ def test_health_check_success(client: TestClient, middleware_api: Api) -> None:
         }
 
 
-def test_health_check_failure(client: TestClient, middleware_api: Api) -> None:
+def test_health_check_failure(client: TestClient, middleware_api: Api, cert: str) -> None:
     """Test /v1/health failure."""
     with unittest.mock.patch.object(
         middleware_api.business_logic,
         "health_check",
-        side_effect=AsyncMock(return_value={"couchdb_reachable": False, "redis": False, "rabbitmq": False}),
+        side_effect=AsyncMock(return_value={"couchdb_reachable": False, "rabbitmq": False}),
     ):
-        r = client.get("/v1/health", headers={"accept": "application/json"})
+        r = client.get(
+            "/v1/health",
+            headers={
+                "ssl-client-cert": cert,
+                "ssl-client-verify": "SUCCESS",
+                "accept": "application/json",
+            },
+        )
         assert r.status_code == http.HTTPStatus.SERVICE_UNAVAILABLE
         assert r.json() == {
             "status": "error",
-            "redis_reachable": False,
+            "redis_reachable": True,
             "rabbitmq_reachable": False,
         }
 
 
-def test_health_check_v2_success(client: TestClient, middleware_api: Api) -> None:
+def test_health_check_v2_success(client: TestClient, middleware_api: Api, cert: str) -> None:
     """Test /v2/health success with CouchDB status."""
     with unittest.mock.patch.object(
         middleware_api.business_logic,
         "health_check",
-        side_effect=AsyncMock(return_value={"couchdb_reachable": True, "redis": True, "rabbitmq": True}),
+        side_effect=AsyncMock(return_value={"couchdb_reachable": True, "rabbitmq": True}),
     ):
-        r = client.get("/v2/health", headers={"accept": "application/json"})
+        r = client.get(
+            "/v2/health",
+            headers={
+                "ssl-client-cert": cert,
+                "ssl-client-verify": "SUCCESS",
+                "accept": "application/json",
+            },
+        )
         assert r.status_code == http.HTTPStatus.OK
         assert r.json() == {
             "status": "ok",
             "services": {
-                "redis": True,
                 "rabbitmq": True,
                 "couchdb_reachable": True,
             },
         }
 
 
-def test_health_check_v2_couchdb_failure(client: TestClient, middleware_api: Api) -> None:
+def test_health_check_v2_couchdb_failure(client: TestClient, middleware_api: Api, cert: str) -> None:
     """Test /v2/health with CouchDB failure returns 503."""
     with unittest.mock.patch.object(
         middleware_api.business_logic,
         "health_check",
-        side_effect=AsyncMock(return_value={"couchdb_reachable": False, "redis": True, "rabbitmq": True}),
+        side_effect=AsyncMock(return_value={"couchdb_reachable": False, "rabbitmq": True}),
     ):
-        r = client.get("/v2/health", headers={"accept": "application/json"})
+        r = client.get(
+            "/v2/health",
+            headers={
+                "ssl-client-cert": cert,
+                "ssl-client-verify": "SUCCESS",
+                "accept": "application/json",
+            },
+        )
         assert r.status_code == http.HTTPStatus.SERVICE_UNAVAILABLE
         assert r.json()["services"]["couchdb_reachable"] is False
         assert r.json()["status"] == "error"
@@ -149,35 +180,44 @@ def test_create_or_update_arcs_success(
     client: TestClient, cert: str, expected_http_status: int, middleware_api: Api
 ) -> None:
     """Test creating a new ARC via the /v1/arcs endpoint."""
-    # Mock the BusinessLogic response
-    mock_result = ArcOperationResult(
-        rdi="rdi-1",
-        client_id="test-client",
-        message="ok",
-        arc=ArcResponse(id="arc-1", status=ArcStatus.CREATED, timestamp="2024-01-01T00:00:00Z"),
-    )
+    # Mock authorization to allow rdi-1
+    with (
+        unittest.mock.patch.object(middleware_api.app.state.common_deps, "get_known_rdis", return_value=["rdi-1"]),
+        unittest.mock.patch.object(
+            middleware_api.app.state.common_deps, "get_authorized_rdis", new_callable=unittest.mock.AsyncMock
+        ) as mock_auth,
+    ):
+        mock_auth.return_value = ["rdi-1"]
 
-    with unittest.mock.patch.object(
-        middleware_api.business_logic, "create_or_update_arc", new_callable=unittest.mock.AsyncMock
-    ) as mock_create:
-        mock_create.return_value = mock_result
+        # Mock the BusinessLogic response
+        mock_result = ArcOperationResult(
+            rdi="rdi-1",
+            client_id="test-client",
+            message="ok",
+            arc=ArcResponse(id="arc-1", status=ArcStatus.CREATED, timestamp="2024-01-01T00:00:00Z"),
+        )
 
-        # Mock uuid to get predictable task_id
-        with unittest.mock.patch(
-            "middleware.api.api.uuid.uuid4", return_value=uuid.UUID("12345678-1234-5678-1234-567812345678")
-        ):
-            r = client.post(
-                "/v1/arcs",
-                headers={
-                    "ssl-client-cert": cert,
-                    "ssl-client-verify": "SUCCESS",
-                    "content-type": "application/json",
-                    "accept": "application/json",
-                },
-                json={"rdi": "rdi-1", "arcs": [{"dummy": "crate"}]},
-            )
-        assert r.status_code == expected_http_status
-        assert r.json()["task_id"] == "12345678-1234-5678-1234-567812345678"
+        with unittest.mock.patch.object(
+            middleware_api.business_logic, "create_or_update_arc", new_callable=unittest.mock.AsyncMock
+        ) as mock_create:
+            mock_create.return_value = mock_result
+
+            # Mock uuid to get predictable task_id
+            with unittest.mock.patch(
+                "middleware.api.api.v1.arcs.uuid.uuid4", return_value=uuid.UUID("12345678-1234-5678-1234-567812345678")
+            ):
+                r = client.post(
+                    "/v1/arcs",
+                    headers={
+                        "ssl-client-cert": cert,
+                        "ssl-client-verify": "SUCCESS",
+                        "content-type": "application/json",
+                        "accept": "application/json",
+                    },
+                    json={"rdi": "rdi-1", "arcs": [{"dummy": "crate"}]},
+                )
+            assert r.status_code == expected_http_status
+            assert r.json()["task_id"] == "12345678-1234-5678-1234-567812345678"
 
 
 def test_create_or_update_arcs_invalid_cert_format(client: TestClient) -> None:
@@ -200,10 +240,10 @@ def test_create_or_update_arcs_no_cert_allowed(client: TestClient, middleware_ap
     """Test successful submission without cert when not required."""
     # pylint: disable=protected-access
     # Disable client cert requirement
-    middleware_api._config.require_client_cert = False
+    middleware_api._config.require_client_cert = False  # noqa: SLF001
 
     # Needs to be known RDI
-    middleware_api._config.known_rdis = ["rdi-1"]
+    middleware_api._config.known_rdis = ["rdi-1"]  # noqa: SLF001
 
     mock_result = ArcOperationResult(
         rdi="rdi-1",
@@ -219,7 +259,7 @@ def test_create_or_update_arcs_no_cert_allowed(client: TestClient, middleware_ap
 
         # Mock uuid to get predictable task_id
         with unittest.mock.patch(
-            "middleware.api.api.uuid.uuid4", return_value=uuid.UUID("12345678-1234-5678-1234-567812345678")
+            "middleware.api.api.v1.arcs.uuid.uuid4", return_value=uuid.UUID("12345678-1234-5678-1234-567812345678")
         ):
             r = client.post(
                 "/v1/arcs",
@@ -234,23 +274,20 @@ def test_create_or_update_arcs_no_cert_allowed(client: TestClient, middleware_ap
         assert body["task_id"] == "12345678-1234-5678-1234-567812345678"
 
     # Reset config
-    middleware_api._config.require_client_cert = True
+    middleware_api._config.require_client_cert = True  # noqa: SLF001
 
 
 def test_get_task_status_v1_transformation(client: TestClient, middleware_api: Api) -> None:
     """Test getting task status via /v1/tasks (v1 endpoint) with singular result from worker."""
-    mock_result = MagicMock()
-    mock_result.status = "SUCCESS"
-    mock_result.ready.return_value = True
-    mock_result.successful.return_value = True
-    mock_result.failed.return_value = False
-    # Mock return value from worker (singular)
-    mock_result.result = {
-        "client_id": "test",
-        "message": "ok",
-        "rdi": "rdi-1",
-        "arc": {"id": "arc-1", "status": "created", "timestamp": "2024-01-01T00:00:00Z"},
-    }
+    mock_result = SyncTaskResult(
+        status=SyncTaskStatus.SUCCESS,
+        result={
+            "client_id": "test",
+            "message": "ok",
+            "rdi": "rdi-1",
+            "arc": {"id": "arc-1", "status": "created", "timestamp": "2024-01-01T00:00:00Z"},
+        },
+    )
 
     with unittest.mock.patch.object(middleware_api.business_logic, "get_task_status", return_value=mock_result):
         r = client.get(
@@ -389,21 +426,25 @@ def test_whoami_accessible_rdis_intersection(client: TestClient, middleware_api:
     # known_rdis fixture has ["rdi-1", "rdi-2"]
     # Let's create a cert with ["rdi-1", "rdi-3"] - only rdi-1 should be accessible
     # pylint: disable=protected-access
-    middleware_api.app.dependency_overrides[middleware_api._validate_client_id] = lambda: "TestClient"
-    middleware_api.app.dependency_overrides[middleware_api._get_authorized_rdis] = lambda: ["rdi-1", "rdi-3"]
-    middleware_api.app.dependency_overrides[middleware_api._get_known_rdis] = lambda: ["rdi-1", "rdi-2"]
+    middleware_api.app.dependency_overrides[get_client_id] = lambda: "TestClient"
 
-    r = client.get(
-        "/v1/whoami",
-        headers={
-            "ssl-client-cert": "dummy-cert",
-            "ssl-client-verify": "SUCCESS",
-            "accept": "application/json",
-        },
-    )
-    assert r.status_code == http.HTTPStatus.OK
-    # Only rdi-1 should be in the intersection
-    assert set(r.json()["accessible_rdis"]) == {"rdi-1"}
+    with (
+        patch.object(middleware_api.app.state.common_deps, "get_authorized_rdis", new_callable=AsyncMock) as mock_auth,
+        patch.object(middleware_api.app.state.common_deps, "get_known_rdis", return_value=["rdi-1", "rdi-2"]),
+    ):
+        mock_auth.return_value = ["rdi-1", "rdi-3"]
+
+        r = client.get(
+            "/v1/whoami",
+            headers={
+                "ssl-client-cert": "dummy-cert",
+                "ssl-client-verify": "SUCCESS",
+                "accept": "application/json",
+            },
+        )
+        assert r.status_code == http.HTTPStatus.OK
+        # Only rdi-1 should be in the intersection
+        assert set(r.json()["accessible_rdis"]) == {"rdi-1"}
 
     # Cleanup
     middleware_api.app.dependency_overrides.clear()
@@ -414,17 +455,21 @@ def test_whoami_accessible_rdis_no_overlap(client: TestClient, middleware_api: A
     # Create certificate with RDIs that don't overlap with known_rdis
     # known_rdis has ["rdi-1", "rdi-2"], create cert with ["rdi-3", "rdi-4"]
     # pylint: disable=protected-access
-    middleware_api.app.dependency_overrides[middleware_api._validate_client_id] = lambda: "TestClient"
-    middleware_api.app.dependency_overrides[middleware_api._get_authorized_rdis] = lambda: ["rdi-3", "rdi-4"]
-    middleware_api.app.dependency_overrides[middleware_api._get_known_rdis] = lambda: ["rdi-1", "rdi-2"]
+    middleware_api.app.dependency_overrides[get_client_id] = lambda: "TestClient"
 
-    r = client.get(
-        "/v1/whoami",
-        headers={"ssl-client-cert": "dummy-cert", "ssl-client-verify": "SUCCESS", "accept": "application/json"},
-    )
-    assert r.status_code == http.HTTPStatus.OK
-    # No overlap, should be empty
-    assert r.json()["accessible_rdis"] == []
+    with (
+        patch.object(middleware_api.app.state.common_deps, "get_authorized_rdis", new_callable=AsyncMock) as mock_auth,
+        patch.object(middleware_api.app.state.common_deps, "get_known_rdis", return_value=["rdi-1", "rdi-2"]),
+    ):
+        mock_auth.return_value = ["rdi-3", "rdi-4"]
+
+        r = client.get(
+            "/v1/whoami",
+            headers={"ssl-client-cert": "dummy-cert", "ssl-client-verify": "SUCCESS", "accept": "application/json"},
+        )
+        assert r.status_code == http.HTTPStatus.OK
+        # No overlap, should be empty
+        assert r.json()["accessible_rdis"] == []
 
     # Cleanup
     middleware_api.app.dependency_overrides.clear()
@@ -434,17 +479,21 @@ def test_whoami_accessible_rdis_complete_overlap(client: TestClient, middleware_
     """Test that accessible_rdis contains all RDIs when there's complete overlap."""
     # Create certificate with same RDIs as known_rdis
     # pylint: disable=protected-access
-    middleware_api.app.dependency_overrides[middleware_api._validate_client_id] = lambda: "TestClient"
-    middleware_api.app.dependency_overrides[middleware_api._get_authorized_rdis] = lambda: ["rdi-1", "rdi-2"]
-    middleware_api.app.dependency_overrides[middleware_api._get_known_rdis] = lambda: ["rdi-1", "rdi-2"]
+    middleware_api.app.dependency_overrides[get_client_id] = lambda: "TestClient"
 
-    r = client.get(
-        "/v1/whoami",
-        headers={"ssl-client-cert": "dummy-cert", "ssl-client-verify": "SUCCESS", "accept": "application/json"},
-    )
-    assert r.status_code == http.HTTPStatus.OK
-    # Complete overlap
-    assert set(r.json()["accessible_rdis"]) == {"rdi-1", "rdi-2"}
+    with (
+        patch.object(middleware_api.app.state.common_deps, "get_authorized_rdis", new_callable=AsyncMock) as mock_auth,
+        patch.object(middleware_api.app.state.common_deps, "get_known_rdis", return_value=["rdi-1", "rdi-2"]),
+    ):
+        mock_auth.return_value = ["rdi-1", "rdi-2"]
+
+        r = client.get(
+            "/v1/whoami",
+            headers={"ssl-client-cert": "dummy-cert", "ssl-client-verify": "SUCCESS", "accept": "application/json"},
+        )
+        assert r.status_code == http.HTTPStatus.OK
+        # Complete overlap
+        assert set(r.json()["accessible_rdis"]) == {"rdi-1", "rdi-2"}
 
     # Cleanup
     middleware_api.app.dependency_overrides.clear()
@@ -456,22 +505,21 @@ def test_whoami_accessible_rdis_superset_in_cert(client: TestClient, middleware_
     # known_rdis has ["rdi-1", "rdi-2"]
     # Result should be ["rdi-1", "rdi-2"]
     # pylint: disable=protected-access
-    middleware_api.app.dependency_overrides[middleware_api._validate_client_id] = lambda: "TestClient"
-    middleware_api.app.dependency_overrides[middleware_api._get_authorized_rdis] = lambda: [
-        "rdi-1",
-        "rdi-2",
-        "rdi-3",
-        "rdi-4",
-    ]
-    middleware_api.app.dependency_overrides[middleware_api._get_known_rdis] = lambda: ["rdi-1", "rdi-2"]
+    middleware_api.app.dependency_overrides[get_client_id] = lambda: "TestClient"
 
-    r = client.get(
-        "/v1/whoami",
-        headers={"ssl-client-cert": "dummy-cert", "ssl-client-verify": "SUCCESS", "accept": "application/json"},
-    )
-    assert r.status_code == http.HTTPStatus.OK
-    # Only the intersection should be returned
-    assert set(r.json()["accessible_rdis"]) == {"rdi-1", "rdi-2"}
+    with (
+        patch.object(middleware_api.app.state.common_deps, "get_authorized_rdis", new_callable=AsyncMock) as mock_auth,
+        patch.object(middleware_api.app.state.common_deps, "get_known_rdis", return_value=["rdi-1", "rdi-2"]),
+    ):
+        mock_auth.return_value = ["rdi-1", "rdi-2", "rdi-3", "rdi-4"]
+
+        r = client.get(
+            "/v1/whoami",
+            headers={"ssl-client-cert": "dummy-cert", "ssl-client-verify": "SUCCESS", "accept": "application/json"},
+        )
+        assert r.status_code == http.HTTPStatus.OK
+        # Only the intersection should be returned
+        assert set(r.json()["accessible_rdis"]) == {"rdi-1", "rdi-2"}
 
     # Cleanup
     middleware_api.app.dependency_overrides.clear()
