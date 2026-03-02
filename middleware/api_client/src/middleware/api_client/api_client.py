@@ -118,6 +118,74 @@ class ApiClient:
         return not isinstance(error, httpx.TimeoutException)
 
     @classmethod
+    def _should_retry_failure(
+        cls,
+        method: str,
+        *,
+        status_code: int | None = None,
+        request_error: httpx.RequestError | None = None,
+    ) -> bool:
+        """Return whether an HTTP failure is retryable for a request method."""
+        if status_code is not None:
+            return cls._should_retry_http_status(method, status_code)
+        if request_error is not None:
+            return cls._should_retry_request_error(method, request_error)
+        return False
+
+    @classmethod
+    def _build_failure_error_message(
+        cls,
+        failure: httpx.HTTPStatusError | httpx.RequestError,
+        *,
+        retryable: bool,
+        max_retries: int,
+    ) -> tuple[str, int | None]:
+        """Return normalized error message and optional status code for a request failure."""
+        if isinstance(failure, httpx.HTTPStatusError):
+            status_code = failure.response.status_code
+            if retryable:
+                return f"Request failed after {max_retries} retries: HTTP {status_code}", status_code
+            return cls._format_http_error_message(status_code, failure.response.text), status_code
+
+        if retryable:
+            return f"Request failed after {max_retries} retries: {failure}", None
+        return f"Request failed: {failure}", None
+
+    @classmethod
+    def _should_retry_or_raise_failure(
+        cls,
+        failure: httpx.HTTPStatusError | httpx.RequestError,
+        *,
+        method: str,
+        attempt: int,
+        max_retries: int,
+    ) -> bool:
+        """Return True to retry; otherwise raise a normalized ApiClientError."""
+        status_code = failure.response.status_code if isinstance(failure, httpx.HTTPStatusError) else None
+        request_error = failure if isinstance(failure, httpx.RequestError) else None
+
+        should_retry = cls._should_retry_failure(
+            method,
+            status_code=status_code,
+            request_error=request_error,
+        )
+
+        if should_retry and attempt < max_retries:
+            if isinstance(failure, httpx.HTTPStatusError):
+                logger.warning("Transient HTTP error %d from server, will retry", failure.response.status_code)
+            else:
+                logger.warning("Request error: %s. Retrying...", failure)
+            return True
+
+        msg, normalized_status_code = cls._build_failure_error_message(
+            failure,
+            retryable=should_retry,
+            max_retries=max_retries,
+        )
+        logger.error(msg)
+        raise ApiClientError(msg, status_code=normalized_status_code) from failure
+
+    @classmethod
     def _format_http_error_message(cls, status_code: int, response_text: str) -> str:
         """Build a safe and concise HTTP error message."""
         response_excerpt = " ".join(response_text.splitlines()).strip()
@@ -327,7 +395,8 @@ class ApiClient:
                     resp = await client.request(method, path, **kwargs)
 
                 # Retry on transient server-side errors before raising
-                if self._should_retry_http_status(method, resp.status_code) and attempt < self._config.max_retries:
+                should_retry = self._should_retry_failure(method, status_code=resp.status_code)
+                if should_retry and attempt < self._config.max_retries:
                     logger.warning("Transient HTTP error %d from server, will retry", resp.status_code)
                     continue
 
@@ -336,29 +405,14 @@ class ApiClient:
 
                 return self._parse_json_response(resp, method, path)
 
-            except httpx.HTTPStatusError as e:
-                if (
-                    self._should_retry_http_status(method, e.response.status_code)
-                    and attempt < self._config.max_retries
+            except (httpx.HTTPStatusError, httpx.RequestError) as e:
+                if self._should_retry_or_raise_failure(
+                    e,
+                    method=method,
+                    attempt=attempt,
+                    max_retries=self._config.max_retries,
                 ):
                     continue
-                if self._should_retry_http_status(method, e.response.status_code):
-                    msg = f"Request failed after {self._config.max_retries} retries: HTTP {e.response.status_code}"
-                else:
-                    msg = self._format_http_error_message(e.response.status_code, e.response.text)
-                logger.error(msg)
-                raise ApiClientError(msg, status_code=e.response.status_code) from e
-
-            except httpx.RequestError as e:
-                if self._should_retry_request_error(method, e) and attempt < self._config.max_retries:
-                    logger.warning("Request error: %s. Retrying...", e)
-                    continue
-                if self._should_retry_request_error(method, e):
-                    msg = f"Request failed after {self._config.max_retries} retries: {e}"
-                else:
-                    msg = f"Request failed: {e}"
-                logger.error(msg)
-                raise ApiClientError(msg) from e
 
         raise ApiClientError("Request failed for an unknown reason")  # pragma: no cover
 
