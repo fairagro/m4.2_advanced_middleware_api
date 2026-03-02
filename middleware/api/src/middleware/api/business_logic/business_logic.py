@@ -211,10 +211,7 @@ class BusinessLogic:
         """
         # If harvest_id is provided, validate that it belongs to the client
         if harvest_id:
-            try:
-                await self._harvest_manager.validate_client_id(harvest_id, client_id)
-            except ValueError as e:
-                raise BusinessLogicError(str(e)) from e
+            await self._harvest_manager.validate_client_id(harvest_id, client_id)
 
         return await self._arc_manager.create_or_update_arc(rdi, arc, client_id, harvest_id)
 

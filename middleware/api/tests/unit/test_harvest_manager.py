@@ -6,6 +6,7 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 
 from middleware.api.business_logic.config import HarvestConfig
+from middleware.api.business_logic.exceptions import AccessDeniedError, ResourceNotFoundError
 from middleware.api.business_logic.harvest_manager import HarvestManager
 from middleware.api.document_store.harvest_document import HarvestDocument, HarvestStatistics
 from middleware.shared.api_models.common.models import HarvestStatus
@@ -110,18 +111,18 @@ async def test_validate_client_id_success(manager: HarvestManager, doc_store: Ma
 
 @pytest.mark.asyncio
 async def test_validate_client_id_mismatch(manager: HarvestManager, doc_store: MagicMock) -> None:
-    """validate_client_id raises ValueError on client_id mismatch."""
+    """validate_client_id raises AccessDeniedError on client_id mismatch."""
     harvest = _make_harvest(client_id="client-a")
     doc_store.get_harvest = AsyncMock(return_value=harvest)
-    with pytest.raises(ValueError, match="does not belong"):
+    with pytest.raises(AccessDeniedError, match="does not belong"):
         await manager.validate_client_id("harvest-1", "wrong-client")
 
 
 @pytest.mark.asyncio
 async def test_validate_client_id_harvest_not_found(manager: HarvestManager, doc_store: MagicMock) -> None:
-    """validate_client_id raises ValueError when harvest not found."""
+    """validate_client_id raises ResourceNotFoundError when harvest not found."""
     doc_store.get_harvest = AsyncMock(return_value=None)
-    with pytest.raises(ValueError, match="not found"):
+    with pytest.raises(ResourceNotFoundError, match="not found"):
         await manager.validate_client_id("no-such-harvest", "client-a")
 
 
@@ -164,18 +165,18 @@ async def test_complete_harvest_preserves_expected_datasets(manager: HarvestMana
 
 @pytest.mark.asyncio
 async def test_complete_harvest_not_found(manager: HarvestManager, doc_store: MagicMock) -> None:
-    """complete_harvest raises ValueError when harvest not found."""
+    """complete_harvest raises ResourceNotFoundError when harvest not found."""
     doc_store.get_harvest = AsyncMock(return_value=None)
-    with pytest.raises(ValueError, match="not found"):
+    with pytest.raises(ResourceNotFoundError, match="not found"):
         await manager.complete_harvest("no-such-harvest", "client-a")
 
 
 @pytest.mark.asyncio
 async def test_complete_harvest_client_id_mismatch(manager: HarvestManager, doc_store: MagicMock) -> None:
-    """complete_harvest raises ValueError when client_id does not match."""
+    """complete_harvest raises AccessDeniedError when client_id does not match."""
     harvest = _make_harvest(client_id="client-a")
     doc_store.get_harvest = AsyncMock(return_value=harvest)
-    with pytest.raises(ValueError, match="does not belong"):
+    with pytest.raises(AccessDeniedError, match="does not belong"):
         await manager.complete_harvest("harvest-1", "wrong-client")
 
 
@@ -197,18 +198,18 @@ async def test_cancel_harvest_success(manager: HarvestManager, doc_store: MagicM
 
 @pytest.mark.asyncio
 async def test_cancel_harvest_not_found(manager: HarvestManager, doc_store: MagicMock) -> None:
-    """cancel_harvest raises ValueError when harvest not found."""
+    """cancel_harvest raises ResourceNotFoundError when harvest not found."""
     doc_store.get_harvest = AsyncMock(return_value=None)
-    with pytest.raises(ValueError, match="not found"):
+    with pytest.raises(ResourceNotFoundError, match="not found"):
         await manager.cancel_harvest("no-such-harvest", "client-a")
 
 
 @pytest.mark.asyncio
 async def test_cancel_harvest_client_id_mismatch(manager: HarvestManager, doc_store: MagicMock) -> None:
-    """cancel_harvest raises ValueError when client_id does not match."""
+    """cancel_harvest raises AccessDeniedError when client_id does not match."""
     harvest = _make_harvest(client_id="client-a")
     doc_store.get_harvest = AsyncMock(return_value=harvest)
-    with pytest.raises(ValueError, match="does not belong"):
+    with pytest.raises(AccessDeniedError, match="does not belong"):
         await manager.cancel_harvest("harvest-1", "wrong-client")
 
 

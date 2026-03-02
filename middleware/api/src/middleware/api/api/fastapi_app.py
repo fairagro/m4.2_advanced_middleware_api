@@ -19,6 +19,13 @@ from opentelemetry.sdk._logs import LoggerProvider
 from opentelemetry.sdk.trace import TracerProvider
 
 from ..business_logic import BusinessLogicFactory
+from ..business_logic.exceptions import (
+    AccessDeniedError,
+    BusinessLogicError,
+    ConflictError,
+    InvalidJsonSemanticError,
+    ResourceNotFoundError,
+)
 from ..config import Config
 from .common.dependencies import CommonApiDependencies
 from .tracing import setup_api_tracing
@@ -179,6 +186,42 @@ class Api:
         return self._app
 
     def _setup_exception_handlers(self) -> None:
+        @self._app.exception_handler(InvalidJsonSemanticError)
+        async def invalid_json_semantic_handler(_request: Request, exc: InvalidJsonSemanticError) -> JSONResponse:
+            return JSONResponse(
+                status_code=HTTPStatus.UNPROCESSABLE_ENTITY,
+                content={"detail": str(exc)},
+            )
+
+        @self._app.exception_handler(ResourceNotFoundError)
+        async def not_found_handler(_request: Request, exc: ResourceNotFoundError) -> JSONResponse:
+            return JSONResponse(
+                status_code=HTTPStatus.NOT_FOUND,
+                content={"detail": str(exc)},
+            )
+
+        @self._app.exception_handler(AccessDeniedError)
+        async def access_denied_handler(_request: Request, exc: AccessDeniedError) -> JSONResponse:
+            return JSONResponse(
+                status_code=HTTPStatus.FORBIDDEN,
+                content={"detail": str(exc)},
+            )
+
+        @self._app.exception_handler(ConflictError)
+        async def conflict_handler(_request: Request, exc: ConflictError) -> JSONResponse:
+            return JSONResponse(
+                status_code=HTTPStatus.CONFLICT,
+                content={"detail": str(exc)},
+            )
+
+        @self._app.exception_handler(BusinessLogicError)
+        async def business_logic_error_handler(_request: Request, _exc: BusinessLogicError) -> JSONResponse:
+            logger.error("Business logic error", exc_info=True)
+            return JSONResponse(
+                status_code=HTTPStatus.INTERNAL_SERVER_ERROR,
+                content={"detail": "Business logic error"},
+            )
+
         @self._app.exception_handler(Exception)
         async def unhandled_exception_handler(_request: Request, _exc: Exception) -> JSONResponse:
             logger.error("Unhandled exception: %s", _exc)

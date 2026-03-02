@@ -4,6 +4,7 @@ import logging
 from typing import Any, Self
 
 from middleware.api.business_logic.config import HarvestConfig
+from middleware.api.business_logic.exceptions import AccessDeniedError, ResourceNotFoundError
 from middleware.api.document_store import DocumentStore
 from middleware.api.document_store.harvest_document import HarvestDocument
 from middleware.shared.api_models.common.models import HarvestStatus
@@ -49,7 +50,7 @@ class HarvestManager:
         """Validate that the harvest belongs to the client."""
         harvest = await self.get_harvest(harvest_id)
         if not harvest:
-            raise ValueError(f"Harvest {harvest_id} not found")
+            raise ResourceNotFoundError(f"Harvest {harvest_id} not found")
 
         # The field in CouchDB is 'client_id'
         stored_client_id = harvest.client_id
@@ -57,19 +58,19 @@ class HarvestManager:
             logger.warning(
                 "[%s] Client ID mismatch for harvest %s: expected %s", client_id, harvest_id, stored_client_id
             )
-            raise ValueError(f"Harvest {harvest_id} does not belong to client {client_id}")
+            raise AccessDeniedError(f"Harvest {harvest_id} does not belong to client {client_id}")
 
     async def complete_harvest(self, harvest_id: str, client_id: str) -> HarvestDocument:
         """Mark a harvest as completed and return the updated document."""
         # Single fetch: used for both client_id validation and expected_datasets
         harvest = await self.get_harvest(harvest_id)
         if not harvest:
-            raise ValueError(f"Harvest {harvest_id} not found")
+            raise ResourceNotFoundError(f"Harvest {harvest_id} not found")
         if harvest.client_id != client_id:
             logger.warning(
                 "[%s] Client ID mismatch for harvest %s: expected %s", client_id, harvest_id, harvest.client_id
             )
-            raise ValueError(f"Harvest {harvest_id} does not belong to client {client_id}")
+            raise AccessDeniedError(f"Harvest {harvest_id} does not belong to client {client_id}")
 
         # Calculate statistics server-side from stored ARCs
         statistics = await self._doc_store.get_harvest_statistics(harvest_id)
@@ -92,12 +93,12 @@ class HarvestManager:
         # Single fetch: used for both client_id validation and RDI auth (endpoint does it first)
         harvest = await self.get_harvest(harvest_id)
         if not harvest:
-            raise ValueError(f"Harvest {harvest_id} not found")
+            raise ResourceNotFoundError(f"Harvest {harvest_id} not found")
         if harvest.client_id != client_id:
             logger.warning(
                 "[%s] Client ID mismatch for harvest %s: expected %s", client_id, harvest_id, harvest.client_id
             )
-            raise ValueError(f"Harvest {harvest_id} does not belong to client {client_id}")
+            raise AccessDeniedError(f"Harvest {harvest_id} does not belong to client {client_id}")
 
         updates = {
             "status": HarvestStatus.CANCELLED,

@@ -1,6 +1,5 @@
 """Modular V3 ARC endpoints using APIRouter."""
 
-import logging
 from http import HTTPStatus
 from typing import Annotated
 
@@ -14,10 +13,8 @@ from middleware.api.api.common.dependencies import (
     get_common_deps,
     get_content_type,
 )
-from middleware.api.business_logic import BusinessLogic, InvalidJsonSemanticError
+from middleware.api.business_logic import BusinessLogic
 from middleware.shared.api_models.v3 import models
-
-logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/v3/arcs", tags=["v3", "arcs"])
 
@@ -36,39 +33,31 @@ async def create_or_update_arc(
     rdi = request_body.rdi
     await deps.validate_rdi_authorized(rdi, request)
 
-    try:
-        result = await bl.create_or_update_arc(rdi, request_body.arc, client_id)
+    result = await bl.create_or_update_arc(rdi, request_body.arc, client_id)
 
-        arc_id = result.arc.id
-        metadata = await bl.get_metadata(arc_id)
+    arc_id = result.arc.id
+    metadata = await bl.get_metadata(arc_id)
 
-        if not metadata:
-            raise HTTPException(status_code=HTTPStatus.INTERNAL_SERVER_ERROR, detail="Failed to retrieve ARC metadata")
+    if not metadata:
+        raise HTTPException(status_code=HTTPStatus.INTERNAL_SERVER_ERROR, detail="Failed to retrieve ARC metadata")
 
-        return models.ArcResponse(
-            client_id=client_id,
-            message="ARC processed successfully",
-            arc_id=arc_id,
-            status=result.arc.status,
-            metadata=models.ArcMetadata(
-                arc_hash=metadata.arc_hash,
-                status=metadata.status,
-                first_seen=metadata.first_seen.isoformat() + "Z",
-                last_seen=metadata.last_seen.isoformat() + "Z",
-            ),
-            events=[
-                models.ArcEventSummary(
-                    timestamp=event.timestamp.isoformat() + "Z",
-                    type=event.type,
-                    message=event.message,
-                )
-                for event in metadata.events
-            ],
-        )
-    except InvalidJsonSemanticError as e:
-        raise HTTPException(status_code=HTTPStatus.UNPROCESSABLE_ENTITY, detail=str(e)) from e
-    except Exception as e:
-        logger.error("Error in v3 ARC endpoint: %s", e, exc_info=True)
-        if isinstance(e, HTTPException):
-            raise e
-        raise HTTPException(status_code=HTTPStatus.INTERNAL_SERVER_ERROR, detail=str(e)) from e
+    return models.ArcResponse(
+        client_id=client_id,
+        message="ARC processed successfully",
+        arc_id=arc_id,
+        status=result.arc.status,
+        metadata=models.ArcMetadata(
+            arc_hash=metadata.arc_hash,
+            status=metadata.status,
+            first_seen=metadata.first_seen.isoformat() + "Z",
+            last_seen=metadata.last_seen.isoformat() + "Z",
+        ),
+        events=[
+            models.ArcEventSummary(
+                timestamp=event.timestamp.isoformat() + "Z",
+                type=event.type,
+                message=event.message,
+            )
+            for event in metadata.events
+        ],
+    )

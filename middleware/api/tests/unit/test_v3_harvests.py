@@ -8,7 +8,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from middleware.api.api.fastapi_app import Api
-from middleware.api.business_logic import InvalidJsonSemanticError
+from middleware.api.business_logic import BusinessLogicError, InvalidJsonSemanticError
 from middleware.api.document_store.harvest_document import HarvestDocument, HarvestStatistics
 from middleware.shared.api_models import ArcOperationResult, ArcResponse, ArcStatus
 from middleware.shared.api_models.common.models import HarvestStatus
@@ -484,7 +484,7 @@ def test_submit_arc_generic_exception(client: TestClient, cert: str, middleware_
     ):
         mock_get.return_value = harvest
         mock_auth.return_value = ["rdi-1"]
-        mock_create.side_effect = RuntimeError("unexpected")
+        mock_create.side_effect = BusinessLogicError("unexpected")
 
         r = client.post(
             "/v3/harvests/h-1/arcs",
