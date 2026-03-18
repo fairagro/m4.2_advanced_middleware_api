@@ -208,6 +208,7 @@ dev = [
 [package.metadata]
 requires-dist = [
     { name = "aiocouch", specifier = ">=2.0.0" },
+    { name = "aiocouch", specifier = ">=4.0.1" },
     { name = "arctrl", specifier = ">=3.0.0b15" },
     { name = "asn1crypto", specifier = ">=1.5.1" },
     { name = "celery", specifier = ">=5.3.6" },
@@ -1251,7 +1252,6 @@ name = "m4-2-advanced-middleware"
 version = "6.0.0"
 source = { virtual = "." }
 dependencies = [
-    { name = "aiocouch" },
     { name = "api" },
     { name = "api-client" },
     { name = "shared" },
@@ -1276,7 +1276,6 @@ dev = [
 
 [package.metadata]
 requires-dist = [
-    { name = "aiocouch", specifier = ">=4.0.1" },
     { name = "api", editable = "middleware/api" },
     { name = "api-client", editable = "middleware/api_client" },
     { name = "shared", editable = "middleware/shared" },

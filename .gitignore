@@ -221,6 +221,7 @@ helmchart/**/*.key
 helmchart/**/*.csr
 helmchart/**/*.srl
 helmchart/**/server.conf
+helmchart/**/client_ext.conf
 
 # ggshield cache
 .cache_ggshield
