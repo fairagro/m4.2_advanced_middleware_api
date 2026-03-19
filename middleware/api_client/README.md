@@ -37,6 +37,7 @@ from pathlib import Path
 from arctrl import ARC, ArcInvestigation
 from middleware.api_client import Config, ApiClient
 
+
 async def main():
     # Load configuration
     config = Config.from_yaml_file(Path("config.yaml"))
@@ -64,6 +65,7 @@ async def main():
             expected_datasets=1,
         )
         print(f"Harvest status: {harvest.status}")
+
 
 asyncio.run(main())
 ```

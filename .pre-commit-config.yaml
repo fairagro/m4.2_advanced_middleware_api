@@ -2,8 +2,8 @@
 # See https://pre-commit.com for more information
 # See https://pre-commit.com/hooks.html for more hooks
 #
-# All hooks use 'uv run' to execute tools defined in pyproject.toml
-# This ensures consistency with the quality-check.sh script and uv.lock
+# Ruff hooks use the project venv binary with --config pyproject.toml
+# so editor, pre-commit, and CI all use the same root configuration.
 
 repos:
   # Built-in hooks (no dependencies needed)
@@ -30,17 +30,19 @@ repos:
       # Ruff - Linting
       - id: ruff
         name: ruff lint
-        entry: uv run ruff check
+        entry: uv run ruff check middleware/
         language: system
-        types: [python]
+        files: ^middleware/
+        pass_filenames: false
         args: [--fix, --exit-non-zero-on-fix]
 
       # Ruff - Formatting
       - id: ruff-format
         name: ruff format
-        entry: uv run ruff format
+        entry: uv run ruff format middleware/
         language: system
-        types: [python]
+        files: ^middleware/
+        pass_filenames: false
 
       # mypy - Type checking
       - id: mypy

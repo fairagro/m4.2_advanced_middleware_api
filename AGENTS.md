@@ -53,6 +53,10 @@ uv run pytest middleware/api_client/tests/unit/ -v
 uv run ruff check .
 uv run mypy middleware/
 
+# Ruff parity checks (local + pre-commit + CI)
+uv run ruff format --check --diff middleware/
+uv run ruff check middleware/
+
 # Install all dependecies
 uv sync --dev --all-packages
 ```
@@ -176,6 +180,12 @@ Agents are expected to maintain high code quality by addressing issues reported 
 - **When to Suppress**: Only suppress if a fix is technically impossible or would result in unnecessarily complex or unreadable code.
 - **Comprehensive Coverage**: Fix all reported issues, including low-severity notices and warnings, not just critical errors.
 
+### Ruff Execution Consistency
+
+- Keep Ruff behavior identical in VS Code, pre-commit, and GitHub Actions by using the same scope (`middleware/`) and the same root config (`pyproject.toml`).
+- If `uv run ruff ...` fails before Ruff starts and shows `packaging.version.InvalidVersion` from `hatch-vcs`, the failure is in package version resolution, not Ruff itself.
+- In that case, verify `tool.hatch.version.raw-options` in `middleware/*/pyproject.toml` can parse repository tags used by CI/release workflows.
+
 ## 📚 File Modifications Pattern
 
 When editing files:
@@ -223,6 +233,12 @@ When editing files:
 - Improved type safety by replacing `Any` with concrete types (`CouchDB`, `Database`) in `CouchDBClient`.
 - Cleaned up Helm Chart templates by removing `initContainers` for CouchDB initialization.
 
+### Session 6: Ruff Parity Across Editor/Hook/CI
+
+- Standardized Ruff checks to run against `middleware/` in pre-commit and CI.
+- Fixed formatting drift in Markdown-embedded Python snippets (e.g., `middleware/api_client/README.md`).
+- Clarified that Ruff failures can be caused by `hatch-vcs` version parsing during `uv run`, and documented how to diagnose it.
+
 ## 📞 Questions to Ask
 
 Before making changes, consider:
@@ -235,6 +251,6 @@ Before making changes, consider:
 
 ---
 
-**Last Updated**: 2025-12-10
+**Last Updated**: 2026-03-19
 **Current Branch**: main
 **Maintainer Notes**: Keep this file updated when architectural decisions change

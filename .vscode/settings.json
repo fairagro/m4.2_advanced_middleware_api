@@ -29,8 +29,9 @@
 
   "mypy.configFile": "pyproject.toml",
 
-  // Ruff Extension Settings - ensure consistency with script
+  // Ruff Extension Settings - use same execution mode as pre-commit and CI
   "ruff.path": ["uv", "run", "ruff"],
+  "ruff.configuration": "${workspaceFolder}/pyproject.toml",
   "ruff.importStrategy": "fromEnvironment",
 
   // Pylint Extension Settings
