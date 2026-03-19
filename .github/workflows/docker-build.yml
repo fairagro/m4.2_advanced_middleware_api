@@ -107,11 +107,25 @@ jobs:
         id: normalize
         run: |
           VERSION="${{ env.IS_FEATURE_BRANCH == 'true' && steps.gitversion.outputs.semVer || steps.gitversion.outputs.majorMinorPatch }}"
-          # PEP 440 normalization:
-          # 1. Remove leading 'v'
-          # 2. Replace all non-alphanumeric chars (except dot) with '.'
-          # 3. Handle specific pattern 'couchdb.step2.v3.api.1' -> 'couchdb.step2.3.api.1' (remove nested 'v')
-          NORMALIZED=$(echo "$VERSION" | sed 's/^v//; s/[^a-zA-Z0-9.]/./g; s/\.v\([0-9]\)/.\1/g')
+          # PEP 440 Strict Normalization:
+          # 1. Base version must be numeric (e.g., 8.4.8)
+          # 2. Additional parts must be attached with '+' as local version identifier
+          # Correctly separates '8.4.8.any.text' into '8.4.8+any.text'
+
+          # Remove leading 'v'
+          VERSION_CLEAN=$(echo "$VERSION" | sed 's/^v//')
+          # Extract numeric base (e.g., 8.4.8)
+          BASE_VERSION=$(echo "$VERSION_CLEAN" | grep -oP "^\d+(\.\d+)*")
+          # The rest becomes the local version part
+          REMAINDER="${VERSION_CLEAN#$BASE_VERSION}"
+          LOCAL_PART=$(echo "$REMAINDER" | sed 's/^[.]//; s/[^a-zA-Z0-9]/./g')
+
+          if [ -n "$LOCAL_PART" ]; then
+            NORMALIZED="${BASE_VERSION}+${LOCAL_PART}"
+          else
+            NORMALIZED="${BASE_VERSION}"
+          fi
+
           echo "version=$NORMALIZED" >> $GITHUB_OUTPUT
 
       - name: Debug version info
