@@ -218,9 +218,9 @@ jobs:
             ${{ env.DOCKERHUB_AVAILABLE == 'true' && inputs.push_to_registry && format('{0}/{1}-{2}', env.DOCKERHUB_NAMESPACE, env.IMAGE_BASE_NAME, matrix.component) || '' }}
           tags: |
             type=semver,pattern={{version}},value=${{ needs.calculate-version.outputs.SemVer }}
-            type=raw,value=${{ needs.calculate-version.outputs.Major }}.${{ needs.calculate-version.outputs.Minor }},enable=${{ !contains(github.ref_name, 'feature/') }}
-            type=raw,value=${{ needs.calculate-version.outputs.Major }},enable=${{ !contains(github.ref_name, 'feature/') }}
-            type=raw,value=latest,enable=${{ !contains(github.ref_name, 'feature/') }}
+            type=raw,value=${{ needs.calculate-version.outputs.Major }}.${{ needs.calculate-version.outputs.Minor }},enable=${{ github.ref_name == 'main' }}
+            type=raw,value=${{ needs.calculate-version.outputs.Major }},enable=${{ github.ref_name == 'main' }}
+            type=raw,value=latest,enable=${{ github.ref_name == 'main' }}
           labels: |
             org.opencontainers.image.title=${{ steps.component-meta.outputs.title }}
             org.opencontainers.image.description=${{ steps.component-meta.outputs.description }}
@@ -229,6 +229,29 @@ jobs:
             org.opencontainers.image.version=v${{ needs.calculate-version.outputs.version }}
             org.opencontainers.image.created=${{ github.event.repository.updated_at }}
             org.opencontainers.image.revision=${{ github.sha }}
+
+      - name: Prepare image tags for build
+        id: prepare-tags
+        run: |
+          if [[ "${{ env.DOCKERHUB_AVAILABLE }}" == "true" && "${{ inputs.push_to_registry }}" == "true" ]]; then
+            BUILD_TAGS="${{ env.DOCKERHUB_NAMESPACE }}/${{ env.IMAGE_BASE_NAME }}-${{ matrix.component }}:${{ needs.calculate-version.outputs.docker_tag_version }}"
+            SOURCE_TAG="${{ env.DOCKERHUB_NAMESPACE }}/${{ env.IMAGE_BASE_NAME }}-${{ matrix.component }}:${{ needs.calculate-version.outputs.docker_tag_version }}"
+
+            if [[ "${{ github.ref_name }}" == "main" ]]; then
+              BUILD_TAGS+=$'\n'"${{ env.DOCKERHUB_NAMESPACE }}/${{ env.IMAGE_BASE_NAME }}-${{ matrix.component }}:latest"
+            fi
+          else
+            BUILD_TAGS="local/${{ env.IMAGE_BASE_NAME }}-${{ matrix.component }}:${{ needs.calculate-version.outputs.docker_tag_version }}"
+            BUILD_TAGS+=$'\n'"local/${{ env.IMAGE_BASE_NAME }}-${{ matrix.component }}:latest"
+            SOURCE_TAG="local/${{ env.IMAGE_BASE_NAME }}-${{ matrix.component }}:${{ needs.calculate-version.outputs.docker_tag_version }}"
+          fi
+
+          {
+            echo "build_tags<<EOF"
+            echo "$BUILD_TAGS"
+            echo "EOF"
+            echo "source_tag=$SOURCE_TAG"
+          } >> "$GITHUB_OUTPUT"
 
       - name: Build Docker image
         id: build
@@ -239,11 +262,7 @@ jobs:
           platforms: linux/amd64
           push: ${{ env.DOCKERHUB_AVAILABLE == 'true' && inputs.push_to_registry }}
           load: true
-          tags: |
-            local/${{ env.IMAGE_BASE_NAME }}-${{ matrix.component }}:latest
-            local/${{ env.IMAGE_BASE_NAME }}-${{ matrix.component }}:${{ needs.calculate-version.outputs.docker_tag_version }}
-            ${{ env.DOCKERHUB_AVAILABLE == 'true' && inputs.push_to_registry && format('{0}/{1}-{2}:{3}', env.DOCKERHUB_NAMESPACE, env.IMAGE_BASE_NAME, matrix.component, needs.calculate-version.outputs.docker_tag_version) || '' }}
-            ${{ env.DOCKERHUB_AVAILABLE == 'true' && inputs.push_to_registry && github.ref_name == 'main' && format('{0}/{1}-{2}:latest', env.DOCKERHUB_NAMESPACE, env.IMAGE_BASE_NAME, matrix.component) || '' }}
+          tags: ${{ steps.prepare-tags.outputs.build_tags }}
           labels: ${{ steps.meta.outputs.labels }}
           build-args: |
             APP_VERSION=${{ needs.calculate-version.outputs.normalized_version }}
@@ -253,7 +272,13 @@ jobs:
       - name: Save Docker image as artifact
         run: |
           # Use one consistent local tag for artifact export and downstream tests.
+          SOURCE_TAG="${{ steps.prepare-tags.outputs.source_tag }}"
           SAVE_TAG="local/${{ env.IMAGE_BASE_NAME }}-${{ matrix.component }}:latest"
+
+          if [[ "$SOURCE_TAG" != "$SAVE_TAG" ]]; then
+            docker tag "$SOURCE_TAG" "$SAVE_TAG"
+          fi
+
           echo "Saving image: $SAVE_TAG"
           docker save "$SAVE_TAG" | gzip > docker-image-${{ matrix.component }}.tar.gz
 
