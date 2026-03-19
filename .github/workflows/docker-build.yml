@@ -19,6 +19,11 @@ on:
         required: false
         type: string
         default: '["api"]'
+      run_tests:
+        description: 'Whether to actually run the build and tests'
+        required: false
+        type: boolean
+        default: true
     outputs:
       version:
         description: 'Calculated version'
@@ -42,9 +47,8 @@ on:
         description: 'A JSON string array of components that were built'
         value: ${{ jobs.calculate-version.outputs.components }}
 
-# Environment variables with fallback values
-# Repository variables (vars.*) are optional and will use defaults if not configured
 env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
   GIT_USER_NAME: ${{ vars.GIT_USER_NAME || 'GitHub Pipeline' }}
   GIT_USER_EMAIL: ${{ vars.GIT_USER_EMAIL || 'github_pipeline@fairagro.net' }}
   DOCKERHUB_NAMESPACE: ${{ vars.DOCKERHUB_NAMESPACE || 'zalf' }}
@@ -61,6 +65,7 @@ jobs:
       contents: read
     outputs:
       version: ${{ env.IS_FEATURE_BRANCH == 'true' && steps.gitversion.outputs.semVer || steps.gitversion.outputs.majorMinorPatch }}
+      normalized_version: ${{ steps.normalize.outputs.version }}
       SemVer: ${{ steps.gitversion.outputs.semVer }}
       Major: ${{ steps.gitversion.outputs.major }}
       Minor: ${{ steps.gitversion.outputs.minor }}
@@ -100,6 +105,14 @@ jobs:
         id: gitversion
         uses: gittools/actions/gitversion/execute@v4
 
+      - name: Normalize version for PEP 440
+        id: normalize
+        run: |
+          VERSION="${{ env.IS_FEATURE_BRANCH == 'true' && steps.gitversion.outputs.semVer || steps.gitversion.outputs.majorMinorPatch }}"
+          # Removes leading 'v' and replaces all non-alphanumeric chars with '.' (PEP 440)
+          NORMALIZED=$(echo "$VERSION" | sed 's/^v//; s/[^a-z0-9.]/./gi')
+          echo "version=$NORMALIZED" >> $GITHUB_OUTPUT
+
       - name: Debug version info
         run: |
           echo "🔧 Version Bump Configuration:"
@@ -114,6 +127,7 @@ jobs:
 
   build-docker-image:
     needs: calculate-version
+    if: inputs.run_tests == true
     strategy:
       matrix:
         component: ${{ fromJson(inputs.components) }}
@@ -187,7 +201,7 @@ jobs:
           tags: ${{ env.DOCKERHUB_AVAILABLE == 'true' && inputs.push_to_registry && steps.meta.outputs.tags || format('local/{0}-{1}:{2}', env.IMAGE_BASE_NAME, matrix.component, needs.calculate-version.outputs.version) }}
           labels: ${{ steps.meta.outputs.labels }}
           build-args: |
-            APP_VERSION=v${{ needs.calculate-version.outputs.version }}
+            APP_VERSION=${{ needs.calculate-version.outputs.normalized_version }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
@@ -219,13 +233,13 @@ jobs:
 
   container-structure-test:
     needs: [calculate-version, build-docker-image]
+    if: inputs.run_tests == true && needs.build-docker-image.result == 'success'
     strategy:
       matrix:
         component: ${{ fromJson(inputs.components) }}
     runs-on: ubuntu-latest
     permissions:
       contents: read
-    if: needs.build-docker-image.result == 'success'
 
     steps:
       - name: Checkout code

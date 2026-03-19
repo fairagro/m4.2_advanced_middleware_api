@@ -1,10 +1,19 @@
 name: Python Code Quality (Reusable)
 
 on:
-  workflow_call: {}
+  workflow_call:
+    inputs:
+      run_tests:
+        description: 'Whether to actually run the quality checks'
+        required: false
+        type: boolean
+        default: true
 
 permissions:
   contents: read
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
 jobs:
   code-quality:
@@ -14,23 +23,34 @@ jobs:
         python-version: ['3.12']
 
     steps:
+    - name: Early exit if tests are disabled
+      if: inputs.run_tests == false
+      run: |
+        echo "ℹ️ Code quality checks are disabled for this PR (no code changes detected)."
+        exit 0
+
     - name: Checkout code
+      if: inputs.run_tests == true
       uses: actions/checkout@v4
 
     - name: Install uv
+      if: inputs.run_tests == true
       uses: astral-sh/setup-uv@v4
       with:
         version: "latest"
 
     - name: Set up Python ${{ matrix.python-version }}
+      if: inputs.run_tests == true
       run: uv python install ${{ matrix.python-version }}
 
     - name: Install dependencies
+      if: inputs.run_tests == true
       run: |
         # Install all dependencies including dev dependencies
         uv sync --dev --all-packages
 
     - name: Code formatting and linting check with Ruff
+      if: inputs.run_tests == true
       run: |
         # Check formatting (do not auto-format), then check linting
         uv run ruff format --check --diff middleware/
@@ -38,16 +58,19 @@ jobs:
       continue-on-error: false
 
     - name: Linting with pylint
+      if: inputs.run_tests == true
       run: |
         uv run pylint middleware/ --fail-under=8.0 --output-format=colorized
       continue-on-error: false
 
     - name: Type checking with mypy
+      if: inputs.run_tests == true
       run: |
         uv run mypy middleware/ --ignore-missing-imports --strict-optional
       continue-on-error: false
 
     - name: Security check with bandit
+      if: inputs.run_tests == true
       id: bandit
       run: |
         # Run bandit, but don't fail the job immediately.
@@ -57,7 +80,7 @@ jobs:
       continue-on-error: false
 
     - name: Review bandit results
-      if: always() && steps.bandit.outcome == 'success'
+      if: inputs.run_tests == true && always() && steps.bandit.outcome == 'success'
       id: bandit-review
       shell: bash
       run: |
