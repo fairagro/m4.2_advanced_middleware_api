@@ -47,6 +47,8 @@ spec:
           env:
             - name: CELERY_BROKER_URL
               value: {{ include "fairagro-advanced-middleware-api-chart.celeryBrokerUrl" . | quote }}
+            - name: CHART_COUCHDB_ENABLED
+              value: {{ ternary "true" "false" .Values.couchdb.enabled | quote }}
             {{- include "fairagro-advanced-middleware-api-chart.couchdbEnvVars" . | nindent 12 }}
             - name: MIDDLEWARE_API_CONFIG
               value: /run/secrets/middleware-api-config

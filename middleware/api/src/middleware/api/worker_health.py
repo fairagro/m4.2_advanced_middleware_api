@@ -1,88 +1,109 @@
 #!/usr/bin/env python3
-"""Health check script for Celery worker and its dependencies.
+"""Health check script for Celery worker chart-internal dependencies.
 
-This module provides functionality to verify the health of:
-- ArcStore backend (Git repository or GitLab API)
-- CouchDB (ARC and Harvest storage)
-- RabbitMQ (Celery message broker)
+This readiness check only verifies services managed by the same Helm chart:
+- RabbitMQ (always for celery-worker deployment)
+- CouchDB (only if enabled in the chart)
 """
 
+import asyncio
 import logging
 import os
+import socket
 import sys
 from http import HTTPStatus
-from pathlib import Path
+from urllib.parse import urlparse
 
 import aiohttp
-
-from middleware.api.arc_store import ArcStore
-from middleware.api.arc_store.git_repo import GitRepo
-from middleware.api.arc_store.gitlab_api import GitlabApi
-from middleware.api.config import Config
-from middleware.api.worker.celery_app import celery_app
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
 logger = logging.getLogger("worker_health")
 
 
-async def check_worker_health() -> bool:
-    """Check health of the worker and its dependencies."""
+async def _check_rabbitmq(host: str, port: int) -> bool:
+    """Check RabbitMQ TCP reachability."""
+
+    def _probe() -> bool:
+        with socket.create_connection((host, port), timeout=5):
+            return True
+
     try:
-        # Load config
-        config_file = Path(os.environ.get("MIDDLEWARE_API_CONFIG", "/run/secrets/middleware-api-config"))
-        if not config_file.is_file():
-            logger.error("Config file not found: %s", config_file)
+        return await asyncio.to_thread(_probe)
+    except OSError as e:
+        logger.error("RabbitMQ health check failed: %s", e)
+        return False
+
+
+async def _check_couchdb(url: str) -> bool:
+    """Check CouchDB HTTP reachability."""
+    try:
+        timeout = aiohttp.ClientTimeout(total=5)
+        async with aiohttp.ClientSession(timeout=timeout) as session, session.get(url) as resp:
+            return resp.status == HTTPStatus.OK
+    except Exception as e:  # noqa: BLE001
+        logger.error("CouchDB health check failed: %s", e)
+        return False
+
+
+def _parse_broker_endpoint(broker_url: str) -> tuple[str, int] | None:
+    """Extract RabbitMQ host and port from CELERY_BROKER_URL."""
+    try:
+        parsed = urlparse(broker_url)
+        host = parsed.hostname
+        port = parsed.port or 5672
+    except ValueError:
+        return None
+
+    if not host:
+        return None
+
+    return host, port
+
+
+async def check_worker_health() -> bool:
+    """Check health of chart-internal dependencies required by celery-worker."""
+    try:
+        broker_url = os.environ.get("CELERY_BROKER_URL", "").strip()
+        if not broker_url:
+            logger.error("CELERY_BROKER_URL must be set")
             return False
 
-        config = Config.from_yaml_file(config_file)
-
-        # Initialize ArcStore
-        store: ArcStore
-        if config.git_repo:
-            store = GitRepo(config.git_repo)
-        elif config.gitlab_api:
-            store = GitlabApi(config.gitlab_api)
-        else:
-            logger.error("Invalid ArcStore configuration")
+        broker_endpoint = _parse_broker_endpoint(broker_url)
+        if broker_endpoint is None:
+            logger.error("Invalid CELERY_BROKER_URL: %s", broker_url)
             return False
 
-        # Check backend (Git/GitLab) - These are synchronous
-        backend_reachable = False
-        try:
-            backend_reachable = store.check_health()
-        except (ConnectionError, TimeoutError) as e:
-            logger.error("Backend health check failed: %s", e)
+        rabbitmq_host, rabbitmq_port = broker_endpoint
 
-        # Check CouchDB (doc store)
-        couchdb_reachable = False
-        try:
-            # We use a simple HTTP GET to avoid complex database setup during health check
-            timeout = aiohttp.ClientTimeout(total=5)
-            async with aiohttp.ClientSession(timeout=timeout) as session, session.get(config.couchdb.url) as resp:
-                couchdb_reachable = resp.status == HTTPStatus.OK
-        except Exception as e:  # noqa: BLE001
-            logger.error("CouchDB health check failed: %s", e)
+        rabbitmq_reachable = await _check_rabbitmq(rabbitmq_host, rabbitmq_port)
 
-        # Check RabbitMQ (broker)
-        rabbitmq_reachable = False
-        try:
-            with celery_app.connection_or_acquire() as conn:
-                conn.ensure_connection(max_retries=1)
-                rabbitmq_reachable = True
-        except Exception as e:  # noqa: BLE001
-            logger.error("RabbitMQ health check failed: %s", e)
+        chart_couchdb_enabled = os.environ.get("CHART_COUCHDB_ENABLED", "false").strip().lower() in {
+            "1",
+            "true",
+            "yes",
+            "on",
+        }
+
+        couchdb_reachable = True
+        couchdb_url = os.environ.get("COUCHDB_URL", "").strip()
+        if chart_couchdb_enabled:
+            if not couchdb_url:
+                logger.error("COUCHDB_URL must be set when CHART_COUCHDB_ENABLED=true")
+                return False
+            couchdb_reachable = await _check_couchdb(couchdb_url)
 
         health_status = {
-            "backend_reachable": backend_reachable,
+            "rabbitmq_host": rabbitmq_host,
+            "rabbitmq_port": rabbitmq_port,
+            "chart_couchdb_enabled": chart_couchdb_enabled,
             "couchdb_reachable": couchdb_reachable,
             "rabbitmq_reachable": rabbitmq_reachable,
         }
 
         logger.info("Health status: %s", health_status)
 
-        # Return True only if ALL checks pass
-        if not all(health_status.values()):
+        if not (rabbitmq_reachable and couchdb_reachable):
             logger.error("Some health checks failed")
             return False
 
@@ -94,8 +115,6 @@ async def check_worker_health() -> bool:
 
 
 if __name__ == "__main__":
-    import asyncio
-
     if asyncio.run(check_worker_health()):
         sys.exit(0)
     else:

@@ -1,7 +1,5 @@
 """Unit tests for worker health check."""
 
-from pathlib import Path
-from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -30,130 +28,108 @@ def setup_aiohttp_mock(status: int = 200, side_effect: Exception | None = None) 
 
 
 @pytest.mark.asyncio
-async def test_check_worker_health_success(tmp_path: Path) -> None:
-    """Test worker health check success."""
-    mock_config = MagicMock()
-    mock_config.gitlab_api = None
-    mock_config.git_repo = str(tmp_path / "repo")
-    mock_config.couchdb = SimpleNamespace(url="http://localhost:5984")
-
-    mock_store = MagicMock()
-    mock_store.check_health.return_value = True
-
-    mock_celery_conn = MagicMock()
+async def test_check_worker_health_success_with_couchdb() -> None:
+    """Health check passes when chart-internal RabbitMQ and CouchDB are reachable."""
     mock_session = setup_aiohttp_mock(status=200)
 
     with (
-        patch("middleware.api.worker_health.Path") as mock_path,
-        patch("middleware.api.worker_health.Config") as mock_config_cls,
-        patch("middleware.api.worker_health.GitRepo", return_value=mock_store),
+        patch("middleware.api.worker_health.socket.create_connection") as mock_conn,
         patch("middleware.api.worker_health.aiohttp.ClientSession", return_value=mock_session),
-        patch("middleware.api.worker_health.celery_app.connection_or_acquire") as mock_conn,
+        patch.dict(
+            "os.environ",
+            {
+                "CELERY_BROKER_URL": "amqp://user:pass@my-rabbit:5672//",
+                "CHART_COUCHDB_ENABLED": "true",
+                "COUCHDB_URL": "http://my-couch:5984",
+            },
+            clear=False,
+        ),
     ):
-        mock_path.return_value.is_file.return_value = True
-        mock_config_cls.from_yaml_file.return_value = mock_config
-        mock_conn.return_value.__enter__.return_value = mock_celery_conn
-        mock_celery_conn.ensure_connection.return_value = None
+        mock_conn.return_value.__enter__.return_value = None
+        mock_conn.return_value.__exit__.return_value = None
 
         assert await check_worker_health() is True
 
 
 @pytest.mark.asyncio
-async def test_check_worker_health_backend_failure(tmp_path: Path) -> None:
-    """Test worker health check when backend fails."""
-    mock_config = MagicMock()
-    mock_config.gitlab_api = None
-    mock_config.git_repo = str(tmp_path / "repo")
-    mock_config.couchdb = SimpleNamespace(url="http://localhost:5984")
-
-    mock_store = MagicMock()
-    mock_store.check_health.return_value = False  # Backend unreachable
-
-    mock_celery_conn = MagicMock()
-    mock_session = setup_aiohttp_mock(status=200)
-
+async def test_check_worker_health_success_without_couchdb() -> None:
+    """Health check passes when only RabbitMQ is managed by the chart."""
     with (
-        patch("middleware.api.worker_health.Path") as mock_path,
-        patch("middleware.api.worker_health.Config") as mock_config_cls,
-        patch("middleware.api.worker_health.GitRepo", return_value=mock_store),
-        patch("middleware.api.worker_health.aiohttp.ClientSession", return_value=mock_session),
-        patch("middleware.api.worker_health.celery_app.connection_or_acquire") as mock_conn,
+        patch("middleware.api.worker_health.socket.create_connection") as mock_conn,
+        patch.dict(
+            "os.environ",
+            {
+                "CELERY_BROKER_URL": "amqp://user:pass@my-rabbit:5672//",
+                "CHART_COUCHDB_ENABLED": "false",
+            },
+            clear=True,
+        ),
     ):
-        mock_path.return_value.is_file.return_value = True
-        mock_config_cls.from_yaml_file.return_value = mock_config
-        mock_conn.return_value.__enter__.return_value = mock_celery_conn
-        mock_celery_conn.ensure_connection.return_value = None
+        mock_conn.return_value.__enter__.return_value = None
+        mock_conn.return_value.__exit__.return_value = None
 
+        assert await check_worker_health() is True
+
+
+@pytest.mark.asyncio
+async def test_check_worker_health_rabbitmq_failure() -> None:
+    """Health check fails when RabbitMQ is unreachable."""
+    with (
+        patch(
+            "middleware.api.worker_health.socket.create_connection",
+            side_effect=OSError("RabbitMQ connection failed"),
+        ),
+        patch.dict(
+            "os.environ",
+            {
+                "CELERY_BROKER_URL": "amqp://user:pass@my-rabbit:5672//",
+                "CHART_COUCHDB_ENABLED": "false",
+            },
+            clear=True,
+        ),
+    ):
         assert await check_worker_health() is False
 
 
 @pytest.mark.asyncio
-async def test_check_worker_health_couchdb_failure(tmp_path: Path) -> None:
-    """Test worker health check when CouchDB fails."""
-    mock_config = MagicMock()
-    mock_config.gitlab_api = None
-    mock_config.git_repo = str(tmp_path / "repo")
-    mock_config.couchdb = SimpleNamespace(url="http://localhost:5984")
-
-    mock_store = MagicMock()
-    mock_store.check_health.return_value = True
-
-    mock_celery_conn = MagicMock()
+async def test_check_worker_health_couchdb_failure() -> None:
+    """Health check fails when chart-managed CouchDB is unreachable."""
     mock_session = setup_aiohttp_mock(side_effect=Exception("CouchDB connection failed"))
 
     with (
-        patch("middleware.api.worker_health.Path") as mock_path,
-        patch("middleware.api.worker_health.Config") as mock_config_cls,
-        patch("middleware.api.worker_health.GitRepo", return_value=mock_store),
+        patch("middleware.api.worker_health.socket.create_connection") as mock_conn,
         patch("middleware.api.worker_health.aiohttp.ClientSession", return_value=mock_session),
-        patch("middleware.api.worker_health.celery_app.connection_or_acquire") as mock_conn,
-    ):
-        mock_path.return_value.is_file.return_value = True
-        mock_config_cls.from_yaml_file.return_value = mock_config
-        mock_conn.return_value.__enter__.return_value = mock_celery_conn
-        mock_celery_conn.ensure_connection.return_value = None
-
-        assert await check_worker_health() is False
-
-
-@pytest.mark.asyncio
-async def test_check_worker_health_rabbitmq_failure(tmp_path: Path) -> None:
-    """Test worker health check when RabbitMQ fails."""
-    mock_config = MagicMock()
-    mock_config.gitlab_api = None
-    mock_config.git_repo = str(tmp_path / "repo")
-    mock_config.couchdb = SimpleNamespace(url="http://localhost:5984")
-
-    mock_store = MagicMock()
-    mock_store.check_health.return_value = True
-    mock_session = setup_aiohttp_mock(status=200)
-
-    with (
-        patch("middleware.api.worker_health.Path") as mock_path,
-        patch("middleware.api.worker_health.Config") as mock_config_cls,
-        patch("middleware.api.worker_health.GitRepo", return_value=mock_store),
-        patch("middleware.api.worker_health.aiohttp.ClientSession", return_value=mock_session),
-        patch(
-            "middleware.api.worker_health.celery_app.connection_or_acquire",
-            side_effect=Exception("RabbitMQ connection failed"),
+        patch.dict(
+            "os.environ",
+            {
+                "CELERY_BROKER_URL": "amqp://user:pass@my-rabbit:5672//",
+                "CHART_COUCHDB_ENABLED": "true",
+                "COUCHDB_URL": "http://my-couch:5984",
+            },
+            clear=True,
         ),
     ):
-        mock_path.return_value.is_file.return_value = True
-        mock_config_cls.from_yaml_file.return_value = mock_config
+        mock_conn.return_value.__enter__.return_value = None
+        mock_conn.return_value.__exit__.return_value = None
 
         assert await check_worker_health() is False
 
 
 @pytest.mark.asyncio
-async def test_check_worker_health_config_missing() -> None:
-    """Test worker health check when config missing."""
-    with patch("middleware.api.worker_health.Path") as mock_path:
-        mock_path.return_value.is_file.return_value = False
+async def test_check_worker_health_missing_rabbitmq_env() -> None:
+    """Health check fails if required broker URL is missing."""
+    with patch.dict("os.environ", {}, clear=True):
         assert await check_worker_health() is False
 
 
 @pytest.mark.asyncio
-async def test_check_worker_health_exception() -> None:
-    """Test worker health check exception handling."""
-    with patch("middleware.api.worker_health.Path", side_effect=Exception("Disk error")):
+async def test_check_worker_health_invalid_broker_url() -> None:
+    """Health check fails if broker URL has an invalid port."""
+    with patch.dict(
+        "os.environ",
+        {
+            "CELERY_BROKER_URL": "amqp://user:pass@my-rabbit:not-a-number//",
+        },
+        clear=True,
+    ):
         assert await check_worker_health() is False
