@@ -2,11 +2,11 @@
 FROM python:3.12.12-alpine3.23 AS package-builder
 
 # Accept PEP 440 compliant version from CI
-ARG SETUPTOOLS_SCM_PRETEND_VERSION=0.0.0
+ARG APP_VERSION=0.0.0
 
 # Set as environment variables for the build process
-ENV SETUPTOOLS_SCM_PRETEND_VERSION=${SETUPTOOLS_SCM_PRETEND_VERSION}
-ENV HATCH_VERSION=${SETUPTOOLS_SCM_PRETEND_VERSION}
+# SETUPTOOLS_SCM_PRETEND_VERSION overrides dynamic version discovery from Git
+ENV SETUPTOOLS_SCM_PRETEND_VERSION=${APP_VERSION}
 
 WORKDIR /build
 

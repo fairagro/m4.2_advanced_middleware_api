@@ -195,7 +195,7 @@ jobs:
           tags: ${{ env.DOCKERHUB_AVAILABLE == 'true' && inputs.push_to_registry && steps.meta.outputs.tags || format('local/{0}-{1}:{2}', env.IMAGE_BASE_NAME, matrix.component, needs.calculate-version.outputs.version) }}
           labels: ${{ steps.meta.outputs.labels }}
           build-args: |
-            SETUPTOOLS_SCM_PRETEND_VERSION=${{ needs.calculate-version.outputs.normalized_version }}
+            APP_VERSION=${{ needs.calculate-version.outputs.normalized_version }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
