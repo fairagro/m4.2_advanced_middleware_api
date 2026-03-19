@@ -50,8 +50,6 @@ spec:
           env:
             - name: CELERY_BROKER_URL
               value: {{ include "fairagro-advanced-middleware-api-chart.celeryBrokerUrl" . | quote }}
-            - name: CELERY_RESULT_BACKEND
-              value: {{ include "fairagro-advanced-middleware-api-chart.celeryResultBackend" . | quote }}
             {{- include "fairagro-advanced-middleware-api-chart.couchdbEnvVars" . | nindent 12 }}
           ports:
             - name: http
