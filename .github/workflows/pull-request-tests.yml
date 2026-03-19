@@ -2,6 +2,9 @@ name: Pull Request Tests
 permissions:
   contents: read
 
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
 on:
   pull_request:
     branches:
@@ -32,17 +35,18 @@ jobs:
   python-quality:
     name: Python Code Quality
     needs: check-changes
-    if: needs.check-changes.outputs.run-tests == 'true'
     uses: ./.github/workflows/python-quality.yml
+    with:
+      run_tests: ${{ needs.check-changes.outputs.run-tests == 'true' }}
 
   docker-build-test:
     name: Docker Build and Test
     needs: check-changes
-    if: needs.check-changes.outputs.run-tests == 'true'
     uses: ./.github/workflows/docker-build.yml
     with:
       push_to_registry: false
       version_bump: 'patch'
+      run_tests: ${{ needs.check-changes.outputs.run-tests == 'true' }}
 
   pr-summary:
     name: Pull Request Summary
