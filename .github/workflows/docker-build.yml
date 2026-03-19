@@ -123,6 +123,8 @@ jobs:
           # The rest becomes the local version part. Ensure it starts with alphanumeric.
           REMAINDER="${VERSION_CLEAN#$BASE_VERSION}"
           LOCAL_PART=$(echo "$REMAINDER" | sed 's/^[^a-zA-Z0-9]*//; s/[^a-zA-Z0-9]/./g')
+
+          if [ -n "$LOCAL_PART" ]; then
             NORMALIZED="${BASE_VERSION}+${LOCAL_PART}"
           else
             NORMALIZED="${BASE_VERSION}"
