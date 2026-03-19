@@ -227,14 +227,11 @@ jobs:
 
       - name: Save Docker image as artifact
         run: |
-          # Use the DockerHub tag if pushed, otherwise local tag
-          if [[ "${{ env.DOCKERHUB_AVAILABLE }}" == "true" && "${{ inputs.push_to_registry }}" == "true" ]]; then
-            IMAGE_TAG="${{ env.DOCKERHUB_NAMESPACE }}/${{ env.IMAGE_BASE_NAME }}-${{ matrix.component }}:${{ needs.calculate-version.outputs.normalized_version }}"
-          else
-            IMAGE_TAG="local/${{ env.IMAGE_BASE_NAME }}-${{ matrix.component }}:${{ needs.calculate-version.outputs.normalized_version }}"
-          fi
-          echo "Saving image: $IMAGE_TAG"
-          docker save "$IMAGE_TAG" | gzip > docker-image-${{ matrix.component }}.tar.gz
+          # Use ONE consistent tag for local testing and saving
+          SAVE_TAG="local/${{ env.IMAGE_BASE_NAME }}-${{ matrix.component }}:latest"
+          docker tag "${{ env.DOCKERHUB_AVAILABLE == 'true' && inputs.push_to_registry && steps.meta.outputs.tags || format('local/{0}-{1}:{2}', env.IMAGE_BASE_NAME, matrix.component, needs.calculate-version.outputs.normalized_version) }}" "$SAVE_TAG"
+          echo "Saving image: $SAVE_TAG"
+          docker save "$SAVE_TAG" | gzip > docker-image-${{ matrix.component }}.tar.gz
 
       - name: Upload Docker image artifact
         uses: actions/upload-artifact@v4
