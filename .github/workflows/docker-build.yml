@@ -67,7 +67,8 @@ jobs:
     permissions:
       contents: read
     outputs:
-      version: ${{ env.IS_FEATURE_BRANCH == 'true' && steps.gitversion.outputs.semVer || steps.gitversion.outputs.majorMinorPatch }}
+      version: ${{ steps.select-version.outputs.version }}
+      docker_tag_version: ${{ steps.docker-tag-version.outputs.version }}
       normalized_version: ${{ steps.normalize.outputs.version }}
       SemVer: ${{ steps.gitversion.outputs.semVer }}
       Major: ${{ steps.gitversion.outputs.major }}
@@ -75,7 +76,7 @@ jobs:
       components: ${{ inputs.components }}
     env:
       FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
-      IS_FEATURE_BRANCH: ${{ startsWith(github.ref_name, 'feature/') }}
+      IS_MAIN_BRANCH: ${{ github.ref_name == 'main' }}
 
     steps:
       - uses: actions/checkout@v4
@@ -107,10 +108,20 @@ jobs:
         id: gitversion
         uses: gittools/actions/gitversion/execute@v4
 
+      - name: Select build version by branch
+        id: select-version
+        run: |
+          if [[ "${{ env.IS_MAIN_BRANCH }}" == "true" ]]; then
+            VERSION="${{ steps.gitversion.outputs.majorMinorPatch }}"
+          else
+            VERSION="${{ steps.gitversion.outputs.semVer }}"
+          fi
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+
       - name: Normalize version for PEP 440
         id: normalize
         run: |
-          VERSION="${{ env.IS_FEATURE_BRANCH == 'true' && steps.gitversion.outputs.semVer || steps.gitversion.outputs.majorMinorPatch }}"
+          VERSION="${{ steps.select-version.outputs.version }}"
           # PEP 440 Strict Normalization:
           # 1. Base version must be numeric (e.g., 8.4.8)
           # 2. Additional parts must be attached with '+' as local version identifier
@@ -132,17 +143,27 @@ jobs:
 
           echo "version=$NORMALIZED" >> $GITHUB_OUTPUT
 
+      - name: Normalize version for Docker tags
+        id: docker-tag-version
+        run: |
+          VERSION="${{ steps.select-version.outputs.version }}"
+          # Docker tags allow only [A-Za-z0-9_.-]. Convert other chars (e.g. '+') to '-'.
+          DOCKER_TAG_VERSION=$(echo "$VERSION" | sed 's/^v//; s/[^a-zA-Z0-9_.-]/-/g')
+          echo "version=$DOCKER_TAG_VERSION" >> "$GITHUB_OUTPUT"
+
       - name: Debug version info
         run: |
           echo "🔧 Version Bump Configuration:"
           echo "  - Input version_bump: ${{ inputs.version_bump }}"
           echo "  - Branch: ${{ github.ref_name }}"
-          echo "  - Is feature branch: ${{ env.IS_FEATURE_BRANCH }}"
+          echo "  - Is main branch: ${{ env.IS_MAIN_BRANCH }}"
           echo ""
           echo "📊 GitVersion Results:"
           echo "  - SemVer: ${{ steps.gitversion.outputs.semVer }}"
           echo "  - MajorMinorPatch: ${{ steps.gitversion.outputs.majorMinorPatch }}"
-          echo "  - Final version: ${{ env.IS_FEATURE_BRANCH == 'true' && steps.gitversion.outputs.semVer || steps.gitversion.outputs.majorMinorPatch }}"
+          echo "  - Selected version: ${{ steps.select-version.outputs.version }}"
+          echo "  - Docker tag version: ${{ steps.docker-tag-version.outputs.version }}"
+          echo "  - PEP 440 version: ${{ steps.normalize.outputs.version }}"
 
   build-docker-image:
     needs: calculate-version
@@ -218,7 +239,11 @@ jobs:
           platforms: linux/amd64
           push: ${{ env.DOCKERHUB_AVAILABLE == 'true' && inputs.push_to_registry }}
           load: true
-          tags: ${{ env.DOCKERHUB_AVAILABLE == 'true' && inputs.push_to_registry && steps.meta.outputs.tags || format('local/{0}-{1}:{2}', env.IMAGE_BASE_NAME, matrix.component, needs.calculate-version.outputs.normalized_version) }}
+          tags: |
+            local/${{ env.IMAGE_BASE_NAME }}-${{ matrix.component }}:latest
+            local/${{ env.IMAGE_BASE_NAME }}-${{ matrix.component }}:${{ needs.calculate-version.outputs.docker_tag_version }}
+            ${{ env.DOCKERHUB_AVAILABLE == 'true' && inputs.push_to_registry && format('{0}/{1}-{2}:{3}', env.DOCKERHUB_NAMESPACE, env.IMAGE_BASE_NAME, matrix.component, needs.calculate-version.outputs.docker_tag_version) || '' }}
+            ${{ env.DOCKERHUB_AVAILABLE == 'true' && inputs.push_to_registry && github.ref_name == 'main' && format('{0}/{1}-{2}:latest', env.DOCKERHUB_NAMESPACE, env.IMAGE_BASE_NAME, matrix.component) || '' }}
           labels: ${{ steps.meta.outputs.labels }}
           build-args: |
             APP_VERSION=${{ needs.calculate-version.outputs.normalized_version }}
@@ -227,16 +252,15 @@ jobs:
 
       - name: Save Docker image as artifact
         run: |
-          # Use ONE consistent tag for local testing and saving
+          # Use one consistent local tag for artifact export and downstream tests.
           SAVE_TAG="local/${{ env.IMAGE_BASE_NAME }}-${{ matrix.component }}:latest"
-          docker tag "${{ env.DOCKERHUB_AVAILABLE == 'true' && inputs.push_to_registry && steps.meta.outputs.tags || format('local/{0}-{1}:{2}', env.IMAGE_BASE_NAME, matrix.component, needs.calculate-version.outputs.normalized_version) }}" "$SAVE_TAG"
           echo "Saving image: $SAVE_TAG"
           docker save "$SAVE_TAG" | gzip > docker-image-${{ matrix.component }}.tar.gz
 
       - name: Upload Docker image artifact
         uses: actions/upload-artifact@v4
         with:
-          name: docker-image-${{ matrix.component }}-${{ needs.calculate-version.outputs.normalized_version }}
+          name: docker-image-${{ matrix.component }}-${{ needs.calculate-version.outputs.docker_tag_version }}
           path: docker-image-${{ matrix.component }}.tar.gz
           retention-days: 1
 
@@ -267,7 +291,7 @@ jobs:
       - name: Download Docker image artifact
         uses: actions/download-artifact@v4
         with:
-          name: docker-image-${{ matrix.component }}-${{ needs.calculate-version.outputs.normalized_version }}
+          name: docker-image-${{ matrix.component }}-${{ needs.calculate-version.outputs.docker_tag_version }}
 
       - name: Load Docker image
         run: |
@@ -281,16 +305,9 @@ jobs:
       - name: Determine image tag for tests
         id: image-tag
         run: |
-          DOCKERHUB_AVAILABLE="${{ secrets.DOCKERHUB_USER != '' && secrets.DOCKERHUB_TOKEN != '' }}"
-          PUSH_TO_REGISTRY="${{ inputs.push_to_registry }}"
-
-          if [[ "$DOCKERHUB_AVAILABLE" == "true" && "$PUSH_TO_REGISTRY" == "true" ]]; then
-            IMAGE_TAG="${{ env.DOCKERHUB_NAMESPACE }}/${{ env.IMAGE_BASE_NAME }}-${{ matrix.component }}:${{ needs.calculate-version.outputs.normalized_version }}"
-            echo "Using DockerHub image: $IMAGE_TAG"
-          else
-            IMAGE_TAG="local/${{ env.IMAGE_BASE_NAME }}-${{ matrix.component }}:${{ needs.calculate-version.outputs.normalized_version }}"
-            echo "Using local image: $IMAGE_TAG"
-          fi
+          # The image was loaded from artifact with the local 'latest' tag
+          IMAGE_TAG="local/${{ env.IMAGE_BASE_NAME }}-${{ matrix.component }}:latest"
+          echo "Using loaded image: $IMAGE_TAG"
 
           echo "image-tag=$IMAGE_TAG" >> $GITHUB_OUTPUT
 
