@@ -193,7 +193,7 @@ jobs:
           echo "🎉 Release finalized successfully"
 
       - name: Login to Docker Hub and Push Helm chart
-        if: github.ref_name == 'main' && env.DOCKERHUB_AVAILABLE == 'true'
+        if: env.DOCKERHUB_AVAILABLE == 'true'
         run: |
           # Login to Helm registry with credentials
           echo "🔑 Logging in to Docker Hub registry..."
@@ -205,7 +205,7 @@ jobs:
           echo "✅ Pushed to DockerHub: ${{ env.DOCKERHUB_NAMESPACE }}/${{ steps.package_chart.outputs.chart-package }}"
 
       - name: Skip DockerHub push (missing credentials)
-        if: github.ref_name == 'main' && env.DOCKERHUB_AVAILABLE != 'true'
+        if: env.DOCKERHUB_AVAILABLE != 'true'
         run: |
           echo "⏭️ Skipping DockerHub push - missing credentials (DOCKERHUB_USER and/or DOCKERHUB_TOKEN)"
           echo "💡 Configure DockerHub secrets to enable automatic chart publishing"
