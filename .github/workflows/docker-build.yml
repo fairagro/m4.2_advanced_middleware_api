@@ -120,11 +120,9 @@ jobs:
           VERSION_CLEAN=$(echo "$VERSION" | sed 's/^v//')
           # Extract numeric base (e.g., 8.4.8)
           BASE_VERSION=$(echo "$VERSION_CLEAN" | grep -oP "^\d+(\.\d+)*")
-          # The rest becomes the local version part
+          # The rest becomes the local version part. Ensure it starts with alphanumeric.
           REMAINDER="${VERSION_CLEAN#$BASE_VERSION}"
-          LOCAL_PART=$(echo "$REMAINDER" | sed 's/^[.]//; s/[^a-zA-Z0-9]/./g')
-
-          if [ -n "$LOCAL_PART" ]; then
+          LOCAL_PART=$(echo "$REMAINDER" | sed 's/^[^a-zA-Z0-9]*//; s/[^a-zA-Z0-9]/./g')
             NORMALIZED="${BASE_VERSION}+${LOCAL_PART}"
           else
             NORMALIZED="${BASE_VERSION}"
