@@ -41,23 +41,21 @@ jobs:
           versionSpec: '6.4.x'
 
       - name: Create GitVersion config
-        uses: DamianReeves/write-file-action@master
-        with:
-          path: GitVersion.yml
-          write-mode: overwrite
-          contents: |
-            mode: ContinuousDeployment
-            tag-prefix: '${{ env.GITVERSION_TAG_PREFIX }}'
-            semantic-version-format: Strict
-            branches:
-              main:
-                label: ''
-                increment: ${{ inputs.version_bump }}
-              feature:
-                regex: ^feature/(?<BranchName>.+)$
-                label: '{BranchName}'
-                increment: Inherit
-                track-merge-target: false
+        run: |
+          cat <<EOF > GitVersion.yml
+          mode: ContinuousDeployment
+          tag-prefix: '${{ env.GITVERSION_TAG_PREFIX }}'
+          semantic-version-format: Strict
+          branches:
+            main:
+              label: ''
+              increment: ${{ inputs.version_bump }}
+            feature:
+              regex: ^feature/(?<BranchName>.+)$
+              label: '{BranchName}'
+              increment: Inherit
+              track-merge-target: false
+          EOF
 
       - name: Execute GitVersion
         id: gitversion
