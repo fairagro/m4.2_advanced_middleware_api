@@ -3,11 +3,11 @@
 ```mermaid
 architecture-beta
 
-    group rdi1(database)[RDI]
+    group rdi1(database)[RDI 1]
     service rdi1db(database)[DB] in rdi1
     service sql2arc(server)[sql2arc] in rdi1
 
-    group rdi2(database)[RDI]
+    group rdi2(database)[RDI 2]
     service rdi2db(database)[DB] in rdi2
     service csw(server)[csw] in rdi2
 
