@@ -19,6 +19,11 @@ on:
         required: false
         type: string
         default: '["api"]'
+      run_tests:
+        description: 'Whether to actually run the build and tests'
+        required: false
+        type: boolean
+        default: true
     outputs:
       version:
         description: 'Calculated version'
@@ -122,6 +127,7 @@ jobs:
 
   build-docker-image:
     needs: calculate-version
+    if: inputs.run_tests == true
     strategy:
       matrix:
         component: ${{ fromJson(inputs.components) }}
@@ -227,13 +233,13 @@ jobs:
 
   container-structure-test:
     needs: [calculate-version, build-docker-image]
+    if: inputs.run_tests == true && needs.build-docker-image.result == 'success'
     strategy:
       matrix:
         component: ${{ fromJson(inputs.components) }}
     runs-on: ubuntu-latest
     permissions:
       contents: read
-    if: needs.build-docker-image.result == 'success'
 
     steps:
       - name: Checkout code
