@@ -1,9 +1,14 @@
 # ---- Package Build Stage ----
 FROM python:3.12.12-alpine3.23 AS package-builder
 
-# Accept version as build argument
+# Accept versions as build arguments from CI
+# The version passed here must already be PEP 440 compliant (no 'v', no dashes)
 ARG APP_VERSION=0.0.0
-ENV SETUPTOOLS_SCM_PRETEND_VERSION=${APP_VERSION}
+ARG SETUPTOOLS_SCM_PRETEND_VERSION=0.0.0
+
+# Set as environment variables for the build process
+ENV SETUPTOOLS_SCM_PRETEND_VERSION=${SETUPTOOLS_SCM_PRETEND_VERSION}
+ENV HATCH_VERSION=${SETUPTOOLS_SCM_PRETEND_VERSION}
 
 WORKDIR /build
 
@@ -14,11 +19,9 @@ COPY middleware ./middleware
 # Upgrade pip and install uv
 RUN pip install --no-cache-dir --upgrade pip==25.3 uv==0.9.27
 
-# Build shared package first (dependency of api)
-RUN uv build --package shared --wheel
-
-# Build the API package as wheel
-RUN uv build --package api --wheel
+# Build wheels
+RUN uv build --package shared --wheel && \
+    uv build --package api --wheel
 
 
 # ---- Binary Build Stage ----

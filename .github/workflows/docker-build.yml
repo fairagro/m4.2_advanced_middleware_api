@@ -60,6 +60,7 @@ jobs:
       contents: read
     outputs:
       version: ${{ env.IS_FEATURE_BRANCH == 'true' && steps.gitversion.outputs.semVer || steps.gitversion.outputs.majorMinorPatch }}
+      normalized_version: ${{ steps.normalize.outputs.version }}
       SemVer: ${{ steps.gitversion.outputs.semVer }}
       Major: ${{ steps.gitversion.outputs.major }}
       Minor: ${{ steps.gitversion.outputs.minor }}
@@ -98,6 +99,14 @@ jobs:
       - name: Execute GitVersion
         id: gitversion
         uses: gittools/actions/gitversion/execute@v4
+
+      - name: Normalize version for PEP 440
+        id: normalize
+        run: |
+          VERSION="${{ env.IS_FEATURE_BRANCH == 'true' && steps.gitversion.outputs.semVer || steps.gitversion.outputs.majorMinorPatch }}"
+          # Removes leading 'v' and replaces all non-alphanumeric chars with '.' (PEP 440)
+          NORMALIZED=$(echo "$VERSION" | sed 's/^v//; s/[^a-z0-9.]/./gi')
+          echo "version=$NORMALIZED" >> $GITHUB_OUTPUT
 
       - name: Debug version info
         run: |
@@ -187,6 +196,7 @@ jobs:
           labels: ${{ steps.meta.outputs.labels }}
           build-args: |
             APP_VERSION=v${{ needs.calculate-version.outputs.version }}
+            SETUPTOOLS_SCM_PRETEND_VERSION=${{ needs.calculate-version.outputs.normalized_version }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
