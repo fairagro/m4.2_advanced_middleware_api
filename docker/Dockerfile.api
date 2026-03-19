@@ -1,9 +1,7 @@
 # ---- Package Build Stage ----
 FROM python:3.12.12-alpine3.23 AS package-builder
 
-# Accept versions as build arguments from CI
-# The version passed here must already be PEP 440 compliant (no 'v', no dashes)
-ARG APP_VERSION=0.0.0
+# Accept PEP 440 compliant version from CI
 ARG SETUPTOOLS_SCM_PRETEND_VERSION=0.0.0
 
 # Set as environment variables for the build process
