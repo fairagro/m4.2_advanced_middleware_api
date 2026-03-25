@@ -93,7 +93,7 @@ api:
   securityContext: {}
   livenessProbe:
     httpGet:
-      path: /v1/liveness
+      path: /v3/liveness
       port: http
     initialDelaySeconds: 10    # Container darf starten
     timeoutSeconds: 3          # genug Zeit für HTTP-Request
@@ -101,7 +101,7 @@ api:
     failureThreshold: 3
   readinessProbe:
     httpGet:
-      path: /v1/health
+      path: /v3/readiness
       port: http
     initialDelaySeconds: 10    # Container darf starten
     timeoutSeconds: 3          # genug Zeit für HTTP-Request
