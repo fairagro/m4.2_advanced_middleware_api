@@ -73,7 +73,7 @@ spec:
           args:
             - celery
             - -A
-            - middleware.api.worker.celery_app
+            - middleware.api.worker.celery_app:celery_app
             - worker
             - --loglevel=info
             - --concurrency={{ .Values.celery.worker.concurrency }}

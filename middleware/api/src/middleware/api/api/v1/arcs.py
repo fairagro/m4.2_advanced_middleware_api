@@ -14,6 +14,7 @@ from middleware.api.api.common.dependencies import (
     get_client_id,
     get_common_deps,
     get_content_type,
+    get_task_status_store,
 )
 from middleware.api.business_logic import ArcOperationResult, BusinessLogic
 from middleware.shared.api_models.v1 import models as v1_models
@@ -29,7 +30,7 @@ async def create_or_update_arcs(
     request_body: v1_models.CreateOrUpdateArcsRequest,
     bl: Annotated[BusinessLogic, Depends(get_business_logic)],
     deps: Annotated[CommonApiDependencies, Depends(get_common_deps)],
-    client_id: Annotated[str, Depends(get_client_id)],
+    client_id: Annotated[str | None, Depends(get_client_id)],
     _: Annotated[None, Depends(get_content_type)],
     __: Annotated[None, Depends(get_accept_type)],
 ) -> v1_models.CreateOrUpdateArcsResponse:
@@ -47,7 +48,8 @@ async def create_or_update_arcs(
 
     task_id = str(uuid.uuid4())
     if isinstance(result, ArcOperationResult):
-        bl.store_task_result(task_id, result)
+        task_status_store = get_task_status_store(request)
+        task_status_store.store_task_result(task_id, result)
     else:
         raise HTTPException(status_code=HTTPStatus.INTERNAL_SERVER_ERROR, detail="Unexpected result type")
 

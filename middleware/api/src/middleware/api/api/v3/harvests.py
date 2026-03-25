@@ -26,7 +26,7 @@ async def create_harvest(  # noqa: PLR0913, PLR0917
     request_body: v3_models.CreateHarvestRequest,
     bl: Annotated[BusinessLogic, Depends(get_business_logic)],
     deps: Annotated[CommonApiDependencies, Depends(get_common_deps)],
-    client_id: Annotated[str, Depends(get_client_id)],
+    client_id: Annotated[str | None, Depends(get_client_id)],
     _content_type: Annotated[None, Depends(get_content_type)],
     _accept_type: Annotated[None, Depends(get_accept_type)],
 ) -> v3_models.HarvestResponse:
@@ -49,7 +49,7 @@ async def list_harvests(
     request: Request,
     bl: Annotated[BusinessLogic, Depends(get_business_logic)],
     deps: Annotated[CommonApiDependencies, Depends(get_common_deps)],
-    _client_id: Annotated[str, Depends(get_client_id)],
+    _client_id: Annotated[str | None, Depends(get_client_id)],
     _accept_type: Annotated[None, Depends(get_accept_type)],
     rdi: str | None = None,
 ) -> list[v3_models.HarvestResponse]:
@@ -67,7 +67,7 @@ async def get_harvest(
     harvest_id: str,
     bl: Annotated[BusinessLogic, Depends(get_business_logic)],
     deps: Annotated[CommonApiDependencies, Depends(get_common_deps)],
-    _client_id: Annotated[str, Depends(get_client_id)],
+    _client_id: Annotated[str | None, Depends(get_client_id)],
 ) -> v3_models.HarvestResponse:
     """Get harvest details."""
     harvest = await bl.harvest_manager.get_harvest(harvest_id)
@@ -84,7 +84,7 @@ async def complete_harvest(  # noqa: PLR0913, PLR0917
     harvest_id: str,
     bl: Annotated[BusinessLogic, Depends(get_business_logic)],
     deps: Annotated[CommonApiDependencies, Depends(get_common_deps)],
-    client_id: Annotated[str, Depends(get_client_id)],
+    client_id: Annotated[str | None, Depends(get_client_id)],
 ) -> v3_models.HarvestResponse:
     """Mark a harvest as completed."""
     harvest = await bl.harvest_manager.get_harvest(harvest_id)
@@ -103,7 +103,7 @@ async def cancel_harvest(
     harvest_id: str,
     bl: Annotated[BusinessLogic, Depends(get_business_logic)],
     deps: Annotated[CommonApiDependencies, Depends(get_common_deps)],
-    client_id: Annotated[str, Depends(get_client_id)],
+    client_id: Annotated[str | None, Depends(get_client_id)],
 ) -> None:
     """Cancel a harvest run."""
     harvest = await bl.harvest_manager.get_harvest(harvest_id)
@@ -121,7 +121,7 @@ async def submit_arc_in_harvest(  # noqa: PLR0913, PLR0917
     request_body: v3_models.SubmitHarvestArcRequest,
     bl: Annotated[BusinessLogic, Depends(get_business_logic)],
     deps: Annotated[CommonApiDependencies, Depends(get_common_deps)],
-    client_id: Annotated[str, Depends(get_client_id)],
+    client_id: Annotated[str | None, Depends(get_client_id)],
 ) -> v3_models.ArcResponse:
     """Submit an ARC within a harvest context.
 

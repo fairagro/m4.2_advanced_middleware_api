@@ -23,10 +23,19 @@ load_dotenv()
 @pytest.fixture(scope="session")
 def config(oid: x509.ObjectIdentifier, known_rdis: list[str]) -> "DictType | ListType":
     """Provide configuration for tests."""
+    couchdb_user = os.getenv("COUCHDB_USER")
+    couchdb_password = os.getenv("COUCHDB_PASSWORD")
+    if not couchdb_user or not couchdb_password:
+        pytest.skip(
+            "System tests require COUCHDB_USER and COUCHDB_PASSWORD in environment. "
+            "Run 'source scripts/load-env.sh' before executing system tests."
+        )
+
     config_wrapper = ConfigWrapper.from_data({
         "log_level": "DEBUG",
         "known_rdis": list(known_rdis),
         "client_auth_oid": oid.dotted_string,
+        "require_client_cert": False,
         "gitlab_api": {
             "url": "https://datahub-dev.ipk-gatersleben.de",
             "group": "FAIRagro-advanced-middleware-integration-tests",
@@ -38,6 +47,8 @@ def config(oid: x509.ObjectIdentifier, known_rdis: list[str]) -> "DictType | Lis
         },
         "couchdb": {
             "url": "http://localhost:5984",
+            "user": couchdb_user,
+            "password": couchdb_password,
         },
     })
     return config_wrapper.unwrap()

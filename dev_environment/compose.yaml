@@ -54,7 +54,7 @@ services:
     command: [
       "/api/middleware-api/middleware-api",
       "celery",
-      "-A", "middleware.api.worker.celery_app",
+      "-A", "middleware.api.worker.celery_app:celery_app",
       "worker",
       "--loglevel=info",
       "--concurrency=8",]

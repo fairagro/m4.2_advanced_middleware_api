@@ -7,7 +7,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from middleware.api.api.fastapi_app import Api
-from middleware.api.business_logic.sync_task import SyncTaskResult, SyncTaskStatus
+from middleware.api.api.legacy.task_types import SyncTaskResult, SyncTaskStatus
 from middleware.shared.api_models import ArcOperationResult, ArcResponse, ArcStatus, TaskStatus
 
 pytestmark = pytest.mark.filterwarnings("ignore:gitlab_api configuration is deprecated.*:DeprecationWarning")
@@ -134,7 +134,7 @@ def test_get_task_status_v2(client: TestClient, middleware_api: Api) -> None:
         },
     )
 
-    with patch.object(middleware_api.business_logic, "get_task_status", return_value=mock_result):
+    with patch.object(middleware_api.task_status_store, "get_task_status", return_value=mock_result):
         r = client.get(
             "/v2/tasks/task-123",
             headers={"accept": "application/json"},
@@ -153,7 +153,7 @@ def test_get_task_status_v2_failure(client: TestClient, middleware_api: Api) -> 
         error="Something went wrong",
     )
 
-    with patch.object(middleware_api.business_logic, "get_task_status", return_value=mock_result):
+    with patch.object(middleware_api.task_status_store, "get_task_status", return_value=mock_result):
         r = client.get(
             "/v2/tasks/task-123",
             headers={"accept": "application/json"},

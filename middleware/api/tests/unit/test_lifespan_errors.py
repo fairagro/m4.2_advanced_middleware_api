@@ -3,6 +3,7 @@
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+from pydantic import SecretStr
 
 from middleware.api.api.fastapi_app import Api
 from middleware.api.api.tracing import ApiTracingResult
@@ -18,8 +19,8 @@ async def test_lifespan_setup_error_reraised() -> None:
     mock_config.otel.endpoint = None
     mock_config.otel.log_console_spans = False
     mock_config.otel.log_level = "DEBUG"
-    mock_config.celery.broker_url = "memory://"
-    mock_config.celery.result_backend = "cache+memory://"
+    mock_config.celery.broker_url = SecretStr("memory://")
+    mock_config.celery.result_backend = SecretStr("cache+memory://")
     mock_config.known_rdis = []
     # Ensure model_dump is not a coroutine
     mock_config.model_dump.return_value = {}
@@ -63,8 +64,8 @@ async def test_lifespan_generic_exception_reraised() -> None:
     mock_config.otel.endpoint = None
     mock_config.otel.log_console_spans = False
     mock_config.otel.log_level = "DEBUG"
-    mock_config.celery.broker_url = "memory://"
-    mock_config.celery.result_backend = "cache+memory://"
+    mock_config.celery.broker_url = SecretStr("memory://")
+    mock_config.celery.result_backend = SecretStr("cache+memory://")
     mock_config.model_dump.return_value = {}
 
     _mock_tracing = ApiTracingResult(tracer_provider=MagicMock(), logger_provider=MagicMock())

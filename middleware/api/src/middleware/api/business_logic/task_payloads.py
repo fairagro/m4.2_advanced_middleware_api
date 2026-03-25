@@ -1,4 +1,4 @@
-"""Pydantic models for Celery tasks."""
+"""Domain payload models for background ARC synchronization tasks."""
 
 from typing import Any
 
@@ -10,4 +10,4 @@ class ArcSyncTask(BaseModel):
 
     rdi: str
     arc: dict[str, Any]
-    client_id: str = "unknown"
+    client_id: str | None = None

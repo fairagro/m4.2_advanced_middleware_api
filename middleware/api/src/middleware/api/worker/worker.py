@@ -9,9 +9,9 @@ import logging
 import threading
 
 from middleware.api.business_logic import BusinessLogic, BusinessLogicFactory, TransientError
+from middleware.api.business_logic.task_payloads import ArcSyncTask
 
 from .celery_app import celery_app, loaded_config
-from .tasks import ArcSyncTask
 
 # Initialize logger
 logger = logging.getLogger(__name__)

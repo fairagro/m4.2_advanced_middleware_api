@@ -12,7 +12,6 @@ from middleware.api.arc_store import ArcStore, ArcStoreTransientError
 from middleware.api.document_store import DocumentStore
 from middleware.api.document_store.arc_document import ArcEvent, ArcEventType
 from middleware.api.utils import calculate_arc_id, extract_identifier
-from middleware.api.worker.tasks import ArcSyncTask
 from middleware.shared.api_models.common.models import ArcOperationResult, ArcResponse, ArcStatus
 
 from .exceptions import (
@@ -21,6 +20,7 @@ from .exceptions import (
     TaskDispatcher,
     TransientError,
 )
+from .task_payloads import ArcSyncTask
 
 logger = logging.getLogger(__name__)
 
@@ -52,7 +52,7 @@ class ArcManager:
         self._tracer = trace.get_tracer(__name__)
 
     async def create_or_update_arc(
-        self, rdi: str, arc: dict[str, Any], client_id: str, harvest_id: str | None = None
+        self, rdi: str, arc: dict[str, Any], client_id: str | None, harvest_id: str | None = None
     ) -> ArcOperationResult:
         """Create or update an ARC with fast CouchDB storage and async GitLab sync.
 
@@ -77,7 +77,7 @@ class ArcManager:
 
         with self._tracer.start_as_current_span(
             "api.ArcManager.create_or_update_arc",
-            attributes={"rdi": rdi, "client_id": client_id},
+            attributes={"rdi": rdi, "client_id": client_id if client_id is not None else ""},
         ) as span:
             logger.info("[%s] Starting ARC creation/update: rdi=%s", client_id, rdi)
             try:

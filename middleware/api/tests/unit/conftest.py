@@ -13,9 +13,11 @@ from fastapi.testclient import TestClient
 from pydantic import HttpUrl, SecretStr
 
 from middleware.api.api.fastapi_app import Api
+from middleware.api.api.legacy.task_types import SyncTaskResult, SyncTaskStatus
 from middleware.api.arc_store.config import GitRepoConfig
 from middleware.api.arc_store.gitlab_api import GitlabApi, GitlabApiConfig
 from middleware.api.business_logic import BusinessLogic
+from middleware.api.business_logic.ports import BusinessLogicPorts
 from middleware.api.config import Config
 from middleware.api.document_store import ArcStoreResult
 from middleware.api.document_store.config import CouchDBConfig
@@ -77,7 +79,11 @@ def middleware_api(config: Config, service: BusinessLogic) -> Api:
     """Provide the Middleware API instance for tests."""
     api = Api(config)
     api.business_logic = service
+    api.task_status_store = MagicMock()
+    api.task_status_store.get_task_status = MagicMock(return_value=SyncTaskResult(status=SyncTaskStatus.PENDING))
+    api.task_status_store.store_task_result = MagicMock()
     api.app.state.business_logic = service
+    api.app.state.task_status_store = api.task_status_store
     return api
 
 
@@ -120,9 +126,19 @@ def service(config: Config) -> BusinessLogic:
     doc_store.setup = AsyncMock()
 
     git_sync_task = MagicMock()
+    broker_health_checker = MagicMock()
+    broker_health_checker.is_healthy = MagicMock(return_value=True)
 
     # Provide an instance in API mode (with task sender)
-    return BusinessLogic(config=config, store=store, doc_store=doc_store, task_dispatcher=git_sync_task)
+    return BusinessLogic(
+        config=config,
+        store=store,
+        doc_store=doc_store,
+        ports=BusinessLogicPorts(
+            task_dispatcher=git_sync_task,
+            broker_health_checker=broker_health_checker,
+        ),
+    )
 
 
 @pytest.fixture

@@ -7,13 +7,14 @@ import pytest
 from middleware.api.business_logic import (
     BusinessLogic,
     BusinessLogicError,
+    BusinessLogicFactory,
     InvalidJsonSemanticError,
     SetupError,
 )
-from middleware.api.business_logic.sync_task import SyncTaskResult, SyncTaskStatus
+from middleware.api.business_logic.ports import BusinessLogicPorts
+from middleware.api.business_logic.task_payloads import ArcSyncTask
 from middleware.api.document_store import ArcStoreResult
-from middleware.api.worker.tasks import ArcSyncTask
-from middleware.shared.api_models.common.models import ArcOperationResult, ArcResponse, ArcStatus
+from middleware.shared.api_models.common.models import ArcOperationResult, ArcStatus
 
 
 @pytest.fixture
@@ -48,6 +49,14 @@ def mock_task_dispatcher() -> MagicMock:
 
 
 @pytest.fixture
+def mock_broker_health_checker() -> MagicMock:
+    """Mock BrokerHealthChecker."""
+    broker_checker = MagicMock()
+    broker_checker.is_healthy = MagicMock(return_value=True)
+    return broker_checker
+
+
+@pytest.fixture
 def mock_config() -> MagicMock:
     """Mock Config."""
     config = MagicMock()
@@ -57,18 +66,36 @@ def mock_config() -> MagicMock:
 
 @pytest.fixture
 def api_logic(
-    mock_config: MagicMock, mock_store: MagicMock, mock_doc_store: MagicMock, mock_task_dispatcher: MagicMock
+    mock_config: MagicMock,
+    mock_store: MagicMock,
+    mock_doc_store: MagicMock,
+    api_ports: BusinessLogicPorts,
 ) -> BusinessLogic:
     """BusinessLogic in API mode."""
     return BusinessLogic(
-        config=mock_config, store=mock_store, doc_store=mock_doc_store, task_dispatcher=mock_task_dispatcher
+        config=mock_config,
+        store=mock_store,
+        doc_store=mock_doc_store,
+        ports=api_ports,
+    )
+
+
+@pytest.fixture
+def api_ports(
+    mock_task_dispatcher: MagicMock,
+    mock_broker_health_checker: MagicMock,
+) -> BusinessLogicPorts:
+    """Bundle API mode ports for BusinessLogic."""
+    return BusinessLogicPorts(
+        task_dispatcher=mock_task_dispatcher,
+        broker_health_checker=mock_broker_health_checker,
     )
 
 
 @pytest.fixture
 def worker_logic(mock_config: MagicMock, mock_store: MagicMock, mock_doc_store: MagicMock) -> BusinessLogic:
     """BusinessLogic in Worker mode."""
-    return BusinessLogic(config=mock_config, store=mock_store, doc_store=mock_doc_store, task_dispatcher=None)
+    return BusinessLogic(config=mock_config, store=mock_store, doc_store=mock_doc_store)
 
 
 @pytest.mark.asyncio
@@ -111,35 +138,33 @@ async def test_api_mode_sync_to_gitlab_forbidden(api_logic: BusinessLogic) -> No
 
 
 @pytest.mark.asyncio
-async def test_health_check(api_logic: BusinessLogic, mock_doc_store: MagicMock) -> None:
+async def test_health_check(
+    api_logic: BusinessLogic, mock_doc_store: MagicMock, mock_broker_health_checker: MagicMock
+) -> None:
     """Test health_check includes only real dependencies."""
     mock_doc_store.health_check.return_value = True
 
-    # Mock rabbitmq success via celery_app
-    with patch("middleware.api.business_logic.business_logic.celery_app") as mock_celery:
-        mock_conn = MagicMock()
-        mock_celery.connection_or_acquire.return_value.__enter__.return_value = mock_conn
+    mock_broker_health_checker.is_healthy.return_value = True
+    result = await api_logic.health_check()
 
-        result = await api_logic.health_check()
-
-        assert result == {
-            "couchdb_reachable": True,
-            "rabbitmq": True,
-        }
+    assert result == {
+        "couchdb_reachable": True,
+        "rabbitmq": True,
+    }
 
 
 @pytest.mark.asyncio
-async def test_health_check_failures(api_logic: BusinessLogic, mock_doc_store: MagicMock) -> None:
+async def test_health_check_failures(
+    api_logic: BusinessLogic, mock_doc_store: MagicMock, mock_broker_health_checker: MagicMock
+) -> None:
     """Test aggregated health check with failures."""
     mock_doc_store.health_check.return_value = False
 
-    # Mock RabbitMQ failure
-    with patch("middleware.api.business_logic.business_logic.celery_app") as mock_celery:
-        mock_celery.connection_or_acquire.side_effect = ConnectionError("Connection failed")
+    mock_broker_health_checker.is_healthy.return_value = False
 
-        status = await api_logic.health_check()
-        assert status["couchdb_reachable"] is False
-        assert status["rabbitmq"] is False
+    status = await api_logic.health_check()
+    assert status["couchdb_reachable"] is False
+    assert status["rabbitmq"] is False
 
 
 @pytest.mark.asyncio
@@ -159,33 +184,6 @@ async def test_setup_failure(api_logic: BusinessLogic, mock_doc_store: MagicMock
     mock_doc_store.setup.side_effect = Exception("DB Fail")
     with pytest.raises(SetupError, match="Failed to setup business logic"):
         await api_logic.startup()
-
-
-def test_get_task_status(api_logic: BusinessLogic) -> None:
-    """Test get_task_status returns a domain SyncTaskResult, hiding Celery internals."""
-    mock_async_result = MagicMock()
-    mock_async_result.state = "SUCCESS"
-    mock_async_result.result = {"some": "data"}
-
-    with patch("middleware.api.business_logic.business_logic.celery_app") as mock_celery:
-        mock_celery.AsyncResult.return_value = mock_async_result
-        result = api_logic.get_task_status("task-1")
-
-    assert isinstance(result, SyncTaskResult)
-    assert result.status == SyncTaskStatus.SUCCESS
-    assert result.result == {"some": "data"}
-    assert result.error is None
-    mock_celery.AsyncResult.assert_called_once_with("task-1")
-
-
-def test_store_task_result(api_logic: BusinessLogic) -> None:
-    """Test store_task_result wraps celery backend store_result."""
-    mock_res = ArcOperationResult(
-        rdi="rdi", arc=ArcResponse(id="1", status=ArcStatus.CREATED, timestamp="2024-01-01T00:00:00Z")
-    )
-    with patch("middleware.api.business_logic.business_logic.celery_app") as mock_celery:
-        api_logic.store_task_result("task-1", mock_res)
-        mock_celery.backend.store_result.assert_called_once()
 
 
 @pytest.mark.asyncio
@@ -248,17 +246,15 @@ def test_factory_create_api_mode() -> None:
     with (
         patch("middleware.api.business_logic.business_logic_factory.CouchDB"),
         patch("middleware.api.business_logic.business_logic_factory.GitRepo"),
-        patch.dict("sys.modules", {"middleware.api.worker": MagicMock()}),
     ):
-        # Actually, simpler to verify the result has a task sender
-        # But the factory does a local import.
-        # We can't easily patch local import without deeper magic or refactoring
-        # For now, let's assume it works if we mock the module it imports?
-        pass
+        bl = BusinessLogicFactory.create(
+            config,
+            mode="api",
+            task_dispatcher=MagicMock(),
+            broker_health_checker=MagicMock(),
+        )
 
-    # Since patching local import is hard, let's just create it and see if it fails
-    # if worker module is not found. But we are in tests.
-    pass
+    assert isinstance(bl, BusinessLogic)
 
 
 @pytest.mark.asyncio

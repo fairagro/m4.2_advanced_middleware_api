@@ -25,7 +25,7 @@ async def create_or_update_arc(
     request_body: models.CreateArcRequest,
     bl: Annotated[BusinessLogic, Depends(get_business_logic)],
     deps: Annotated[CommonApiDependencies, Depends(get_common_deps)],
-    client_id: Annotated[str, Depends(get_client_id)],
+    client_id: Annotated[str | None, Depends(get_client_id)],
     _: Annotated[None, Depends(get_content_type)],
     __: Annotated[None, Depends(get_accept_type)],
 ) -> models.ArcResponse:

@@ -23,6 +23,12 @@ couchdb: {}
 
 celery: {}
 
+health_checks:
+  readiness_check_couchdb: true
+  readiness_check_rabbitmq: true
+  global_health_check_workers: true
+  global_health_check_git_backend: false
+
 otel:
   # endpoint: http://signoz:4318  # Uncomment to enable Signoz tracing
   # log_console_spans: true       # Enable SPAN logging to console

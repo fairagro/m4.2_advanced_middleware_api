@@ -1,5 +1,6 @@
 """V3 API Models."""
 
+from enum import StrEnum
 from typing import Annotated
 
 from pydantic import BaseModel, Field
@@ -12,6 +13,32 @@ class CreateArcRequest(BaseModel):
 
     rdi: Annotated[str, Field(description="Research Data Infrastructure identifier")]
     arc: Annotated[dict, Field(description="ARC definition in RO-Crate JSON format")]
+
+
+class BaseStatusResponse(BaseModel):
+    """Base response model for status-only API responses."""
+
+    status: Annotated["StatusResponse", Field(description="Overall service status")]
+    services: Annotated[dict[str, bool], Field(description="Dictionary of service checks")]
+
+
+class StatusResponse(StrEnum):
+    """Allowed status values for liveness/readiness/health responses."""
+
+    OK = "ok"
+    ERROR = "error"
+
+
+class LivenessResponse(BaseStatusResponse):
+    """Response model for liveness checks."""
+
+
+class ReadinessResponse(BaseStatusResponse):
+    """Response model for readiness checks."""
+
+
+class HealthResponse(BaseStatusResponse):
+    """Response model for global health checks."""
 
 
 class SubmitHarvestArcRequest(BaseModel):

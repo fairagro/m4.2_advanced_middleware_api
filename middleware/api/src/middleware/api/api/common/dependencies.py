@@ -5,16 +5,24 @@ from http import HTTPStatus
 from typing import cast
 from urllib.parse import unquote
 
-from asn1crypto.core import Sequence, UTF8String  # type: ignore
+from asn1crypto.core import SequenceOf, UTF8String  # type: ignore
 from cryptography import x509
 from cryptography.x509.extensions import ExtensionNotFound
 from cryptography.x509.oid import NameOID
 from fastapi import HTTPException, Request
 
+from middleware.api.api.legacy.task_status_store import LegacyTaskStatusStore
 from middleware.api.business_logic import BusinessLogic
 from middleware.api.config import Config
+from middleware.api.health_service import ApiHealthService
 
 logger = logging.getLogger(__name__)
+
+
+class _RDISequence(SequenceOf):
+    """ASN.1 sequence wrapper for RDI UTF8String entries."""
+
+    _child_spec = UTF8String
 
 
 class CommonApiDependencies:
@@ -64,11 +72,11 @@ class CommonApiDependencies:
         request.state.cert = cert
         return cert
 
-    async def validate_client_id(self, request: Request) -> str:
+    async def validate_client_id(self, request: Request) -> str | None:
         """Validate client certificate and return client ID."""
         cert = self._validate_client_cert(request)
         if cert is None:
-            return "unknown"
+            return None
 
         cn_attributes = cert.subject.get_attributes_for_oid(NameOID.COMMON_NAME)
         if not cn_attributes:
@@ -112,10 +120,9 @@ class CommonApiDependencies:
             for ext in cert.extensions:
                 if ext.oid == oid:
                     der_bytes = ext.value.public_bytes()
-                    seq = Sequence.load(der_bytes)
+                    seq = _RDISequence.load(der_bytes)
                     for item in seq:
-                        if isinstance(item, UTF8String):
-                            allowed_rdis.append(item.native)
+                        allowed_rdis.append(item.native)
                     break
         except (ExtensionNotFound, TypeError, ValueError) as e:
             logger.warning("Error extracting RDI extension: %s", e)
@@ -136,7 +143,7 @@ class CommonApiDependencies:
         raise HTTPException(status_code=HTTPStatus.FORBIDDEN, detail=f"RDI '{rdi}' not authorized.")
 
 
-async def get_client_id(request: Request) -> str:
+async def get_client_id(request: Request) -> str | None:
     """Dependency helper to get client ID from common dependencies."""
     deps: CommonApiDependencies = request.app.state.common_deps
     return await deps.validate_client_id(request)
@@ -170,3 +177,19 @@ def get_common_deps(request: Request) -> CommonApiDependencies:
         return deps
     # Fallback for mocks/tests
     return cast(CommonApiDependencies, deps)
+
+
+def get_health_service(request: Request) -> ApiHealthService:
+    """Dependency to get ApiHealthService from app state."""
+    service = request.app.state.health_service
+    if isinstance(service, ApiHealthService):
+        return service
+    return cast(ApiHealthService, service)
+
+
+def get_task_status_store(request: Request) -> LegacyTaskStatusStore:
+    """Dependency to get legacy task status store from app state."""
+    store = request.app.state.task_status_store
+    if isinstance(store, LegacyTaskStatusStore):
+        return store
+    return cast(LegacyTaskStatusStore, store)

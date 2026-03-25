@@ -50,6 +50,9 @@ RUN uv pip install --system pyinstaller
 # Build standalone binary with PyInstaller
 RUN pyinstaller --onedir \
     --name middleware-api \
+    --hidden-import "middleware.api.worker" \
+    --hidden-import "middleware.api.worker.celery_app" \
+    --hidden-import "middleware.api.worker.worker" \
     --hidden-import "celery.app.amqp" \
     --hidden-import "celery.app.control" \
     --hidden-import "celery.app.events" \

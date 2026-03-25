@@ -17,6 +17,27 @@ from .document_store.config import CouchDBConfig
 from .worker.config import CeleryConfig
 
 
+class HealthCheckConfig(ConfigBase):
+    """Feature flags controlling API readiness/global health checks."""
+
+    readiness_check_couchdb: Annotated[
+        bool,
+        Field(description="Whether /v3/readiness should include CouchDB reachability checks."),
+    ] = True
+    readiness_check_rabbitmq: Annotated[
+        bool,
+        Field(description="Whether /v3/readiness should include RabbitMQ reachability checks."),
+    ] = True
+    global_health_check_workers: Annotated[
+        bool,
+        Field(description="Whether /v3/health should include Celery worker liveness checks."),
+    ] = True
+    global_health_check_git_backend: Annotated[
+        bool,
+        Field(description="Whether /v3/health should include Git backend reachability checks."),
+    ] = False
+
+
 class Config(ConfigBase):
     """Configuration model for the Middleware API."""
 
@@ -34,6 +55,10 @@ class Config(ConfigBase):
 
     celery: Annotated[CeleryConfig, Field(description="Celery configuration")]
     harvest: Annotated[HarvestConfig, Field(description="Default Harvest configuration")] = HarvestConfig()
+    health_checks: Annotated[
+        HealthCheckConfig,
+        Field(description="Health check feature-toggle configuration"),
+    ] = HealthCheckConfig()
 
     require_client_cert: Annotated[
         bool, Field(description="Require client certificate for API access (set to false for development)")

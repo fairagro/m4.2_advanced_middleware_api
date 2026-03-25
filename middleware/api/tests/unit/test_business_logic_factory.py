@@ -1,6 +1,6 @@
 """Unit tests for the BusinessLogicFactory."""
 
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -12,7 +12,46 @@ pytestmark = pytest.mark.filterwarnings("ignore:gitlab_api configuration is depr
 
 
 def test_factory_creates_api_mode() -> None:
-    """Test factory creates API mode BusinessLogic with task sender."""
+    """Test factory creates API mode BusinessLogic with injected adapters."""
+    config_data = {
+        "log_level": "DEBUG",
+        "git_repo": {
+            "url": "https://gitlab.com",
+            "group": "test-group",
+        },
+        "couchdb": {
+            "url": "http://localhost:5984",
+        },
+        "celery": {
+            "broker_url": "memory://",
+            "result_backend": "cache+memory://",
+        },
+    }
+    config = Config.from_data(config_data)
+    task_dispatcher = MagicMock()
+    broker_health_checker = MagicMock()
+
+    with (
+        patch("middleware.api.business_logic.business_logic_factory.CouchDB") as mock_couch,
+        patch("middleware.api.business_logic.business_logic_factory.GitRepo") as mock_git_repo,
+    ):
+        bl = BusinessLogicFactory.create(
+            config,
+            mode="api",
+            task_dispatcher=task_dispatcher,
+            broker_health_checker=broker_health_checker,
+        )
+
+        assert isinstance(bl, BusinessLogic)
+        # pylint: disable=protected-access
+        assert bl._arc_manager._dispatcher == task_dispatcher  # noqa: SLF001
+        assert bl._broker_health_checker == broker_health_checker  # noqa: SLF001
+        assert bl._doc_store == mock_couch.return_value  # noqa: SLF001
+        assert bl._arc_manager._store == mock_git_repo.return_value  # noqa: SLF001
+
+
+def test_factory_api_mode_requires_dispatcher() -> None:
+    """Test factory fails fast if API mode has no task dispatcher."""
     config_data = {
         "log_level": "DEBUG",
         "git_repo": {
@@ -29,18 +68,8 @@ def test_factory_creates_api_mode() -> None:
     }
     config = Config.from_data(config_data)
 
-    with (
-        patch("middleware.api.business_logic.business_logic_factory.CouchDB") as mock_couch,
-        patch("middleware.api.business_logic.business_logic_factory.GitRepo") as mock_git_repo,
-        patch("middleware.api.business_logic.business_logic_factory.CeleryTaskDispatcher") as mock_dispatcher,
-    ):
-        bl = BusinessLogicFactory.create(config, mode="api")
-
-        assert isinstance(bl, BusinessLogic)
-        # pylint: disable=protected-access
-        assert bl._arc_manager._dispatcher == mock_dispatcher.return_value  # noqa: SLF001
-        assert bl._doc_store == mock_couch.return_value  # noqa: SLF001
-        assert bl._arc_manager._store == mock_git_repo.return_value  # noqa: SLF001
+    with pytest.raises(ValueError, match="task_dispatcher"):
+        BusinessLogicFactory.create(config, mode="api")
 
 
 def test_factory_creates_worker_mode() -> None:

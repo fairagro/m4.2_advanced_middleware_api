@@ -5,6 +5,7 @@ from typing import Any
 
 from .arc_document import ArcEvent, ArcMetadata
 from .harvest_document import HarvestDocument, HarvestStatistics
+from .task_record import TaskRecord
 
 
 class DocumentStoreError(Exception):
@@ -116,7 +117,7 @@ class DocumentStore(ABC):
     async def create_harvest(
         self,
         rdi: str,
-        client_id: str,
+        client_id: str | None,
         expected_datasets: int | None = None,
     ) -> str:
         """Create a new harvest record.
@@ -174,5 +175,26 @@ class DocumentStore(ABC):
 
         Returns:
             The calculated harvest statistics.
+        """
+        raise NotImplementedError
+
+    @abstractmethod
+    async def get_task_record(self, task_id: str) -> TaskRecord | None:
+        """Get persisted task status record for a task id.
+
+        Args:
+            task_id: Task identifier
+
+        Returns:
+            Task record model or ``None`` if not found.
+        """
+        raise NotImplementedError
+
+    @abstractmethod
+    async def save_task_record(self, task_record: TaskRecord) -> None:
+        """Create or update a persisted task status record.
+
+        Args:
+            task_record: Task record model to persist
         """
         raise NotImplementedError

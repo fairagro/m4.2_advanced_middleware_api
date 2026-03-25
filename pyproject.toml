@@ -151,6 +151,7 @@ filterwarnings = [
 # Output and behavior
 addopts = [
     "-v",                        # Verbose output
+  "-ra",                       # Show summary for skipped/xfail/etc. with reasons
     "--strict-markers",          # Treat unregistered markers as errors
     "--tb=short",                # Shorter traceback format
     "--cov=middleware",          # Enable coverage for middleware packages

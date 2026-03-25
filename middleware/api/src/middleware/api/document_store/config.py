@@ -2,7 +2,7 @@
 
 from typing import Annotated
 
-from pydantic import BaseModel, Field, SecretStr
+from pydantic import BaseModel, Field, SecretStr, field_validator
 
 
 class CouchDBConfig(BaseModel):
@@ -13,3 +13,11 @@ class CouchDBConfig(BaseModel):
     password: Annotated[SecretStr | None, Field(description="CouchDB password")] = None
     db_name: Annotated[str, Field(description="Name of the database for ARCs and harvests")] = "arcs"
     max_event_log_size: Annotated[int, Field(default=100, description="Maximum number of events in ARC metadata")] = 100
+
+    @field_validator("url")
+    @classmethod
+    def validate_url_scheme(cls, value: str) -> str:
+        """Ensure CouchDB URL uses an explicit HTTP(S) scheme."""
+        if not (value.startswith("http://") or value.startswith("https://")):
+            raise ValueError("couchdb.url must start with 'http://' or 'https://'")
+        return value

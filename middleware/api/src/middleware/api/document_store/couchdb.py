@@ -22,6 +22,7 @@ from .harvest_document import (
     HarvestDocument,
     HarvestStatistics,
 )
+from .task_record import TaskRecord
 
 logger = logging.getLogger(__name__)
 
@@ -214,7 +215,7 @@ class CouchDB(DocumentStore):
     async def create_harvest(
         self,
         rdi: str,
-        client_id: str,
+        client_id: str | None,
         expected_datasets: int | None = None,
     ) -> str:
         """Create a new harvest record."""
@@ -303,3 +304,14 @@ class CouchDB(DocumentStore):
                 stats.arcs_unchanged += 1
 
         return stats
+
+    async def get_task_record(self, task_id: str) -> TaskRecord | None:
+        """Get persisted task status record."""
+        doc = await self._client.get_document(f"task_status_{task_id}")
+        return TaskRecord.model_validate(doc) if doc else None
+
+    async def save_task_record(self, task_record: TaskRecord) -> None:
+        """Create or update a task status record in CouchDB."""
+        doc_id = f"task_status_{task_record.task_id}"
+        payload = task_record.model_dump(mode="json", exclude_none=True)
+        await self._client.save_document(doc_id, payload)

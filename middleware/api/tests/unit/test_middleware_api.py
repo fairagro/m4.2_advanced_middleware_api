@@ -12,7 +12,7 @@ from fastapi.testclient import TestClient
 
 from middleware.api.api.common.dependencies import get_client_id
 from middleware.api.api.fastapi_app import Api
-from middleware.api.business_logic.sync_task import SyncTaskResult, SyncTaskStatus
+from middleware.api.api.legacy.task_types import SyncTaskResult, SyncTaskStatus
 from middleware.shared.api_models import (
     ArcOperationResult,
     ArcResponse,
@@ -247,7 +247,7 @@ def test_create_or_update_arcs_no_cert_allowed(client: TestClient, middleware_ap
 
     mock_result = ArcOperationResult(
         rdi="rdi-1",
-        client_id="unknown",
+        client_id=None,
         message="ok",
         arc=ArcResponse(id="arc-1", status=ArcStatus.CREATED, timestamp="2024-01-01T00:00:00Z"),
     )
@@ -289,7 +289,7 @@ def test_get_task_status_v1_transformation(client: TestClient, middleware_api: A
         },
     )
 
-    with unittest.mock.patch.object(middleware_api.business_logic, "get_task_status", return_value=mock_result):
+    with unittest.mock.patch.object(middleware_api.task_status_store, "get_task_status", return_value=mock_result):
         r = client.get(
             "/v1/tasks/task-123",
             headers={"accept": "application/json"},

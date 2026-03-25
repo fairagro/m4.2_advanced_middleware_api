@@ -36,15 +36,14 @@ class HarvestDocument(BaseModel):
     # Harvest data
     rdi: Annotated[str, Field(description="Research Data Infrastructure identifier")]
     client_id: Annotated[
-        str,
+        str | None,
         Field(
             description="The identifier of the client who started the harvest",
             # Old CouchDB documents (main-branch schema) have neither 'client_id'
             # nor an equivalent field — they used a separate 'source' field that
-            # tracked the data *source system*, not the client identity.  Provide
-            # 'unknown' as the default so those documents can still be parsed.
+            # tracked the data *source system*, not the client identity.
         ),
-    ] = "unknown"
+    ] = None
     started_at: Annotated[datetime, Field(description="Harvest start timestamp")]
     completed_at: Annotated[datetime | None, Field(description="Harvest completion timestamp")] = None
     status: Annotated[HarvestStatus, Field(description="Harvest status")]

@@ -26,12 +26,20 @@ from ..business_logic.exceptions import (
     InvalidJsonSemanticError,
     ResourceNotFoundError,
 )
+from ..celery_integration import (
+    CeleryBrokerHealthChecker,
+    CeleryTaskDispatcher,
+    CeleryWorkerHealthChecker,
+    build_api_celery_app,
+)
 from ..config import Config
+from ..health_service import ApiHealthService
 from .common.dependencies import CommonApiDependencies
+from .legacy.task_status_store import LegacyTaskStatusStore
 from .tracing import setup_api_tracing
 from .v1 import arcs as arcs_v1, system as system_v1, tasks as tasks_v1
 from .v2 import arcs as arcs_v2, system as system_v2, tasks as tasks_v2
-from .v3 import arcs as arcs_v3, harvests as harvests_v3
+from .v3 import arcs as arcs_v3, harvests as harvests_v3, system as system_v3
 
 try:
     from importlib.metadata import PackageNotFoundError, version
@@ -120,8 +128,21 @@ class Api:
 
         """
         self._config = app_config
-        # Initialize BusinessLogic via Factory (API mode)
-        self.business_logic = BusinessLogicFactory.create(self._config, mode="api")
+        api_celery_app = build_api_celery_app(self._config)
+        broker_health_checker = CeleryBrokerHealthChecker(api_celery_app)
+        # Initialize BusinessLogic via Factory (API mode) with Celery-backed adapters.
+        self.business_logic = BusinessLogicFactory.create(
+            self._config,
+            mode="api",
+            task_dispatcher=CeleryTaskDispatcher(api_celery_app),
+            broker_health_checker=broker_health_checker,
+        )
+        self.task_status_store = LegacyTaskStatusStore(self.business_logic.document_store)
+        self.health_service = ApiHealthService(
+            config=self._config,
+            broker_health_checker=broker_health_checker,
+            worker_health_checker=CeleryWorkerHealthChecker(api_celery_app),
+        )
         self.common_deps = CommonApiDependencies(self._config)
 
         self._tracer_provider: TracerProvider | None = None
@@ -171,6 +192,8 @@ class Api:
 
         # Map state for routers to access
         self._app.state.business_logic = self.business_logic
+        self._app.state.task_status_store = self.task_status_store
+        self._app.state.health_service = self.health_service
         self._app.state.common_deps = self.common_deps
 
         self._setup_routes()
@@ -243,6 +266,7 @@ class Api:
         self._app.include_router(tasks_v2.router)
 
         # Register V3
+        self._app.include_router(system_v3.router)
         self._app.include_router(arcs_v3.router)
         self._app.include_router(harvests_v3.router)
 

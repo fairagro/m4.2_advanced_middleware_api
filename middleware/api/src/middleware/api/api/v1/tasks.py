@@ -8,10 +8,10 @@ from pydantic import ValidationError
 
 from middleware.api.api.common.dependencies import (
     get_accept_type,
-    get_business_logic,
+    get_task_status_store,
 )
-from middleware.api.business_logic import BusinessLogic
-from middleware.api.business_logic.sync_task import SyncTaskStatus
+from middleware.api.api.legacy.task_status_store import LegacyTaskStatusStore
+from middleware.api.api.legacy.task_types import SyncTaskStatus
 from middleware.shared.api_models.common.models import ArcOperationResult
 from middleware.shared.api_models.v1 import models as v1_models
 
@@ -23,11 +23,11 @@ router = APIRouter(prefix="/v1/tasks", tags=["v1", "tasks"], deprecated=True)
 @router.get("/{task_id}", response_model=v1_models.GetTaskStatusResponse)
 async def get_task_status(
     task_id: str,
-    bl: Annotated[BusinessLogic, Depends(get_business_logic)],
+    task_status_store: Annotated[LegacyTaskStatusStore, Depends(get_task_status_store)],
     _: Annotated[None, Depends(get_accept_type)],
 ) -> v1_models.GetTaskStatusResponse:
     """Get the status of an async task (v1)."""
-    result = bl.get_task_status(task_id)
+    result = task_status_store.get_task_status(task_id)
 
     task_result: v1_models.CreateOrUpdateArcsResponse | None = None
     error_message = None

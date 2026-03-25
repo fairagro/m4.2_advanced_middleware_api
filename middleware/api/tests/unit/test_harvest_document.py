@@ -64,8 +64,8 @@ def test_harvest_document_alias() -> None:
 def test_harvest_document_backward_compat_no_client_id() -> None:
     """Old CouchDB documents pre-date the 'client_id' field entirely.
 
-    Such documents must be parsed without error; client_id should fall back
-    to 'unknown' because we have no way to recover the original client identity.
+    Such documents must be parsed without error; client_id falls back
+    to None because we have no way to recover the original client identity.
     The unrelated old 'source' field (data-source system name, not client
     identity) must be silently ignored via extra='ignore'.
     """
@@ -83,7 +83,7 @@ def test_harvest_document_backward_compat_no_client_id() -> None:
 
     doc = HarvestDocument.model_validate(old_doc)
 
-    assert doc.client_id == "unknown"
+    assert doc.client_id is None
     assert doc.doc_id == "harvest-old-001"
     assert doc.statistics.arcs_submitted == 3  # noqa: PLR2004
 
@@ -111,7 +111,7 @@ def test_harvest_document_backward_compat_config_field_ignored() -> None:
 
     doc = HarvestDocument.model_validate(old_doc)
 
-    assert doc.client_id == "unknown"
+    assert doc.client_id is None
     # Neither 'config' nor 'source' must appear on the new model
     assert not hasattr(doc, "config")
     assert not hasattr(doc, "source")

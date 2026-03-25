@@ -36,7 +36,7 @@ class HarvestManager:
         """
         return cls(doc_store, config)
 
-    async def create_harvest(self, rdi: str, client_id: str, expected_datasets: int | None = None) -> str:
+    async def create_harvest(self, rdi: str, client_id: str | None, expected_datasets: int | None = None) -> str:
         """Start a new harvest run."""
         harvest_id = await self._doc_store.create_harvest(rdi, client_id, expected_datasets=expected_datasets)
         logger.info("[%s] Created harvest: %s (rdi=%s)", client_id, harvest_id, rdi)
@@ -46,7 +46,7 @@ class HarvestManager:
         """Get harvest details."""
         return await self._doc_store.get_harvest(harvest_id)
 
-    async def validate_client_id(self, harvest_id: str, client_id: str) -> None:
+    async def validate_client_id(self, harvest_id: str, client_id: str | None) -> None:
         """Validate that the harvest belongs to the client."""
         harvest = await self.get_harvest(harvest_id)
         if not harvest:
@@ -60,7 +60,7 @@ class HarvestManager:
             )
             raise AccessDeniedError(f"Harvest {harvest_id} does not belong to client {client_id}")
 
-    async def complete_harvest(self, harvest_id: str, client_id: str) -> HarvestDocument:
+    async def complete_harvest(self, harvest_id: str, client_id: str | None) -> HarvestDocument:
         """Mark a harvest as completed and return the updated document."""
         # Single fetch: used for both client_id validation and expected_datasets
         harvest = await self.get_harvest(harvest_id)
@@ -88,7 +88,7 @@ class HarvestManager:
         logger.info("[%s] Completed harvest: %s", client_id, harvest_id)
         return updated
 
-    async def cancel_harvest(self, harvest_id: str, client_id: str) -> None:
+    async def cancel_harvest(self, harvest_id: str, client_id: str | None) -> None:
         """Cancel a harvest run."""
         # Single fetch: used for both client_id validation and RDI auth (endpoint does it first)
         harvest = await self.get_harvest(harvest_id)

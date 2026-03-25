@@ -2,7 +2,7 @@
 
 from typing import Protocol, runtime_checkable
 
-from middleware.api.worker.tasks import ArcSyncTask
+from .task_payloads import ArcSyncTask
 
 
 @runtime_checkable
@@ -11,6 +11,7 @@ class TaskDispatcher(Protocol):
 
     def dispatch_sync_arc(self, task: ArcSyncTask) -> None:
         """Dispatch a task to sync an ARC to GitLab."""
+        raise NotImplementedError
 
 
 class BusinessLogicError(Exception):

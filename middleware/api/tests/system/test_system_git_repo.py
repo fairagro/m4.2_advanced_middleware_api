@@ -134,6 +134,28 @@ async def test_create_arc_via_git_repo(
     # _verify_repo_content(repo_path)
 
 
+@pytest.mark.asyncio
+@pytest.mark.system
+async def test_create_arc_requires_client_cert_when_enabled(api_client: TestClient) -> None:
+    """Ensure requests without client cert are rejected when cert auth is enabled."""
+    body = {
+        "rdi": "rdi-1",
+        "arcs": [
+            {
+                "@id": "./",
+                "@type": "Dataset",
+                "identifier": "Test",
+                "name": "Test ARC",
+            }
+        ],
+    }
+
+    response = api_client.post("/v1/arcs", json=body)
+
+    assert response.status_code == http.HTTPStatus.UNAUTHORIZED
+    assert response.json()["detail"] == "Client certificate required"
+
+
 def _verify_repo_content(repo_path: Path) -> None:
     """Verify the content of the pushed repository."""
     with tempfile.TemporaryDirectory() as tmp_clone:
