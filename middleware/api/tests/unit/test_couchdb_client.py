@@ -208,7 +208,7 @@ async def test_couchdb_client_get_document_no_db(couchdb_client: CouchDBClient) 
 
 @pytest.mark.asyncio
 async def test_couchdb_client_save_document_new(couchdb_client: CouchDBClient) -> None:
-    """Test saving a new document.
+    """Test saving a new document calls create() then save() on the returned Document.
 
     Parameters
     ----------
@@ -217,13 +217,17 @@ async def test_couchdb_client_save_document_new(couchdb_client: CouchDBClient) -
     """
     mock_db = MagicMock()
     mock_db.__getitem__ = AsyncMock(side_effect=NotFoundError)
-    mock_doc = {"_id": "new_doc", "val": 1}
+    # Simulate an aiocouch Document: create() returns an object with a save() coroutine.
+    mock_doc = MagicMock()
+    mock_doc.save = AsyncMock()
+    mock_doc.__iter__ = MagicMock(return_value=iter({"_id": "new_doc", "val": 1}.items()))
     mock_db.create = AsyncMock(return_value=mock_doc)
     couchdb_client._db = mock_db  # noqa: SLF001
 
-    result = await couchdb_client.save_document("new_doc", {"val": 1})
-    assert result == mock_doc
+    await couchdb_client.save_document("new_doc", {"val": 1})
+
     mock_db.create.assert_called_with("new_doc", data={"val": 1})
+    mock_doc.save.assert_awaited_once()
 
 
 @pytest.mark.asyncio

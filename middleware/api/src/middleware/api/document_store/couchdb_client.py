@@ -191,7 +191,10 @@ class CouchDBClient:
             await doc.save()
         except NotFoundError:
             # If not found, it's a create
+            # NOTE: aiocouch.Database.create() only creates a local object;
+            # doc.save() is required to actually PUT the document to CouchDB.
             doc = await self._db.create(doc_id, data=data)
+            await doc.save()
 
         return dict(doc)
 
