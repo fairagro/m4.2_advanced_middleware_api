@@ -80,8 +80,8 @@ def middleware_api(config: Config, service: BusinessLogic) -> Api:
     api = Api(config)
     api.business_logic = service
     api.task_status_store = MagicMock()
-    api.task_status_store.get_task_status = MagicMock(return_value=SyncTaskResult(status=SyncTaskStatus.PENDING))
-    api.task_status_store.store_task_result = MagicMock()
+    api.task_status_store.get_task_status = AsyncMock(return_value=SyncTaskResult(status=SyncTaskStatus.PENDING))
+    api.task_status_store.store_task_result = AsyncMock()
     api.app.state.business_logic = service
     api.app.state.task_status_store = api.task_status_store
     return api

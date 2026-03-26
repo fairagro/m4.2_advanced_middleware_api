@@ -2,11 +2,7 @@
 
 import asyncio
 import logging
-import threading
-from collections.abc import Coroutine
-from concurrent.futures import TimeoutError as FuturesTimeoutError
 from datetime import datetime
-from typing import Any
 
 from middleware.shared.api_models.common.models import ArcOperationResult
 
@@ -22,38 +18,8 @@ from .task_types import SyncTaskResult, SyncTaskStatus
 
 logger = logging.getLogger(__name__)
 
-
-class _DocumentStoreSyncBridge:
-    """Run async DocumentStore operations from synchronous legacy call sites."""
-
-    _loop: asyncio.AbstractEventLoop | None = None
-    _thread: threading.Thread | None = None
-    _lock = threading.Lock()
-
-    @classmethod
-    def _ensure_loop(cls) -> asyncio.AbstractEventLoop:
-        with cls._lock:
-            if cls._loop is not None:
-                return cls._loop
-
-            loop = asyncio.new_event_loop()
-
-            def _runner() -> None:
-                asyncio.set_event_loop(loop)
-                loop.run_forever()
-
-            thread = threading.Thread(target=_runner, name="legacy-task-status-sync-bridge", daemon=True)
-            thread.start()
-            cls._loop = loop
-            cls._thread = thread
-            return loop
-
-    @classmethod
-    def run(cls, coroutine: Coroutine[Any, Any, Any], timeout_seconds: float) -> object:
-        """Execute coroutine on bridge loop and return result."""
-        loop = cls._ensure_loop()
-        future = asyncio.run_coroutine_threadsafe(coroutine, loop)
-        return future.result(timeout=timeout_seconds)
+_TASK_STATUS_READ_TIMEOUT_SECONDS = 5.0
+_TASK_STATUS_WRITE_TIMEOUT_SECONDS = 5.0
 
 
 class LegacyTaskStatusStore:
@@ -87,29 +53,39 @@ class LegacyTaskStatusStore:
                 return datetime.fromisoformat(normalized[:-6])
             raise
 
-    def get_task_status(self, task_id: str) -> SyncTaskResult:
+    async def get_task_status(self, task_id: str) -> SyncTaskResult:
         """Read task status record from document storage."""
+        result: SyncTaskResult
         try:
-            record = _DocumentStoreSyncBridge.run(self._doc_store.get_task_record(task_id), timeout_seconds=2.0)
-        except (FuturesTimeoutError, RuntimeError, ValueError, OSError) as exc:
+            record = await asyncio.wait_for(
+                self._doc_store.get_task_record(task_id),
+                timeout=_TASK_STATUS_READ_TIMEOUT_SECONDS,
+            )
+        except TimeoutError as exc:
+            logger.warning("Task status read timed out for %s: %s", task_id, exc)
+            result = SyncTaskResult(status=SyncTaskStatus.FAILURE, error="Task status lookup timed out")
+        except (RuntimeError, ValueError, OSError) as exc:
             logger.warning("Task status read failed for %s: %s", task_id, exc)
-            return SyncTaskResult(status=SyncTaskStatus.PENDING)
+            result = SyncTaskResult(status=SyncTaskStatus.FAILURE, error="Task status lookup failed")
+        else:
+            if not isinstance(record, TaskRecord):
+                result = SyncTaskResult(status=SyncTaskStatus.PENDING)
+            else:
+                mapped_status = SyncTaskStatus(record.status.value)
 
-        if not isinstance(record, TaskRecord):
-            return SyncTaskResult(status=SyncTaskStatus.PENDING)
+                if mapped_status == SyncTaskStatus.SUCCESS:
+                    result_payload = record.result.model_dump(mode="json") if record.result is not None else None
+                    result = SyncTaskResult(status=SyncTaskStatus.SUCCESS, result=result_payload)
+                elif mapped_status == SyncTaskStatus.FAILURE:
+                    result = SyncTaskResult(status=SyncTaskStatus.FAILURE, error=record.error or "Task failed")
+                elif mapped_status == SyncTaskStatus.RUNNING:
+                    result = SyncTaskResult(status=SyncTaskStatus.RUNNING)
+                else:
+                    result = SyncTaskResult(status=SyncTaskStatus.PENDING)
 
-        mapped_status = SyncTaskStatus(record.status.value)
+        return result
 
-        if mapped_status == SyncTaskStatus.SUCCESS:
-            result_payload = record.result.model_dump(mode="json") if record.result is not None else None
-            return SyncTaskResult(status=SyncTaskStatus.SUCCESS, result=result_payload)
-        if mapped_status == SyncTaskStatus.FAILURE:
-            return SyncTaskResult(status=SyncTaskStatus.FAILURE, error=record.error or "Task failed")
-        if mapped_status == SyncTaskStatus.RUNNING:
-            return SyncTaskResult(status=SyncTaskStatus.RUNNING)
-        return SyncTaskResult(status=SyncTaskStatus.PENDING)
-
-    def store_task_result(self, task_id: str, result: ArcOperationResult) -> None:
+    async def store_task_result(self, task_id: str, result: ArcOperationResult) -> None:
         """Persist successful task result via DocumentStore abstraction."""
         record = TaskRecord(
             task_id=task_id,
@@ -126,9 +102,9 @@ class LegacyTaskStatusStore:
             ),
         )
         try:
-            _DocumentStoreSyncBridge.run(
+            await asyncio.wait_for(
                 self._doc_store.save_task_record(task_record=record),
-                timeout_seconds=2.0,
+                timeout=_TASK_STATUS_WRITE_TIMEOUT_SECONDS,
             )
-        except (FuturesTimeoutError, RuntimeError, ValueError, OSError) as exc:
+        except (TimeoutError, RuntimeError, ValueError, OSError) as exc:
             logger.warning("Task status write failed for %s: %s", task_id, exc)

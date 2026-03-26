@@ -289,7 +289,11 @@ def test_get_task_status_v1_transformation(client: TestClient, middleware_api: A
         },
     )
 
-    with unittest.mock.patch.object(middleware_api.task_status_store, "get_task_status", return_value=mock_result):
+    with unittest.mock.patch.object(
+        middleware_api.task_status_store,
+        "get_task_status",
+        new=AsyncMock(return_value=mock_result),
+    ):
         r = client.get(
             "/v1/tasks/task-123",
             headers={"accept": "application/json"},

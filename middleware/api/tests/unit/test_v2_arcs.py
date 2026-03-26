@@ -134,7 +134,7 @@ def test_get_task_status_v2(client: TestClient, middleware_api: Api) -> None:
         },
     )
 
-    with patch.object(middleware_api.task_status_store, "get_task_status", return_value=mock_result):
+    with patch.object(middleware_api.task_status_store, "get_task_status", new=AsyncMock(return_value=mock_result)):
         r = client.get(
             "/v2/tasks/task-123",
             headers={"accept": "application/json"},
@@ -153,7 +153,7 @@ def test_get_task_status_v2_failure(client: TestClient, middleware_api: Api) -> 
         error="Something went wrong",
     )
 
-    with patch.object(middleware_api.task_status_store, "get_task_status", return_value=mock_result):
+    with patch.object(middleware_api.task_status_store, "get_task_status", new=AsyncMock(return_value=mock_result)):
         r = client.get(
             "/v2/tasks/task-123",
             headers={"accept": "application/json"},

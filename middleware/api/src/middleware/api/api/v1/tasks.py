@@ -27,7 +27,7 @@ async def get_task_status(
     _: Annotated[None, Depends(get_accept_type)],
 ) -> v1_models.GetTaskStatusResponse:
     """Get the status of an async task (v1)."""
-    result = task_status_store.get_task_status(task_id)
+    result = await task_status_store.get_task_status(task_id)
 
     task_result: v1_models.CreateOrUpdateArcsResponse | None = None
     error_message = None

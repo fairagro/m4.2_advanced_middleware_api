@@ -49,7 +49,7 @@ async def create_or_update_arcs(
     task_id = str(uuid.uuid4())
     if isinstance(result, ArcOperationResult):
         task_status_store = get_task_status_store(request)
-        task_status_store.store_task_result(task_id, result)
+        await task_status_store.store_task_result(task_id, result)
     else:
         raise HTTPException(status_code=HTTPStatus.INTERNAL_SERVER_ERROR, detail="Unexpected result type")
 

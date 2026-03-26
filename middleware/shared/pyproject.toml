@@ -10,6 +10,7 @@ dependencies = [
     "opentelemetry-api>=1.26.0",
     "opentelemetry-sdk>=1.26.0",
     "opentelemetry-exporter-otlp>=1.26.0",
+    "opentelemetry-instrumentation-logging>=0.47b0",
 ]
 
 [tool.hatch.build.targets.wheel]
