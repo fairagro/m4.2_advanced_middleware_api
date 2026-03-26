@@ -43,20 +43,22 @@ class BusinessLogicManager:
             with cls._lock:
                 # Double-checked locking: only the first thread initializes.
                 if cls._business_logic is None:
-                    loop = asyncio.new_event_loop()
-                    asyncio.set_event_loop(loop)
+                    new_loop = asyncio.new_event_loop()
+                    asyncio.set_event_loop(new_loop)
                     bl = BusinessLogicFactory.create(loaded_config, mode="worker")
-                    loop.run_until_complete(bl.startup())
+                    new_loop.run_until_complete(bl.startup())
                     # Set _loop before _business_logic: the outer check uses
                     # _business_logic as the sentinel, so once it is set the
                     # _loop is guaranteed to be set too.
-                    cls._loop = loop
+                    cls._loop = new_loop
                     cls._business_logic = bl
                     logger.info("BusinessLogic initialized and connected for worker process")
 
-        assert cls._business_logic is not None  # noqa: S101
-        assert cls._loop is not None  # noqa: S101
-        return cls._business_logic, cls._loop
+        bl = cls._business_logic
+        loop = cls._loop
+        if bl is None or loop is None:
+            raise RuntimeError("BusinessLogicManager failed to initialize; this is a bug")
+        return bl, loop
 
 
 @celery_app.task(

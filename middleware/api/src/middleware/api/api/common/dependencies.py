@@ -18,6 +18,9 @@ from middleware.api.health_service import ApiHealthService
 
 logger = logging.getLogger(__name__)
 
+# Sentinel used to distinguish "cert not yet cached" from "cert cached as None"
+_CERT_NOT_CACHED = object()
+
 
 class _RDISequence(SequenceOf):
     """ASN.1 sequence wrapper for RDI UTF8String entries."""
@@ -38,11 +41,14 @@ class CommonApiDependencies:
 
     def _validate_client_cert(self, request: Request) -> x509.Certificate | None:
         """Extract and parse client certificate from request headers."""
-        # Use getattr to avoid MyPy errors on the untyped state object
-        state_cert = getattr(request.state, "cert", None)
-        if state_cert is not None:
+        # Use a sentinel so that a cached None (no cert) is distinguishable from
+        # "not yet checked", avoiding redundant header parsing on repeat calls.
+        state_cert = getattr(request.state, "cert", _CERT_NOT_CACHED)
+        if state_cert is not _CERT_NOT_CACHED:
             if isinstance(state_cert, x509.Certificate):
                 return state_cert
+            if state_cert is None:
+                return None
             # Fallback for mocks/tests
             return cast(x509.Certificate, state_cert)
 

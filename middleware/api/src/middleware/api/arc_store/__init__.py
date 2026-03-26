@@ -62,6 +62,14 @@ class ArcStore(ABC):
         """Check connection to the storage backend."""
         raise NotImplementedError("`ArcStore._check_health` is not implemented")
 
+    async def shutdown(self) -> None:  # noqa: PLR6301
+        """Release resources held by the store (e.g. thread-pool executors).
+
+        Subclasses should override this if they own background resources.
+        The default implementation is a no-op.
+        """
+        return  # no-op default; subclasses (e.g. GitRepo) override
+
     async def create_or_update(self, arc_id: str, arc: ARC) -> None:
         """_Create or update an ARC.
 

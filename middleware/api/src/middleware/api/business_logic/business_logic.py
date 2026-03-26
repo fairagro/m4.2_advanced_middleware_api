@@ -133,6 +133,7 @@ class BusinessLogic:
     async def shutdown(self) -> None:
         """Close all background connections and perform cleanup."""
         await self._doc_store.close()
+        await self._arc_manager.shutdown()
 
     async def __aenter__(self) -> Self:
         """Enter async context, ensuring setup is complete.

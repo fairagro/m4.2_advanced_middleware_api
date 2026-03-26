@@ -258,6 +258,11 @@ class GitRepo(ArcStore):
 
         return await loop.run_in_executor(self._executor, _wrapper)
 
+    async def shutdown(self) -> None:
+        """Shut down the thread-pool executor, cancelling any pending futures."""
+        self._executor.shutdown(wait=False, cancel_futures=True)
+        logger.debug("GitRepo thread-pool executor shut down")
+
     def _check_health(self) -> bool:
         """Check connection to the storage backend."""
         return self._remote_provider.check_health()

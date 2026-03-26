@@ -24,6 +24,7 @@ def mock_store() -> MagicMock:
     # Mock arc_id to use hashing or simpler return
     store.arc_id.side_effect = lambda i, r: f"arc_{i}_{r}"
     store.create_or_update = AsyncMock()
+    store.shutdown = AsyncMock()
     return store
 
 

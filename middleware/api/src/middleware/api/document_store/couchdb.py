@@ -73,10 +73,10 @@ class CouchDB(DocumentStore):
         existing_doc_dict = await self._client.get_document(doc_id)
         existing_doc = ArcDocument.model_validate(existing_doc_dict) if existing_doc_dict else None
 
-        is_new = existing_doc is None
         has_changes = True  # Default to true for new
 
-        if is_new:
+        if existing_doc is None:
+            is_new = True
             logger.info("ARC %s is new (hash: %s)", arc_id, content_hash[:8])
             metadata = ArcMetadata(
                 arc_hash=content_hash,
@@ -91,8 +91,8 @@ class CouchDB(DocumentStore):
                 ],
             )
         else:
+            is_new = False
             # Check for changes
-            assert existing_doc is not None
             has_changes = existing_doc.metadata.arc_hash != content_hash
 
             # Start with existing metadata

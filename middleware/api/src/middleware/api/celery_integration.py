@@ -42,7 +42,7 @@ class CeleryBrokerHealthChecker(BrokerHealthChecker):
             with self._celery_app.connection_or_acquire() as conn:
                 conn.ensure_connection(max_retries=1)
                 return True
-        except ConnectionError as e:
+        except Exception as e:  # noqa: BLE001
             logger.error("RabbitMQ health check failed: %s", e)
             return False
 

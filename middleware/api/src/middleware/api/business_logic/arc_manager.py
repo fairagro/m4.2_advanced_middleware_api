@@ -51,6 +51,10 @@ class ArcManager:
         self._dispatcher = task_dispatcher
         self._tracer = trace.get_tracer(__name__)
 
+    async def shutdown(self) -> None:
+        """Release resources held by the underlying ArcStore (e.g. thread-pool)."""
+        await self._store.shutdown()
+
     async def create_or_update_arc(
         self, rdi: str, arc: dict[str, Any], client_id: str | None, harvest_id: str | None = None
     ) -> ArcOperationResult:
