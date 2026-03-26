@@ -107,4 +107,5 @@ class LegacyTaskStatusStore:
                 timeout=_TASK_STATUS_WRITE_TIMEOUT_SECONDS,
             )
         except (TimeoutError, RuntimeError, ValueError, OSError) as exc:
-            logger.warning("Task status write failed for %s: %s", task_id, exc)
+            logger.error("Task status write failed for %s: %s", task_id, exc)
+            raise

@@ -47,3 +47,18 @@ async def test_store_task_result_uses_document_store_once() -> None:
     await store.store_task_result("task-1", result)
 
     doc_store.save_task_record.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("exc", [TimeoutError("slow"), RuntimeError("boom"), ValueError("bad"), OSError("io")])
+async def test_store_task_result_propagates_write_failure(exc: Exception) -> None:
+    """A CouchDB write failure must propagate so the endpoint returns 500, not 202."""
+    doc_store = MagicMock()
+    doc_store.save_task_record = AsyncMock(side_effect=exc)
+    store = LegacyTaskStatusStore(doc_store=doc_store)
+
+    arc = MagicMock(id="arc-1", status=MagicMock(value="created"), timestamp="2026-03-25T14:39:20Z")
+    result = MagicMock(client_id=None, message="ok", rdi="rdi-1", arc=arc)
+
+    with pytest.raises(type(exc)):
+        await store.store_task_result("task-1", result)

@@ -44,7 +44,14 @@ async def create_or_update_arc(
     task_id = str(uuid.uuid4())
     if isinstance(result, ArcOperationResult):
         task_status_store = get_task_status_store(request)
-        await task_status_store.store_task_result(task_id, result)
+        try:
+            await task_status_store.store_task_result(task_id, result)
+        except (TimeoutError, RuntimeError, ValueError, OSError) as exc:
+            logger.error("Failed to persist task status for %s, cannot accept request: %s", task_id, exc)
+            raise HTTPException(
+                status_code=HTTPStatus.INTERNAL_SERVER_ERROR,
+                detail="Failed to persist task status",
+            ) from exc
     else:
         raise HTTPException(status_code=HTTPStatus.INTERNAL_SERVER_ERROR, detail="Unexpected result type")
 
