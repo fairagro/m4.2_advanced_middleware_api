@@ -3,7 +3,7 @@
 from http import HTTPStatus
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 
 from middleware.api.api.common.dependencies import (
     CommonApiDependencies,
@@ -45,19 +45,21 @@ async def create_harvest(  # noqa: PLR0913, PLR0917
 
 
 @router.get("", response_model=list[v3_models.HarvestResponse])
-async def list_harvests(
+async def list_harvests(  # noqa: PLR0913, PLR0917
     request: Request,
     bl: Annotated[BusinessLogic, Depends(get_business_logic)],
     deps: Annotated[CommonApiDependencies, Depends(get_common_deps)],
     _client_id: Annotated[str | None, Depends(get_client_id)],
     _accept_type: Annotated[None, Depends(get_accept_type)],
     rdi: str | None = None,
+    skip: int = Query(default=0, ge=0, description="Number of records to skip"),
+    limit: int = Query(default=100, ge=1, le=1000, description="Maximum number of records to return"),
 ) -> list[v3_models.HarvestResponse]:
     """List harvest runs."""
     if rdi:
         await deps.validate_rdi_authorized(rdi, request)
 
-    harvests = await bl.harvest_manager.list_harvests(rdi)
+    harvests = await bl.harvest_manager.list_harvests(rdi, skip=skip, limit=limit)
     return [_map_harvest(h) for h in harvests]
 
 
@@ -74,7 +76,15 @@ async def get_harvest(
     if not harvest:
         raise HTTPException(status_code=HTTPStatus.NOT_FOUND, detail="Harvest not found")
 
-    await deps.validate_rdi_authorized(harvest.rdi, request)
+    try:
+        await deps.validate_rdi_authorized(harvest.rdi, request)
+    except HTTPException as exc:
+        # Return 404 regardless of whether the harvest exists but the caller is
+        # not authorised: leaking the existence of a harvest (403 vs 404) is an
+        # information-disclosure vulnerability (C1).
+        if exc.status_code in {HTTPStatus.FORBIDDEN, HTTPStatus.UNAUTHORIZED}:
+            raise HTTPException(status_code=HTTPStatus.NOT_FOUND, detail="Harvest not found") from exc
+        raise
     return _map_harvest(harvest)
 
 
@@ -87,13 +97,14 @@ async def complete_harvest(  # noqa: PLR0913, PLR0917
     client_id: Annotated[str | None, Depends(get_client_id)],
 ) -> v3_models.HarvestResponse:
     """Mark a harvest as completed."""
+    # Fetch once — used for both RDI auth and passed to complete_harvest (C2).
     harvest = await bl.harvest_manager.get_harvest(harvest_id)
     if not harvest:
         raise HTTPException(status_code=HTTPStatus.NOT_FOUND, detail="Harvest not found")
 
     await deps.validate_rdi_authorized(harvest.rdi, request)
 
-    harvest = await bl.harvest_manager.complete_harvest(harvest_id, client_id=client_id)
+    harvest = await bl.harvest_manager.complete_harvest(harvest_id, client_id=client_id, pre_fetched=harvest)
     return _map_harvest(harvest)
 
 
@@ -106,12 +117,13 @@ async def cancel_harvest(
     client_id: Annotated[str | None, Depends(get_client_id)],
 ) -> None:
     """Cancel a harvest run."""
+    # Fetch once — used for both RDI auth and passed to cancel_harvest (C2).
     harvest = await bl.harvest_manager.get_harvest(harvest_id)
     if not harvest:
         raise HTTPException(status_code=HTTPStatus.NOT_FOUND, detail="Harvest not found")
 
     await deps.validate_rdi_authorized(harvest.rdi, request)
-    await bl.harvest_manager.cancel_harvest(harvest_id, client_id=client_id)
+    await bl.harvest_manager.cancel_harvest(harvest_id, client_id=client_id, pre_fetched=harvest)
 
 
 @router.post("/{harvest_id}/arcs", response_model=v3_models.ArcResponse)

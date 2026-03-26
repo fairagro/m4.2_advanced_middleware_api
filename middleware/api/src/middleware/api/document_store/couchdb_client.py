@@ -14,13 +14,20 @@ from aiocouch.exception import NotFoundError, PreconditionFailedError
 from middleware.api.document_store.config import CouchDBConfig
 
 logger = logging.getLogger(__name__)
-DEFAULT_QUERY_LIMIT = 100
 
 
 class CouchDBClient:
     """Async CouchDB client wrapper."""
 
-    def __init__(self, url: str, db_name: str, user: str | None = None, password: str | None = None):
+    def __init__(
+        self,
+        url: str,
+        db_name: str,
+        user: str | None = None,
+        password: str | None = None,
+        *,
+        default_query_limit: int,
+    ):
         """Initialize CouchDB client.
 
         Args:
@@ -28,13 +35,18 @@ class CouchDBClient:
             db_name: Database name to use
             user: CouchDB username (optional)
             password: CouchDB password (optional)
+            default_query_limit: Default maximum number of documents returned by a Mango query.
         """
         self._url = url
         self._db_name = db_name
         self._user = user
         self._password = password
+        self._default_query_limit = default_query_limit
         self._client: CouchDB | None = None
         self._db: Database | None = None
+        # Shared HTTP session for raw CouchDB calls (e.g. index management).
+        # Created lazily on first use; closed alongside the aiocouch client.
+        self._session: aiohttp.ClientSession | None = None
 
     @classmethod
     def from_config(cls, config: CouchDBConfig) -> Self:
@@ -51,6 +63,7 @@ class CouchDBClient:
             db_name=config.db_name,
             user=config.user,
             password=config.password.get_secret_value() if config.password else None,
+            default_query_limit=config.default_query_limit,
         )
 
     async def connect(self) -> None:
@@ -109,6 +122,11 @@ class CouchDBClient:
 
     async def close(self) -> None:
         """Close CouchDB connection."""
+        if self._session:
+            try:
+                await self._session.close()
+            finally:
+                self._session = None
         if self._client:
             try:
                 await self._client.close()
@@ -196,12 +214,23 @@ class CouchDBClient:
         except NotFoundError:
             return False
 
-    async def find(self, selector: dict[str, Any], limit: int = DEFAULT_QUERY_LIMIT) -> list[dict[str, Any]]:
+    async def find(
+        self,
+        selector: dict[str, Any],
+        limit: int | None = None,
+        skip: int = 0,
+        fields: list[str] | None = None,
+    ) -> list[dict[str, Any]]:
         """Find documents using a Mango query selector.
 
         Args:
             selector: Mango query selector
-            limit: Maximum number of results
+            limit: Maximum number of results to return per call.
+                   Defaults to the instance's ``default_query_limit``.
+            skip: Number of results to skip (for pagination)
+            fields: Optional list of fields to include in results (projection).
+                    When set, ``arc_content`` and other large fields can be
+                    excluded to reduce memory and network usage.
 
         Returns:
             List of matching documents
@@ -209,9 +238,38 @@ class CouchDBClient:
         if not self._db:
             raise RuntimeError("Not connected to CouchDB")
 
-        # Use the find method of the database
-        result = self._db.find(selector, limit=limit)
-        return [dict(doc) async for doc in result]
+        effective_limit = limit if limit is not None else self._default_query_limit
+        # aiocouch's find passes extra kwargs through to the _find body.
+        kwargs: dict[str, Any] = {"limit": effective_limit, "skip": skip}
+        if fields is not None:
+            kwargs["fields"] = fields
+
+        result = self._db.find(selector, **kwargs)
+        docs = [dict(doc) async for doc in result]
+
+        if len(docs) == effective_limit:
+            logger.warning(
+                "CouchDB find() returned exactly %d documents for selector %s — "
+                "results may be silently truncated. Use skip/limit for pagination.",
+                effective_limit,
+                selector,
+            )
+
+        return docs
+
+    def _get_session(self) -> aiohttp.ClientSession:
+        """Return the shared aiohttp session, creating it on first call."""
+        if self._session is None:
+            auth = (
+                aiohttp.BasicAuth(self._user, self._password)
+                if self._user is not None and self._password is not None
+                else None
+            )
+            self._session = aiohttp.ClientSession(
+                auth=auth,
+                headers={"Content-Type": "application/json"},
+            )
+        return self._session
 
     async def create_index(self, fields: list[str], name: str | None = None) -> None:
         """Create a Mango index if it doesn't exist.
@@ -223,30 +281,19 @@ class CouchDBClient:
         if not self._db:
             raise RuntimeError("Not connected to CouchDB")
 
-        index_def = {
+        index_def: dict[str, Any] = {
             "index": {"fields": fields},
             "type": "json",
         }
         if name:
             index_def["name"] = name
 
-        # aiocouch doesn't have a direct create_index method on the Database object in all versions,
-        # but we can use the underlying session to POST to _index
-        # Alternatively, we use the endpoint directly via the client
         if not self._db_name:
             raise RuntimeError("Database name is not set")
         url = f"{self._url}/{self._db_name}/_index"
 
-        if not self._client:
-            raise RuntimeError("Not connected to CouchDB")
-
-        if self._user is None or self._password is None:
-            raise ValueError("CouchDB authentication requires both username and password")
-
-        async with (
-            aiohttp.ClientSession() as session,
-            session.post(url, json=index_def, auth=aiohttp.BasicAuth(self._user, self._password)) as resp,
-        ):
+        session = self._get_session()
+        async with session.post(url, json=index_def) as resp:
             if resp.status not in {HTTPStatus.OK, HTTPStatus.CREATED}:
                 text = await resp.text()
                 logger.error("Failed to create index on %s: %s", fields, text)

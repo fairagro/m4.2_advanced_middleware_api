@@ -313,7 +313,7 @@ async def test_couchdb_client_find(couchdb_client: CouchDBClient) -> None:
     result = await couchdb_client.find(selector, limit=10)
 
     assert result == docs
-    mock_db.find.assert_called_with(selector, limit=10)
+    mock_db.find.assert_called_with(selector, limit=10, skip=0)
 
 
 @pytest.mark.asyncio

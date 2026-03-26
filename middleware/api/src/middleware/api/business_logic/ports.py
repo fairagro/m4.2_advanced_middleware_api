@@ -3,7 +3,16 @@
 from dataclasses import dataclass
 from typing import Protocol, runtime_checkable
 
-from .exceptions import TaskDispatcher
+from .task_payloads import ArcSyncTask
+
+
+@runtime_checkable
+class TaskDispatcher(Protocol):
+    """Protocol for dispatching background tasks."""
+
+    def dispatch_sync_arc(self, task: ArcSyncTask) -> None:
+        """Dispatch a task to sync an ARC to GitLab."""
+        raise NotImplementedError
 
 
 @runtime_checkable

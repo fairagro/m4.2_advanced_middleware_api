@@ -230,4 +230,4 @@ async def test_list_harvests_filtered(manager: HarvestManager, doc_store: MagicM
     """list_harvests with rdi filter forwards rdi to doc_store."""
     doc_store.list_harvests = AsyncMock(return_value=[_make_harvest()])
     await manager.list_harvests(rdi="rdi-1")
-    doc_store.list_harvests.assert_called_once_with("rdi-1")
+    doc_store.list_harvests.assert_called_once_with("rdi-1", skip=0, limit=None)

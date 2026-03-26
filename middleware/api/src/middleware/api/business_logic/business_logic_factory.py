@@ -9,8 +9,7 @@ from ..arc_store.gitlab_api import GitlabApi
 from ..document_store.couchdb import CouchDB
 from .business_logic import BusinessLogic
 from .config import BusinessLogicFactoryConfig
-from .exceptions import TaskDispatcher
-from .ports import BrokerHealthChecker, BusinessLogicPorts
+from .ports import BrokerHealthChecker, BusinessLogicPorts, TaskDispatcher
 
 logger = logging.getLogger(__name__)
 

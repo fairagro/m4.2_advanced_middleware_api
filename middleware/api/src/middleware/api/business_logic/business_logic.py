@@ -93,6 +93,11 @@ class BusinessLogic:
         """Get the underlying document store instance."""
         return self._doc_store
 
+    @property
+    def arc_store(self) -> ArcStore:
+        """Get the underlying arc store instance (used by health checks)."""
+        return self._arc_manager.store
+
     async def get_metadata(self, arc_id: str) -> ArcMetadata | None:
         """Get metadata for an ARC.
 

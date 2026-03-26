@@ -14,12 +14,8 @@ from middleware.api.document_store.arc_document import ArcEvent, ArcEventType
 from middleware.api.utils import calculate_arc_id, extract_identifier
 from middleware.shared.api_models.common.models import ArcOperationResult, ArcResponse, ArcStatus
 
-from .exceptions import (
-    BusinessLogicError,
-    InvalidJsonSemanticError,
-    TaskDispatcher,
-    TransientError,
-)
+from .exceptions import BusinessLogicError, InvalidJsonSemanticError, TransientError
+from .ports import TaskDispatcher
 from .task_payloads import ArcSyncTask
 
 logger = logging.getLogger(__name__)
@@ -50,6 +46,11 @@ class ArcManager:
         self._doc_store = doc_store
         self._dispatcher = task_dispatcher
         self._tracer = trace.get_tracer(__name__)
+
+    @property
+    def store(self) -> ArcStore:
+        """Return the underlying ArcStore (used by health checks and shutdown delegation)."""
+        return self._store
 
     async def shutdown(self) -> None:
         """Release resources held by the underlying ArcStore (e.g. thread-pool)."""
@@ -90,8 +91,9 @@ class ArcManager:
                 if identifier is None:
                     raise InvalidJsonSemanticError("RO-Crate JSON must contain an 'identifier' (e.g. in ISA object).")
 
-                # Store in CouchDB (fast) - identifiers and hashing are handled inside doc_store
-                doc_result = await self._doc_store.store_arc(rdi, arc, harvest_id=harvest_id)
+                # Store in CouchDB (fast) - pass the already-extracted identifier to
+                # avoid a second graph traversal inside the document store.
+                doc_result = await self._doc_store.store_arc(rdi, arc, harvest_id=harvest_id, identifier=identifier)
                 arc_id = doc_result.arc_id
                 span.set_attribute("arc_id", arc_id)
 

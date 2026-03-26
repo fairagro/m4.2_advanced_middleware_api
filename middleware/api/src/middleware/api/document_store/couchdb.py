@@ -56,14 +56,15 @@ class CouchDB(DocumentStore):
         rdi: str,
         arc_content: dict[str, Any],
         harvest_id: str | None = None,
+        identifier: str | None = None,
     ) -> ArcStoreResult:
         """Store ARC with change detection."""
-        # Use the shared utility to calculate ARC ID
-        identifier = extract_identifier(arc_content)
-        if not identifier:
+        # Re-use pre-extracted identifier when available (avoids a second graph traversal).
+        resolved_identifier = identifier or extract_identifier(arc_content)
+        if not resolved_identifier:
             raise ValueError("ARC content must contain a valid identifier")
 
-        arc_id = calculate_arc_id(identifier, rdi)
+        arc_id = calculate_arc_id(resolved_identifier, rdi)
         doc_id = f"arc_{arc_id}"
 
         content_hash = self._calculate_content_hash(arc_content)
@@ -264,21 +265,27 @@ class CouchDB(DocumentStore):
         await self._client.save_document(harvest_id, doc_data)
         return doc
 
-    async def list_harvests(self, rdi: str | None = None) -> list[HarvestDocument]:
+    async def list_harvests(
+        self,
+        rdi: str | None = None,
+        skip: int = 0,
+        limit: int | None = None,
+    ) -> list[HarvestDocument]:
         """List harvest records."""
         selector: dict[str, Any] = {"type": "harvest"}
         if rdi:
             selector["rdi"] = rdi
 
-        docs = await self._client.find(selector)
+        docs = await self._client.find(selector, limit=limit, skip=skip)
         return [HarvestDocument.model_validate(d) for d in docs]
 
     async def get_harvest_statistics(self, harvest_id: str) -> HarvestStatistics:
         """Calculate and return statistics for a specific harvest run."""
-        # Find all ARCs that were touched by this harvest run
-        # We search for documents where last_harvest_id in metadata matches
+        # Fetch only the fields we need: event log and document type.
+        # Excluding arc_content avoids loading potentially large RO-Crate JSON.
+        projection_fields = ["_id", "type", "metadata.events", "metadata.last_harvest_id"]
         selector = {"type": "arc", "metadata.last_harvest_id": harvest_id}
-        docs = await self._client.find(selector)
+        docs = await self._client.find(selector, fields=projection_fields)
 
         stats = HarvestStatistics()
         stats.arcs_submitted = len(docs)

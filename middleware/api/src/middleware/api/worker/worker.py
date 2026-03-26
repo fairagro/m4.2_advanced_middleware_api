@@ -8,6 +8,8 @@ import asyncio
 import logging
 import threading
 
+from celery.signals import worker_shutdown
+
 from middleware.api.business_logic import BusinessLogic, BusinessLogicFactory, TransientError
 from middleware.api.business_logic.task_payloads import ArcSyncTask
 
@@ -59,6 +61,35 @@ class BusinessLogicManager:
         if bl is None or loop is None:
             raise RuntimeError("BusinessLogicManager failed to initialize; this is a bug")
         return bl, loop
+
+    @classmethod
+    def shutdown(cls) -> None:
+        """Gracefully close the persistent BusinessLogic and event loop.
+
+        Called from the Celery ``worker_shutdown`` signal so that the
+        thread-pool executor and CouchDB connection are released before
+        the worker process exits.
+        """
+        with cls._lock:
+            bl = cls._business_logic
+            loop = cls._loop
+            # Guard against shutdown being called before initialization.
+            if bl is None or loop is None:
+                return
+            try:
+                loop.run_until_complete(bl.shutdown())
+            except Exception:  # noqa: BLE001
+                logger.warning("Error during BusinessLogicManager shutdown", exc_info=True)
+            finally:
+                cls._business_logic = None
+                cls._loop = None
+                logger.info("BusinessLogicManager shut down cleanly")
+
+
+@worker_shutdown.connect
+def _on_worker_shutdown(**_kwargs: object) -> None:
+    """Release persistent resources when the Celery worker process exits."""
+    BusinessLogicManager.shutdown()
 
 
 @celery_app.task(

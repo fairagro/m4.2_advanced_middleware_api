@@ -60,10 +60,23 @@ class HarvestManager:
             )
             raise AccessDeniedError(f"Harvest {harvest_id} does not belong to client {client_id}")
 
-    async def complete_harvest(self, harvest_id: str, client_id: str | None) -> HarvestDocument:
-        """Mark a harvest as completed and return the updated document."""
-        # Single fetch: used for both client_id validation and expected_datasets
-        harvest = await self.get_harvest(harvest_id)
+    async def complete_harvest(
+        self,
+        harvest_id: str,
+        client_id: str | None,
+        *,
+        pre_fetched: HarvestDocument | None = None,
+    ) -> HarvestDocument:
+        """Mark a harvest as completed and return the updated document.
+
+        Args:
+            harvest_id: Harvest run identifier.
+            client_id: Client that issued the request (used for ownership check).
+            pre_fetched: Already-fetched harvest document to avoid a second DB
+                         round-trip.  When ``None`` the document is fetched here.
+        """
+        # Reuse pre-fetched document when available (C2: avoid double DB fetch).
+        harvest = pre_fetched or await self.get_harvest(harvest_id)
         if not harvest:
             raise ResourceNotFoundError(f"Harvest {harvest_id} not found")
         if harvest.client_id != client_id:
@@ -88,10 +101,23 @@ class HarvestManager:
         logger.info("[%s] Completed harvest: %s", client_id, harvest_id)
         return updated
 
-    async def cancel_harvest(self, harvest_id: str, client_id: str | None) -> None:
-        """Cancel a harvest run."""
-        # Single fetch: used for both client_id validation and RDI auth (endpoint does it first)
-        harvest = await self.get_harvest(harvest_id)
+    async def cancel_harvest(
+        self,
+        harvest_id: str,
+        client_id: str | None,
+        *,
+        pre_fetched: HarvestDocument | None = None,
+    ) -> None:
+        """Cancel a harvest run.
+
+        Args:
+            harvest_id: Harvest run identifier.
+            client_id: Client that issued the request (used for ownership check).
+            pre_fetched: Already-fetched harvest document to avoid a second DB
+                         round-trip.  When ``None`` the document is fetched here.
+        """
+        # Reuse pre-fetched document when available (C2: avoid double DB fetch).
+        harvest = pre_fetched or await self.get_harvest(harvest_id)
         if not harvest:
             raise ResourceNotFoundError(f"Harvest {harvest_id} not found")
         if harvest.client_id != client_id:
@@ -106,6 +132,14 @@ class HarvestManager:
         await self._doc_store.update_harvest(harvest_id, updates)
         logger.info("[%s] Cancelled harvest: %s", client_id, harvest_id)
 
-    async def list_harvests(self, rdi: str | None = None) -> list[HarvestDocument]:
-        """List harvest runs."""
-        return await self._doc_store.list_harvests(rdi)
+    async def list_harvests(
+        self, rdi: str | None = None, *, skip: int = 0, limit: int | None = None
+    ) -> list[HarvestDocument]:
+        """List harvest runs.
+
+        Args:
+            rdi: Optional RDI filter.
+            skip: Number of records to skip (pagination).
+            limit: Maximum records to return (``None`` = use backend default).
+        """
+        return await self._doc_store.list_harvests(rdi, skip=skip, limit=limit)

@@ -12,7 +12,6 @@ from .exceptions import (
     InvalidJsonSemanticError,
     ResourceNotFoundError,
     SetupError,
-    TaskDispatcher,
     TransientError,
 )
 from .harvest_manager import HarvestManager
@@ -29,7 +28,6 @@ __all__ = [
     "SetupError",
     "BrokerHealthChecker",
     "BusinessLogicPorts",
-    "TaskDispatcher",
     "TransientError",
     "BusinessLogicFactory",
     "HarvestManager",

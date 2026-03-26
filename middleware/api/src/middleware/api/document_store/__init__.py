@@ -42,6 +42,7 @@ class DocumentStore(ABC):
         rdi: str,
         arc_content: dict[str, Any],
         harvest_id: str | None = None,
+        identifier: str | None = None,
     ) -> ArcStoreResult:
         """Store ARC with change detection.
 
@@ -49,6 +50,8 @@ class DocumentStore(ABC):
             rdi: Research Data Infrastructure identifier
             arc_content: RO-Crate JSON content
             harvest_id: Optional harvest run identifier
+            identifier: Pre-extracted RO-Crate identifier to avoid re-parsing.
+                        Extracted from arc_content when omitted.
 
         Returns:
             ArcStoreResult containing status and flags
@@ -155,11 +158,18 @@ class DocumentStore(ABC):
         raise NotImplementedError
 
     @abstractmethod
-    async def list_harvests(self, rdi: str | None = None) -> list[HarvestDocument]:
+    async def list_harvests(
+        self,
+        rdi: str | None = None,
+        skip: int = 0,
+        limit: int | None = None,
+    ) -> list[HarvestDocument]:
         """List harvest records.
 
         Args:
             rdi: Optional RDI to filter by
+            skip: Number of records to skip (for pagination)
+            limit: Maximum number of records to return (None = backend default)
 
         Returns:
             List of harvest documents

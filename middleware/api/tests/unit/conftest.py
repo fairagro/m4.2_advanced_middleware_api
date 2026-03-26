@@ -115,7 +115,12 @@ def service(config: Config) -> BusinessLogic:
 
     doc_store = MagicMock()
 
-    async def mock_store_arc(rdi: str, arc: dict, harvest_id: str | None = None) -> ArcStoreResult:  # noqa: ARG001
+    async def mock_store_arc(
+        rdi: str,
+        arc: dict,
+        harvest_id: str | None = None,  # noqa: ARG001
+        identifier: str | None = None,  # noqa: ARG001
+    ) -> ArcStoreResult:
         identifier = extract_identifier(arc)
         arc_id = calculate_arc_id(identifier, rdi) if identifier else "mock-arc-id"
         return ArcStoreResult(arc_id=arc_id, is_new=True, has_changes=True)

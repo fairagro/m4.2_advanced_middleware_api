@@ -6,6 +6,7 @@ from http import HTTPStatus
 
 import aiohttp
 
+from .arc_store import ArcStore
 from .arc_store.git_repo import GitRepo
 from .arc_store.gitlab_api import GitlabApi
 from .business_logic.ports import BrokerHealthChecker
@@ -23,11 +24,23 @@ class ApiHealthService:
         config: Config,
         broker_health_checker: BrokerHealthChecker,
         worker_health_checker: CeleryWorkerHealthChecker,
+        arc_store: ArcStore | None = None,
     ) -> None:
-        """Initialize the health service with check adapters."""
+        """Initialize the health service with check adapters.
+
+        Args:
+            config: API configuration (feature-toggle flags).
+            broker_health_checker: Adapter to check RabbitMQ reachability.
+            worker_health_checker: Adapter to check live Celery workers.
+            arc_store: Existing ArcStore instance reused for the git-backend
+                       health check.  When ``None`` and the git-backend check
+                       is enabled, a new store is created from config (legacy
+                       behaviour, wastes one ThreadPoolExecutor per call).
+        """
         self._config = config
         self._broker_health_checker = broker_health_checker
         self._worker_health_checker = worker_health_checker
+        self._arc_store = arc_store
 
     @staticmethod
     async def liveness_checks() -> dict[str, bool]:
@@ -74,6 +87,14 @@ class ApiHealthService:
     async def _check_git_backend(self) -> bool:
         """Check whether configured Git backend is reachable."""
         try:
+            if self._arc_store is not None:
+                # Reuse the already-initialised store — no new thread pool.
+                return await asyncio.to_thread(self._arc_store.check_health)
+
+            # Fallback: build a transient store from config (legacy path).
+            # This creates a new ThreadPoolExecutor per call; prefer injecting
+            # arc_store at construction time to avoid this.
+
             store: GitRepo | GitlabApi
             if self._config.git_repo is not None:
                 store = GitRepo(self._config.git_repo)
@@ -83,7 +104,9 @@ class ApiHealthService:
                 logger.error("No Git backend configured")
                 return False
 
-            return await asyncio.to_thread(store.check_health)
+            result = await asyncio.to_thread(store.check_health)
+            await store.shutdown()
+            return result
         except Exception as e:  # noqa: BLE001
             logger.error("Git backend health check failed: %s", e)
             return False

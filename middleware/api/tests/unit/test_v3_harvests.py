@@ -221,7 +221,7 @@ def test_list_harvests_with_rdi_filter(client: TestClient, cert: str, middleware
         )
 
         assert r.status_code == http.HTTPStatus.OK
-        mock_list.assert_called_once_with("rdi-1")
+        mock_list.assert_called_once_with("rdi-1", skip=0, limit=100)
 
 
 # ---------------------------------------------------------------------------

@@ -142,6 +142,7 @@ class Api:
             config=self._config,
             broker_health_checker=broker_health_checker,
             worker_health_checker=CeleryWorkerHealthChecker(api_celery_app),
+            arc_store=self.business_logic.arc_store,
         )
         self.common_deps = CommonApiDependencies(self._config)
 
@@ -247,7 +248,7 @@ class Api:
 
         @self._app.exception_handler(Exception)
         async def unhandled_exception_handler(_request: Request, _exc: Exception) -> JSONResponse:
-            logger.error("Unhandled exception: %s", _exc)
+            logger.error("Unhandled exception", exc_info=True)
             return JSONResponse(
                 status_code=HTTPStatus.INTERNAL_SERVER_ERROR,
                 content={"detail": "Internal Server Error. Please contact support if the problem persists."},
