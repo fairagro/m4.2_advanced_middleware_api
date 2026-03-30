@@ -6,6 +6,7 @@ Provides async access to CouchDB for ARC and Harvest document storage.
 import logging
 from http import HTTPStatus
 from typing import Any, Self
+from urllib.parse import quote
 
 import aiohttp
 from aiocouch import CouchDB, Database
@@ -14,6 +15,10 @@ from aiocouch.exception import NotFoundError, PreconditionFailedError
 from middleware.api.document_store.config import CouchDBConfig
 
 logger = logging.getLogger(__name__)
+
+
+class DocumentConflictError(RuntimeError):
+    """Raised when a document update conflicts with a newer CouchDB revision."""
 
 
 class CouchDBClient:
@@ -310,6 +315,57 @@ class CouchDBClient:
             )
 
         return docs
+
+    async def save_document_if_revision_matches(
+        self,
+        doc_id: str,
+        data: dict[str, Any],
+        *,
+        expected_rev: str,
+    ) -> dict[str, Any]:
+        """Save a document only if the expected revision still matches.
+
+        Uses raw ``PUT /{db}/{docid}`` to allow optimistic-concurrency handling
+        in higher layers (retry on 409 Conflict).
+
+        Args:
+            doc_id: Document ID.
+            data: Complete document payload to save.
+            expected_rev: Revision expected by the caller.
+
+        Returns:
+            Saved document payload including updated ``_rev``.
+
+        Raises:
+            DocumentConflictError: If CouchDB returns 409 conflict.
+            RuntimeError: For non-success HTTP errors.
+        """
+        if not self._db:
+            raise RuntimeError("Not connected to CouchDB")
+        if not self._db_name:
+            raise RuntimeError("Database name is not set")
+
+        payload = dict(data)
+        payload["_id"] = doc_id
+        payload["_rev"] = expected_rev
+
+        encoded_doc_id = quote(doc_id, safe="")
+        url = f"{self._url}/{self._db_name}/{encoded_doc_id}"
+        session = self._get_session()
+
+        async with session.put(url, json=payload) as resp:
+            if resp.status in {HTTPStatus.CREATED, HTTPStatus.ACCEPTED, HTTPStatus.OK}:
+                response_data = await resp.json()
+                new_rev = response_data.get("rev")
+                if isinstance(new_rev, str):
+                    payload["_rev"] = new_rev
+                return payload
+
+            if resp.status == HTTPStatus.CONFLICT:
+                raise DocumentConflictError(f"Conflict updating document {doc_id}")
+
+            text = await resp.text()
+            raise RuntimeError(f"Failed to update document {doc_id}: {resp.status} {text}")
 
     def _get_session(self) -> aiohttp.ClientSession:
         """Return the shared aiohttp session, creating it on first call."""

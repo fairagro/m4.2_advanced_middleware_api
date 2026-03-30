@@ -11,7 +11,6 @@ from opentelemetry import trace
 from middleware.api.arc_store import ArcStore, ArcStoreTransientError
 from middleware.api.document_store import DocumentStore
 from middleware.api.document_store.arc_document import ArcEvent, ArcEventType
-from middleware.api.document_store.harvest_document import HarvestStatistics
 from middleware.api.utils import calculate_arc_id, extract_identifier
 from middleware.shared.api_models.common.models import ArcOperationResult, ArcResponse, ArcStatus
 
@@ -103,7 +102,11 @@ class ArcManager:
                 should_trigger_git = is_new or has_changes
 
                 if harvest_id:
-                    await self._increment_harvest_statistics(harvest_id, is_new=is_new, has_changes=has_changes)
+                    await self._doc_store.increment_harvest_statistics(
+                        harvest_id,
+                        is_new=is_new,
+                        has_changes=has_changes,
+                    )
 
                 logger.info(
                     "[%s] Stored ARC %s in CouchDB: is_new=%s, has_changes=%s, trigger_git=%s",
@@ -145,34 +148,6 @@ class ArcManager:
                 if isinstance(e, BusinessLogicError):
                     raise
                 raise BusinessLogicError(f"unexpected error encountered: {str(e)}") from e
-
-    async def _increment_harvest_statistics(self, harvest_id: str, *, is_new: bool, has_changes: bool) -> None:
-        """Increment harvest counters based on ARC change detection result.
-
-        This makes harvest completion O(1): statistics are maintained at submit-time,
-        so we do not need to scan ARC documents when a harvest is completed.
-        """
-        harvest = await self._doc_store.get_harvest(harvest_id)
-        if not harvest:
-            logger.warning("Harvest %s not found while incrementing statistics", harvest_id)
-            return
-
-        stats = harvest.statistics or HarvestStatistics()
-        stats.arcs_submitted += 1
-
-        if is_new:
-            stats.arcs_new += 1
-        elif has_changes:
-            stats.arcs_updated += 1
-        else:
-            stats.arcs_unchanged += 1
-
-        await self._doc_store.update_harvest(
-            harvest_id,
-            {
-                "statistics": stats.model_dump(),
-            },
-        )
 
     async def sync_to_gitlab(self, rdi: str, arc: dict[str, Any]) -> None:
         """Synchronize ARC to GitLab storage.

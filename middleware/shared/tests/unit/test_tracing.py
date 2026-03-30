@@ -94,11 +94,12 @@ def test_initialize_tracing_no_console() -> None:
 
 def test_initialize_tracing_with_otlp() -> None:
     """initialize_tracing with valid OTLP endpoint adds OTLP processor."""
-    provider, tracer = initialize_tracing(
-        service_name="test-svc",
-        otlp_endpoint="http://localhost:4318",
-        log_console_spans=False,
-    )
+    with patch("middleware.shared.tracing.OTLPSpanExporter"):
+        provider, tracer = initialize_tracing(
+            service_name="test-svc",
+            otlp_endpoint="http://localhost:4318",
+            log_console_spans=False,
+        )
     assert provider is not None
 
 
@@ -133,20 +134,22 @@ def test_initialize_logging_no_endpoint() -> None:
 
 def test_initialize_logging_with_otlp_endpoint() -> None:
     """initialize_logging with OTLP endpoint configures exporters."""
-    provider = initialize_logging(
-        service_name="test-svc",
-        otlp_endpoint="http://localhost:4318",
-        log_console=False,
-    )
+    with patch("middleware.shared.tracing.OTLPLogExporter"):
+        provider = initialize_logging(
+            service_name="test-svc",
+            otlp_endpoint="http://localhost:4318",
+            log_console=False,
+        )
 
     assert isinstance(provider, LoggerProvider)
 
 
 def test_initialize_logging_with_console_exporter() -> None:
     """initialize_logging with console exporter enabled."""
-    provider = initialize_logging(
-        otlp_endpoint="http://localhost:4318",
-        log_console=True,
-    )
+    with patch("middleware.shared.tracing.OTLPLogExporter"):
+        provider = initialize_logging(
+            otlp_endpoint="http://localhost:4318",
+            log_console=True,
+        )
 
     assert isinstance(provider, LoggerProvider)

@@ -8,7 +8,7 @@ from aiocouch.exception import NotFoundError, PreconditionFailedError
 from pydantic import SecretStr
 
 from middleware.api.document_store.config import CouchDBConfig
-from middleware.api.document_store.couchdb_client import CouchDBClient
+from middleware.api.document_store.couchdb_client import CouchDBClient, DocumentConflictError
 
 
 @pytest.fixture
@@ -372,6 +372,53 @@ async def test_couchdb_client_find_projected_raises_on_http_error(couchdb_client
 
     with pytest.raises(RuntimeError, match="CouchDB _find failed with status 400"):
         await couchdb_client.find_projected({"type": "arc"}, ["metadata.events"])
+
+
+@pytest.mark.asyncio
+async def test_save_document_if_revision_matches_success(couchdb_client: CouchDBClient) -> None:
+    """Test revision-checked save succeeds and returns updated _rev."""
+    couchdb_client._db = MagicMock()  # noqa: SLF001
+    couchdb_client._db_name = "test_db"  # noqa: SLF001
+
+    mock_response = AsyncMock()
+    mock_response.status = 201
+    mock_response.json = AsyncMock(return_value={"ok": True, "id": "doc1", "rev": "2-new"})
+
+    mock_session = MagicMock()
+    mock_session.put.return_value.__aenter__.return_value = mock_response
+    mock_session.put.return_value.__aexit__.return_value = None
+    couchdb_client._session = mock_session  # noqa: SLF001
+
+    result = await couchdb_client.save_document_if_revision_matches(
+        "doc1",
+        {"type": "harvest", "statistics": {"arcs_submitted": 1}},
+        expected_rev="1-old",
+    )
+
+    assert result["_id"] == "doc1"
+    assert result["_rev"] == "2-new"
+
+
+@pytest.mark.asyncio
+async def test_save_document_if_revision_matches_conflict(couchdb_client: CouchDBClient) -> None:
+    """Test revision-checked save raises DocumentConflictError on 409."""
+    couchdb_client._db = MagicMock()  # noqa: SLF001
+    couchdb_client._db_name = "test_db"  # noqa: SLF001
+
+    mock_response = AsyncMock()
+    mock_response.status = 409
+
+    mock_session = MagicMock()
+    mock_session.put.return_value.__aenter__.return_value = mock_response
+    mock_session.put.return_value.__aexit__.return_value = None
+    couchdb_client._session = mock_session  # noqa: SLF001
+
+    with pytest.raises(DocumentConflictError, match="Conflict updating document doc1"):
+        await couchdb_client.save_document_if_revision_matches(
+            "doc1",
+            {"type": "harvest", "statistics": {"arcs_submitted": 1}},
+            expected_rev="1-old",
+        )
 
 
 @pytest.mark.asyncio

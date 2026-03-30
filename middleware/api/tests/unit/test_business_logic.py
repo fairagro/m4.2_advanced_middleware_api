@@ -14,7 +14,6 @@ from middleware.api.business_logic import (
 from middleware.api.business_logic.ports import BusinessLogicPorts
 from middleware.api.business_logic.task_payloads import ArcSyncTask
 from middleware.api.document_store import ArcStoreResult
-from middleware.api.document_store.harvest_document import HarvestStatistics
 from middleware.shared.api_models.common.models import ArcOperationResult, ArcStatus
 
 
@@ -261,13 +260,8 @@ async def test_api_mode_increments_harvest_statistics(
         is_new=is_new,
         has_changes=has_changes,
     )
-    mock_doc_store.get_harvest = AsyncMock(
-        return_value=MagicMock(
-            client_id="client",
-            statistics=HarvestStatistics(),
-        )
-    )
-    mock_doc_store.update_harvest = AsyncMock()
+    mock_doc_store.get_harvest = AsyncMock(return_value=MagicMock(client_id="client"))
+    mock_doc_store.increment_harvest_statistics = AsyncMock()
 
     rdi = "test-rdi"
     harvest_id = "harvest-1"
@@ -275,14 +269,11 @@ async def test_api_mode_increments_harvest_statistics(
 
     await api_logic.create_or_update_arc(rdi, arc_data, "client", harvest_id=harvest_id)
 
-    mock_doc_store.update_harvest.assert_called_once()
-    _, kwargs = mock_doc_store.update_harvest.call_args
-    assert kwargs == {}
-    call_args = mock_doc_store.update_harvest.call_args[0]
-    assert call_args[0] == harvest_id
-    stats = call_args[1]["statistics"]
-    assert stats["arcs_submitted"] == 1  # noqa: PLR2004
-    assert stats[counter_key] == 1  # noqa: PLR2004
+    mock_doc_store.increment_harvest_statistics.assert_called_once_with(
+        harvest_id,
+        is_new=is_new,
+        has_changes=has_changes,
+    )
 
     if is_new or has_changes:
         mock_task_dispatcher.dispatch_sync_arc.assert_called_once()

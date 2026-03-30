@@ -92,6 +92,9 @@ def config(
         "log_level": "DEBUG",
         "known_rdis": list(known_rdis),
         "client_auth_oid": oid.dotted_string,
+        "otel": {
+            "endpoint": None,
+        },
         "require_client_cert": False,
         "gitlab_api": {
             "url": "https://datahub-dev.ipk-gatersleben.de",
@@ -186,6 +189,9 @@ def worker_process(
     """
     gitlab_token = os.getenv("GITLAB_API_TOKEN", "")
     worker_cfg: dict[str, Any] = {
+        "otel": {
+            "endpoint": None,
+        },
         "couchdb": {
             "url": external_services["couchdb_url"],
             "user": external_services["couchdb_user"],
