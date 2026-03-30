@@ -321,6 +321,60 @@ async def test_couchdb_client_find(couchdb_client: CouchDBClient) -> None:
 
 
 @pytest.mark.asyncio
+async def test_couchdb_client_find_projected(couchdb_client: CouchDBClient) -> None:
+    """Test finding projected documents with a selector."""
+    couchdb_client._db = MagicMock()  # noqa: SLF001
+    couchdb_client._db_name = "test_db"  # noqa: SLF001
+
+    selector = {"type": "arc"}
+    fields = ["metadata.events"]
+    expected_docs = [{"metadata": {"events": [{"type": "arc_created"}]}}]
+
+    mock_response = AsyncMock()
+    mock_response.status = 200
+    mock_response.json = AsyncMock(return_value={"docs": expected_docs})
+
+    mock_session = MagicMock()
+    mock_session.post.return_value.__aenter__.return_value = mock_response
+    mock_session.post.return_value.__aexit__.return_value = None
+
+    couchdb_client._session = mock_session  # noqa: SLF001
+
+    result = await couchdb_client.find_projected(selector, fields, limit=10, skip=2)
+
+    assert result == expected_docs
+    mock_session.post.assert_called_once_with(
+        "http://localhost:5984/test_db/_find",
+        json={
+            "selector": selector,
+            "fields": fields,
+            "limit": 10,
+            "skip": 2,
+        },
+    )
+
+
+@pytest.mark.asyncio
+async def test_couchdb_client_find_projected_raises_on_http_error(couchdb_client: CouchDBClient) -> None:
+    """Test projected find raises when CouchDB returns an error status."""
+    couchdb_client._db = MagicMock()  # noqa: SLF001
+    couchdb_client._db_name = "test_db"  # noqa: SLF001
+
+    mock_response = AsyncMock()
+    mock_response.status = 400
+    mock_response.text = AsyncMock(return_value='{"error":"bad_request"}')
+
+    mock_session = MagicMock()
+    mock_session.post.return_value.__aenter__.return_value = mock_response
+    mock_session.post.return_value.__aexit__.return_value = None
+
+    couchdb_client._session = mock_session  # noqa: SLF001
+
+    with pytest.raises(RuntimeError, match="CouchDB _find failed with status 400"):
+        await couchdb_client.find_projected({"type": "arc"}, ["metadata.events"])
+
+
+@pytest.mark.asyncio
 async def test_couchdb_client_ensure_system_databases(couchdb_client: CouchDBClient) -> None:
     """Test ensuring system databases exist."""
     with patch("middleware.api.document_store.couchdb_client.CouchDB") as mock_couchdb:

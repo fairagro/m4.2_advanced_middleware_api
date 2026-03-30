@@ -282,7 +282,7 @@ class CouchDB(DocumentStore):
     async def get_harvest_statistics(self, harvest_id: str) -> HarvestStatistics:
         """Calculate and return statistics for a specific harvest run."""
         selector = {"type": "arc", "metadata.last_harvest_id": harvest_id}
-        docs = await self._client.find(selector)
+        docs = await self._client.find_projected(selector, fields=["metadata.events"])
 
         stats = HarvestStatistics()
         stats.arcs_submitted = len(docs)

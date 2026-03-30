@@ -251,6 +251,66 @@ class CouchDBClient:
 
         return docs
 
+    async def find_projected(
+        self,
+        selector: dict[str, Any],
+        fields: list[str],
+        limit: int | None = None,
+        skip: int = 0,
+    ) -> list[dict[str, Any]]:
+        """Find documents using CouchDB _find with explicit field projection.
+
+        This method uses the raw HTTP endpoint because aiocouch's ``Database.find``
+        returns full ``Document`` objects and therefore does not support the
+        ``fields`` parameter.
+
+        Args:
+            selector: Mango query selector.
+            fields: List of fields to return (CouchDB ``fields`` projection).
+            limit: Maximum number of results to return per call.
+                   Defaults to the instance's ``default_query_limit``.
+            skip: Number of results to skip (for pagination).
+
+        Returns:
+            List of projected documents.
+        """
+        if not self._db:
+            raise RuntimeError("Not connected to CouchDB")
+        if not self._db_name:
+            raise RuntimeError("Database name is not set")
+
+        effective_limit = limit if limit is not None else self._default_query_limit
+
+        payload: dict[str, Any] = {
+            "selector": selector,
+            "fields": fields,
+            "limit": effective_limit,
+            "skip": skip,
+        }
+
+        url = f"{self._url}/{self._db_name}/_find"
+        session = self._get_session()
+        async with session.post(url, json=payload) as resp:
+            if resp.status != HTTPStatus.OK:
+                text = await resp.text()
+                logger.error("CouchDB _find with projection failed: %s", text)
+                raise RuntimeError(f"CouchDB _find failed with status {resp.status}: {text}")
+
+            response_data = await resp.json()
+
+        docs_raw = response_data.get("docs", [])
+        docs: list[dict[str, Any]] = [dict(doc) for doc in docs_raw]
+
+        if len(docs) == effective_limit:
+            logger.warning(
+                "CouchDB find_projected() returned exactly %d documents for selector %s — "
+                "results may be silently truncated. Use skip/limit for pagination.",
+                effective_limit,
+                selector,
+            )
+
+        return docs
+
     def _get_session(self) -> aiohttp.ClientSession:
         """Return the shared aiohttp session, creating it on first call."""
         if self._session is None:
