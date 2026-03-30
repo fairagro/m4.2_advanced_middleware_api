@@ -28,16 +28,16 @@ spec:
     matchLabels:
       {{- include "fairagro-advanced-middleware-api-chart.selectorLabels" . | nindent 6 }}
       app.kubernetes.io/component: couchdb
+  strategy:
+    # Currently we do not want to use ReadWriteMany volumes for CouchDB, so we need to ensure that the pod is recreated upon updates.
+    type: Recreate
+    rollingUpdate: null
   template:
     metadata:
       labels:
         {{- include "fairagro-advanced-middleware-api-chart.labels" . | nindent 8 }}
         app.kubernetes.io/component: couchdb
     spec:
-      strategy:
-        # Currently we do not want to use ReadWriteMany volumes for CouchDB, so we need to ensure that the pod is recreated upon updates.
-        type: Recreate
-        rollingUpdate: null
       containers:
         - name: couchdb
           image: {{ .Values.couchdb.image | quote }}
