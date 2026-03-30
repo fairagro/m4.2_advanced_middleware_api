@@ -87,6 +87,17 @@ Set via `.env` file or shell environment:
 - `POSTGRES_USER` - Database user (default: `postgres`)
 - `POSTGRES_PASSWORD` - Database password (default: `postgres`)
 
+### System Tests: Load Dev Secrets Into Current Shell
+
+Some system tests require secrets (e.g. `COUCHDB_USER`, `COUCHDB_PASSWORD`, `GITLAB_API_TOKEN`) to be present
+in the current shell environment. Use:
+
+```bash
+source scripts/load-dev-secrets.sh
+```
+
+This decrypts `dev_environment/secrets.enc.yaml` via `sops` and exports the required variables in your shell.
+
 ### Secrets with sops
 
 The `client.key` file should be encrypted with sops:

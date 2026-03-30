@@ -14,6 +14,7 @@ on:
         - patch
 
 env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
   GIT_USER_NAME: ${{ vars.GIT_USER_NAME || 'GitHub Pipeline' }}
   GIT_USER_EMAIL: ${{ vars.GIT_USER_EMAIL || 'github_pipeline@fairagro.net' }}
   DOCKERHUB_NAMESPACE: ${{ vars.DOCKERHUB_NAMESPACE || 'zalf' }}
@@ -40,23 +41,21 @@ jobs:
           versionSpec: '6.4.x'
 
       - name: Create GitVersion config
-        uses: DamianReeves/write-file-action@master
-        with:
-          path: GitVersion.yml
-          write-mode: overwrite
-          contents: |
-            mode: ContinuousDeployment
-            tag-prefix: '${{ env.GITVERSION_TAG_PREFIX }}'
-            semantic-version-format: Strict
-            branches:
-              main:
-                label: ''
-                increment: ${{ inputs.version_bump }}
-              feature:
-                regex: ^feature/(?<BranchName>.+)$
-                label: '{BranchName}'
-                increment: Inherit
-                track-merge-target: false
+        run: |
+          cat <<EOF > GitVersion.yml
+          mode: ContinuousDeployment
+          tag-prefix: '${{ env.GITVERSION_TAG_PREFIX }}'
+          semantic-version-format: Strict
+          branches:
+            main:
+              label: ''
+              increment: ${{ inputs.version_bump }}
+            feature:
+              regex: ^feature/(?<BranchName>.+)$
+              label: '{BranchName}'
+              increment: Inherit
+              track-merge-target: false
+          EOF
 
       - name: Execute GitVersion
         id: gitversion
@@ -194,7 +193,7 @@ jobs:
           echo "🎉 Release finalized successfully"
 
       - name: Login to Docker Hub and Push Helm chart
-        if: github.ref_name == 'main' && env.DOCKERHUB_AVAILABLE == 'true'
+        if: env.DOCKERHUB_AVAILABLE == 'true'
         run: |
           # Login to Helm registry with credentials
           echo "🔑 Logging in to Docker Hub registry..."
@@ -206,7 +205,7 @@ jobs:
           echo "✅ Pushed to DockerHub: ${{ env.DOCKERHUB_NAMESPACE }}/${{ steps.package_chart.outputs.chart-package }}"
 
       - name: Skip DockerHub push (missing credentials)
-        if: github.ref_name == 'main' && env.DOCKERHUB_AVAILABLE != 'true'
+        if: env.DOCKERHUB_AVAILABLE != 'true'
         run: |
           echo "⏭️ Skipping DockerHub push - missing credentials (DOCKERHUB_USER and/or DOCKERHUB_TOKEN)"
           echo "💡 Configure DockerHub secrets to enable automatic chart publishing"

@@ -32,7 +32,8 @@ class ArcStore(ABC):
         """Initialize ArcStore with tracer."""
         self._tracer = trace.get_tracer(__name__)
 
-    def arc_id(self, identifier: str, rdi: str) -> str:
+    @staticmethod
+    def arc_id(identifier: str, rdi: str) -> str:
         """Generate ARC ID."""
         return calculate_arc_id(identifier, rdi)
 
@@ -60,6 +61,14 @@ class ArcStore(ABC):
     def _check_health(self) -> bool:
         """Check connection to the storage backend."""
         raise NotImplementedError("`ArcStore._check_health` is not implemented")
+
+    async def shutdown(self) -> None:  # noqa: PLR6301
+        """Release resources held by the store (e.g. thread-pool executors).
+
+        Subclasses should override this if they own background resources.
+        The default implementation is a no-op.
+        """
+        return  # no-op default; subclasses (e.g. GitRepo) override
 
     async def create_or_update(self, arc_id: str, arc: ARC) -> None:
         """_Create or update an ARC.

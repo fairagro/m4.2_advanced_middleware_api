@@ -17,6 +17,8 @@ from pydantic import ValidationError
 
 from middleware.api.config import Config
 
+pytestmark = pytest.mark.filterwarnings("ignore:gitlab_api configuration is deprecated.*:DeprecationWarning")
+
 
 def _git_repo(tmp_path: Path, group: str = "g") -> dict[str, str]:
     repo_dir = tmp_path / "repo"
@@ -143,3 +145,15 @@ def test_config_from_yaml_file_success(tmp_path: Path) -> None:
     assert config.log_level == "DEBUG"
     assert config.git_repo is not None
     assert config.git_repo.url == tmp_path.as_uri()
+
+
+def test_config_accepts_missing_deprecated_celery_result_backend(tmp_path: Path) -> None:
+    """Test that deprecated celery.result_backend is optional."""
+    config_data = {
+        "git_repo": _git_repo(tmp_path),
+        "couchdb": {"url": "http://localhost:5984"},
+        "celery": {"broker_url": "memory://"},
+    }
+
+    config = Config.model_validate(config_data)
+    assert config.celery.model_dump().get("result_backend") is None

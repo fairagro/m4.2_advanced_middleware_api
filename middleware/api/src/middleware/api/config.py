@@ -5,36 +5,36 @@ import re
 from typing import Annotated, ClassVar, Self
 
 from cryptography import x509
-from pydantic import BaseModel, ConfigDict, Field, SecretStr, field_validator, model_validator
+from pydantic import ConfigDict, Field, field_validator, model_validator
 
 from middleware.shared.config.config_base import ConfigBase
 
-from .arc_store.git_repo import GitRepoConfig
+from .arc_store.config import GitRepoConfig
 from .arc_store.gitlab_api import GitlabApiConfig
+from .business_logic.config import HarvestConfig
+from .document_store.config import CouchDBConfig
+from .worker.config import CeleryConfig
 
 
-class CeleryConfig(BaseModel):
-    """Configuration for Celery worker."""
+class HealthCheckConfig(ConfigBase):
+    """Feature flags controlling API readiness/global health checks."""
 
-    broker_url: Annotated[
-        SecretStr,
-        Field(description="RabbitMQ broker URL"),
-    ]
-    result_backend: Annotated[SecretStr, Field(description="Redis backend URL")]
-    task_rate_limit: Annotated[str | None, Field(description="Rate limit for tasks (e.g. '10/m')")] = None
-    retry_backoff: Annotated[bool, Field(description="Whether to use exponential backoff for retries")] = True
-    retry_backoff_max: Annotated[int, Field(description="Max backoff time in seconds")] = 3600
-    max_retries: Annotated[int, Field(description="Max number of retries for transient errors")] = 120
-
-
-class CouchDBConfig(BaseModel):
-    """Configuration for CouchDB."""
-
-    url: Annotated[str, Field(description="CouchDB URL")]
-    user: Annotated[str | None, Field(description="CouchDB username")] = None
-    password: Annotated[SecretStr | None, Field(description="CouchDB password")] = None
-    db_name: Annotated[str, Field(description="Name of the database for ARCs and harvests")] = "arcs"
-    max_event_log_size: Annotated[int, Field(default=100, description="Maximum number of events in ARC metadata")] = 100
+    readiness_check_couchdb: Annotated[
+        bool,
+        Field(description="Whether /v3/readiness should include CouchDB reachability checks."),
+    ] = True
+    readiness_check_rabbitmq: Annotated[
+        bool,
+        Field(description="Whether /v3/readiness should include RabbitMQ reachability checks."),
+    ] = True
+    global_health_check_workers: Annotated[
+        bool,
+        Field(description="Whether /v3/health should include Celery worker liveness checks."),
+    ] = True
+    global_health_check_git_backend: Annotated[
+        bool,
+        Field(description="Whether /v3/health should include Git backend reachability checks."),
+    ] = False
 
 
 class Config(ConfigBase):
@@ -46,10 +46,18 @@ class Config(ConfigBase):
     )
 
     git_repo: Annotated[GitRepoConfig | None, Field(description="GitRepo storage backend configuration")] = None
-    gitlab_api: Annotated[GitlabApiConfig | None, Field(description="GitLab API storage backend configuration")] = None
+    gitlab_api: Annotated[
+        GitlabApiConfig | None,
+        Field(description="GitLab API storage backend configuration", deprecated=True),
+    ] = None
     couchdb: Annotated[CouchDBConfig, Field(description="CouchDB configuration")]
 
     celery: Annotated[CeleryConfig, Field(description="Celery configuration")]
+    harvest: Annotated[HarvestConfig, Field(description="Default Harvest configuration")] = HarvestConfig()
+    health_checks: Annotated[
+        HealthCheckConfig,
+        Field(description="Health check feature-toggle configuration"),
+    ] = HealthCheckConfig()
 
     require_client_cert: Annotated[
         bool, Field(description="Require client certificate for API access (set to false for development)")

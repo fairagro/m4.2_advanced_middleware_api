@@ -1,13 +1,16 @@
 """Unit tests for the v2/arcs endpoint."""
 
 import http
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, patch
 
 import pytest
 from fastapi.testclient import TestClient
 
-from middleware.api.api import Api
-from middleware.shared.api_models.models import ArcOperationResult, ArcResponse, ArcStatus, TaskStatus
+from middleware.api.api.fastapi_app import Api
+from middleware.api.api.legacy.task_types import SyncTaskResult, SyncTaskStatus
+from middleware.shared.api_models import ArcOperationResult, ArcResponse, ArcStatus, TaskStatus
+
+pytestmark = pytest.mark.filterwarnings("ignore:gitlab_api configuration is deprecated.*:DeprecationWarning")
 
 
 @pytest.mark.unit
@@ -52,9 +55,11 @@ def test_create_or_update_arc_success(
 
     with (
         patch.object(middleware_api.business_logic, "create_or_update_arc", new_callable=AsyncMock) as mock_create,
-        patch("middleware.api.api.uuid.uuid4") as mock_uuid,
+        patch.object(middleware_api.app.state.common_deps, "get_authorized_rdis", new_callable=AsyncMock) as mock_auth,
+        patch("middleware.api.api.v2.arcs.uuid.uuid4") as mock_uuid,
     ):
         mock_create.return_value = mock_result
+        mock_auth.return_value = ["rdi-1"]
         mock_uuid.return_value = "task-123"
 
         r = client.post(
@@ -119,20 +124,17 @@ def test_create_or_update_arc_rdi_not_known(client: TestClient, cert: str) -> No
 @pytest.mark.unit
 def test_get_task_status_v2(client: TestClient, middleware_api: Api) -> None:
     """Test getting task status via /v2/tasks endpoint."""
-    mock_result = MagicMock()
-    mock_result.status = "SUCCESS"
-    mock_result.ready.return_value = True
-    mock_result.successful.return_value = True
-    mock_result.failed.return_value = False
-    # Mock return value from worker (ArcOperationResult)
-    mock_result.result = {
-        "client_id": "test",
-        "message": "ok",
-        "rdi": "rdi-1",
-        "arc": {"id": "arc-1", "status": "created", "timestamp": "2024-01-01T00:00:00Z"},
-    }
+    mock_result = SyncTaskResult(
+        status=SyncTaskStatus.SUCCESS,
+        result={
+            "client_id": "test",
+            "message": "ok",
+            "rdi": "rdi-1",
+            "arc": {"id": "arc-1", "status": "created", "timestamp": "2024-01-01T00:00:00Z"},
+        },
+    )
 
-    with patch.object(middleware_api.business_logic, "get_task_status", return_value=mock_result):
+    with patch.object(middleware_api.task_status_store, "get_task_status", new=AsyncMock(return_value=mock_result)):
         r = client.get(
             "/v2/tasks/task-123",
             headers={"accept": "application/json"},
@@ -142,3 +144,22 @@ def test_get_task_status_v2(client: TestClient, middleware_api: Api) -> None:
         assert body["status"] == TaskStatus.SUCCESS
         assert body["result"]["message"] == "ok"
         assert body["result"]["arc"]["id"] == "arc-1"
+
+
+def test_get_task_status_v2_failure(client: TestClient, middleware_api: Api) -> None:
+    """Test getting task status for a failed task via /v2/tasks endpoint."""
+    mock_result = SyncTaskResult(
+        status=SyncTaskStatus.FAILURE,
+        error="Something went wrong",
+    )
+
+    with patch.object(middleware_api.task_status_store, "get_task_status", new=AsyncMock(return_value=mock_result)):
+        r = client.get(
+            "/v2/tasks/task-123",
+            headers={"accept": "application/json"},
+        )
+        assert r.status_code == http.HTTPStatus.OK
+        body = r.json()
+        assert body["status"] == TaskStatus.FAILURE
+        assert body["message"] == "Something went wrong"
+        assert body["result"] is None

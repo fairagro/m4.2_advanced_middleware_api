@@ -10,14 +10,18 @@ dependencies = [
     "opentelemetry-api>=1.26.0",
     "opentelemetry-sdk>=1.26.0",
     "opentelemetry-exporter-otlp>=1.26.0",
+    "opentelemetry-instrumentation-logging>=0.47b0",
 ]
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/middleware"]
 
+[tool.ruff]
+extend = "../../pyproject.toml"
+
 [tool.hatch.version]
 source = "vcs"
-raw-options = { root = "../..", fallback_version = "0.0.0" }
+raw-options = { root = "../..", fallback_version = "0.0.0", tag_regex = "^(?:v|.*-(?:chart|docker)-v)(?P<version>\\d+\\.\\d+\\.\\d+)(?:$|[-+].*)" }
 
 [build-system]
 requires = ["hatchling", "hatch-vcs"]
