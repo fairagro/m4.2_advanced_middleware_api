@@ -14,6 +14,19 @@
   "python.analysis.useLibraryCodeForTypes": true,
   "python-envs.pythonProjects": [],
 
+  // Treat Helm templates as templating files instead of plain YAML
+  "files.associations": {
+    "**/helmchart/**/templates/*.yaml": "jinja-yaml",
+    "**/helmchart/**/templates/*.yml": "jinja-yaml",
+    "**/helmchart/**/templates/*.tpl": "jinja-yaml",
+    "helmchart/**/templates/**/*.yaml": "jinja-yaml",
+    "helmchart/**/templates/**/*.yml": "jinja-yaml",
+    "helmchart/**/templates/**/*.tpl": "jinja-yaml",
+    "helmchart/fairagro-advanced-middleware-api-chart/templates/*.yaml": "jinja-yaml",
+    "helmchart/fairagro-advanced-middleware-api-chart/templates/*.yml": "jinja-yaml",
+    "helmchart/fairagro-advanced-middleware-api-chart/templates/*.tpl": "jinja-yaml"
+  },
+
   // Code formatting - use ruff for both linting and formatting
   "[python]": {
     "editor.defaultFormatter": "charliermarsh.ruff",
@@ -27,18 +40,20 @@
   "sops-edit.onlyUseButtons": false,
   "sops-edit.tempFilePreExtension": "decrypted",
 
-  "mypy.dmypyExecutable": "${workspaceFolder}/.venv/bin/dmypy",
+  "mypy.configFile": "pyproject.toml",
 
-  // Ruff Extension Settings - ensure consistency with script
-  "ruff.configuration": "./pyproject.toml",
+  // Ruff Extension Settings - use same execution mode as pre-commit and CI
   "ruff.path": ["uv", "run", "ruff"],
+  "ruff.configuration": "${workspaceFolder}/pyproject.toml",
   "ruff.importStrategy": "fromEnvironment",
 
   // Pylint Extension Settings
   "pylint.args": [
-    "--rcfile=${workspaceFolder}/pyproject.toml"
+    "--rcfile=pyproject.toml"
   ],
   "pylint.importStrategy": "fromEnvironment",
 
-  "python-envs.defaultEnvManager": "ms-python.python:venv"
+  "python-envs.defaultEnvManager": "ms-python.python:venv",
+
+  "remote.autoForwardPortsSource": "process"
 }

@@ -5,7 +5,6 @@ description = "The FAIRagro advanced middleware"
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
-  "aiocouch>=4.0.1",
   "api",
   "api_client",
   "shared",
@@ -26,6 +25,7 @@ dev = [
   "ruff>=0.14.8",
   "pre-commit>=4.0.0",
   "respx>=0.20.0",
+  "testcontainers>=4.14.2",
 ]
 
 [tool.uv.sources]
@@ -70,8 +70,13 @@ lint.select = [
   "SIM", # flake8-simplify
   "A",   # flake8-builtins
   "ARG", # flake8-unused-arguments
+  "BLE", # flake8-blind-except (fängt zu generische Exceptions ab)
   "PLR", # Pylint Refactor (inkl. complexity rules wie too-many-return-statements)
+  "SLF", # flake8-self (Private member access)
 ]
+
+# Muss für PLR0917 aktiviert sein
+preview = true
 
 # Maximale Zeilenlänge wie in pylint (Standard: 100)
 line-length = 120
@@ -92,6 +97,9 @@ max-complexity = 10
 known-first-party = ["middleware"]
 force-single-line = false
 combine-as-imports = true
+
+[tool.ruff.lint.per-file-ignores]
+"middleware/*/tests/**/*.py" = ["SLF001"]
 
 # Black and isort replaced by ruff format - configurations removed to avoid conflicts
 
@@ -129,9 +137,22 @@ python_files = ["test_*.py"]
 python_classes = ["Test*"]
 python_functions = ["test_*"]
 
+# Suppress DeprecationWarnings from intentionally deprecated modules so tests
+# stay clean. Use pytest.warns(DeprecationWarning) to assert the warnings
+# explicitly where needed.
+filterwarnings = [
+    "ignore:GitlabApi.*is deprecated:DeprecationWarning",
+    "ignore:GitlabApiConfig.*is deprecated:DeprecationWarning",
+    # Pydantic emits a bare 'deprecated' warning whenever a deprecated field
+    # is *accessed* on a model instance.  In tests we intentionally exercise
+    # paths that touch the deprecated gitlab_api field; suppress the noise.
+    "ignore:deprecated:DeprecationWarning:middleware\\.api\\.config",
+]
+
 # Output and behavior
 addopts = [
     "-v",                        # Verbose output
+  "-ra",                       # Show summary for skipped/xfail/etc. with reasons
     "--strict-markers",          # Treat unregistered markers as errors
     "--tb=short",                # Shorter traceback format
     "--cov=middleware",          # Enable coverage for middleware packages
@@ -149,7 +170,8 @@ markers = [
     "asyncio: marks tests as async",
     "unit: marks tests as unit tests",
     "integration: marks tests as integration tests",
-    "system: marks tests as system tests",
+    "system_local: marks tests that use locally runnable external services (e.g. testcontainers)",
+    "system_external: marks tests that depend on real external systems/secrets",
 ]
 
 [tool.coverage.run]
@@ -253,6 +275,15 @@ disable = [
     # Additional opinionated/style checks often handled by formatters
     "R0903",  # too-few-public-methods (opinionated, often not relevant)
     "R0913",  # too-many-arguments (opinionated, case-by-case basis)
+    "R0917",  # too-many-positional-arguments (handled by ruff PLR0917)
     "C0301",  # line-too-long (handled by ruff formatter)
     "R0801",  # duplicate-code (can be noisy in tests)
+    "R0914",  # too-many-locals (handled by ruff PLR0914)
+
+    # Exception checks (covered by ruff BLE001)
+    "W0718",  # broad-exception-caught
+    "W0703",  # broad-except
+
+    # Private member access
+    "W0212",  # protected-access
 ]

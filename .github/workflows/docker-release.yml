@@ -14,6 +14,7 @@ on:
         - patch
 
 env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
   GIT_USER_NAME: ${{ vars.GIT_USER_NAME || 'GitHub Pipeline' }}
   GIT_USER_EMAIL: ${{ vars.GIT_USER_EMAIL || 'github_pipeline@fairagro.net' }}
   IMAGE_BASE_NAME: ${{ vars.IMAGE_BASE_NAME || 'fairagro-advanced-middleware' }}

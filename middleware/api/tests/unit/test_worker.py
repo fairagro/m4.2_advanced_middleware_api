@@ -1,58 +1,58 @@
 """Unit tests for Celery worker tasks."""
 
+import asyncio
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from middleware.api.worker import sync_arc_to_gitlab
+from middleware.api.worker.worker import sync_arc_to_gitlab
 
 
 def test_sync_arc_to_gitlab_success() -> None:
     """Test successful task execution."""
-    # Mock business logic result (sync_to_gitlab returns None)
-
-    # Mock get_business_logic
-    with patch("middleware.api.worker.BusinessLogicManager.get_business_logic") as mock_get_bl:
+    with patch("middleware.api.worker.worker.BusinessLogicManager.get") as mock_get:
         mock_bl = MagicMock()
-        mock_get_bl.return_value = mock_bl
-        # Mock context manager
-        mock_bl.__aenter__ = AsyncMock(return_value=mock_bl)
-        mock_bl.__aexit__ = AsyncMock(return_value=False)
-
         mock_bl.sync_to_gitlab = AsyncMock()
+        loop = asyncio.new_event_loop()
+        mock_get.return_value = (mock_bl, loop)
 
-        # Execute the task
-        # Note: client_id is no longer passed to sync_arc_to_gitlab
-        result = sync_arc_to_gitlab.apply(args=("test-rdi", {"dummy": "data"})).get()
+        try:
+            result = sync_arc_to_gitlab.apply(
+                args=({"rdi": "test-rdi", "arc": {"dummy": "data"}, "client_id": "test-client"},)
+            ).get()
+        finally:
+            loop.close()
 
-        # Verify result dictionary structure
-        assert result["status"] == "synced"
-        assert result["message"] == "Successfully synced to GitLab"
-        assert result["rdi"] == "test-rdi"
-
+        assert result is None
         mock_bl.sync_to_gitlab.assert_called_once_with("test-rdi", {"dummy": "data"})
 
 
 def test_sync_arc_to_gitlab_failure() -> None:
-    """Test task failure handling."""
-    with patch("middleware.api.worker.BusinessLogicManager.get_business_logic") as mock_get_bl:
+    """Test task failure handling — exception must be re-raised."""
+    with patch("middleware.api.worker.worker.BusinessLogicManager.get") as mock_get:
         mock_bl = MagicMock()
-        mock_get_bl.return_value = mock_bl
-        # Mock context manager
-        mock_bl.__aenter__ = AsyncMock(return_value=mock_bl)
-        mock_bl.__aexit__ = AsyncMock(return_value=False)
-
-        # Set sync_to_gitlab as AsyncMock with side_effect
         mock_bl.sync_to_gitlab = AsyncMock(side_effect=ValueError("Processing failed"))
+        loop = asyncio.new_event_loop()
+        mock_get.return_value = (mock_bl, loop)
 
-        with pytest.raises(ValueError, match="Processing failed"):
-            sync_arc_to_gitlab.apply(args=("test-rdi", {"dummy": "data"})).get()
+        try:
+            with pytest.raises(ValueError, match="Processing failed"):
+                sync_arc_to_gitlab.apply(
+                    args=({"rdi": "test-rdi", "arc": {"dummy": "data"}, "client_id": "test-client"},)
+                ).get()
+        finally:
+            loop.close()
 
 
-def test_sync_arc_to_gitlab_no_business_logic() -> None:
-    """Test task fails when business_logic is not initialized."""
+def test_sync_arc_to_gitlab_initialization_error() -> None:
+    """Test task fails (and re-raises) when BusinessLogicManager.get raises."""
     with (
-        patch("middleware.api.worker.BusinessLogicManager.get_business_logic", return_value=None),
-        pytest.raises(TypeError, match="'NoneType' object does not support the asynchronous context manager protocol"),
+        patch(
+            "middleware.api.worker.worker.BusinessLogicManager.get",
+            side_effect=RuntimeError("CouchDB unreachable"),
+        ),
+        pytest.raises(RuntimeError, match="CouchDB unreachable"),
     ):
-        sync_arc_to_gitlab.apply(args=("test-rdi", {"dummy": "data"})).get()
+        sync_arc_to_gitlab.apply(
+            args=({"rdi": "test-rdi", "arc": {"dummy": "data"}, "client_id": "test-client"},)
+        ).get()

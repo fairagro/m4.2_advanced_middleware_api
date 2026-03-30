@@ -89,7 +89,13 @@ minikube delete --all --purge   # only if we have trouble starting minikube
 minikube start --driver=docker --cni=calico
 minikube addons enable ingress
 minikube image load fairagro-advanced-middleware-api:test
-helm install api-test ./helmchart/fairagro-advanced-middleware-api-chart -f helmchart/test_deploy/values.yaml
+sops exec-env dev_environment/secrets.enc.yaml \
+    "helm install api-test ./helmchart/fairagro-advanced-middleware-api-chart \
+    -f helmchart/test_deploy/values.yaml \
+    --set rabbitmq.auth.user=\"$\RABBITMQ_DEFAULT_USER\" \
+    --set rabbitmq.auth.password=\"\$RABBITMQ_DEFAULT_PASS\" \
+    --set couchdb.auth.username=\"\$COUCHDB_USER\" \
+    --set couchdb.auth.password=\"\$COUCHDB_PASSWORD\""
 ```
 
 Note that the value file `helmchart/test_deploy/values.yaml` references the local docker image `fairagro-advanced-middleware-api:test`.

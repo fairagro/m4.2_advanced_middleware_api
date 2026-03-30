@@ -112,35 +112,6 @@ Compute Celery broker URL based on enabled RabbitMQ or provided override.
 {{- end }}
 
 {{/*
-Compute Celery result backend based on enabled Redis or provided override.
-*/}}
-{{- define "fairagro-advanced-middleware-api-chart.celeryResultBackend" -}}
-{{- $fullname := include "fairagro-advanced-middleware-api-chart.fullname" . -}}
-{{- $celeryConfig := default (dict) .Values.config.celery -}}
-{{- $backendOverride := $celeryConfig.result_backend -}}
-{{- if .Values.redis.enabled -}}
-	{{- $redisAuth := default (dict) .Values.redis.auth -}}
-	{{- $pass := default "" $redisAuth.password -}}
-	{{- $existing := default "" $redisAuth.existingSecret -}}
-	{{- if $backendOverride -}}
-		{{- $backendOverride -}}
-	{{- else if $existing -}}
-		{{- if $pass -}}
-			{{- $passEsc := urlquery $pass -}}
-			{{- printf "redis://:%s@%s-redis:6379/0" $passEsc $fullname -}}
-		{{- else -}}
-			{{- required "Provide redis.auth.password when redis.auth.existingSecret is set, or set config.celery.result_backend" $backendOverride -}}
-		{{- end -}}
-	{{- else -}}
-		{{- $passEsc := urlquery (required "redis.auth.password is required when not using an existing secret" $pass) -}}
-		{{- printf "redis://:%s@%s-redis:6379/0" $passEsc $fullname -}}
-	{{- end }}
-{{- else }}
-{{- required "Set config.celery.result_backend when redis.enabled=false" $backendOverride -}}
-{{- end }}
-{{- end }}
-
-{{/*
 Compute CouchDB URL based on enabled CouchDB or provided override.
 */}}
 {{- define "fairagro-advanced-middleware-api-chart.couchdbUrl" -}}

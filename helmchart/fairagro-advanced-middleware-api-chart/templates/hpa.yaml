@@ -31,7 +31,7 @@ spec:
     {{- end }}
 {{- end }}
 
-{{- if and .Values.celery.worker.enabled .Values.celery.worker.autoscaling.enabled .Values.rabbitmq.enabled .Values.redis.enabled }}
+{{- if and .Values.celery.worker.enabled .Values.celery.worker.autoscaling.enabled .Values.rabbitmq.enabled }}
 ---
 apiVersion: autoscaling/v2
 kind: HorizontalPodAutoscaler

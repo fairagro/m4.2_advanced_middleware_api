@@ -28,20 +28,39 @@ class Config(ConfigBase):
     timeout: Annotated[float, Field(description="Request timeout in seconds", gt=0)] = 30.0
     verify_ssl: Annotated[bool, Field(description="Enable SSL certificate verification")] = True
     follow_redirects: Annotated[bool, Field(description="Follow HTTP redirects for API requests")] = True
+    max_concurrency: Annotated[
+        int,
+        Field(description="Maximum number of concurrent API requests across the ApiClient package", ge=1),
+    ] = 10
 
     # Retry parameters
     max_retries: Annotated[int, Field(description="Maximum number of retries for transient HTTP errors", ge=0)] = 3
     retry_backoff_factor: Annotated[float, Field(description="Backoff factor for retries", gt=0)] = 2.0
-
-    # Polling parameters
+    # Polling parameters (deprecated)
     polling_initial_delay: Annotated[
-        float, Field(description="Initial delay in seconds between polling requests", gt=0)
+        float,
+        Field(
+            description="Initial delay in seconds between polling requests",
+            gt=0,
+            deprecated=True,
+        ),
     ] = 1.0
     polling_max_delay: Annotated[
-        float, Field(description="Maximum delay in seconds between polling requests", gt=0)
+        float,
+        Field(
+            description="Maximum delay in seconds between polling requests",
+            gt=0,
+            deprecated=True,
+        ),
     ] = 30.0
-    polling_backoff_factor: Annotated[float, Field(description="Factor to increase delay between polls", gt=1.0)] = 1.5
-    polling_timeout: Annotated[float, Field(description="Total timeout for polling in minutes", gt=0)] = 90.0
+    polling_backoff_factor: Annotated[
+        float,
+        Field(description="Factor to increase delay between polls", gt=1.0, deprecated=True),
+    ] = 1.5
+    polling_timeout: Annotated[
+        float,
+        Field(description="Total timeout for polling in minutes", gt=0, deprecated=True),
+    ] = 90.0
 
     @field_validator("api_url")
     @classmethod

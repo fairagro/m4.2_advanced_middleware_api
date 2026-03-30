@@ -123,7 +123,7 @@ python -m middleware.api.main
 To run the middleware api via `uvicorn` command line tool:
 
 ```bash
-uvicorn middleware.api.api:app
+uvrun uvicorn middleware.api.api.fastapi_app:app
 ```
 
 ### Running via `fastapi`
@@ -131,7 +131,7 @@ uvicorn middleware.api.api:app
 To run the middleware api via `fastapi` command line tool:
 
 ```bash
-fastapi run middleware/api/src/middleware/api/api.py --app app
+fastapi run middleware/api/src/middleware/api/api/fastapi_app.py --app app
 ```
 
 ### Using a local docker image
@@ -158,3 +158,52 @@ docker run \
     -p 8000:8000 \
     zalf/fairagro-advanced-middleware-api:latest
 ```
+
+## Config handling conventions
+
+To keep configuration code consistent and avoid circular imports, the project
+uses a strict layering model for config classes.
+
+### Core rules
+
+1. **Sub-component config lives in the sub-component package**
+     - Example locations:
+         - `middleware/api/src/middleware/api/arc_store/config.py`
+         - `middleware/api/src/middleware/api/document_store/config.py`
+         - `middleware/api/src/middleware/api/worker/config.py`
+
+2. **Sub-config modules must never import the main app config**
+     - Forbidden in any `**/config.py` sub-module:
+         - `from middleware.api.config import Config`
+         - direct/indirect imports that pull in `middleware.api.config`
+
+3. **Main config aggregates sub-configs (one-way dependency)**
+     - `middleware.api.config.Config` may import sub-config classes.
+     - Sub-components may import their own sub-config classes.
+     - Dependency direction must remain:
+         - `sub_component.config` -> (no dependency on) `middleware.api.config`
+         - `middleware.api.config` -> `sub_component.config`
+
+4. **Avoid config re-export chains through heavy package `__init__.py` files**
+     - Re-export-heavy packages can trigger circular imports when imported from config.
+     - Prefer importing config classes directly from the concrete `.../config.py` module.
+
+### Practical import pattern
+
+- Preferred (runtime and tests):
+  - `from middleware.api.arc_store.config import GitRepoConfig`
+  - `from middleware.api.document_store.config import CouchDBConfig`
+  - `from middleware.api.worker.config import CeleryConfig`
+
+- Keep central aggregation in:
+  - `middleware/api/src/middleware/api/config.py`
+
+### Migration guideline
+
+When a config class is still colocated with runtime logic (e.g. in a backend
+implementation module), move it to the sub-component `config.py` and then:
+
+1. Update imports in runtime modules and tests to the new path.
+2. Update references/messages/docs that mention the old import path.
+3. Verify that no sub-config imports `middleware.api.config`.
+4. Run focused unit tests for affected modules.

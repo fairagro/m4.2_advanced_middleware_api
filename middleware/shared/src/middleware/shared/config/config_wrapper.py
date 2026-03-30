@@ -114,7 +114,7 @@ class ConfigWrapper:
         if isinstance(wrapper, ConfigWrapperDict):
             return {k: cls._unwrap(v) for k, v in wrapper.items()}
         if isinstance(wrapper, ConfigWrapperList):
-            return [cls._unwrap(wrapper[i]) for i in range(len(wrapper))]
+            return [cls._unwrap(v) for _, v in wrapper.items()]
         if isinstance(wrapper, (str, int, float, bool, type(None))):
             return wrapper
         raise TypeError(f"Cannot unwrap element of type '{type(wrapper)}'")
@@ -222,7 +222,7 @@ class ConfigWrapper:
             return None
 
         # Try bool
-        if value.lower() in ("true", "false"):
+        if value.lower() in {"true", "false"}:
             return value.lower() == "true"
 
         # Try int
@@ -345,7 +345,7 @@ class ConfigWrapperList(ConfigWrapper):
             raise TypeError(f"ConfigWrapperList only supports integer keys, got {type(key)}")
 
         value = self._data[key]
-        key_str = ConfigWrapper._get_path_str(value, key)
+        key_str = ConfigWrapper._get_path_str(value, key)  # noqa: SLF001
         override_value = self._override_key_access(key_str)
         if override_value is not None:
             return override_value
@@ -353,12 +353,13 @@ class ConfigWrapperList(ConfigWrapper):
 
     def __iter__(self) -> Generator[int, None, None]:
         """Iterate over list indices."""
-        yield from range(len(self._data))
+        for idx, _ in enumerate(self._data):
+            yield idx
 
     def items(self) -> Generator[tuple[int, WrapType], None, None]:
         """Iterate over index-value pairs."""
         for idx, value in enumerate(self._data):
-            key_str = ConfigWrapper._get_path_str(value, idx)
+            key_str = ConfigWrapper._get_path_str(value, idx)  # noqa: SLF001
             yield idx, super()._wrap(value, key_str)
 
     def __len__(self) -> int:

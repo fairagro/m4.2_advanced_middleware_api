@@ -225,3 +225,5 @@ helmchart/**/client_ext.conf
 
 # ggshield cache
 .cache_ggshield
+
+**/.structurizr/

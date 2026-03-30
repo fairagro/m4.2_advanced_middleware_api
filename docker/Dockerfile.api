@@ -50,12 +50,14 @@ RUN uv pip install --system pyinstaller
 # Build standalone binary with PyInstaller
 RUN pyinstaller --onedir \
     --name middleware-api \
+    --hidden-import "middleware.api.worker" \
+    --hidden-import "middleware.api.worker.celery_app" \
+    --hidden-import "middleware.api.worker.worker" \
     --hidden-import "celery.app.amqp" \
     --hidden-import "celery.app.control" \
     --hidden-import "celery.app.events" \
     --hidden-import "celery.app.log" \
     --hidden-import "celery.apps.worker" \
-    --hidden-import "celery.backends.redis" \
     --hidden-import "celery.concurrency.prefork" \
     --hidden-import "celery.events.state" \
     --hidden-import "celery.fixups" \
@@ -72,7 +74,6 @@ RUN pyinstaller --onedir \
     --copy-metadata opentelemetry-instrumentation \
     --copy-metadata opentelemetry-instrumentation-fastapi \
     --copy-metadata opentelemetry-instrumentation-celery \
-    --copy-metadata opentelemetry-instrumentation-redis \
     --copy-metadata opentelemetry-instrumentation-requests \
     --copy-metadata opentelemetry-sdk \
     --copy-metadata requests \

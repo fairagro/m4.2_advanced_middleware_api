@@ -3,7 +3,9 @@
 from abc import ABC, abstractmethod
 from typing import Any
 
-from middleware.api.schemas import ArcEvent, ArcMetadata
+from .arc_document import ArcEvent, ArcMetadata
+from .harvest_document import HarvestDocument, HarvestStatistics
+from .task_record import TaskRecord
 
 
 class DocumentStoreError(Exception):
@@ -40,6 +42,7 @@ class DocumentStore(ABC):
         rdi: str,
         arc_content: dict[str, Any],
         harvest_id: str | None = None,
+        identifier: str | None = None,
     ) -> ArcStoreResult:
         """Store ARC with change detection.
 
@@ -47,6 +50,8 @@ class DocumentStore(ABC):
             rdi: Research Data Infrastructure identifier
             arc_content: RO-Crate JSON content
             harvest_id: Optional harvest run identifier
+            identifier: Pre-extracted RO-Crate identifier to avoid re-parsing.
+                        Extracted from arc_content when omitted.
 
         Returns:
             ArcStoreResult containing status and flags
@@ -97,12 +102,8 @@ class DocumentStore(ABC):
         raise NotImplementedError
 
     @abstractmethod
-    async def setup(self, setup_system: bool = False) -> None:
-        """Initialize the document store and its dependencies.
-
-        Args:
-            setup_system: Whether to ensure system databases exist.
-        """
+    async def setup(self) -> None:
+        """Initialize the document store and its dependencies."""
         raise NotImplementedError
 
     @abstractmethod
@@ -113,4 +114,97 @@ class DocumentStore(ABC):
     @abstractmethod
     async def close(self) -> None:
         """Close the connection to the document store."""
+        raise NotImplementedError
+
+    @abstractmethod
+    async def create_harvest(
+        self,
+        rdi: str,
+        client_id: str | None,
+        expected_datasets: int | None = None,
+    ) -> str:
+        """Create a new harvest record.
+
+        Args:
+            rdi: Research Data Infrastructure identifier
+            client_id: Client identifier
+            expected_datasets: Optional number of datasets expected to be harvested.
+
+        Returns:
+            The harvest_id of the created harvest
+        """
+        raise NotImplementedError
+
+    @abstractmethod
+    async def get_harvest(self, harvest_id: str) -> HarvestDocument | None:
+        """Get harvest document.
+
+        Args:
+            harvest_id: Harvest identifier
+
+        Returns:
+            The harvest document or None if not found
+        """
+        raise NotImplementedError
+
+    @abstractmethod
+    async def update_harvest(self, harvest_id: str, updates: dict[str, Any]) -> HarvestDocument:
+        """Update a harvest record.
+
+        Args:
+            harvest_id: Harvest identifier
+            updates: Dictionary of fields to update
+        """
+        raise NotImplementedError
+
+    @abstractmethod
+    async def list_harvests(
+        self,
+        rdi: str | None = None,
+        skip: int = 0,
+        limit: int | None = None,
+    ) -> list[HarvestDocument]:
+        """List harvest records.
+
+        Args:
+            rdi: Optional RDI to filter by
+            skip: Number of records to skip (for pagination)
+            limit: Maximum number of records to return (None = backend default)
+
+        Returns:
+            List of harvest documents
+        """
+        raise NotImplementedError
+
+    @abstractmethod
+    async def get_harvest_statistics(self, harvest_id: str) -> HarvestStatistics:
+        """Calculate statistics for a given harvest run.
+
+        Args:
+            harvest_id: The ID of the harvest run.
+
+        Returns:
+            The calculated harvest statistics.
+        """
+        raise NotImplementedError
+
+    @abstractmethod
+    async def get_task_record(self, task_id: str) -> TaskRecord | None:
+        """Get persisted task status record for a task id.
+
+        Args:
+            task_id: Task identifier
+
+        Returns:
+            Task record model or ``None`` if not found.
+        """
+        raise NotImplementedError
+
+    @abstractmethod
+    async def save_task_record(self, task_record: TaskRecord) -> None:
+        """Create or update a persisted task status record.
+
+        Args:
+            task_record: Task record model to persist
+        """
         raise NotImplementedError
