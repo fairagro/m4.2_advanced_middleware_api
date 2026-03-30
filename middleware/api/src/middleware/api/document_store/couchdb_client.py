@@ -222,7 +222,6 @@ class CouchDBClient:
         selector: dict[str, Any],
         limit: int | None = None,
         skip: int = 0,
-        fields: list[str] | None = None,
     ) -> list[dict[str, Any]]:
         """Find documents using a Mango query selector.
 
@@ -231,9 +230,6 @@ class CouchDBClient:
             limit: Maximum number of results to return per call.
                    Defaults to the instance's ``default_query_limit``.
             skip: Number of results to skip (for pagination)
-            fields: Optional list of fields to include in results (projection).
-                    When set, ``arc_content`` and other large fields can be
-                    excluded to reduce memory and network usage.
 
         Returns:
             List of matching documents
@@ -242,12 +238,7 @@ class CouchDBClient:
             raise RuntimeError("Not connected to CouchDB")
 
         effective_limit = limit if limit is not None else self._default_query_limit
-        # aiocouch's find passes extra kwargs through to the _find body.
-        kwargs: dict[str, Any] = {"limit": effective_limit, "skip": skip}
-        if fields is not None:
-            kwargs["fields"] = fields
-
-        result = self._db.find(selector, **kwargs)
+        result = self._db.find(selector, limit=effective_limit, skip=skip)
         docs = [dict(doc) async for doc in result]
 
         if len(docs) == effective_limit:

@@ -132,12 +132,11 @@ async def test_validate_client_id_harvest_not_found(manager: HarvestManager, doc
 @pytest.mark.asyncio
 async def test_complete_harvest_success(manager: HarvestManager, doc_store: MagicMock) -> None:
     """complete_harvest marks the harvest COMPLETED and updates statistics."""
-    harvest = _make_harvest(client_id="client-a")
     stats = HarvestStatistics(arcs_submitted=5)
+    harvest = _make_harvest(client_id="client-a", statistics=stats)
     updated = _make_harvest(client_id="client-a", status=HarvestStatus.COMPLETED, statistics=stats)
 
     doc_store.get_harvest = AsyncMock(return_value=harvest)
-    doc_store.get_harvest_statistics = AsyncMock(return_value=stats)
     doc_store.update_harvest = AsyncMock(return_value=updated)
 
     result = await manager.complete_harvest("harvest-1", "client-a")
@@ -149,11 +148,9 @@ async def test_complete_harvest_success(manager: HarvestManager, doc_store: Magi
 async def test_complete_harvest_preserves_expected_datasets(manager: HarvestManager, doc_store: MagicMock) -> None:
     """complete_harvest preserves expected_datasets already set in the harvest."""
     harvest = _make_harvest(client_id="client-a", statistics=HarvestStatistics(expected_datasets=10))
-    stats = HarvestStatistics(arcs_submitted=5)
     updated = _make_harvest(client_id="client-a", status=HarvestStatus.COMPLETED)
 
     doc_store.get_harvest = AsyncMock(return_value=harvest)
-    doc_store.get_harvest_statistics = AsyncMock(return_value=stats)
     doc_store.update_harvest = AsyncMock(return_value=updated)
 
     await manager.complete_harvest("harvest-1", "client-a")

@@ -14,6 +14,7 @@ from middleware.api.business_logic import (
 from middleware.api.business_logic.ports import BusinessLogicPorts
 from middleware.api.business_logic.task_payloads import ArcSyncTask
 from middleware.api.document_store import ArcStoreResult
+from middleware.api.document_store.harvest_document import HarvestStatistics
 from middleware.shared.api_models.common.models import ArcOperationResult, ArcStatus
 
 
@@ -236,6 +237,57 @@ async def test_api_mode_skips_sync_if_no_changes(
 
     mock_doc_store.store_arc.assert_called_once()
     mock_task_dispatcher.dispatch_sync_arc.assert_not_called()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "case",
+    [
+        (True, True, "arcs_new"),
+        (False, True, "arcs_updated"),
+        (False, False, "arcs_unchanged"),
+    ],
+)
+async def test_api_mode_increments_harvest_statistics(
+    api_logic: BusinessLogic,
+    mock_doc_store: MagicMock,
+    mock_task_dispatcher: MagicMock,
+    case: tuple[bool, bool, str],
+) -> None:
+    """ARC submissions in a harvest increment the corresponding harvest counters."""
+    is_new, has_changes, counter_key = case
+    mock_doc_store.store_arc.return_value = ArcStoreResult(
+        arc_id="arc_id",
+        is_new=is_new,
+        has_changes=has_changes,
+    )
+    mock_doc_store.get_harvest = AsyncMock(
+        return_value=MagicMock(
+            client_id="client",
+            statistics=HarvestStatistics(),
+        )
+    )
+    mock_doc_store.update_harvest = AsyncMock()
+
+    rdi = "test-rdi"
+    harvest_id = "harvest-1"
+    arc_data = {"@context": "https://w3id.org/ro/crate/1.1/context", "@graph": [{"@id": "./", "identifier": "ABC"}]}
+
+    await api_logic.create_or_update_arc(rdi, arc_data, "client", harvest_id=harvest_id)
+
+    mock_doc_store.update_harvest.assert_called_once()
+    _, kwargs = mock_doc_store.update_harvest.call_args
+    assert kwargs == {}
+    call_args = mock_doc_store.update_harvest.call_args[0]
+    assert call_args[0] == harvest_id
+    stats = call_args[1]["statistics"]
+    assert stats["arcs_submitted"] == 1  # noqa: PLR2004
+    assert stats[counter_key] == 1  # noqa: PLR2004
+
+    if is_new or has_changes:
+        mock_task_dispatcher.dispatch_sync_arc.assert_called_once()
+    else:
+        mock_task_dispatcher.dispatch_sync_arc.assert_not_called()
 
 
 def test_factory_create_api_mode() -> None:

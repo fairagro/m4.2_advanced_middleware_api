@@ -281,11 +281,8 @@ class CouchDB(DocumentStore):
 
     async def get_harvest_statistics(self, harvest_id: str) -> HarvestStatistics:
         """Calculate and return statistics for a specific harvest run."""
-        # Fetch only the fields we need: event log and document type.
-        # Excluding arc_content avoids loading potentially large RO-Crate JSON.
-        projection_fields = ["_id", "type", "metadata.events", "metadata.last_harvest_id"]
         selector = {"type": "arc", "metadata.last_harvest_id": harvest_id}
-        docs = await self._client.find(selector, fields=projection_fields)
+        docs = await self._client.find(selector)
 
         stats = HarvestStatistics()
         stats.arcs_submitted = len(docs)
