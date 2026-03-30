@@ -28,6 +28,13 @@ spec:
     matchLabels:
       {{- include "fairagro-advanced-middleware-api-chart.selectorLabels" . | nindent 6 }}
       app.kubernetes.io/component: couchdb
+  {{- if .Values.couchdb.persistence.enabled }}
+  strategy:
+    # The deployment uses a ReadWriteOnce volume, which can only be attached to one pod at a time.
+    # The Recreate strategy ensures the old pod is terminated before the new one is created, allowing the volume to be re-attached.
+    type: Recreate
+    rollingUpdate: null
+  {{- end }}
   template:
     metadata:
       labels:
