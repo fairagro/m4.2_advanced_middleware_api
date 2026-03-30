@@ -29,6 +29,7 @@ jobs:
             src:
               - 'middleware/**'
               - 'docker/**'
+              - 'helmchart/**'
               - 'pyproject.toml'
               - 'uv.lock'
 
