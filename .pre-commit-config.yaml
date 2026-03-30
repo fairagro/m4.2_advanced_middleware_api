@@ -70,10 +70,20 @@ repos:
         types: [python]
         files: ^middleware/
 
-      # pytest - Unit tests only (runs on pre-push to keep commits fast)
+      # pytest - Unit + integration tests on pre-push
       - id: pytest-unit
-        name: pytest unit tests
-        entry: bash -c "uv run pytest middleware/*/tests/unit/"
+        name: pytest unit and integration tests
+        entry: bash -c "uv run pytest -m 'not system_local and not system_external'"
+        language: system
+        types: [python]
+        pass_filenames: false
+        always_run: true
+        stages: [pre-push]
+
+      # pytest - System tests with locally runnable external services
+      - id: pytest-system-local
+        name: pytest system_local tests
+        entry: bash -c "uv run pytest -m system_local --no-cov"
         language: system
         types: [python]
         pass_filenames: false

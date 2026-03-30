@@ -147,12 +147,12 @@ class CouchDB(DocumentStore):
             arc_content=arc_content,
             metadata=metadata,
         )
-        # Hack to handle _rev which is aliased in Pydantic but needs to be passed to client logic
-        # if we were using it manually.
-        # But our client.save_document wraps simple dict PUT.
-        # We need to pass the dict. Pydantic's model_dump(by_alias=True) will include _id and _rev.
-        doc_data = doc.model_dump(by_alias=True, exclude_none=True)
-        # _rev should not be in data if it's None (new doc)
+        # Serialize to a plain dict for CouchDB:
+        # - by_alias=True: maps doc_id→"_id" and doc_rev→"_rev" (CouchDB field names)
+        # - exclude_none=True: omits "_rev" when None (required for new documents; CouchDB
+        #   rejects a PUT with "_rev": null)
+        # - mode="json": converts datetime/enum values to JSON-safe primitives
+        doc_data = doc.model_dump(mode="json", by_alias=True, exclude_none=True)
 
         await self._client.save_document(doc_id, doc_data)
 
@@ -188,7 +188,7 @@ class CouchDB(DocumentStore):
         if len(doc.metadata.events) > self._config.max_event_log_size:
             doc.metadata.events = doc.metadata.events[-self._config.max_event_log_size :]
 
-        doc_data = doc.model_dump(by_alias=True, exclude_none=True)
+        doc_data = doc.model_dump(mode="json", by_alias=True, exclude_none=True)
         await self._client.save_document(doc_id, doc_data)
 
     async def health_check(self) -> bool:
@@ -232,7 +232,7 @@ class CouchDB(DocumentStore):
             statistics=HarvestStatistics(expected_datasets=expected_datasets),
         )
 
-        doc_data = doc.model_dump(by_alias=True, exclude_none=True)
+        doc_data = doc.model_dump(mode="json", by_alias=True, exclude_none=True)
         await self._client.save_document(doc_id, doc_data)
         return doc_id
 
@@ -261,7 +261,7 @@ class CouchDB(DocumentStore):
         if doc.status == HarvestStatus.COMPLETED and not doc.completed_at:
             doc.completed_at = datetime.now(UTC)
 
-        doc_data = doc.model_dump(by_alias=True, exclude_none=True)
+        doc_data = doc.model_dump(mode="json", by_alias=True, exclude_none=True)
         await self._client.save_document(harvest_id, doc_data)
         return doc
 

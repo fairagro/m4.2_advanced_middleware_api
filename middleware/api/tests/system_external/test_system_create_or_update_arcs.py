@@ -3,12 +3,14 @@
 import hashlib
 import http
 import json
+import os
+import time
 from pathlib import Path
 from typing import Any
 
 import pytest
 from fastapi.testclient import TestClient
-from gitlab import Gitlab
+from gitlab import Gitlab, GitlabError
 
 pytestmark = [
     pytest.mark.filterwarnings(
@@ -21,7 +23,8 @@ pytestmark = [
 
 
 @pytest.mark.asyncio
-@pytest.mark.system
+@pytest.mark.system_external
+@pytest.mark.usefixtures("worker_process")
 @pytest.mark.parametrize(
     "json_info",
     [
@@ -33,6 +36,8 @@ async def test_create_arcs(
     client: TestClient,
     cert: str,
     json_info: dict[str, Any],
+    gitlab_api: Gitlab,
+    config: dict[str, Any],
 ) -> None:
     """Test creating ARCs via the /v1/arcs endpoint."""
     cert_with_linebreaks = cert.replace("\\n", "\n")
@@ -53,17 +58,42 @@ async def test_create_arcs(
     assert "task_id" in body  # nosec
     assert body["status"] == "processing"  # nosec
 
-    # Note: In system tests, we would need to poll /v1/tasks/{task_id} to verify completion
-    # For now, we skip verification as it requires Celery worker to be running
-    # _verify_gitlab_project(gitlab_api, config, json_info)
+    _wait_for_gitlab_project(gitlab_api, config, json_info)
 
 
-def _verify_gitlab_project(gitlab_api: Gitlab, config: dict[str, Any], json_info: dict[str, Any]) -> None:
+def _verify_gitlab_project(gitlab_api: Gitlab, config: dict[str, Any], json_info: dict[str, Any]) -> bool:
     """Verify that the project was created in GitLab and contains the expected file."""
-    # check that we have a project/repo that contains the isa.investigation.xlsx file
     group_name = config["gitlab_api"]["group"].lower()
     group = gitlab_api.groups.get(group_name)
     arc_id = hashlib.sha256(f"{json_info['identifier']}:rdi-1".encode()).hexdigest()
-    project_light = group.projects.list(search=arc_id)[0]
-    project = gitlab_api.projects.get(project_light.id)
-    project.files.get(file_path="isa.investigation.xlsx", ref="main")
+    try:
+        projects = group.projects.list(search=arc_id)
+        if not projects:
+            return False
+        project = gitlab_api.projects.get(projects[0].id)
+        project.files.get(file_path="isa.investigation.xlsx", ref="main")
+        return True
+    except GitlabError:
+        return False
+
+
+def _wait_for_gitlab_project(
+    gitlab_api: Gitlab,
+    config: dict[str, Any],
+    json_info: dict[str, Any],
+    timeout_seconds: int = 180,
+    poll_interval_seconds: int = 2,
+) -> None:
+    """Poll GitLab until the ARC project and expected file are present."""
+    timeout_seconds = int(os.getenv("SYSTEM_EXTERNAL_GITLAB_TIMEOUT", str(timeout_seconds)))
+    deadline = time.time() + timeout_seconds
+    while time.time() < deadline:
+        if _verify_gitlab_project(gitlab_api, config, json_info):
+            return
+        time.sleep(poll_interval_seconds)
+
+    pytest.fail(
+        "GitLab side effect not observed within timeout: expected project and "
+        "isa.investigation.xlsx file were not found. "
+        "Ensure the sync worker path is active for system_external tests."
+    )

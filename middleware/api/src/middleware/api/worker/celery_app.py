@@ -64,7 +64,7 @@ else:
         "middleware_api",
         broker=broker_url,
         backend=backend_url,
-        include=["middleware.api.worker"],
+        include=["middleware.api.worker.worker"],
     )
 
     setup_worker_tracing(celery_app, loaded_config)

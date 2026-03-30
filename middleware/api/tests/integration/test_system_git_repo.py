@@ -17,7 +17,8 @@ from git import Repo
 
 from middleware.api.api.fastapi_app import Api
 from middleware.api.config import Config
-from middleware.api.document_store import ArcStoreResult
+from middleware.api.document_store import ArcStoreResult, TaskRecord
+from middleware.api.document_store.task_record import TaskRecordStatus
 from middleware.shared.config.config_wrapper import ConfigWrapper
 
 
@@ -71,7 +72,15 @@ def api_client(git_repo_config: dict[str, Any]) -> Generator[TestClient, None, N
     api = Api(config)
     # Mock BusinessLogic connection methods to avoid requiring a real CouchDB for system tests
     with (
+        patch.object(api.business_logic._doc_store, "connect", AsyncMock()),  # noqa: SLF001
+        patch.object(api.business_logic._doc_store, "setup", AsyncMock()),  # noqa: SLF001
+        patch.object(api.business_logic._doc_store, "close", AsyncMock()),  # noqa: SLF001
         patch.object(api.business_logic._doc_store, "health_check", AsyncMock(return_value=True)),  # noqa: SLF001
+        patch.object(
+            api.business_logic._doc_store,  # noqa: SLF001
+            "save_task_record",
+            AsyncMock(return_value=TaskRecord(task_id="test-task", status=TaskRecordStatus.SUCCESS)),
+        ),
         patch.object(
             api.business_logic._doc_store,  # noqa: SLF001
             "store_arc",
@@ -83,7 +92,7 @@ def api_client(git_repo_config: dict[str, Any]) -> Generator[TestClient, None, N
 
 
 @pytest.mark.asyncio
-@pytest.mark.system
+@pytest.mark.integration
 async def test_create_arc_via_git_repo(
     api_client: TestClient,
     git_server_root: Path,
@@ -135,7 +144,7 @@ async def test_create_arc_via_git_repo(
 
 
 @pytest.mark.asyncio
-@pytest.mark.system
+@pytest.mark.integration
 async def test_create_arc_requires_client_cert_when_enabled(api_client: TestClient) -> None:
     """Ensure requests without client cert are rejected when cert auth is enabled."""
     body = {

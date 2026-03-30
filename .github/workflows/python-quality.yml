@@ -124,9 +124,13 @@ jobs:
         echo "❌ Failing workflow due to HIGH or MEDIUM severity security issues found by bandit."
         exit 1
 
-    - name: Run unit tests with coverage
+    - name: Run unit and integration tests with coverage
       run: |
-        uv run pytest -m "not system" --cov=api --cov=api_client --cov=shared --cov-report=xml --cov-report=html --cov-report=term-missing --junitxml=pytest-report.xml
+        uv run pytest -m "not system_local and not system_external" --cov=api --cov=api_client --cov=shared --cov-report=xml --cov-report=html --cov-report=term-missing --junitxml=pytest-report.xml
+
+    - name: Run system_local tests (testcontainers)
+      run: |
+        uv run pytest -m "system_local" --no-cov
 
     - name: Upload coverage to Codecov
       uses: codecov/codecov-action@v4
@@ -157,4 +161,4 @@ jobs:
         echo "| pylint | ✅ Code quality | Static analysis (min score: 8.0) |" >> $GITHUB_STEP_SUMMARY
         echo "| mypy | ✅ Type checking | Static type analysis |" >> $GITHUB_STEP_SUMMARY
         echo "| bandit | ✅ Security | Security vulnerability scan |" >> $GITHUB_STEP_SUMMARY
-        echo "| pytest | ✅ Unit tests | Test execution with coverage |" >> $GITHUB_STEP_SUMMARY
+        echo "| pytest | ✅ unit + integration + system_local | system_external intentionally excluded in CI |" >> $GITHUB_STEP_SUMMARY

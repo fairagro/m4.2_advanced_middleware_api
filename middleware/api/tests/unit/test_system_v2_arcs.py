@@ -1,4 +1,4 @@
-"""System tests for v2 ARC endpoint: task-record persistence contract."""
+"""Unit tests for v2 ARC endpoint: task-record persistence contract."""
 
 import http
 import json
@@ -37,16 +37,14 @@ def _v2_body() -> dict[str, Any]:
     return {"rdi": "rdi-1", "arc": arc}
 
 
-@pytest.mark.system
+@pytest.mark.unit
 def test_create_or_update_arc_v2_accepted(
     client: TestClient,
     middleware_api: Api,
     cert: str,
 ) -> None:
     """POST /v2/arcs returns 202 and status SUCCESS when task record is persisted."""
-    doc_store = middleware_api.business_logic._doc_store  # noqa: SLF001
-
-    with patch.object(doc_store, "save_task_record", new=AsyncMock()):
+    with patch.object(middleware_api.task_status_store, "store_task_result", new=AsyncMock()):
         response = client.post("/v2/arcs", headers=_v2_headers(cert), json=_v2_body())
 
     assert response.status_code == http.HTTPStatus.ACCEPTED
@@ -55,7 +53,7 @@ def test_create_or_update_arc_v2_accepted(
     assert data["status"] == "SUCCESS"
 
 
-@pytest.mark.system
+@pytest.mark.unit
 def test_create_or_update_arc_v2_returns_500_on_task_write_failure(
     client: TestClient,
     middleware_api: Api,
@@ -74,11 +72,9 @@ def test_create_or_update_arc_v2_returns_500_on_task_write_failure(
     been durably persisted so that the very first GET /v2/tasks/{id} returns
     SUCCESS immediately.
     """
-    doc_store = middleware_api.business_logic._doc_store  # noqa: SLF001
-
     with patch.object(
-        doc_store,
-        "save_task_record",
+        middleware_api.task_status_store,
+        "store_task_result",
         new=AsyncMock(side_effect=TimeoutError("CouchDB write timed out")),
     ):
         response = client.post("/v2/arcs", headers=_v2_headers(cert), json=_v2_body())
