@@ -254,7 +254,7 @@ async def test_api_mode_increments_harvest_statistics(
     case: tuple[bool, bool, str],
 ) -> None:
     """ARC submissions in a harvest increment the corresponding harvest counters."""
-    is_new, has_changes, counter_key = case
+    is_new, has_changes, _ = case
     mock_doc_store.store_arc.return_value = ArcStoreResult(
         arc_id="arc_id",
         is_new=is_new,
