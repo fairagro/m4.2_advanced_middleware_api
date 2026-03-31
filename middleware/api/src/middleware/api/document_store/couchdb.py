@@ -1,5 +1,6 @@
 """CouchDB implementation of DocumentStore."""
 
+import asyncio
 import hashlib
 import json
 import logging
