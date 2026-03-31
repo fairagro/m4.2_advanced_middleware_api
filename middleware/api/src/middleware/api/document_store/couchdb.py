@@ -312,6 +312,7 @@ class CouchDB(DocumentStore):
                     attempt,
                     max_retries,
                 )
+                await asyncio.sleep(0.1)  # Add a small delay before retrying
 
         raise RuntimeError(
             f"Failed to increment harvest statistics for {harvest_id} after "
