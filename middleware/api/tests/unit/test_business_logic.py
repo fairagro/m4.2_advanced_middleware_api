@@ -238,6 +238,49 @@ async def test_api_mode_skips_sync_if_no_changes(
     mock_task_dispatcher.dispatch_sync_arc.assert_not_called()
 
 
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "case",
+    [
+        (True, True, "arcs_new"),
+        (False, True, "arcs_updated"),
+        (False, False, "arcs_unchanged"),
+    ],
+)
+async def test_api_mode_increments_harvest_statistics(
+    api_logic: BusinessLogic,
+    mock_doc_store: MagicMock,
+    mock_task_dispatcher: MagicMock,
+    case: tuple[bool, bool, str],
+) -> None:
+    """ARC submissions in a harvest increment the corresponding harvest counters."""
+    is_new, has_changes, _ = case
+    mock_doc_store.store_arc.return_value = ArcStoreResult(
+        arc_id="arc_id",
+        is_new=is_new,
+        has_changes=has_changes,
+    )
+    mock_doc_store.get_harvest = AsyncMock(return_value=MagicMock(client_id="client"))
+    mock_doc_store.increment_harvest_statistics = AsyncMock()
+
+    rdi = "test-rdi"
+    harvest_id = "harvest-1"
+    arc_data = {"@context": "https://w3id.org/ro/crate/1.1/context", "@graph": [{"@id": "./", "identifier": "ABC"}]}
+
+    await api_logic.create_or_update_arc(rdi, arc_data, "client", harvest_id=harvest_id)
+
+    mock_doc_store.increment_harvest_statistics.assert_called_once_with(
+        harvest_id,
+        is_new=is_new,
+        has_changes=has_changes,
+    )
+
+    if is_new or has_changes:
+        mock_task_dispatcher.dispatch_sync_arc.assert_called_once()
+    else:
+        mock_task_dispatcher.dispatch_sync_arc.assert_not_called()
+
+
 def test_factory_create_api_mode() -> None:
     """Test factory creates API mode BusinessLogic."""
     config = MagicMock()

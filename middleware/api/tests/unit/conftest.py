@@ -33,6 +33,8 @@ def setup_test_config() -> Generator[None, None, None]:
     config_content = """
 log_level: DEBUG
 known_rdis: []
+otel:
+    endpoint: null
 git_repo:
   url: http://localhost
   group: test-group

@@ -1,5 +1,6 @@
 """CouchDB implementation of DocumentStore."""
 
+import asyncio
 import hashlib
 import json
 import logging
@@ -8,7 +9,7 @@ from datetime import UTC, datetime
 from typing import Any
 
 from middleware.api.document_store.config import CouchDBConfig
-from middleware.api.document_store.couchdb_client import CouchDBClient
+from middleware.api.document_store.couchdb_client import CouchDBClient, DocumentConflictError
 from middleware.api.utils import calculate_arc_id, extract_identifier
 from middleware.shared.api_models.common.models import ArcEventType, ArcLifecycleStatus, HarvestStatus
 
@@ -265,6 +266,60 @@ class CouchDB(DocumentStore):
         await self._client.save_document(harvest_id, doc_data)
         return doc
 
+    async def increment_harvest_statistics(
+        self,
+        harvest_id: str,
+        *,
+        is_new: bool,
+        has_changes: bool,
+    ) -> None:
+        """Atomically increment harvest counters with optimistic-concurrency retry."""
+        max_retries = self._config.harvest_stats_max_retries
+
+        for attempt in range(1, max_retries + 1):
+            doc_dict = await self._client.get_document(harvest_id)
+            if not doc_dict:
+                logger.warning("Harvest %s not found while incrementing statistics", harvest_id)
+                return
+
+            harvest_doc = HarvestDocument.model_validate(doc_dict)
+            if not harvest_doc.doc_rev:
+                raise RuntimeError(f"Harvest {harvest_id} has no _rev; cannot apply atomic update")
+
+            stats = harvest_doc.statistics or HarvestStatistics()
+            stats.arcs_submitted += 1
+
+            if is_new:
+                stats.arcs_new += 1
+            elif has_changes:
+                stats.arcs_updated += 1
+            else:
+                stats.arcs_unchanged += 1
+
+            harvest_doc.statistics = stats
+            payload = harvest_doc.model_dump(mode="json", by_alias=True, exclude_none=True)
+
+            try:
+                await self._client.save_document_if_revision_matches(
+                    harvest_id,
+                    payload,
+                    expected_rev=harvest_doc.doc_rev,
+                )
+                return
+            except DocumentConflictError:
+                logger.debug(
+                    "Conflict incrementing harvest statistics for %s (attempt %d/%d)",
+                    harvest_id,
+                    attempt,
+                    max_retries,
+                )
+                await asyncio.sleep(0.1)  # Add a small delay before retrying
+
+        raise RuntimeError(
+            f"Failed to increment harvest statistics for {harvest_id} after "
+            f"{max_retries} retries due to revision conflicts"
+        )
+
     async def list_harvests(
         self,
         rdi: str | None = None,
@@ -281,11 +336,8 @@ class CouchDB(DocumentStore):
 
     async def get_harvest_statistics(self, harvest_id: str) -> HarvestStatistics:
         """Calculate and return statistics for a specific harvest run."""
-        # Fetch only the fields we need: event log and document type.
-        # Excluding arc_content avoids loading potentially large RO-Crate JSON.
-        projection_fields = ["_id", "type", "metadata.events", "metadata.last_harvest_id"]
         selector = {"type": "arc", "metadata.last_harvest_id": harvest_id}
-        docs = await self._client.find(selector, fields=projection_fields)
+        docs = await self._client.find_projected(selector, fields=["metadata.events"])
 
         stats = HarvestStatistics()
         stats.arcs_submitted = len(docs)

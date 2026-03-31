@@ -6,7 +6,7 @@ from typing import Any, Self
 from middleware.api.business_logic.config import HarvestConfig
 from middleware.api.business_logic.exceptions import AccessDeniedError, ResourceNotFoundError
 from middleware.api.document_store import DocumentStore
-from middleware.api.document_store.harvest_document import HarvestDocument
+from middleware.api.document_store.harvest_document import HarvestDocument, HarvestStatistics
 from middleware.shared.api_models.common.models import HarvestStatus
 
 logger = logging.getLogger(__name__)
@@ -85,12 +85,8 @@ class HarvestManager:
             )
             raise AccessDeniedError(f"Harvest {harvest_id} does not belong to client {client_id}")
 
-        # Calculate statistics server-side from stored ARCs
-        statistics = await self._doc_store.get_harvest_statistics(harvest_id)
-
-        # Preserve expected_datasets if already set
-        if harvest.statistics and harvest.statistics.expected_datasets is not None:
-            statistics.expected_datasets = harvest.statistics.expected_datasets
+        # Statistics are maintained incrementally during ARC submission.
+        statistics = harvest.statistics or HarvestStatistics()
 
         updates: dict[str, Any] = {
             "status": HarvestStatus.COMPLETED,

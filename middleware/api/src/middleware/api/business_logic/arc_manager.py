@@ -101,6 +101,13 @@ class ArcManager:
                 has_changes = doc_result.has_changes
                 should_trigger_git = is_new or has_changes
 
+                if harvest_id:
+                    await self._doc_store.increment_harvest_statistics(
+                        harvest_id,
+                        is_new=is_new,
+                        has_changes=has_changes,
+                    )
+
                 logger.info(
                     "[%s] Stored ARC %s in CouchDB: is_new=%s, has_changes=%s, trigger_git=%s",
                     client_id,

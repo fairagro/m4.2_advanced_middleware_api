@@ -6,6 +6,7 @@ Provides async access to CouchDB for ARC and Harvest document storage.
 import logging
 from http import HTTPStatus
 from typing import Any, Self
+from urllib.parse import quote
 
 import aiohttp
 from aiocouch import CouchDB, Database
@@ -14,6 +15,10 @@ from aiocouch.exception import NotFoundError, PreconditionFailedError
 from middleware.api.document_store.config import CouchDBConfig
 
 logger = logging.getLogger(__name__)
+
+
+class DocumentConflictError(RuntimeError):
+    """Raised when a document update conflicts with a newer CouchDB revision."""
 
 
 class CouchDBClient:
@@ -222,7 +227,6 @@ class CouchDBClient:
         selector: dict[str, Any],
         limit: int | None = None,
         skip: int = 0,
-        fields: list[str] | None = None,
     ) -> list[dict[str, Any]]:
         """Find documents using a Mango query selector.
 
@@ -231,9 +235,6 @@ class CouchDBClient:
             limit: Maximum number of results to return per call.
                    Defaults to the instance's ``default_query_limit``.
             skip: Number of results to skip (for pagination)
-            fields: Optional list of fields to include in results (projection).
-                    When set, ``arc_content`` and other large fields can be
-                    excluded to reduce memory and network usage.
 
         Returns:
             List of matching documents
@@ -242,12 +243,7 @@ class CouchDBClient:
             raise RuntimeError("Not connected to CouchDB")
 
         effective_limit = limit if limit is not None else self._default_query_limit
-        # aiocouch's find passes extra kwargs through to the _find body.
-        kwargs: dict[str, Any] = {"limit": effective_limit, "skip": skip}
-        if fields is not None:
-            kwargs["fields"] = fields
-
-        result = self._db.find(selector, **kwargs)
+        result = self._db.find(selector, limit=effective_limit, skip=skip)
         docs = [dict(doc) async for doc in result]
 
         if len(docs) == effective_limit:
@@ -259,6 +255,117 @@ class CouchDBClient:
             )
 
         return docs
+
+    async def find_projected(
+        self,
+        selector: dict[str, Any],
+        fields: list[str],
+        limit: int | None = None,
+        skip: int = 0,
+    ) -> list[dict[str, Any]]:
+        """Find documents using CouchDB _find with explicit field projection.
+
+        This method uses the raw HTTP endpoint because aiocouch's ``Database.find``
+        returns full ``Document`` objects and therefore does not support the
+        ``fields`` parameter.
+
+        Args:
+            selector: Mango query selector.
+            fields: List of fields to return (CouchDB ``fields`` projection).
+            limit: Maximum number of results to return per call.
+                   Defaults to the instance's ``default_query_limit``.
+            skip: Number of results to skip (for pagination).
+
+        Returns:
+            List of projected documents.
+        """
+        if not self._db:
+            raise RuntimeError("Not connected to CouchDB")
+        if not self._db_name:
+            raise RuntimeError("Database name is not set")
+
+        effective_limit = limit if limit is not None else self._default_query_limit
+
+        payload: dict[str, Any] = {
+            "selector": selector,
+            "fields": fields,
+            "limit": effective_limit,
+            "skip": skip,
+        }
+
+        url = f"{self._url}/{self._db_name}/_find"
+        session = self._get_session()
+        async with session.post(url, json=payload) as resp:
+            if resp.status != HTTPStatus.OK:
+                text = await resp.text()
+                logger.error("CouchDB _find with projection failed: %s", text)
+                raise RuntimeError(f"CouchDB _find failed with status {resp.status}: {text}")
+
+            response_data = await resp.json()
+
+        docs_raw = response_data.get("docs", [])
+        docs: list[dict[str, Any]] = [dict(doc) for doc in docs_raw]
+
+        if len(docs) == effective_limit:
+            logger.warning(
+                "CouchDB find_projected() returned exactly %d documents for selector %s — "
+                "results may be silently truncated. Use skip/limit for pagination.",
+                effective_limit,
+                selector,
+            )
+
+        return docs
+
+    async def save_document_if_revision_matches(
+        self,
+        doc_id: str,
+        data: dict[str, Any],
+        *,
+        expected_rev: str,
+    ) -> dict[str, Any]:
+        """Save a document only if the expected revision still matches.
+
+        Uses raw ``PUT /{db}/{docid}`` to allow optimistic-concurrency handling
+        in higher layers (retry on 409 Conflict).
+
+        Args:
+            doc_id: Document ID.
+            data: Complete document payload to save.
+            expected_rev: Revision expected by the caller.
+
+        Returns:
+            Saved document payload including updated ``_rev``.
+
+        Raises:
+            DocumentConflictError: If CouchDB returns 409 conflict.
+            RuntimeError: For non-success HTTP errors.
+        """
+        if not self._db:
+            raise RuntimeError("Not connected to CouchDB")
+        if not self._db_name:
+            raise RuntimeError("Database name is not set")
+
+        payload = dict(data)
+        payload["_id"] = doc_id
+        payload["_rev"] = expected_rev
+
+        encoded_doc_id = quote(doc_id, safe="")
+        url = f"{self._url}/{self._db_name}/{encoded_doc_id}"
+        session = self._get_session()
+
+        async with session.put(url, json=payload) as resp:
+            if resp.status in {HTTPStatus.CREATED, HTTPStatus.ACCEPTED, HTTPStatus.OK}:
+                response_data = await resp.json()
+                new_rev = response_data.get("rev")
+                if isinstance(new_rev, str):
+                    payload["_rev"] = new_rev
+                return payload
+
+            if resp.status == HTTPStatus.CONFLICT:
+                raise DocumentConflictError(f"Conflict updating document {doc_id}")
+
+            text = await resp.text()
+            raise RuntimeError(f"Failed to update document {doc_id}: {resp.status} {text}")
 
     def _get_session(self) -> aiohttp.ClientSession:
         """Return the shared aiohttp session, creating it on first call."""
