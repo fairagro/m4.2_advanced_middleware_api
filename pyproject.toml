@@ -12,19 +12,19 @@ dependencies = [
 
 [dependency-groups]
 dev = [
-  "fastapi[standard]>=0.124.0",
+  "fastapi[standard]>=0.135.3",
   "httpx>=0.28.1",
   "pylint>=4.0.4",
-  "pytest>=9.0.2",
+  "pytest>=9.0.3",
   "pytest-asyncio>=1.1.0",
   "pytest-cov>=7.0.0",
   "pytest-env>=1.2.0",
   "pytest-mock>=3.10.0",
-  "mypy>=1.19.0",
+  "mypy>=1.20.1",
   "bandit>=1.7.0",
-  "ruff>=0.14.8",
+  "ruff>=0.15.10",
   "pre-commit>=4.0.0",
-  "respx>=0.20.0",
+  "respx>=0.23.1",
   "testcontainers>=4.14.2",
 ]
 
