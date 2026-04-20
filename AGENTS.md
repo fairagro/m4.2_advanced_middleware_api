@@ -230,6 +230,7 @@ Before generating or modifying code, read the relevant spec folders:
 **Project-level** (`spec/`) — cross-cutting concerns:
 
 - **[`spec/principles.md`](spec/principles.md)** — Authoritative project principles (start here).
+- **[`spec/ci-cd/`](spec/ci-cd/)** — GitHub Actions workflows: PR validation, Docker/Helm releases, CodeQL scanning.
 
 **API component** (`middleware/api/spec/`) — api internals:
 
