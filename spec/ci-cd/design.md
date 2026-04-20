@@ -64,10 +64,13 @@ them without duplicating the skip logic inside each workflow.
    build artifact. This catches vulnerabilities in the final published layer
    and uploads SARIF results to GitHub Security for tracking over time.
 
-7. **Bandit low-severity findings do not block the build**
-   — Low-severity findings are reported in the job summary but do not fail the
-   workflow. Medium and higher findings fail the build. This matches the
-   `--ll` flag used in local development (`bandit -ll`).
+7. **Bandit runs without severity filter in CI; JSON report drives the pass/fail decision**
+   — In CI, Bandit runs without a severity filter and writes its output as JSON.
+   A subsequent step parses the report and fails the job only when medium or
+   high severity issues are present. Low-severity findings appear in the job
+   summary but do not cause a failure. This is stricter than the local
+   development command (`bandit -ll`) which suppresses low-severity findings
+   entirely — CI surfaces them so they are visible, even if not blocking.
 
 8. **CodeQL runs on feature branches and weekly**
    — Running on every `feature/*` push catches vulnerabilities early in the
