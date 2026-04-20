@@ -24,7 +24,7 @@ dev = [
   "bandit>=1.7.0",
   "ruff>=0.15.10",
   "pre-commit>=4.0.0",
-  "respx>=0.20.0",
+  "respx>=0.23.1",
   "testcontainers>=4.14.2",
 ]
 
