@@ -114,7 +114,7 @@ middleware/
         ├── arc-manager/       # Two-phase ARC ingest: CouchDB + async GitLab sync
         ├── arc-store/         # ArcStore interface + GitRepo implementation
         ├── document-store/    # CouchDB persistence layer
-        └── harvest-management/# Harvest run lifecycle and ownership
+        └── harvest-manager/    # Harvest run lifecycle and ownership
 ```
 
 **Project-level specs** cover concerns that cut across components or that don't

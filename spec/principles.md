@@ -102,7 +102,7 @@ a last resort. A real fix is always preferred.
 
 - Spec folder names use kebab-case and must mirror the primary code name they
   describe. A spec for `ArcManager` lives in `arc-manager/`; a spec for
-  `HarvestManager` lives in `harvest-management/` (kebab-case of the concept).
+  `HarvestManager` lives in `harvest-manager/` (kebab-case of the class name).
 - When a spec covers a behaviour rather than a single class (e.g. `arc-store/`),
   the folder name describes that behaviour; it is acceptable if there is no
   exact 1:1 class match.

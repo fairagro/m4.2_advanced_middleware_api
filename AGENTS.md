@@ -44,7 +44,7 @@ middleware/
 │   │   ├── arc-manager/        # Two-phase ARC ingest: CouchDB + async GitLab sync
 │   │   ├── arc-store/          # ArcStore interface + GitRepo implementation
 │   │   ├── document-store/     # CouchDB persistence layer
-│   │   └── harvest-management/ # Harvest run lifecycle and ownership
+│   │   └── harvest-manager/    # Harvest run lifecycle and ownership
 │   └── src/middleware/api/
 ├── api_client/            # Client library for API
 │   └── config.py          # Optional certificate support (26 tests)
@@ -239,7 +239,7 @@ Before generating or modifying code, read the relevant spec folders:
 - **[`middleware/api/spec/arc-manager/`](middleware/api/spec/arc-manager/)** — `ArcManager.create_or_update_arc` business logic: CouchDB storage, idempotency, Celery dispatch, harvest statistics. Shared by both upload endpoints and accessible from the worker context.
 - **[`middleware/api/spec/arc-store/`](middleware/api/spec/arc-store/)** — `ArcStore` Git-backend interface: `GitRepo` (primary) and `GitlabApi` (deprecated), error classification, and credential injection.
 - **[`middleware/api/spec/document-store/`](middleware/api/spec/document-store/)** — CouchDB persistence layer, race-condition-safe initialization, and content-hash idempotency.
-- **[`middleware/api/spec/harvest-management/`](middleware/api/spec/harvest-management/)** — Harvest run lifecycle, ownership validation, and progress tracking.
+- **[`middleware/api/spec/harvest-manager/`](middleware/api/spec/harvest-manager/)** — Harvest run lifecycle, ownership validation, and progress tracking.
 
 For the AI agent workflow documentation, see [`docs/ai_workflow.md`](docs/ai_workflow.md).
 
@@ -253,7 +253,7 @@ The `spec-to-code` agent uses this table in Step 3 to locate affected code.
 | `middleware/api/spec/arc-manager/` | `middleware/api/src/middleware/api/business_logic/arc_manager.py` |
 | `middleware/api/spec/arc-store/` | `middleware/api/src/middleware/api/arc_store/git_repo.py`, `gitlab_api.py` (deprecated) |
 | `middleware/api/spec/document-store/` | `middleware/api/src/middleware/api/document_store/couchdb_client.py` |
-| `middleware/api/spec/harvest-management/` | `middleware/api/src/middleware/api/business_logic/harvest_manager.py` |
+| `middleware/api/spec/harvest-manager/` | `middleware/api/src/middleware/api/business_logic/harvest_manager.py` |
 | `middleware/api/spec/arc-upload/` | `middleware/api/src/middleware/api/api/v3/arcs.py` |
 | `middleware/api/spec/harvest-arc-upload/` | `middleware/api/src/middleware/api/api/v3/harvests.py` |
 | `spec/` (project-level) | Follow links in **Architecture & Design** above to the affected component. |
@@ -310,7 +310,7 @@ The `spec-to-code` agent uses this table in Step 3 to locate affected code.
 - Created `.agents/skills/` with three skills: `arctrl`, `config-wrapper`, `create-specifica-feature`.
 - Created `.github/agents/spec-to-code.agent.md` custom agent for spec-to-code translation.
 - Created `spec/principles.md` as the authoritative project foundation contract.
-- Created `middleware/api/spec/` with four component-level specs: `arc-manager`, `arc-store`, `document-store`, `harvest-management`.
+- Created `middleware/api/spec/` with four component-level specs: `arc-manager`, `arc-store`, `document-store`, `harvest-manager`.
 - Created `docs/ai_workflow.md` documenting the SDD workflow and VS Code integration.
 - Updated `AGENTS.md` with Architecture & Design section linking to all specs.
 
