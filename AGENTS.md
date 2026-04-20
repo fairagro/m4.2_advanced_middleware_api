@@ -9,6 +9,9 @@ This file contains critical context about the FAIRagro Advanced Middleware API p
 | Python | 3.12.12 | Primary language |
 | FastAPI | Latest | REST API framework |
 | Pydantic | V2 | Configuration validation |
+| Celery | Latest | Async task queue (GitLab sync worker) |
+| CouchDB | Latest | Fast document store (ARC + harvest metadata) |
+| RabbitMQ | Latest | Message broker for Celery |
 | Docker | Latest | Containerization |
 | Git LFS | 3.3.0+ | Large file storage |
 | uv | Latest | Python package manager |
@@ -16,11 +19,32 @@ This file contains critical context about the FAIRagro Advanced Middleware API p
 ## 📁 Project Structure
 
 ```text
+.agents/
+└── skills/                # Agent Skills (agentskills.io standard)
+    ├── arctrl/            # arctrl Python library reference
+    ├── config-wrapper/    # ConfigWrapper / ConfigBase pattern
+    └── create-specifica-feature/  # How to create a new Specifica feature
+
+.github/
+└── agents/
+    └── spec-to-code.agent.md     # Spec-to-code custom agent
+
+docs/
+└── ai_workflow.md         # AI agent workflow documentation
+
+spec/                      # Project-level architecture & design
+└── principles.md          # Foundation contract, project values
+
 middleware/
 ├── shared/                 # Shared utilities & configuration
 │   └── config/
 │       └── config_wrapper.py    # ConfigWrapper with primitive types (24 tests, 86.53% coverage)
 ├── api/                    # FastAPI REST API
+│   ├── spec/              # Component-level architecture & design
+│   │   ├── arc-manager/        # Two-phase ARC ingest: CouchDB + async GitLab sync
+│   │   ├── arc-store/          # ArcStore interface + GitRepo implementation
+│   │   ├── document-store/     # CouchDB persistence layer
+│   │   └── harvest-manager/    # Harvest run lifecycle and ownership
 │   └── src/middleware/api/
 ├── api_client/            # Client library for API
 │   └── config.py          # Optional certificate support (26 tests)
@@ -195,6 +219,47 @@ When editing files:
 3. **Never modify `.git/` directly** - Use scripts instead
 4. **Test after changes** - Always run relevant tests with `uv run pytest`
 
+## 🏗️ Architecture & Design
+
+**Read [`spec/principles.md`](spec/principles.md) first.** It defines module
+dependency rules, configuration constraints, typing rules, and code quality
+requirements. Do not restate what is there.
+
+Before generating or modifying code, read the relevant spec folders:
+
+**Project-level** (`spec/`) — cross-cutting concerns:
+
+- **[`spec/principles.md`](spec/principles.md)** — Authoritative project principles (start here).
+- **[`spec/ci-cd/`](spec/ci-cd/)** — GitHub Actions workflows: PR validation, Docker/Helm releases, CodeQL scanning.
+
+**API component** (`middleware/api/spec/`) — api internals:
+
+- **[`middleware/api/spec/arc-upload/`](middleware/api/spec/arc-upload/)** — HTTP contract for `POST /v3/arcs`: standalone ARC submission (rdi from request body).
+- **[`middleware/api/spec/harvest-arc-upload/`](middleware/api/spec/harvest-arc-upload/)** — HTTP contract for `POST /v3/harvests/{harvest_id}/arcs`: ARC submission within a harvest run (rdi resolved from harvest).
+- **[`middleware/api/spec/arc-manager/`](middleware/api/spec/arc-manager/)** — `ArcManager.create_or_update_arc` business logic: CouchDB storage, idempotency, Celery dispatch, harvest statistics. Shared by both upload endpoints and accessible from the worker context.
+- **[`middleware/api/spec/arc-store/`](middleware/api/spec/arc-store/)** — `ArcStore` Git-backend interface: `GitRepo` (primary) and `GitlabApi` (deprecated), error classification, and credential injection.
+- **[`middleware/api/spec/document-store/`](middleware/api/spec/document-store/)** — CouchDB persistence layer, race-condition-safe initialization, and content-hash idempotency.
+- **[`middleware/api/spec/harvest-manager/`](middleware/api/spec/harvest-manager/)** — Harvest run lifecycle, ownership validation, and progress tracking.
+
+For the AI agent workflow documentation, see [`docs/ai_workflow.md`](docs/ai_workflow.md).
+
+### Spec-to-Code Mapping
+
+This table maps each spec folder to the primary source file(s) it describes.
+The `spec-to-code` agent uses this table in Step 3 to locate affected code.
+
+| Spec folder | Primary source file(s) |
+| ----------- | ---------------------- |
+| `middleware/api/spec/arc-manager/` | `middleware/api/src/middleware/api/business_logic/arc_manager.py` |
+| `middleware/api/spec/arc-store/` | `middleware/api/src/middleware/api/arc_store/git_repo.py`, `gitlab_api.py` (deprecated) |
+| `middleware/api/spec/document-store/` | `middleware/api/src/middleware/api/document_store/couchdb_client.py` |
+| `middleware/api/spec/harvest-manager/` | `middleware/api/src/middleware/api/business_logic/harvest_manager.py` |
+| `middleware/api/spec/arc-upload/` | `middleware/api/src/middleware/api/api/v3/arcs.py` |
+| `middleware/api/spec/harvest-arc-upload/` | `middleware/api/src/middleware/api/api/v3/harvests.py` |
+| `spec/` (project-level) | Follow links in **Architecture & Design** above to the affected component. |
+
+---
+
 ## 🚀 Recent Work Sessions
 
 ### Session 1: ConfigWrapper Primitive Types
@@ -239,7 +304,17 @@ When editing files:
 - Fixed formatting drift in Markdown-embedded Python snippets (e.g., `middleware/api_client/README.md`).
 - Clarified that Ruff failures can be caused by `hatch-vcs` version parsing during `uv run`, and documented how to diagnose it.
 
-## 📞 Questions to Ask
+### Session 7: Spec-Driven Development Setup
+
+- Introduced Specifica-based spec-driven development (SDD) workflow.
+- Created `.agents/skills/` with three skills: `arctrl`, `config-wrapper`, `create-specifica-feature`.
+- Created `.github/agents/spec-to-code.agent.md` custom agent for spec-to-code translation.
+- Created `spec/principles.md` as the authoritative project foundation contract.
+- Created `middleware/api/spec/` with four component-level specs: `arc-manager`, `arc-store`, `document-store`, `harvest-manager`.
+- Created `docs/ai_workflow.md` documenting the SDD workflow and VS Code integration.
+- Updated `AGENTS.md` with Architecture & Design section linking to all specs.
+
+---
 
 Before making changes, consider:
 
@@ -251,6 +326,6 @@ Before making changes, consider:
 
 ---
 
-**Last Updated**: 2026-03-19
-**Current Branch**: main
+**Last Updated**: 2026-04-20
+**Current Branch**: feature/going_sdd
 **Maintainer Notes**: Keep this file updated when architectural decisions change
