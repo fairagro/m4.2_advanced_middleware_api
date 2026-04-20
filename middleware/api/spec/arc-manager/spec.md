@@ -20,8 +20,11 @@ specified in `arc-store/`.
 - [ ] When a harvest context is provided, increment the harvest run's counters
       (new-ARC and changed-ARC) in the document store after persisting, regardless
       of whether a background sync was scheduled.
-- [ ] Return a result containing the ARC identifier, its status (`CREATED` or
-      `UPDATED`), a timestamp, and the originating client and RDI.
+- [ ] Return an internal result to the caller containing the ARC identifier, its
+      status (`CREATED` or `UPDATED`), a timestamp, the originating `rdi`, and
+      the caller's `client_id`. The HTTP layer (see `arc-upload/` and
+      `harvest-arc-upload/`) decides which of these fields to expose in the
+      HTTP response.
 
 ## Edge Cases
 
