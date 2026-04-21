@@ -1,4 +1,7 @@
-name: Create Helm Chart Release
+name: Helm Chart Release
+
+permissions:
+  contents: write
 
 on:
   workflow_dispatch:
@@ -18,74 +21,80 @@ env:
   GIT_USER_NAME: ${{ vars.GIT_USER_NAME || 'GitHub Pipeline' }}
   GIT_USER_EMAIL: ${{ vars.GIT_USER_EMAIL || 'github_pipeline@fairagro.net' }}
   DOCKERHUB_NAMESPACE: ${{ vars.DOCKERHUB_NAMESPACE || 'zalf' }}
-  IMAGE_NAME: ${{ vars.IMAGE_NAME || 'fairagro-advanced-middleware-api' }}
-  GITVERSION_TAG_PREFIX: ${{ vars.GITVERSION_TAG_PREFIX || '.*-chart-v' }}
 
 jobs:
-  calculate-version:
+  version:
+    name: Determine Version
     runs-on: ubuntu-latest
     permissions:
       contents: read
     outputs:
-      version: ${{ env.IS_FEATURE_BRANCH == 'true' && steps.gitversion.outputs.semVer || steps.gitversion.outputs.majorMinorPatch }}
-    env:
-      IS_FEATURE_BRANCH: ${{ startsWith(github.ref_name, 'feature/') }}
+      version: ${{ steps.calc-version.outputs.version }}
 
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
-      - uses: gittools/actions/gitversion/setup@v4
-        with:
-          versionSpec: '6.4.x'
-
-      - name: Create GitVersion config
+      - name: Calculate next chart version
+        id: calc-version
         run: |
-          cat <<EOF > GitVersion.yml
-          mode: ContinuousDeployment
-          tag-prefix: '${{ env.GITVERSION_TAG_PREFIX }}'
-          semantic-version-format: Strict
-          branches:
-            main:
-              label: ''
-              increment: ${{ inputs.version_bump }}
-            feature:
-              regex: ^feature/(?<BranchName>.+)$
-              label: '{BranchName}'
-              increment: Inherit
-              track-merge-target: false
-          EOF
+          # Find latest final release tag (timestamp-prefixed, e.g. 20260421143022-chart-v1.2.3)
+          # Extract just the semver part, sort by version, take highest
+          LATEST_CHART_VERSION=$(git tag --list '*-chart-v*' \
+            | grep -E '^[0-9]+-chart-v[0-9]+\.[0-9]+\.[0-9]+$' \
+            | sed 's/^[0-9]*-chart-v//' \
+            | sort -V \
+            | tail -1)
+          if [ -z "$LATEST_CHART_VERSION" ]; then LATEST_CHART_VERSION="0.0.0"; fi
 
-      - name: Execute GitVersion
-        id: gitversion
-        uses: gittools/actions/gitversion/execute@v4
+          MAJOR=$(echo "$LATEST_CHART_VERSION" | cut -d. -f1)
+          MINOR=$(echo "$LATEST_CHART_VERSION" | cut -d. -f2)
+          PATCH=$(echo "$LATEST_CHART_VERSION" | cut -d. -f3)
 
-      - name: Debug version info
+          case "${{ inputs.version_bump }}" in
+            major) MAJOR=$((MAJOR + 1)); MINOR=0; PATCH=0 ;;
+            minor) MINOR=$((MINOR + 1)); PATCH=0 ;;
+            *)     PATCH=$((PATCH + 1)) ;;
+          esac
+
+          BASE_VERSION="${MAJOR}.${MINOR}.${PATCH}"
+
+          if [[ "$GITHUB_REF_NAME" == feature/* ]]; then
+            BRANCH_LABEL=$(echo "$GITHUB_REF_NAME" | sed 's|feature/||' | tr '/_ ' '---' | cut -c1-30)
+            NEW_VERSION="${BASE_VERSION}-rc.${BRANCH_LABEL}.${{ github.run_number }}"
+          else
+            NEW_VERSION="${BASE_VERSION}"
+          fi
+
+          echo "version=$NEW_VERSION" >> $GITHUB_OUTPUT
+
+      - name: Report version to summary
         run: |
-          echo "🔧 Helm Version Configuration:"
-          echo "  - Branch: ${{ github.ref_name }}"
-          echo "  - Is feature branch: ${{ env.IS_FEATURE_BRANCH }}"
-          echo "  - Version bump input: ${{ github.event.inputs.version_bump || 'patch (default)' }}"
-          echo ""
-          echo "📊 GitVersion Results:"
-          echo "  - SemVer: ${{ steps.gitversion.outputs.semVer }}"
-          echo "  - MajorMinorPatch: ${{ steps.gitversion.outputs.majorMinorPatch }}"
-          echo "  - Final version: ${{ env.IS_FEATURE_BRANCH == 'true' && steps.gitversion.outputs.semVer || steps.gitversion.outputs.majorMinorPatch }}"
+          echo "## 📦 Helm Chart Release Version" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Type | Value |" >> $GITHUB_STEP_SUMMARY
+          echo "|---|---|" >> $GITHUB_STEP_SUMMARY
+          echo "| **Chart Version** | \`${{ steps.calc-version.outputs.version }}\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| **Branch** | \`${{ github.ref_name }}\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| **Commit** | \`${{ github.sha }}\` |" >> $GITHUB_STEP_SUMMARY
 
   helm-release:
-    needs: calculate-version
+    name: Release
+    needs: version
     runs-on: ubuntu-latest
     permissions:
       contents: write
 
     env:
-      TIMESTAMP: ${{ github.run_id }}${{ github.run_attempt }}
-      RELEASE_TAG: ${{ github.run_id }}${{ github.run_attempt }}-chart-v${{ needs.calculate-version.outputs.version }}
-      CHART_VERSION: ${{ needs.calculate-version.outputs.version }}
+      CHART_VERSION: ${{ needs.version.outputs.version }}
       DOCKERHUB_AVAILABLE: ${{ secrets.DOCKERHUB_USER != '' && secrets.DOCKERHUB_TOKEN != '' }}
 
     steps:
+      - name: Generate timestamp
+        id: timestamp
+        run: echo "value=$(date +%Y%m%d%H%M%S)" >> $GITHUB_OUTPUT
+
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
@@ -94,118 +103,68 @@ jobs:
         with:
           version: '3.14.0'
 
-      - name: Log release info
-        run: |
-          echo "📋 Release prepared (all variables defined in YAML):"
-          echo "  - Release tag: ${{ env.RELEASE_TAG }}"
-          echo "  - Chart version: ${{ env.CHART_VERSION }}"
-          echo "  - App version: (read from Chart.yaml by Helm)"
-          echo "  - DockerHub available: ${{ env.DOCKERHUB_AVAILABLE }}"
-
-      - name: Create version tag
-        id: create_tag
-        uses: mathieudutour/github-tag-action@v6.2
-        with:
-          github_token: ${{ secrets.GITHUB_TOKEN }}
-          custom_tag: ${{ env.RELEASE_TAG }}
-          tag_prefix: ""
-          create_annotated_tag: true
-
       - name: Package Helm chart
         id: package_chart
         run: |
-          # Package Helm chart (app-version is read from Chart.yaml automatically)
           helm package ./helmchart/fairagro-advanced-middleware-api-chart --version "${{ env.CHART_VERSION }}"
-
-          # Find the actual chart package name (helm package creates name based on Chart.yaml)
           CHART_PACKAGE=$(ls *.tgz | head -1)
           echo "chart-package=$CHART_PACKAGE" >> $GITHUB_OUTPUT
           echo "📦 Created Helm chart package: $CHART_PACKAGE"
 
-      - name: Log release info
-        run: |
-          if [[ "${{ github.ref_name }}" == "main" ]]; then
-            echo "Creating GitHub release for final Helm release"
-            echo "✅ Git tag: ${{ env.RELEASE_TAG }}"
-            echo "✅ GitHub release: Will be created"
-          else
-            echo "Feature branch release - tracking version progression"
-            echo "✅ Git tag: ${{ env.RELEASE_TAG }} (for GitVersion tracking)"
-            echo "⏭️ GitHub release: Skipped (feature branch)"
-          fi
+      - name: Create version tag
+        uses: mathieudutour/github-tag-action@v6.2
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          custom_tag: ${{ steps.timestamp.outputs.value }}-chart-v${{ env.CHART_VERSION }}
+          tag_prefix: ""
+          create_annotated_tag: true
 
       - name: Create GitHub Release (Draft)
         if: github.ref_name == 'main'
-        id: draft_release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: ${{ env.RELEASE_TAG }}
-          name: "chart-v${{ env.CHART_VERSION }}"
+          tag_name: ${{ steps.timestamp.outputs.value }}-chart-v${{ env.CHART_VERSION }}
+          name: chart-v${{ env.CHART_VERSION }}
           body: |
             ## Helm Chart Release v${{ env.CHART_VERSION }}
 
             **Chart Version**: ${{ env.CHART_VERSION }}
 
+            Install via OCI registry:
             ```bash
             helm upgrade --install fairagro-middleware \
-              oci://registry-1.docker.io/zalf/fairagro-advanced-middleware-api-chart \
+              oci://registry-1.docker.io/${{ env.DOCKERHUB_NAMESPACE }}/fairagro-advanced-middleware-api-chart \
               --version ${{ env.CHART_VERSION }}
             ```
 
-            *(App version and image tag are defined in the Helm chart's Chart.yaml and values.yaml)*
+            *(App version and image tag are defined in the Helm chart's values.yaml)*
+
+            ### Fallback (if OCI registry is unavailable)
+
+            Download the chart package attached to this release, then install from file:
+            ```bash
+            helm upgrade --install fairagro-middleware \
+              fairagro-advanced-middleware-api-chart-${{ env.CHART_VERSION }}.tgz
+            ```
           files: ${{ steps.package_chart.outputs.chart-package }}
           draft: true
-          make_latest: true
+          prerelease: false
           generate_release_notes: true
-          append_body: true
+          make_latest: true
 
-      - name: Finalize Release
+      - name: Publish Release
         if: github.ref_name == 'main'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          echo "🔍 Looking for draft release with tag: ${{ env.RELEASE_TAG }}"
-
-          # Give GitHub API a moment to index the new release
-          sleep 5
-
-          # Try to get the release ID from the draft release we just created
-          if RELEASE_ID=$(gh api repos/${{ github.repository }}/releases/tags/${{ env.RELEASE_TAG }} --jq '.id' 2>/dev/null); then
-            echo "✅ Found release ID via tag: $RELEASE_ID"
-          else
-            echo "⚠️ Release not found via tag, searching in all releases..."
-
-            # Search for the release by version in all releases
-            RELEASE_ID=$(gh api repos/${{ github.repository }}/releases --jq '.[] | select(.tag_name == "${{ env.RELEASE_TAG }}") | .id')
-
-            if [[ -n "$RELEASE_ID" ]]; then
-              echo "✅ Found release ID via search: $RELEASE_ID"
-            else
-              echo "❌ Release not found at all!"
-              exit 1
-            fi
-          fi
-
-          # Convert draft to final release
+          RELEASE_ID=$(gh api repos/${{ github.repository }}/releases/tags/${{ steps.timestamp.outputs.value }}-chart-v${{ env.CHART_VERSION }} --jq '.id')
           gh api repos/${{ github.repository }}/releases/$RELEASE_ID \
             --method PATCH \
             --field draft=false
-          echo "🎉 Release finalized successfully"
 
-      - name: Login to Docker Hub and Push Helm chart
-        if: env.DOCKERHUB_AVAILABLE == 'true'
+      - name: Push Helm chart to Docker Hub
+        if: env.DOCKERHUB_AVAILABLE == 'true' && github.ref_name == 'main'
         run: |
-          # Login to Helm registry with credentials
-          echo "🔑 Logging in to Docker Hub registry..."
           echo "${{ secrets.DOCKERHUB_TOKEN }}" | helm registry login -u "${{ secrets.DOCKERHUB_USER }}" --password-stdin registry-1.docker.io
-
-          # Push Helm chart to OCI registry
-          echo "📦 Pushing Helm chart to DockerHub OCI registry..."
-          helm push ${{ steps.package_chart.outputs.chart-package }} oci://registry-1.docker.io/${{ env.DOCKERHUB_NAMESPACE }}
-          echo "✅ Pushed to DockerHub: ${{ env.DOCKERHUB_NAMESPACE }}/${{ steps.package_chart.outputs.chart-package }}"
-
-      - name: Skip DockerHub push (missing credentials)
-        if: env.DOCKERHUB_AVAILABLE != 'true'
-        run: |
-          echo "⏭️ Skipping DockerHub push - missing credentials (DOCKERHUB_USER and/or DOCKERHUB_TOKEN)"
-          echo "💡 Configure DockerHub secrets to enable automatic chart publishing"
+          helm push "${{ steps.package_chart.outputs.chart-package }}" oci://registry-1.docker.io/${{ env.DOCKERHUB_NAMESPACE }}
+          echo "✅ Pushed Helm chart to Docker Hub: ${{ env.DOCKERHUB_NAMESPACE }}/${{ steps.package_chart.outputs.chart-package }}"

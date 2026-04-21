@@ -1,0 +1,140 @@
+name: Reusable Check
+
+permissions:
+  contents: read
+
+on:
+  workflow_call:
+    inputs:
+      version:
+        description: 'Version calculated in Build phase'
+        required: true
+        type: string
+      components:
+        description: 'A JSON string array of components to check'
+        required: false
+        type: string
+        default: '["api"]'
+
+env:
+  IMAGE_BASE_NAME: ${{ vars.IMAGE_BASE_NAME || 'fairagro-advanced-middleware' }}
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
+jobs:
+  licence-check:
+    name: Licence Check
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        component: ${{ fromJson(inputs.components) }}
+    permissions:
+      contents: read
+
+    steps:
+      - name: Download Docker image artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: docker-image-${{ matrix.component }}-${{ inputs.version }}
+
+      - name: Load Docker image
+        run: |
+          docker load < docker-image-${{ matrix.component }}.tar.gz
+          IMAGE_TAG="local/${{ env.IMAGE_BASE_NAME }}-${{ matrix.component }}:${{ inputs.version }}"
+          echo "LICENCE_IMAGE_TAG=$IMAGE_TAG" >> $GITHUB_ENV
+
+      - name: Run Trivy licence scanner
+        uses: aquasecurity/trivy-action@57a97c7e7821a5776cebc9bb87c984fa69cba8f1
+        with:
+          image-ref: ${{ env.LICENCE_IMAGE_TAG }}
+          format: 'table'
+          scan-type: 'image'
+          scanners: 'license'
+          severity: 'CRITICAL,HIGH'
+
+  security-check:
+    name: Security Check
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        component: ${{ fromJson(inputs.components) }}
+    permissions:
+      contents: read
+      security-events: write
+
+    steps:
+      - name: Download Docker image artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: docker-image-${{ matrix.component }}-${{ inputs.version }}
+
+      - name: Download SBOM artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: sbom-${{ matrix.component }}-${{ inputs.version }}
+
+      - name: Load Docker image
+        run: |
+          docker load < docker-image-${{ matrix.component }}.tar.gz
+          IMAGE_TAG="local/${{ env.IMAGE_BASE_NAME }}-${{ matrix.component }}:${{ inputs.version }}"
+          echo "SCAN_IMAGE_TAG=$IMAGE_TAG" >> $GITHUB_ENV
+
+      - name: Run Trivy Vulnerability Scan (Image)
+        uses: aquasecurity/trivy-action@57a97c7e7821a5776cebc9bb87c984fa69cba8f1
+        with:
+          image-ref: ${{ env.SCAN_IMAGE_TAG }}
+          format: 'sarif'
+          output: 'trivy-image-results.sarif'
+          severity: 'CRITICAL,HIGH'
+
+      - name: Run Trivy Vulnerability Scan (SBOM)
+        uses: aquasecurity/trivy-action@57a97c7e7821a5776cebc9bb87c984fa69cba8f1
+        with:
+          image-ref: 'sbom-${{ matrix.component }}.spdx.json'
+          scan-type: 'sbom'
+          format: 'sarif'
+          output: 'trivy-sbom-results.sarif'
+          severity: 'CRITICAL,HIGH'
+
+      - name: Upload Trivy scan results
+        uses: github/codeql-action/upload-sarif@v3
+        if: always()
+        with:
+          sarif_file: 'trivy-image-results.sarif'
+          category: "trivy-image-scan-${{ matrix.component }}"
+
+      - name: Upload Trivy SBOM scan results
+        uses: github/codeql-action/upload-sarif@v3
+        if: always()
+        with:
+          sarif_file: 'trivy-sbom-results.sarif'
+          category: "trivy-sbom-scan-${{ matrix.component }}"
+
+  container-structure-tests:
+    name: Container Structure Tests
+    strategy:
+      matrix:
+        component: ${{ fromJson(inputs.components) }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Download Docker image artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: docker-image-${{ matrix.component }}-${{ inputs.version }}
+
+      - name: Load Docker image
+        run: |
+          docker load < docker-image-${{ matrix.component }}.tar.gz
+          IMAGE_TAG="local/${{ env.IMAGE_BASE_NAME }}-${{ matrix.component }}:${{ inputs.version }}"
+          echo "IMAGE_TAG=$IMAGE_TAG" >> $GITHUB_ENV
+
+      - name: Run Container Structure Tests
+        uses: plexsystems/container-structure-test-action@v0.3.0
+        with:
+          image: ${{ env.IMAGE_TAG }}
+          config: docker/container-structure-tests/${{ matrix.component }}.yaml

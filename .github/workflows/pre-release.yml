@@ -1,0 +1,44 @@
+name: Pre Release
+
+permissions:
+  contents: write
+  packages: write
+
+on:
+  workflow_dispatch:
+
+jobs:
+  code-quality:
+    name: Code Quality
+    uses: ./.github/workflows/reusable-code-quality.yml
+    with:
+      components: '["api"]'
+    secrets: inherit
+
+  build:
+    name: Build
+    uses: ./.github/workflows/reusable-build.yml
+    with:
+      version_bump: 'patch'
+      components: '["api"]'
+    secrets: inherit
+
+  check:
+    name: Check
+    needs: build
+    uses: ./.github/workflows/reusable-check.yml
+    with:
+      version: ${{ needs.build.outputs.version }}
+      components: '["api"]'
+    secrets: inherit
+
+  release:
+    name: Release
+    needs: [build, check, code-quality]
+    uses: ./.github/workflows/reusable-release.yml
+    with:
+      version: ${{ needs.build.outputs.version }}
+      components: '["api"]'
+      release_type: 'feature'
+      create_github_release: false
+    secrets: inherit

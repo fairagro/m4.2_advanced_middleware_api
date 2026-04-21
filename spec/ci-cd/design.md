@@ -4,75 +4,116 @@
 
 ```text
 On PR → main:
-    pull-request-tests.yml
-        ├─→ python-quality.yml    (reusable)
-        └─→ docker-build.yml      (reusable, push=false)
+    feature-pull-request.yml
+        ├─→ reusable-code-quality.yml
+        ├─→ reusable-build.yml        (push=false)
+        └─→ reusable-check.yml
 
-On workflow_dispatch (Docker release):
-    docker-release.yml
-        ├─→ docker-build.yml      (reusable, push=true)
-        └─→ Trivy scan → SARIF upload
+On workflow_dispatch (Pre Release, any branch):
+    pre-release.yml
+        ├─→ reusable-code-quality.yml
+        ├─→ reusable-build.yml        (push=true)
+        ├─→ reusable-check.yml
+        └─→ reusable-release.yml      (no GitHub Release)
 
-On workflow_dispatch (Helm release):
+On workflow_dispatch (Release, main only):
+    release.yml
+        ├─→ reusable-code-quality.yml
+        ├─→ reusable-build.yml        (push=true)
+        ├─→ reusable-check.yml
+        └─→ reusable-release.yml      (creates GitHub Release)
+
+On workflow_dispatch (Helm Chart Release):
     helm-release.yml
         └─→ package + publish chart
 
 On push feature/* or schedule:
     codeql.yml
-        └─→ CodeQL Python analysis
+        └─→ CodeQL analysis (Python + Actions)
 ```
 
 ## Reusable Workflows
 
-`python-quality.yml` and `docker-build.yml` are defined as `workflow_call`
-workflows. They accept a `run_tests` boolean so the PR orchestrator can skip
-them without duplicating the skip logic inside each workflow.
+| File | Purpose |
+| --- | --- |
+| `reusable-code-quality.yml` | Ruff, Pylint, MyPy, Bandit, pytest |
+| `reusable-build.yml` | Version calc, Docker build, SBOM generation |
+| `reusable-check.yml` | Licence scan, Trivy vuln scan, container structure tests |
+| `reusable-release.yml` | Docker push (DockerHub + GHCR), Git tag, GitHub Release |
 
 ## Key Decisions
 
-1. **Change detection before running jobs**
-   — The PR workflow uses `dorny/paths-filter` to detect whether any relevant
-   files changed. If only docs or config unrelated to code changed, all jobs
-   are skipped. This avoids unnecessary CI minutes and keeps PRs for
-   documentation fast.
+1. **Bash-based version calculation**
+   — Versions are calculated with a short bash script: find the latest
+   semver Git tag in the appropriate namespace (docker-v* for Docker, chart-v*
+   for Helm), parse it, apply the bump, and produce the new version.
+   GitVersion (a .NET tool) was considered but rejected because it introduces
+   a heavyweight external dependency for a task that a few lines of bash
+   handle transparently and auditably inside the workflow file itself.
 
-2. **Reusable workflows for quality and build**
-   — `python-quality.yml` and `docker-build.yml` are called both from the PR
-   workflow and from `docker-release.yml`. Keeping them as separate reusable
-   workflows avoids duplication and ensures the same checks run in PR and
-   release pipelines.
+2. **Timestamp as ordering prefix for Git tags**
+   — The GitHub releases page sorts releases by tag name. Sorting by semver
+   alone is unreliable when patch and minor releases interleave. The spec
+   requires a lexically monotone ordering prefix; a `YYYYMMDDhhmmss` timestamp
+   generated via `date +%Y%m%d%H%M%S` at job start satisfies this because its
+   fixed length (14 characters) ensures lexical sort equals chronological sort.
+   The ordering prefix is stripped from the human-readable GitHub Release name,
+   so releases display as `docker-v1.2.3` or `chart-v1.2.3-rc.my-feature.42`.
 
-3. **GitVersion for semantic versioning**
-   — Versions are derived automatically from Git tags using GitVersion
-   (`ContinuousDeployment` mode). The tag prefix differs between Docker
-   (`.*-docker-v`) and Helm (`.*-chart-v`) releases so each artifact has an
-   independent version history.
+3. **Draft → Publish pattern for immutable releases**
+   — GitHub repository releases have immutability enabled (`Enable release
+   immutability` setting). Once published, a release cannot be modified —
+   including adding assets. To support attaching files, releases are always
+   created as `draft: true` first (allowing asset uploads), then published
+   by a separate `gh api PATCH draft=false` call. This applies to both
+   Docker releases (`reusable-release.yml`) and Helm chart releases
+   (`helm-release.yml`).
 
-4. **Branch strategy: `main` = final release, `feature/*` = pre-release**
-   — Releases from `main` produce `MAJOR.MINOR.PATCH` versions and create
-   GitHub Releases. Releases from `feature/*` branches produce semver
-   pre-release versions (label = branch suffix) and do not create a GitHub
-   Release. This allows testing release artifacts from feature branches
-   without polluting the release history.
+4. **Feature branch releases always create a Git tag**
+   — A Git tag is created on every release run, including feature branch
+   pre-releases that produce no GitHub Release entry. This ensures the version
+   calculator always finds a valid baseline when calculating the next version,
+   regardless of whether the previous run produced a published release.
+   The suffix order `rc.{branch-label}.{run_number}` is chosen so that
+   pre-release versions sort first by branch (grouping all builds from the
+   same feature together) and then by run number within that branch.
 
-5. **Container structure tests before push**
-   — The Docker image is built and tested with `container-structure-test`
-   before any push to the registry. A broken image is never published.
+5. **Build phase: Docker image as the transfer artifact**
+   — `reusable-build.yml` builds the Docker image, saves it as a gzip
+   artifact (`docker-image-{component}-{version}`), and generates an SBOM
+   (`sbom-{component}-{version}`). Downstream jobs (`reusable-check.yml`,
+   `reusable-release.yml`) download these artifacts rather than rebuilding.
+   This guarantees that the checked and released image are byte-for-byte
+   identical to the built image.
 
-6. **Trivy scan after push**
-   — Trivy runs against the pushed image (by digest) rather than the local
-   build artifact. This catches vulnerabilities in the final published layer
-   and uploads SARIF results to GitHub Security for tracking over time.
+6. **Check phase: licence, security, and container structure**
+   — `reusable-check.yml` runs three independent job groups:
+   `licence-check` (Trivy licence scanner), `security-check` (Trivy vuln
+   scan on image + SBOM, SARIF upload to GitHub Security), and
+   `container-structure-tests`. All three must pass before a release job runs.
 
-7. **Bandit runs without severity filter in CI; JSON report drives the pass/fail decision**
-   — In CI, Bandit runs without a severity filter and writes its output as JSON.
-   A subsequent step parses the report and fails the job only when medium or
-   high severity issues are present. Low-severity findings appear in the job
-   summary but do not cause a failure. This is stricter than the local
-   development command (`bandit -ll`) which suppresses low-severity findings
-   entirely — CI surfaces them so they are visible, even if not blocking.
+7. **Bandit uses project `.bandit` config; pass/fail driven by JSON report**
+   — Bandit runs as `bandit -r middleware/ -c .bandit -f json`, capturing all
+   findings regardless of severity. A post-processing step prints every finding
+   (including LOW) for visibility, then exits non-zero only when MEDIUM or HIGH
+   findings are present. This keeps exclusion and threshold configuration in the
+   `.bandit` file and avoids the `-ll` flag, which would suppress LOW findings
+   entirely and contradict the requirement to log them.
 
-8. **CodeQL runs on feature branches and weekly**
-   — Running on every `feature/*` push catches vulnerabilities early in the
-   development cycle. The weekly schedule catches newly published CVEs even
-   when the codebase has not changed.
+8. **CodeQL config excludes `dev_environment/`**
+   — A `.github/codeql/codeql-config.yml` file instructs CodeQL to skip the
+   `dev_environment/` directory, which contains Docker Compose configuration
+   and secrets that are not part of the application code.
+
+9. **Helm chart version: Git tag is authoritative**
+   — `Chart.yaml` is never modified by the CI pipeline. The authoritative
+   chart version is the Git tag; CI passes it to `helm package --version` at
+   package time. This mirrors the hatch-vcs pattern used for Python packages.
+
+10. **Change detection on pull requests**
+    — `feature-pull-request.yml` runs a `detect-changes` job first using
+    `dorny/paths-filter`. All downstream jobs (`code-quality`, `build`,
+    `check`) are skipped unless at least one of the following paths changed:
+    `middleware/**`, `pyproject.toml`, `docker/**`, `scripts/**`,
+    `.github/workflows/**`. PRs that only touch documentation, specs, or
+    Helm chart YAML finish instantly without consuming CI minutes.

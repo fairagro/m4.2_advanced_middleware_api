@@ -73,7 +73,7 @@ All code must pass:
 - `uv run ruff check middleware/` — linting
 - `uv run mypy middleware/` — static type checking
 - `uv run pylint middleware/` — style and code smells
-- `uv run bandit -r middleware/ -c .bandit -ll` — security
+- `uv run bandit -r middleware/ -c .bandit` — security (low findings logged, medium/high fail)
 
 **Suppression comments** (`# noqa`, `# type: ignore`, `# pylint: disable`) are
 a last resort. A real fix is always preferred.
@@ -117,3 +117,22 @@ a last resort. A real fix is always preferred.
 - SSL verification is enabled by default.
 - All inputs are validated at system boundaries by Pydantic.
 - No secrets in logs or error messages.
+
+---
+
+## Branch Strategy
+
+This project uses **Trunk-Based Development** with short-lived branches:
+
+| Branch | Purpose | CI behaviour |
+| ------ | ------- | ------------ |
+| `main` | Trunk — always deployable production state | Final release via `workflow_dispatch` |
+| `feature/*` | New features and bug fixes | PR checks; manual pre-release via `workflow_dispatch` |
+| `docs/*` | Documentation-only changes | Change detection skips all CI jobs |
+
+**Rules:**
+
+- All branches merge into `main` via pull request.
+- `feature/*` covers both new functionality and bug fixes; no separate `fix/*` or `hotfix/*` branches.
+- `docs/*` branches exist solely to skip unnecessary CI; they carry no release privilege.
+- Long-lived branches other than `main` are not permitted.
