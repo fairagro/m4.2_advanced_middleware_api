@@ -92,10 +92,13 @@ On push feature/* or schedule:
    scan on image + SBOM, SARIF upload to GitHub Security), and
    `container-structure-tests`. All three must pass before a release job runs.
 
-7. **Bandit uses project `.bandit` config**
-   — Bandit is invoked as `bandit -r middleware/ -c .bandit -ll`, delegating
-   all severity and exclusion configuration to the `.bandit` file checked into
-   the repository. This keeps CI and local development behaviour consistent.
+7. **Bandit uses project `.bandit` config; pass/fail driven by JSON report**
+   — Bandit runs as `bandit -r middleware/ -c .bandit -f json`, capturing all
+   findings regardless of severity. A post-processing step prints every finding
+   (including LOW) for visibility, then exits non-zero only when MEDIUM or HIGH
+   findings are present. This keeps exclusion and threshold configuration in the
+   `.bandit` file and avoids the `-ll` flag, which would suppress LOW findings
+   entirely and contradict the requirement to log them.
 
 8. **CodeQL config excludes `dev_environment/`**
    — A `.github/codeql/codeql-config.yml` file instructs CodeQL to skip the

@@ -73,7 +73,7 @@ All code must pass:
 - `uv run ruff check middleware/` — linting
 - `uv run mypy middleware/` — static type checking
 - `uv run pylint middleware/` — style and code smells
-- `uv run bandit -r middleware/ -c .bandit -ll` — security
+- `uv run bandit -r middleware/ -c .bandit` — security (low findings logged, medium/high fail)
 
 **Suppression comments** (`# noqa`, `# type: ignore`, `# pylint: disable`) are
 a last resort. A real fix is always preferred.
