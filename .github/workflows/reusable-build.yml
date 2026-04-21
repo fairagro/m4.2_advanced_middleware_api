@@ -49,12 +49,16 @@ jobs:
       - name: Calculate next version
         id: calc-version
         run: |
-          LATEST_TAG=$(git tag --list 'v*' --sort=-version:refname | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | head -1)
-          if [ -z "$LATEST_TAG" ]; then LATEST_TAG="v0.0.0"; fi
+          LATEST_TAG=$(git tag --list '*-docker-v*' \
+            | grep -E '^[0-9]+-docker-v[0-9]+\.[0-9]+\.[0-9]+$' \
+            | sed 's/^[0-9]*-docker-v//' \
+            | sort -V \
+            | tail -1)
+          if [ -z "$LATEST_TAG" ]; then LATEST_TAG="0.0.0"; fi
 
-          MAJOR=$(echo "${LATEST_TAG#v}" | cut -d. -f1)
-          MINOR=$(echo "${LATEST_TAG#v}" | cut -d. -f2)
-          PATCH=$(echo "${LATEST_TAG#v}" | cut -d. -f3)
+          MAJOR=$(echo "$LATEST_TAG" | cut -d. -f1)
+          MINOR=$(echo "$LATEST_TAG" | cut -d. -f2)
+          PATCH=$(echo "$LATEST_TAG" | cut -d. -f3)
 
           case "${{ inputs.version_bump }}" in
             major) MAJOR=$((MAJOR + 1)); MINOR=0; PATCH=0 ;;

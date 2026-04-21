@@ -162,6 +162,7 @@ jobs:
           } > release-body.md
 
       - name: Create GitHub Release (Draft)
+        id: create_release
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ needs.create-release-tag.outputs.timestamp }}-${{ inputs.tag_prefix }}${{ inputs.version }}
@@ -175,7 +176,28 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          RELEASE_ID=$(gh api repos/${{ github.repository }}/releases/tags/${{ needs.create-release-tag.outputs.timestamp }}-${{ inputs.tag_prefix }}${{ inputs.version }} --jq '.id')
+          echo "🔍 Finalizing release for tag: ${{ needs.create-release-tag.outputs.timestamp }}-${{ inputs.tag_prefix }}${{ inputs.version }}"
+
+          # Give GitHub API a moment to index the new release
+          sleep 5
+
+          # Try to get the release ID from the draft release we just created
+          if RELEASE_ID=$(gh api repos/${{ github.repository }}/releases/tags/${{ needs.create-release-tag.outputs.timestamp }}-${{ inputs.tag_prefix }}${{ inputs.version }} --jq '.id' 2>/dev/null); then
+            echo "✅ Found release ID via tag: $RELEASE_ID"
+          else
+            echo "⚠️ Release not found via tag, searching in all releases..."
+            # Search for the release by tag name in all release list (including drafts)
+            RELEASE_ID=$(gh api repos/${{ github.repository }}/releases --jq '.[] | select(.tag_name == "${{ needs.create-release-tag.outputs.timestamp }}-${{ inputs.tag_prefix }}${{ inputs.version }}") | .id')
+
+            if [[ -n "$RELEASE_ID" ]]; then
+              echo "✅ Found release ID via search: $RELEASE_ID"
+            else
+              echo "❌ Release not found at all!"
+              exit 1
+            fi
+          fi
+
           gh api repos/${{ github.repository }}/releases/$RELEASE_ID \
             --method PATCH \
             --field draft=false
+          echo "🎉 Release finalized successfully"
