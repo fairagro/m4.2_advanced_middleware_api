@@ -1,0 +1,181 @@
+name: Reusable Release
+
+permissions:
+  contents: read
+
+on:
+  workflow_call:
+    inputs:
+      version:
+        description: 'Version calculated in Build phase'
+        required: true
+        type: string
+      components:
+        description: 'A JSON string array of components to release'
+        required: false
+        type: string
+        default: '["api"]'
+      release_type:
+        description: 'Type of release (feature or final)'
+        required: true
+        type: string
+      create_github_release:
+        description: 'Whether to create a GitHub release'
+        required: false
+        type: boolean
+        default: true
+      tag_prefix:
+        description: 'Prefix for the git release tag (e.g. "docker-v" or "chart-v")'
+        required: false
+        type: string
+        default: 'docker-v'
+    secrets:
+      DOCKERHUB_USER:
+        required: true
+      DOCKERHUB_TOKEN:
+        required: true
+
+env:
+  GIT_USER_NAME: ${{ vars.GIT_USER_NAME || 'GitHub Pipeline' }}
+  GIT_USER_EMAIL: ${{ vars.GIT_USER_EMAIL || 'github_pipeline@fairagro.net' }}
+  IMAGE_BASE_NAME: ${{ vars.IMAGE_BASE_NAME || 'fairagro-advanced-middleware' }}
+  DOCKERHUB_NAMESPACE: ${{ vars.DOCKERHUB_NAMESPACE || 'zalf' }}
+  GHCR_NAMESPACE: ${{ github.repository_owner }}
+
+jobs:
+  docker-push:
+    name: DockerPush/Release
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    strategy:
+      matrix:
+        component: ${{ fromJson(inputs.components) }}
+
+    steps:
+      - name: Download Docker image artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: docker-image-${{ matrix.component }}-${{ inputs.version }}
+
+      - name: Load Docker image
+        run: |
+          docker load < docker-image-${{ matrix.component }}.tar.gz
+          LOCAL_TAG="local/${{ env.IMAGE_BASE_NAME }}-${{ matrix.component }}:${{ inputs.version }}"
+          echo "LOCAL_TAG=$LOCAL_TAG" >> $GITHUB_ENV
+
+      - name: Login to DockerHub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USER }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Tag and Push Images
+        run: |
+          # DockerHub
+          DH_TAG="${{ env.DOCKERHUB_NAMESPACE }}/${{ env.IMAGE_BASE_NAME }}-${{ matrix.component }}:${{ inputs.version }}"
+          docker tag ${{ env.LOCAL_TAG }} $DH_TAG
+          docker push $DH_TAG
+          echo "✅ Pushed to DockerHub: $DH_TAG"
+
+          # GHCR
+          REPO_LOWER=$(echo "${{ github.repository }}" | tr '[:upper:]' '[:lower:]')
+          GHCR_TAG="ghcr.io/$REPO_LOWER/${{ matrix.component }}:${{ inputs.version }}"
+          docker tag ${{ env.LOCAL_TAG }} $GHCR_TAG
+          docker push $GHCR_TAG
+          echo "✅ Pushed to GHCR: $GHCR_TAG"
+
+  create-release-tag:
+    name: CreateReleaseTag/Release
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    outputs:
+      timestamp: ${{ steps.timestamp.outputs.value }}
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Generate timestamp
+        id: timestamp
+        run: echo "value=$(date +%Y%m%d%H%M%S)" >> $GITHUB_OUTPUT
+
+      - name: Create version tag
+        uses: mathieudutour/github-tag-action@v6.2
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          custom_tag: ${{ steps.timestamp.outputs.value }}-${{ inputs.tag_prefix }}${{ inputs.version }}
+          tag_prefix: ""
+
+  github-release:
+    name: GitHubRelease/Release
+    if: inputs.create_github_release == true
+    needs: [docker-push, create-release-tag]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Generate release body
+        run: |
+          COMPONENT=$(echo '${{ inputs.components }}' | jq -r '.[0]')
+          DH_IMAGE="${{ env.DOCKERHUB_NAMESPACE }}/${{ env.IMAGE_BASE_NAME }}-${COMPONENT}:${{ inputs.version }}"
+          REPO_LOWER=$(echo "${{ github.repository }}" | tr '[:upper:]' '[:lower:]')
+          GHCR_IMAGE="ghcr.io/${REPO_LOWER}/${COMPONENT}:${{ inputs.version }}"
+          TAG="${{ needs.create-release-tag.outputs.timestamp }}-${{ inputs.tag_prefix }}${{ inputs.version }}"
+          REPO_BASENAME=$(basename "${{ github.repository }}")
+          {
+            echo "## Usage"
+            echo ""
+            echo "Pull and run the Docker image:"
+            echo '```bash'
+            echo "docker pull ${DH_IMAGE}"
+            echo "docker run --rm ${DH_IMAGE}"
+            echo '```'
+            echo ""
+            echo "Or via GitHub Container Registry:"
+            echo '```bash'
+            echo "docker pull ${GHCR_IMAGE}"
+            echo "docker run --rm ${GHCR_IMAGE}"
+            echo '```'
+            echo ""
+            echo "### Fallback (if registry images are unavailable)"
+            echo ""
+            echo "Build and run locally from source:"
+            echo '```bash'
+            echo "git clone https://github.com/${{ github.repository }}.git"
+            echo "cd ${REPO_BASENAME}"
+            echo "git checkout ${TAG}"
+            echo "docker build -f docker/Dockerfile.${COMPONENT} -t ${COMPONENT}:${{ inputs.version }} ."
+            echo "docker run --rm ${COMPONENT}:${{ inputs.version }}"
+            echo '```'
+          } > release-body.md
+
+      - name: Create GitHub Release (Draft)
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ needs.create-release-tag.outputs.timestamp }}-${{ inputs.tag_prefix }}${{ inputs.version }}
+          name: ${{ inputs.tag_prefix }}${{ inputs.version }}
+          body_path: release-body.md
+          draft: true
+          prerelease: ${{ inputs.release_type == 'feature' }}
+          generate_release_notes: true
+
+      - name: Publish Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          RELEASE_ID=$(gh api repos/${{ github.repository }}/releases/tags/${{ needs.create-release-tag.outputs.timestamp }}-${{ inputs.tag_prefix }}${{ inputs.version }} --jq '.id')
+          gh api repos/${{ github.repository }}/releases/$RELEASE_ID \
+            --method PATCH \
+            --field draft=false

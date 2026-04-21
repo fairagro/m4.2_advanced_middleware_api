@@ -1,0 +1,68 @@
+name: Release
+
+permissions:
+  contents: write
+  packages: write
+  security-events: write
+
+on:
+  workflow_dispatch:
+    inputs:
+      version_bump:
+        description: 'Version bump type (only allowed on main branch)'
+        required: true
+        default: 'patch'
+        type: choice
+        options:
+        - major
+        - minor
+        - patch
+
+jobs:
+  validate-branch:
+    name: Validate Main Branch
+    runs-on: ubuntu-latest
+    steps:
+      - name: Assert main branch
+        run: |
+          if [[ "${{ github.ref_name }}" != "main" ]]; then
+            echo "::error::The Release workflow can only be triggered from the 'main' branch."
+            exit 1
+          fi
+
+  code-quality:
+    name: Code Quality
+    needs: validate-branch
+    uses: ./.github/workflows/reusable-code-quality.yml
+    with:
+      components: '["api"]'
+    secrets: inherit
+
+  build:
+    name: Build
+    needs: validate-branch
+    uses: ./.github/workflows/reusable-build.yml
+    with:
+      version_bump: ${{ inputs.version_bump }}
+      components: '["api"]'
+    secrets: inherit
+
+  check:
+    name: Check
+    needs: build
+    uses: ./.github/workflows/reusable-check.yml
+    with:
+      version: ${{ needs.build.outputs.version }}
+      components: '["api"]'
+    secrets: inherit
+
+  release:
+    name: Release
+    needs: [build, check, code-quality]
+    uses: ./.github/workflows/reusable-release.yml
+    with:
+      version: ${{ needs.build.outputs.version }}
+      components: '["api"]'
+      release_type: 'final'
+      tag_prefix: 'docker-v'
+    secrets: inherit

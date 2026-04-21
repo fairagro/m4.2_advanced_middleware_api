@@ -1,0 +1,61 @@
+name: Feature Pull Request
+
+permissions:
+  contents: read
+  security-events: write
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+    branches:
+      - 'main'
+
+jobs:
+  detect-changes:
+    name: Detect Changes
+    runs-on: ubuntu-latest
+    outputs:
+      code: ${{ steps.filter.outputs.code }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            code:
+              - 'middleware/**'
+              - 'pyproject.toml'
+              - 'docker/**'
+              - 'scripts/**'
+              - '.github/workflows/**'
+
+  code-quality:
+    name: Code Quality
+    needs: detect-changes
+    if: needs.detect-changes.outputs.code == 'true'
+    uses: ./.github/workflows/reusable-code-quality.yml
+    with:
+      components: '["api"]'
+    secrets: inherit
+
+  build:
+    name: Build
+    needs: detect-changes
+    if: needs.detect-changes.outputs.code == 'true'
+    uses: ./.github/workflows/reusable-build.yml
+    with:
+      components: '["api"]'
+    secrets: inherit
+
+  check:
+    name: Check
+    needs: build
+    if: needs.build.result == 'success'
+    uses: ./.github/workflows/reusable-check.yml
+    with:
+      version: ${{ needs.build.outputs.version }}
+      components: '["api"]'
+    secrets: inherit

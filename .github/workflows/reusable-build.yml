@@ -1,0 +1,182 @@
+name: Reusable Build
+
+permissions:
+  contents: read
+
+on:
+  workflow_call:
+    inputs:
+      version_bump:
+        description: 'Version bump type: major, minor, or patch'
+        required: false
+        type: string
+        default: 'patch'
+      components:
+        description: 'A JSON string array of components to build'
+        required: false
+        type: string
+        default: '["api"]'
+    outputs:
+      version:
+        description: 'Calculated version'
+        value: ${{ jobs.version.outputs.version }}
+      pep440_version:
+        description: 'PEP 440 compliant version for Python package builds'
+        value: ${{ jobs.version.outputs.pep440_version }}
+      components:
+        description: 'A JSON string array of components that were built'
+        value: ${{ inputs.components }}
+
+env:
+  IMAGE_BASE_NAME: ${{ vars.IMAGE_BASE_NAME || 'fairagro-advanced-middleware' }}
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
+jobs:
+  version:
+    name: Determine Version
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    outputs:
+      version: ${{ steps.calc-version.outputs.version }}
+      pep440_version: ${{ steps.calc-version.outputs.pep440_version }}
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Calculate next version
+        id: calc-version
+        run: |
+          LATEST_TAG=$(git tag --list 'v*' --sort=-version:refname | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | head -1)
+          if [ -z "$LATEST_TAG" ]; then LATEST_TAG="v0.0.0"; fi
+
+          MAJOR=$(echo "${LATEST_TAG#v}" | cut -d. -f1)
+          MINOR=$(echo "${LATEST_TAG#v}" | cut -d. -f2)
+          PATCH=$(echo "${LATEST_TAG#v}" | cut -d. -f3)
+
+          case "${{ inputs.version_bump }}" in
+            major) MAJOR=$((MAJOR + 1)); MINOR=0; PATCH=0 ;;
+            minor) MINOR=$((MINOR + 1)); PATCH=0 ;;
+            *)     PATCH=$((PATCH + 1)) ;;
+          esac
+
+          BASE_VERSION="${MAJOR}.${MINOR}.${PATCH}"
+
+          if [[ "$GITHUB_REF_NAME" == feature/* ]]; then
+            # Pre-release: use sequential dev build counter (github.run_number)
+            BRANCH_LABEL=$(echo "$GITHUB_REF_NAME" | sed 's|feature/||' | tr '/_ ' '---' | cut -c1-30)
+            NEW_VERSION="${BASE_VERSION}-rc.${BRANCH_LABEL}.${{ github.run_number }}"
+
+            # PEP 440 compliant variant for Python package builds (hatch-vcs / setuptools-scm).
+            # Format: X.Y.Z.devN+branch.name
+            PEP440_BRANCH=$(echo "$GITHUB_REF_NAME" \
+              | sed 's|feature/||' \
+              | tr '[:upper:]' '[:lower:]' \
+              | sed -E 's/[^a-z0-9]+/./g; s/^\.+//; s/\.+$//; s/\.{2,}/./g' \
+              | cut -c1-30)
+            if [[ -z "$PEP440_BRANCH" ]]; then
+              PEP440_BRANCH="feature"
+            fi
+            PEP440_VERSION="${BASE_VERSION}.dev${{ github.run_number }}+${PEP440_BRANCH}"
+          else
+            NEW_VERSION="${BASE_VERSION}"
+            PEP440_VERSION="${BASE_VERSION}"
+          fi
+
+          echo "version=$NEW_VERSION" >> $GITHUB_OUTPUT
+          echo "pep440_version=$PEP440_VERSION" >> $GITHUB_OUTPUT
+
+      - name: Report versions to summary
+        run: |
+          echo "## 📦 Docker Build Versions" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Version Type | Value |" >> $GITHUB_STEP_SUMMARY
+          echo "|---|---|" >> $GITHUB_STEP_SUMMARY
+          echo "| **Docker Tag** | \`${{ steps.calc-version.outputs.version }}\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| **Python Build** | \`${{ steps.calc-version.outputs.pep440_version }}\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| **Branch** | \`${{ github.ref_name }}\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| **Commit** | \`${{ github.sha }}\` |" >> $GITHUB_STEP_SUMMARY
+
+  docker-build:
+    name: Docker Build
+    needs: version
+    strategy:
+      matrix:
+        component: ${{ fromJson(inputs.components) }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build Docker image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: docker/Dockerfile.${{ matrix.component }}
+          platforms: linux/amd64
+          push: false
+          load: true
+          tags: local/${{ env.IMAGE_BASE_NAME }}-${{ matrix.component }}:${{ needs.version.outputs.version }}
+          build-args: |
+            APP_VERSION=${{ needs.version.outputs.pep440_version }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Save Docker image as artifact
+        run: |
+          IMAGE_TAG="local/${{ env.IMAGE_BASE_NAME }}-${{ matrix.component }}:${{ needs.version.outputs.version }}"
+          docker save "$IMAGE_TAG" | gzip > docker-image-${{ matrix.component }}.tar.gz
+
+      - name: Upload Docker image artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: docker-image-${{ matrix.component }}-${{ needs.version.outputs.version }}
+          path: docker-image-${{ matrix.component }}.tar.gz
+          retention-days: 1
+
+  generate-sbom:
+    name: Generate SBOM
+    needs: [version, docker-build]
+    strategy:
+      matrix:
+        component: ${{ fromJson(inputs.components) }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+
+    steps:
+      - name: Download Docker image artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: docker-image-${{ matrix.component }}-${{ needs.version.outputs.version }}
+
+      - name: Load Docker image
+        run: |
+          docker load < docker-image-${{ matrix.component }}.tar.gz
+          IMAGE_TAG="local/${{ env.IMAGE_BASE_NAME }}-${{ matrix.component }}:${{ needs.version.outputs.version }}"
+          echo "SBOM_IMAGE_TAG=$IMAGE_TAG" >> $GITHUB_ENV
+
+      - name: Create SBOM directory
+        run: mkdir -p sboms
+
+      - name: Generate SBOM
+        uses: anchore/sbom-action@v0
+        with:
+          image: ${{ env.SBOM_IMAGE_TAG }}
+          output-file: sboms/sbom-${{ matrix.component }}.spdx.json
+          format: spdx-json
+
+      - name: Upload SBOM artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: sbom-${{ matrix.component }}-${{ needs.version.outputs.version }}
+          path: sboms/sbom-${{ matrix.component }}.spdx.json
+          retention-days: 1

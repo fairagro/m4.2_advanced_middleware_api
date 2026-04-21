@@ -15,6 +15,10 @@ type: application
 # This is the chart version. This version number should be incremented each time you make changes
 # to the chart and its templates, including the app version.
 # Versions are expected to follow Semantic Versioning (https://semver.org/)
+#
+# NOTE: The authoritative chart version is the git tag ({timestamp}-chart-v{major}.{minor}.{patch}).
+# The CI pipeline overrides this value at package time via `helm package --version`.
+# This value reflects the last released version and serves as a reference for developers.
 version: 0.2.0
 
 # This is the version number of the application being deployed. This version number should be
