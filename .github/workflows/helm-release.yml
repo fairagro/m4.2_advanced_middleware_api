@@ -120,6 +120,7 @@ jobs:
           create_annotated_tag: true
 
       - name: Create GitHub Release (Draft)
+        id: create_release
         if: github.ref_name == 'main'
         uses: softprops/action-gh-release@v2
         with:
@@ -157,10 +158,30 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          RELEASE_ID=$(gh api repos/${{ github.repository }}/releases/tags/${{ steps.timestamp.outputs.value }}-chart-v${{ env.CHART_VERSION }} --jq '.id')
+          echo "🔍 Finalizing helm release for tag: ${{ steps.timestamp.outputs.value }}-chart-v${{ env.CHART_VERSION }}"
+
+          # Give GitHub API a moment to index the new release
+          sleep 5
+
+          # Try to get the release ID from the draft release we just created
+          if RELEASE_ID=$(gh api repos/${{ github.repository }}/releases/tags/${{ steps.timestamp.outputs.value }}-chart-v${{ env.CHART_VERSION }} --jq '.id' 2>/dev/null); then
+            echo "✅ Found release ID via tag: $RELEASE_ID"
+          else
+            echo "⚠️ Release not found via tag, searching in all releases..."
+            RELEASE_ID=$(gh api repos/${{ github.repository }}/releases --jq '.[] | select(.tag_name == "${{ steps.timestamp.outputs.value }}-chart-v${{ env.CHART_VERSION }}") | .id')
+
+            if [[ -n "$RELEASE_ID" ]]; then
+              echo "✅ Found release ID via search: $RELEASE_ID"
+            else
+              echo "❌ Release not found at all!"
+              exit 1
+            fi
+          fi
+
           gh api repos/${{ github.repository }}/releases/$RELEASE_ID \
             --method PATCH \
             --field draft=false
+          echo "🎉 Helm release finalized successfully"
 
       - name: Push Helm chart to Docker Hub
         if: env.DOCKERHUB_AVAILABLE == 'true' && github.ref_name == 'main'
