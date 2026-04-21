@@ -35,7 +35,7 @@ pipelines run on GitHub Actions.
 - [ ] On `main`, produce a final `MAJOR.MINOR.PATCH` version.
 - [ ] On a `feature/*` branch, produce a pre-release version with the format
       `MAJOR.MINOR.PATCH-rc.{branch-label}.{run_number}`, where `{branch-label}`
-      is the feature name with the `feature/` prefix stripped.
+      is the sanitized feature name (e.g., slashes and underscores replaced by hyphens).
 
 <!-- Git Tag and Release Naming -->
 - [ ] Every release creates a Git tag with an ordering prefix that is
