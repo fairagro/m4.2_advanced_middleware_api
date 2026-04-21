@@ -45,7 +45,7 @@ On push feature/* or schedule:
 
 1. **Bash-based version calculation**
    — Versions are calculated with a short bash script: find the latest
-   semver Git tag in the appropriate namespace (`v*` for Docker, `chart-v*`
+   semver Git tag in the appropriate namespace (docker-v* for Docker, chart-v*
    for Helm), parse it, apply the bump, and produce the new version.
    GitVersion (a .NET tool) was considered but rejected because it introduces
    a heavyweight external dependency for a task that a few lines of bash
