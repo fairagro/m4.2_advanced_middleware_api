@@ -14,7 +14,7 @@
     "github-actions"
   ],
 
-  "rangeStrategy": "pin",
+  "rangeStrategy": "auto",
 
   "prHourlyLimit": 2,
   "prConcurrentLimit": 5,
@@ -55,7 +55,7 @@
       "description": "🐍 Python application dependencies (uv / pep621)",
       "matchManagers": ["pep621"],
       "groupName": "Python dependencies (uv)",
-      "rangeStrategy": "pin",
+      "rangeStrategy": "widen",
       "separateMinorPatch": true
     },
 
