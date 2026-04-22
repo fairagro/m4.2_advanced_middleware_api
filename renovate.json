@@ -10,7 +10,7 @@
   "enabledManagers": [
     "dockerfile",
     "devcontainer",
-    "regex",
+    "custom.regex",
     "pep621",
     "github-actions"
   ],
@@ -95,20 +95,42 @@
     }
   ],
 
-  "regexManagers": [
+  "customManagers": [
     {
-      "description": "pip / uv / pyinstaller in Dockerfile",
+      "customType": "regex",
+      "description": "pip in Dockerfile",
       "fileMatch": ["(^|/)Dockerfile$"],
       "matchStrings": [
-        "pip==(?<currentValue>\\d+\\.\\d+\\.\\d+)",
-        "uv==(?<currentValue>\\d+\\.\\d+\\.\\d+)",
-        "pyinstaller==(?<currentValue>\\d+\\.\\d+\\.\\d+)"
+        "pip==(?<currentValue>\\d+\\.\\d+\\.\\d+)"
       ],
+      "depNameTemplate": "pip",
       "datasourceTemplate": "pypi",
       "versioningTemplate": "pep440"
     },
-
     {
+      "customType": "regex",
+      "description": "uv in Dockerfile",
+      "fileMatch": ["(^|/)Dockerfile$"],
+      "matchStrings": [
+        "uv==(?<currentValue>\\d+\\.\\d+\\.\\d+)"
+      ],
+      "depNameTemplate": "uv",
+      "datasourceTemplate": "pypi",
+      "versioningTemplate": "pep440"
+    },
+    {
+      "customType": "regex",
+      "description": "pyinstaller in Dockerfile",
+      "fileMatch": ["(^|/)Dockerfile$"],
+      "matchStrings": [
+         "pyinstaller==(?<currentValue>\\d+\\.\\d+\\.\\d+)"
+      ],
+      "depNameTemplate": "pyinstaller",
+      "datasourceTemplate": "pypi",
+      "versioningTemplate": "pep440"
+    },
+    {
+      "customType": "regex",
       "description": "Alpine pinned packages in Dockerfile",
       "fileMatch": ["(^|/)Dockerfile$"],
       "matchStrings": [
