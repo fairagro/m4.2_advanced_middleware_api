@@ -7,6 +7,7 @@ DOCKERFILE="${PROJECT_DIR}/docker/Dockerfile.api"
 APK_INDEX_URL="https://dl-cdn.alpinelinux.org/alpine/v3.23/main/x86_64/APKINDEX.tar.gz"
 
 TMP_DIR=$(mktemp -d)
+trap 'rm -rf "$TMP_DIR"' EXIT
 
 echo "⬇️ Downloading Alpine index..."
 curl -sL "$APK_INDEX_URL" -o "$TMP_DIR/APKINDEX.tar.gz"
