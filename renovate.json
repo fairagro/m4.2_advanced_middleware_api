@@ -10,7 +10,6 @@
   "enabledManagers": [
     "dockerfile",
     "devcontainer",
-    "custom.regex",
     "pep621",
     "github-actions"
   ],
@@ -92,52 +91,6 @@
       "matchDatasources": ["repology"],
       "matchUpdateTypes": ["minor", "major"],
       "enabled": false
-    }
-  ],
-
-  "customManagers": [
-    {
-      "customType": "regex",
-      "description": "pip in Dockerfile",
-      "fileMatch": ["(^|/)Dockerfile$"],
-      "matchStrings": [
-        "pip==(?<currentValue>\\d+\\.\\d+\\.\\d+)"
-      ],
-      "depNameTemplate": "pip",
-      "datasourceTemplate": "pypi",
-      "versioningTemplate": "pep440"
-    },
-    {
-      "customType": "regex",
-      "description": "uv in Dockerfile",
-      "fileMatch": ["(^|/)Dockerfile$"],
-      "matchStrings": [
-        "uv==(?<currentValue>\\d+\\.\\d+\\.\\d+)"
-      ],
-      "depNameTemplate": "uv",
-      "datasourceTemplate": "pypi",
-      "versioningTemplate": "pep440"
-    },
-    {
-      "customType": "regex",
-      "description": "pyinstaller in Dockerfile",
-      "fileMatch": ["(^|/)Dockerfile$"],
-      "matchStrings": [
-         "pyinstaller==(?<currentValue>\\d+\\.\\d+\\.\\d+)"
-      ],
-      "depNameTemplate": "pyinstaller",
-      "datasourceTemplate": "pypi",
-      "versioningTemplate": "pep440"
-    },
-    {
-      "customType": "regex",
-      "description": "Alpine pinned packages in Dockerfile",
-      "fileMatch": ["(^|/)Dockerfile$"],
-      "matchStrings": [
-        "(?<depName>curl|git|zlib|tzdata|build-base|python3-dev|libffi-dev|openssl-dev|cargo)=(?<currentValue>[^\\s\\\\]+)"
-      ],
-      "datasourceTemplate": "repology",
-      "versioningTemplate": "loose"
     }
   ],
 
