@@ -12,6 +12,9 @@ on:
 permissions:
   contents: read
 
+env:
+  GITHUB_COM_TOKEN: ${{ secrets.RENOVATE_TOKEN }}
+
 jobs:
   renovate:
     runs-on: ubuntu-latest
