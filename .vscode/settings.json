@@ -55,5 +55,12 @@
 
   "python-envs.defaultEnvManager": "ms-python.python:venv",
 
-  "remote.autoForwardPortsSource": "process"
+  "remote.autoForwardPortsSource": "process",
+
+  "json.schemas": [
+    {
+      "fileMatch": ["renovate.json"],
+      "url": "https://docs.renovatebot.com/renovate-schema.json"
+    }
+  ]
 }

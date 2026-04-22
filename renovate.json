@@ -1,0 +1,109 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+
+  "extends": [
+    "config:recommended"
+  ],
+
+  "timezone": "Europe/Berlin",
+
+  "enabledManagers": [
+    "dockerfile",
+    "regex",
+    "pep621",
+    "github-actions"
+  ],
+
+  "rangeStrategy": "pin",
+
+  "prHourlyLimit": 2,
+  "prConcurrentLimit": 5,
+
+  "labels": ["dependencies"],
+
+  "rebaseWhen": "behind-base-branch",
+
+  "commitMessagePrefix": "deps:",
+
+  "lockFileMaintenance": {
+    "enabled": true,
+    "schedule": ["before 3am on monday"],
+    "recreateWhen": "auto"
+  },
+
+  "packageRules": [
+    {
+      "matchManagers": ["github-actions"],
+      "matchUpdateTypes": ["patch", "minor"],
+      "groupName": "GitHub Actions"
+    },
+    {
+      "matchManagers": ["github-actions"],
+      "matchUpdateTypes": ["major"],
+      "groupName": "GitHub Actions (major)"
+    },
+
+    {
+      "matchManagers": ["dockerfile"],
+      "groupName": "Docker base images"
+    },
+    {
+      "matchManagers": ["dockerfile"],
+      "matchUpdateTypes": ["major"],
+      "groupName": "Docker base images (major)"
+    },
+
+    {
+      "matchManagers": ["pep621"],
+      "groupName": "Python dependencies (uv)",
+      "rangeStrategy": "pin",
+      "separateMinorPatch": true
+    },
+
+    {
+      "matchDatasources": ["pypi"],
+      "groupName": "Python build tools"
+    },
+
+    {
+      "matchDatasources": ["repology"],
+      "groupName": "Alpine safe updates",
+      "matchUpdateTypes": ["patch"]
+    },
+
+    {
+      "matchDatasources": ["repology"],
+      "matchUpdateTypes": ["minor", "major"],
+      "enabled": false
+    }
+  ],
+
+  "regexManagers": [
+    {
+      "description": "pip / uv / pyinstaller in Dockerfile",
+      "fileMatch": ["(^|/)Dockerfile$"],
+      "matchStrings": [
+        "pip==(?<currentValue>\\d+\\.\\d+\\.\\d+)",
+        "uv==(?<currentValue>\\d+\\.\\d+\\.\\d+)",
+        "pyinstaller==(?<currentValue>\\d+\\.\\d+\\.\\d+)"
+      ],
+      "datasourceTemplate": "pypi",
+      "versioningTemplate": "pep440"
+    },
+
+    {
+      "description": "Alpine apk packages (pinned versions)",
+      "fileMatch": ["(^|/)Dockerfile$"],
+      "matchStrings": [
+        "(?<depName>curl|git|zlib|tzdata|build-base|python3-dev|libffi-dev|openssl-dev|cargo)=(?<currentValue>[^\\s\\\\]+)"
+      ],
+      "datasourceTemplate": "repology",
+      "versioningTemplate": "loose"
+    }
+  ],
+
+  "ignorePaths": [
+    "**/node_modules/**",
+    "**/__pycache__/**"
+  ]
+}
