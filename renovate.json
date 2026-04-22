@@ -9,6 +9,7 @@
 
   "enabledManagers": [
     "dockerfile",
+    "devcontainer",
     "regex",
     "pep621",
     "github-actions"
@@ -33,27 +34,26 @@
 
   "packageRules": [
     {
-      "matchManagers": ["github-actions"],
-      "matchUpdateTypes": ["patch", "minor"],
-      "groupName": "GitHub Actions"
-    },
-    {
-      "matchManagers": ["github-actions"],
-      "matchUpdateTypes": ["major"],
-      "groupName": "GitHub Actions (major)"
-    },
-
-    {
-      "matchManagers": ["dockerfile"],
-      "groupName": "Docker base images"
-    },
-    {
-      "matchManagers": ["dockerfile"],
-      "matchUpdateTypes": ["major"],
-      "groupName": "Docker base images (major)"
+      "description": "🔷 Runtime Sync: Docker + Devcontainer base images",
+      "matchManagers": ["dockerfile", "devcontainer"],
+      "matchPackagePatterns": [
+        "python",
+        "alpine",
+        "mcr.microsoft.com/devcontainers"
+      ],
+      "groupName": "Runtime base (Docker + Devcontainer)"
     },
 
     {
+      "description": "🧩 Devcontainer features",
+      "matchManagers": ["devcontainer"],
+      "matchPackagePatterns": ["features/*"],
+      "groupName": "Devcontainer features",
+      "separateMinorPatch": true
+    },
+
+    {
+      "description": "🐍 Python application dependencies (uv / pep621)",
       "matchManagers": ["pep621"],
       "groupName": "Python dependencies (uv)",
       "rangeStrategy": "pin",
@@ -61,17 +61,34 @@
     },
 
     {
+      "description": "🐍 Python build tools (pip/uv/pyinstaller via regex)",
       "matchDatasources": ["pypi"],
       "groupName": "Python build tools"
     },
 
     {
-      "matchDatasources": ["repology"],
-      "groupName": "Alpine safe updates",
-      "matchUpdateTypes": ["patch"]
+      "description": "⚙️ GitHub Actions updates (stable grouping)",
+      "matchManagers": ["github-actions"],
+      "matchUpdateTypes": ["patch", "minor"],
+      "groupName": "GitHub Actions"
     },
 
     {
+      "description": "⚙️ GitHub Actions major updates",
+      "matchManagers": ["github-actions"],
+      "matchUpdateTypes": ["major"],
+      "groupName": "GitHub Actions (major)"
+    },
+
+    {
+      "description": "🐧 Alpine OS safe updates only",
+      "matchDatasources": ["repology"],
+      "matchUpdateTypes": ["patch"],
+      "groupName": "Alpine OS safe updates"
+    },
+
+    {
+      "description": "🚫 Disable risky OS upgrades",
       "matchDatasources": ["repology"],
       "matchUpdateTypes": ["minor", "major"],
       "enabled": false
@@ -92,7 +109,7 @@
     },
 
     {
-      "description": "Alpine apk packages (pinned versions)",
+      "description": "Alpine pinned packages in Dockerfile",
       "fileMatch": ["(^|/)Dockerfile$"],
       "matchStrings": [
         "(?<depName>curl|git|zlib|tzdata|build-base|python3-dev|libffi-dev|openssl-dev|cargo)=(?<currentValue>[^\\s\\\\]+)"
