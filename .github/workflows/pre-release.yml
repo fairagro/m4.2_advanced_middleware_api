@@ -3,6 +3,7 @@ name: Pre Release
 permissions:
   contents: write
   packages: write
+  security-events: write
 
 on:
   workflow_dispatch:
