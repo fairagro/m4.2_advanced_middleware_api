@@ -71,12 +71,10 @@ done < <(grep -oE '[a-z0-9][a-z0-9_-]*=[0-9][a-z0-9._]+-r[0-9]+' "$DOCKERFILE" |
 echo "🐍 Updating pip-pinned packages..."
 
 while IFS= read -r match; do
-  [[ "$match" =~ ^([a-zA-Z0-9][a-zA-Z0-9_-]*)==[0-9][a-z0-9._]*$ ]] || continue
+  [[ "$match" =~ ^([a-zA-Z0-9][a-zA-Z0-9_-]*)==([0-9][a-z0-9._]*)$ ]] || continue
 
   pkg="${BASH_REMATCH[1]}"
-  current="${BASH_REMATCH[2]:-}"
-  # extract current from match (everything after ==)
-  current="${match#*==}"
+  current="${BASH_REMATCH[2]}"
 
   latest=$(curl -sf "https://pypi.org/pypi/${pkg}/json" | python3 -c "import sys,json; print(json.load(sys.stdin)['info']['version'])" 2>/dev/null || true)
 
