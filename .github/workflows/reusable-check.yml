@@ -43,7 +43,7 @@ jobs:
           echo "LICENCE_IMAGE_TAG=$IMAGE_TAG" >> $GITHUB_ENV
 
       - name: Run Trivy licence scanner
-        uses: aquasecurity/trivy-action@57a97c7e7821a5776cebc9bb87c984fa69cba8f1
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25
         with:
           image-ref: ${{ env.LICENCE_IMAGE_TAG }}
           format: 'table'
@@ -79,7 +79,7 @@ jobs:
           echo "SCAN_IMAGE_TAG=$IMAGE_TAG" >> $GITHUB_ENV
 
       - name: Run Trivy Vulnerability Scan (Image)
-        uses: aquasecurity/trivy-action@57a97c7e7821a5776cebc9bb87c984fa69cba8f1
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25
         with:
           image-ref: ${{ env.SCAN_IMAGE_TAG }}
           format: 'sarif'
@@ -87,7 +87,7 @@ jobs:
           severity: 'CRITICAL,HIGH'
 
       - name: Run Trivy Vulnerability Scan (SBOM)
-        uses: aquasecurity/trivy-action@57a97c7e7821a5776cebc9bb87c984fa69cba8f1
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25
         with:
           image-ref: 'sbom-${{ matrix.component }}.spdx.json'
           scan-type: 'sbom'
