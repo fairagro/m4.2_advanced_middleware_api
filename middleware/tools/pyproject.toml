@@ -5,7 +5,7 @@ description = "ARC conversion tools"
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
-    "arctrl>=3.0.0b15",
+    "arctrl==3.0.5",
 ]
 
 [tool.hatch.build.targets.wheel]
