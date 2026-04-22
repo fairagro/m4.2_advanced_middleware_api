@@ -4,7 +4,17 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
 DOCKERFILE="${PROJECT_DIR}/docker/Dockerfile.api"
-APK_INDEX_URL="https://dl-cdn.alpinelinux.org/alpine/v3.23/main/x86_64/APKINDEX.tar.gz"
+
+# Extract Alpine version dynamically from the base image in the Dockerfile
+# Matches e.g. "FROM python:3.12.12-alpine3.23" → "3.23"
+ALPINE_VERSION=$(grep -m1 '^FROM ' "$DOCKERFILE" | grep -oE 'alpine([0-9]+\.[0-9]+)' | grep -oE '[0-9]+\.[0-9]+')
+if [[ -z "$ALPINE_VERSION" ]]; then
+  echo "❌ Could not extract Alpine version from $DOCKERFILE" >&2
+  exit 1
+fi
+echo "🏔️  Detected Alpine version: $ALPINE_VERSION"
+
+APK_INDEX_URL="https://dl-cdn.alpinelinux.org/alpine/v${ALPINE_VERSION}/main/x86_64/APKINDEX.tar.gz"
 
 TMP_DIR=$(mktemp -d)
 trap 'rm -rf "$TMP_DIR"' EXIT
