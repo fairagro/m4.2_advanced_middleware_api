@@ -68,6 +68,9 @@
 			"version": "latest",
 			"helm": "latest",
 			"minikube": "latest"
+		},
+		"ghcr.io/devcontainers-extra/features/renovate-cli:2": {
+			"version": "latest"
 		}
 	},
 
