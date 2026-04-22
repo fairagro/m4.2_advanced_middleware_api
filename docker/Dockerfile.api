@@ -1,5 +1,5 @@
 # ---- Package Build Stage ----
-FROM python:3.12.13-alpine3.23 AS package-builder
+FROM python:3.14.4-alpine3.23 AS package-builder
 
 # Accept PEP 440 compliant version from CI
 ARG APP_VERSION=0.0.0
@@ -23,7 +23,7 @@ RUN uv build --package shared --wheel && \
 
 
 # ---- Binary Build Stage ----
-FROM python:3.12.13-alpine3.23 AS binary-builder
+FROM python:3.14.4-alpine3.23 AS binary-builder
 
 # Install build tools for PyInstaller
 RUN apk add --no-cache \
@@ -90,7 +90,7 @@ RUN pyinstaller --onedir \
 
 
 # ---- Runtime Stage ----
-FROM alpine:3.23.3
+FROM alpine:3.23.4
 
 WORKDIR /api
 
