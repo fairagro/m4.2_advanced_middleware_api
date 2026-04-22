@@ -62,7 +62,7 @@ while IFS= read -r match; do
 
   # Escape dots in version string (literal in versions, but special in sed regex)
   escaped_current="${current//./\\.}"
-  sed -i "s|${pkg}=${escaped_current}|${pkg}=${latest}|g" "$DOCKERFILE"
+  sed -i "s|\(^\|[[:space:]]\)${pkg}=${escaped_current}\([[:space:]]\|$\)|\1${pkg}=${latest}\2|g" "$DOCKERFILE"
 
 done < <(grep -oE '[a-z0-9][a-z0-9_-]*=[0-9][a-z0-9._]+-r[0-9]+' "$DOCKERFILE" || true)
 
