@@ -52,6 +52,8 @@ jobs:
     strategy:
       matrix:
         component: ${{ fromJson(inputs.components) }}
+    outputs:
+      digests: ${{ steps.outputs.outputs.digests }}
 
     steps:
       - name: Download Docker image artifact
@@ -79,6 +81,7 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Tag and Push Images
+        id: push
         run: |
           # DockerHub
           DH_TAG="${{ env.DOCKERHUB_NAMESPACE }}/${{ env.IMAGE_BASE_NAME }}-${{ matrix.component }}:${{ inputs.version }}"
@@ -92,6 +95,17 @@ jobs:
           docker tag ${{ env.LOCAL_TAG }} $GHCR_TAG
           docker push $GHCR_TAG
           echo "✅ Pushed to GHCR: $GHCR_TAG"
+
+          # Extract digest
+          DIGEST=$(docker inspect --format='{{index .RepoDigests 0}}' $DH_TAG | cut -d'@' -f2)
+          echo "digest=$DIGEST" >> $GITHUB_OUTPUT
+
+      - name: Collect digests
+        id: outputs
+        run: |
+          # Since matrix runs in parallel, we need a way to collect them if there were more than 1.
+          # For now, with one component, we just output it.
+          echo "digests={\"${{ matrix.component }}\": \"${{ steps.push.outputs.digest }}\"}" >> $GITHUB_OUTPUT
 
   create-release-tag:
     name: CreateReleaseTag/Release
@@ -126,38 +140,47 @@ jobs:
       contents: write
 
     steps:
+      - name: Download SBOM artifacts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: sbom-*
+          merge-multiple: true
+          path: sboms
+
       - name: Generate release body
         run: |
           COMPONENT=$(echo '${{ inputs.components }}' | jq -r '.[0]')
+          DIGEST=$(echo '${{ needs.docker-push.outputs.digests }}' | jq -r ".[\"$COMPONENT\"]")
           DH_IMAGE="${{ env.DOCKERHUB_NAMESPACE }}/${{ env.IMAGE_BASE_NAME }}-${COMPONENT}:${{ inputs.version }}"
           REPO_LOWER=$(echo "${{ github.repository }}" | tr '[:upper:]' '[:lower:]')
           GHCR_IMAGE="ghcr.io/${REPO_LOWER}/${COMPONENT}:${{ inputs.version }}"
           TAG="${{ needs.create-release-tag.outputs.timestamp }}-${{ inputs.tag_prefix }}${{ inputs.version }}"
           REPO_BASENAME=$(basename "${{ github.repository }}")
+
           {
+            echo "## Docker Images"
+            echo ""
+            echo "| Platform | Image Digest |"
+            echo "| --- | --- |"
+            echo "| linux/amd64 | \`$DIGEST\` |"
+            echo ""
+            echo "### Registry Links"
+            echo "* **DockerHub**: [${DH_IMAGE}](https://hub.docker.com/r/${{ env.DOCKERHUB_NAMESPACE }}/${{ env.IMAGE_BASE_NAME }}-${COMPONENT})"
+            echo "* **GHCR**: \`${GHCR_IMAGE}\`"
+            echo ""
             echo "## Usage"
             echo ""
-            echo "Pull and run the Docker image:"
+            echo "Pull the Docker image:"
             echo '```bash'
             echo "docker pull ${DH_IMAGE}"
-            echo "docker run --rm ${DH_IMAGE}"
             echo '```'
             echo ""
-            echo "Or via GitHub Container Registry:"
-            echo '```bash'
-            echo "docker pull ${GHCR_IMAGE}"
-            echo "docker run --rm ${GHCR_IMAGE}"
-            echo '```'
-            echo ""
-            echo "### Fallback (if registry images are unavailable)"
-            echo ""
-            echo "Build and run locally from source:"
+            echo "## Fallback (Build from source)"
             echo '```bash'
             echo "git clone https://github.com/${{ github.repository }}.git"
             echo "cd ${REPO_BASENAME}"
             echo "git checkout ${TAG}"
             echo "docker build -f docker/Dockerfile.${COMPONENT} -t ${COMPONENT}:${{ inputs.version }} ."
-            echo "docker run --rm ${COMPONENT}:${{ inputs.version }}"
             echo '```'
           } > release-body.md
 
@@ -171,6 +194,7 @@ jobs:
           draft: true
           prerelease: ${{ inputs.release_type == 'feature' }}
           generate_release_notes: true
+          files: sboms/*
 
       - name: Publish Release
         env:

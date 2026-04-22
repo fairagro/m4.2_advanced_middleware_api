@@ -1,0 +1,126 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+
+  "extends": [
+    "config:recommended"
+  ],
+
+  "timezone": "Europe/Berlin",
+
+  "enabledManagers": [
+    "dockerfile",
+    "devcontainer",
+    "regex",
+    "pep621",
+    "github-actions"
+  ],
+
+  "rangeStrategy": "pin",
+
+  "prHourlyLimit": 2,
+  "prConcurrentLimit": 5,
+
+  "labels": ["dependencies"],
+
+  "rebaseWhen": "behind-base-branch",
+
+  "commitMessagePrefix": "deps:",
+
+  "lockFileMaintenance": {
+    "enabled": true,
+    "schedule": ["before 3am on monday"],
+    "recreateWhen": "auto"
+  },
+
+  "packageRules": [
+    {
+      "description": "🔷 Runtime Sync: Docker + Devcontainer base images",
+      "matchManagers": ["dockerfile", "devcontainer"],
+      "matchPackagePatterns": [
+        "python",
+        "alpine",
+        "mcr.microsoft.com/devcontainers"
+      ],
+      "groupName": "Runtime base (Docker + Devcontainer)"
+    },
+
+    {
+      "description": "🧩 Devcontainer features",
+      "matchManagers": ["devcontainer"],
+      "matchPackagePatterns": ["features/*"],
+      "groupName": "Devcontainer features",
+      "separateMinorPatch": true
+    },
+
+    {
+      "description": "🐍 Python application dependencies (uv / pep621)",
+      "matchManagers": ["pep621"],
+      "groupName": "Python dependencies (uv)",
+      "rangeStrategy": "pin",
+      "separateMinorPatch": true
+    },
+
+    {
+      "description": "🐍 Python build tools (pip/uv/pyinstaller via regex)",
+      "matchDatasources": ["pypi"],
+      "groupName": "Python build tools"
+    },
+
+    {
+      "description": "⚙️ GitHub Actions updates (stable grouping)",
+      "matchManagers": ["github-actions"],
+      "matchUpdateTypes": ["patch", "minor"],
+      "groupName": "GitHub Actions"
+    },
+
+    {
+      "description": "⚙️ GitHub Actions major updates",
+      "matchManagers": ["github-actions"],
+      "matchUpdateTypes": ["major"],
+      "groupName": "GitHub Actions (major)"
+    },
+
+    {
+      "description": "🐧 Alpine OS safe updates only",
+      "matchDatasources": ["repology"],
+      "matchUpdateTypes": ["patch"],
+      "groupName": "Alpine OS safe updates"
+    },
+
+    {
+      "description": "🚫 Disable risky OS upgrades",
+      "matchDatasources": ["repology"],
+      "matchUpdateTypes": ["minor", "major"],
+      "enabled": false
+    }
+  ],
+
+  "regexManagers": [
+    {
+      "description": "pip / uv / pyinstaller in Dockerfile",
+      "fileMatch": ["(^|/)Dockerfile$"],
+      "matchStrings": [
+        "pip==(?<currentValue>\\d+\\.\\d+\\.\\d+)",
+        "uv==(?<currentValue>\\d+\\.\\d+\\.\\d+)",
+        "pyinstaller==(?<currentValue>\\d+\\.\\d+\\.\\d+)"
+      ],
+      "datasourceTemplate": "pypi",
+      "versioningTemplate": "pep440"
+    },
+
+    {
+      "description": "Alpine pinned packages in Dockerfile",
+      "fileMatch": ["(^|/)Dockerfile$"],
+      "matchStrings": [
+        "(?<depName>curl|git|zlib|tzdata|build-base|python3-dev|libffi-dev|openssl-dev|cargo)=(?<currentValue>[^\\s\\\\]+)"
+      ],
+      "datasourceTemplate": "repology",
+      "versioningTemplate": "loose"
+    }
+  ],
+
+  "ignorePaths": [
+    "**/node_modules/**",
+    "**/__pycache__/**"
+  ]
+}

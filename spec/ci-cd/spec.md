@@ -76,11 +76,15 @@ pipelines run on GitHub Actions.
 
 <!-- Release Body -->
 - [ ] Every GitHub Release body must contain concrete usage instructions:
-      the exact `helm install` and `docker run` commands with the published
-      image URLs and chart version for that release.
-- [ ] If Docker image push to DockerHub or GHCR was skipped or failed, the
-      release body must document the fallback: how to build the image locally
-      and how to install the Helm chart directly from the GitHub release asset.
+      the exact `docker pull` commands and registry links for the published
+      image.
+- [ ] Every GitHub Release body must contain a technical metadata table
+      providing the image architecture (e.g., `linux/amd64`) and the
+      corresponding image digest (SHA256).
+- [ ] Every GitHub Release must have the corresponding SBOM (Software Bill of
+      Materials) in SPDX format attached as a release asset.
+- [ ] The release body documents the fallback: how to build the image locally
+      from the specific release tag.
 
 <!-- Security Scanning -->
 - [ ] Run CodeQL static analysis for Python and GitHub Actions on every push to
