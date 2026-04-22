@@ -31,12 +31,25 @@
     "recreateWhen": "auto"
   },
 
+  "devcontainer": {
+    "fileMatch": [
+      "(^|/)\\.devcontainer(/.+)?/devcontainer\\.json$"
+    ]
+  },
+
   "packageRules": [
+    {
+      "description": "🔒 Python 3.12 global lock (Docker + Devcontainer)",
+      "matchManagers": ["dockerfile", "devcontainer"],
+      "matchPackagePatterns": ["python"],
+      "allowedVersions": "/^3\\.12/",
+      "groupName": "Python 3.12 runtime"
+    },
+
     {
       "description": "🔷 Runtime Sync: Docker + Devcontainer base images",
       "matchManagers": ["dockerfile", "devcontainer"],
       "matchPackagePatterns": [
-        "python",
         "alpine",
         "mcr.microsoft.com/devcontainers"
       ],
