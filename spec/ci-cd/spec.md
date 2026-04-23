@@ -7,16 +7,17 @@ pipelines run on GitHub Actions.
 ## Requirements
 
 <!-- Pull Request Validation -->
-- [ ] On every pull request targeting `main`, detect which files changed and
-      skip all CI jobs when only non-code files (docs, specs, Helm chart YAML)
-      were modified.
-- [ ] On every pull request targeting `main`, run code quality checks, build
-      the Docker image, and execute all check jobs.
-- [ ] On every pull request, verify code quality (formatting, linting, type
-      checking, security, tests) and fail the PR if any check fails.
-- [ ] On every pull request, build the Docker image, generate an SBOM, run
-      licence checks, security scans, and container structure tests; do not
-      push the image to any registry.
+- [ ] On every pull request targeting `main`, detect which files changed.
+- [ ] On every pull request targeting `main`, every job that is configured as a
+      required GitHub status check must always produce a status result — it must
+      never be skipped.
+- [ ] When only non-code files (docs, specs, Helm chart YAML) were modified, all
+      required checks must complete immediately with a success status, without
+      performing any actual work (no builds, no test runs, no scans). Jobs that
+      are not required are skipped.
+- [ ] When code files were modified, all required checks run normally; failures
+      block the PR merge.
+- [ ] Required Checks are: "Container Structure Tests" and "Code Quality Check"
 
 <!-- Code Quality -->
 - [ ] Enforce consistent code formatting with Ruff; fail when committed code
@@ -59,7 +60,7 @@ pipelines run on GitHub Actions.
       build, check, and release jobs in sequence.
 - [ ] On a manually triggered pre-release (any branch), run the same pipeline
       but push images without creating a GitHub Release entry.
-- [ ] Push Docker images to DockerHub and GitHub Container Registry (GHCR).
+- [ ] Push Docker images to DockerHub and GitHub Container Registry (GHCR) in independent jobs.
 - [ ] Run container structure tests and Trivy scans before pushing; do not push
       a broken image.
 - [ ] Generate an SBOM for every built image.
@@ -92,14 +93,48 @@ pipelines run on GitHub Actions.
 - [ ] Exclude `dev_environment/` from CodeQL analysis.
 - [ ] Upload CodeQL results to GitHub Security.
 
-## Edge Cases
+<!-- Python Package Publishing -->
+
+- [ ] Publish Python packages to PyPI for `middleware/api_client` and `middleware/shared` components.
+- [ ] PyPI packages must be published whenever a Docker image is successfully pushed to a registry.
+- [ ] Final releases from `main` branch must publish packages to **PyPI** (<https://pypi.org>).
+- [ ] Feature branch pre-releases must publish packages to **TestPyPI** (<https://test.pypi.org/>).
+- [ ] Packages must be published only after the `reusable-check.yml` security scans have passed.
+- [ ] Publish the `middleware/api_client` component under the name `fairagro-middleware-api-client`.
+- [ ] Publish the `middleware/shared` component under the name `fairagro-middleware-shared`.
+- [ ] Both packages must include wheels and source distributions.
+- [ ] Each package must include complete `README.md` with usage instructions.
+- [ ] Each package must include license information.
+- [ ] Each package must include project metadata including author and homepage.
+- [ ] Each package must include required dependencies from `pyproject.toml`.
+- [ ] PyPI packages must use the exact same semantic version as the Docker image.
+- [ ] Final release from `main`: `MAJOR.MINOR.PATCH`.
+- [ ] Feature branch pre-release: `MAJOR.MINOR.PATCH-rc.{branch-label}.{run_number}`.
+- [ ] If a GitHub release is created, the packages must be added to the artifact list.
+- [ ] If a github release is created, include `pip install` commands for each package with exact version information.
+- [ ] If a GitHub release is created, provide fallback instructions for local installation from source.
+
+<!-- General considerations -->
+
+- [ ] Each upload to an external service (DockerHub, GHCR, PyPI) must be modelled as a standalone job, independent from other upload jobs.
+- [ ] If an upload job fails, the release is still considered successful.
+- [ ] If a GitHub release is created, the body must document the usage of successfully uploaded artifacts, as specified above.
+- [ ] If an upload job fails and a GitHub release is created, issue a corresponding warning message in the GitHub release.
+- [ ] If the credentials for an external service are missing, treat this like an upload failure. Adapt the GitHub release body warning accordingly.
+
+### Edge Cases
 
 Docker build or container tests fail → image is not pushed to any registry.
 
 Version cannot be calculated from Git history → pipeline fails before build;
 no artifact is produced.
 
+Only non-code files changed in a PR → required status checks complete immediately
+with success; Docker build and scan jobs are skipped entirely.
+
 Feature branch release → pre-release image/chart published; no GitHub Release
 entry created; Git tag is still created for version tracking.
 
 DockerHub credentials absent → push step is skipped; build and tests still run.
+
+PyPI credentials absent → skip publishing but continue with GitHub Release.

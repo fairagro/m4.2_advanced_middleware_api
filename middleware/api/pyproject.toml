@@ -5,7 +5,7 @@ description = "The FAIRagro advanced middleware API"
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
-  "shared",
+  "fairagro-middleware-shared",
   "aiocouch>=4.0.1",
   "arctrl>=3.0.0b15",
   "asn1crypto>=1.5.1",
@@ -27,7 +27,7 @@ dependencies = [
 middleware-couchdb-setup = "middleware.api.cli:main"
 
 [tool.uv.sources]
-shared = { workspace = true }
+fairagro-middleware-shared = { workspace = true }
 
 [tool.ruff]
 extend = "../../pyproject.toml"

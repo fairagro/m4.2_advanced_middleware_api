@@ -35,10 +35,10 @@ jobs:
   code-quality:
     name: Code Quality
     needs: detect-changes
-    if: needs.detect-changes.outputs.code == 'true'
     uses: ./.github/workflows/reusable-code-quality.yml
     with:
       components: '["api"]'
+      skip: ${{ needs.detect-changes.outputs.code != 'true' }}
     secrets: inherit
 
   build:
@@ -52,10 +52,11 @@ jobs:
 
   check:
     name: Check
-    needs: build
-    if: needs.build.result == 'success'
+    needs: [detect-changes, build]
+    if: always() && needs.detect-changes.result == 'success'
     uses: ./.github/workflows/reusable-check.yml
     with:
-      version: ${{ needs.build.outputs.version }}
+      version: ${{ needs.build.outputs.version || '' }}
       components: '["api"]'
+      skip: ${{ needs.detect-changes.outputs.code != 'true' }}
     secrets: inherit

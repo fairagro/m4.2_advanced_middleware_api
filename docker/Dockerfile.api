@@ -18,7 +18,7 @@ COPY middleware ./middleware
 RUN pip install --no-cache-dir --upgrade pip==26.0.1 uv==0.11.7
 
 # Build wheels
-RUN uv build --package shared --wheel && \
+RUN uv build --package fairagro-middleware-shared --wheel && \
     uv build --package api --wheel
 
 
