@@ -13,11 +13,11 @@ pipelines run on GitHub Actions.
       never be skipped.
 - [ ] When only non-code files (docs, specs, Helm chart YAML) were modified, all
       required checks must complete immediately with a success status, without
-      performing any actual work (no builds, no test runs, no scans). Job that
+      performing any actual work (no builds, no test runs, no scans). Jobs that
       are not required are skipped.
 - [ ] When code files were modified, all required checks run normally; failures
       block the PR merge.
-- [ ] Required Checks are: "Container Structure Tests" and "Code Qulity Check"
+- [ ] Required Checks are: "Container Structure Tests" and "Code Quality Check"
 
 <!-- Code Quality -->
 - [ ] Enforce consistent code formatting with Ruff; fail when committed code
@@ -110,14 +110,14 @@ pipelines run on GitHub Actions.
 - [ ] PyPI packages must use the exact same semantic version as the Docker image.
 - [ ] Final release from `main`: `MAJOR.MINOR.PATCH`.
 - [ ] Feature branch pre-release: `MAJOR.MINOR.PATCH-rc.{branch-label}.{run_number}`.
-- [ ] If a github release is created, the packages must added to the artifact list.
+- [ ] If a GitHub release is created, the packages must be added to the artifact list.
 - [ ] If a github release is created, include `pip install` commands for each package with exact version information.
-- [ ] If a github release is created, provide fallback instructions for local installation from source
+- [ ] If a GitHub release is created, provide fallback instructions for local installation from source.
 
 <!-- General considerations -->
 
 - [ ] Each upload to an external service (DockerHub, GHCR, PyPI) must be modelled as a standalone job, independent from other upload jobs.
-- [ ] If an upload job fails, the release is still considered successful
+- [ ] If an upload job fails, the release is still considered successful.
 - [ ] If a GitHub release is created, the body must document the usage of successfully uploaded artifacts, as specified above.
 - [ ] If an upload job fails and a GitHub release is created, issue a corresponding warning message in the GitHub release.
 - [ ] If the credentials for an external service are missing, treat this like an upload failure. Adapt the GitHub release body warning accordingly.
