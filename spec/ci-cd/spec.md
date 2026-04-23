@@ -7,16 +7,17 @@ pipelines run on GitHub Actions.
 ## Requirements
 
 <!-- Pull Request Validation -->
-- [ ] On every pull request targeting `main`, detect which files changed and
-      skip all CI jobs when only non-code files (docs, specs, Helm chart YAML)
-      were modified.
-- [ ] On every pull request targeting `main`, run code quality checks, build
-      the Docker image, and execute all check jobs.
-- [ ] On every pull request, verify code quality (formatting, linting, type
-      checking, security, tests) and fail the PR if any check fails.
-- [ ] On every pull request, build the Docker image, generate an SBOM, run
-      licence checks, security scans, and container structure tests; do not
-      push the image to any registry.
+- [ ] On every pull request targeting `main`, detect which files changed.
+- [ ] On every pull request targeting `main`, every job that is configured as a
+      required GitHub status check must always produce a status result — it must
+      never be skipped.
+- [ ] When only non-code files (docs, specs, Helm chart YAML) were modified, all
+      required checks must complete immediately with a success status, without
+      performing any actual work (no builds, no test runs, no scans). Job that
+      are not required are skipped.
+- [ ] When code files were modified, all required checks run normally; failures
+      block the PR merge.
+- [ ] Required Checks are: "Container Structure Tests" and "Code Qulity Check"
 
 <!-- Code Quality -->
 - [ ] Enforce consistent code formatting with Ruff; fail when committed code
@@ -127,6 +128,9 @@ Docker build or container tests fail → image is not pushed to any registry.
 
 Version cannot be calculated from Git history → pipeline fails before build;
 no artifact is produced.
+
+Only non-code files changed in a PR → required status checks complete immediately
+with success; Docker build and scan jobs are skipped entirely.
 
 Feature branch release → pre-release image/chart published; no GitHub Release
 entry created; Git tag is still created for version tracking.
