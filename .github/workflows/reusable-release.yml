@@ -204,44 +204,51 @@ jobs:
         run: |
           COMPONENT=$(echo '${{ inputs.components }}' | jq -r '.[0]')
           DH_IMAGE="${{ env.DOCKERHUB_NAMESPACE }}/${{ env.IMAGE_BASE_NAME }}-${COMPONENT}:${{ inputs.version }}"
+          DH_URL="https://hub.docker.com/r/${{ env.DOCKERHUB_NAMESPACE }}/${{ env.IMAGE_BASE_NAME }}-${COMPONENT}"
           REPO_LOWER=$(echo "${{ github.repository }}" | tr '[:upper:]' '[:lower:]')
           GHCR_IMAGE="ghcr.io/${REPO_LOWER}/${COMPONENT}:${{ inputs.version }}"
+          GHCR_URL="https://ghcr.io/${REPO_LOWER}/${COMPONENT}"
           TAG="${{ needs.create-release-tag.outputs.timestamp }}-${{ inputs.tag_prefix }}${{ inputs.version }}"
           REPO_BASENAME=$(basename "${{ github.repository }}")
           PYPI_VERSION="${{ inputs.pep440_version || inputs.version }}"
           PYPI_REGISTRY=$([ "${{ inputs.release_type }}" = "final" ] && echo "https://pypi.org" || echo "https://test.pypi.org")
+          DOCKER_SUCCESS=$([[ "${{ needs.push-dockerhub.result }}" == "success" || "${{ needs.push-ghcr.result }}" == "success" ]] && echo "true" || echo "false")
+          PYPI_SUCCESS=$([[ "${{ needs.publish-pypi.result }}" == "success" ]] && echo "true" || echo "false")
 
           {
-            echo "## Docker Images"
-            echo ""
-            echo "| Platform | Image Digest |"
-            echo "| --- | --- |"
-            if [[ "${{ needs.push-dockerhub.result }}" == "success" ]]; then
-              echo "| linux/amd64 (DockerHub) | \`${{ needs.push-dockerhub.outputs.digest }}\` |"
-            fi
-            echo ""
-            echo "### Registry Links"
-            if [[ "${{ needs.push-dockerhub.result }}" == "success" ]]; then
-              echo "* **DockerHub**: [${DH_IMAGE}](https://hub.docker.com/r/${{ env.DOCKERHUB_NAMESPACE }}/${{ env.IMAGE_BASE_NAME }}-${COMPONENT})"
+            # --- Docker section ---
+            if [[ "$DOCKER_SUCCESS" == "true" ]]; then
+              echo "## Docker Image"
               echo ""
-              echo "Pull from DockerHub:"
-              echo '```bash'
-              echo "docker pull ${DH_IMAGE}"
-              echo '```'
-            fi
-            if [[ "${{ needs.push-ghcr.result }}" == "success" ]]; then
-              echo "* **GHCR**: \`${GHCR_IMAGE}\`"
+              if [[ "${{ needs.push-dockerhub.result }}" == "success" ]]; then
+                echo "| Platform | Image Digest |"
+                echo "| --- | --- |"
+                echo "| linux/amd64 | \`${{ needs.push-dockerhub.outputs.digest }}\` |"
+                echo ""
+              fi
+              if [[ "${{ needs.push-dockerhub.result }}" == "success" ]]; then
+                echo "**[Pull from DockerHub](${DH_URL})**"
+                echo '```bash'
+                echo "docker pull ${DH_IMAGE}"
+                echo '```'
+                echo ""
+              fi
+              if [[ "${{ needs.push-ghcr.result }}" == "success" ]]; then
+                echo "**[Pull from GHCR](${GHCR_URL})**"
+                echo '```bash'
+                echo "docker pull ${GHCR_IMAGE}"
+                echo '```'
+                echo ""
+              fi
+            else
+              echo "## Docker Image"
               echo ""
-              echo "Pull from GHCR:"
-              echo '```bash'
-              echo "docker pull ${GHCR_IMAGE}"
-              echo '```'
-            fi
-            if [[ "${{ needs.push-dockerhub.result }}" != "success" && "${{ needs.push-ghcr.result }}" != "success" ]]; then
               echo "_No Docker registries were successfully updated for this release._"
-            fi
-            if [[ "${{ needs.publish-pypi.result }}" == "success" ]]; then
               echo ""
+            fi
+
+            # --- Python packages section ---
+            if [[ "$PYPI_SUCCESS" == "true" ]]; then
               echo "## Python Packages"
               echo ""
               echo "Published to [$PYPI_REGISTRY]($PYPI_REGISTRY):"
@@ -250,22 +257,33 @@ jobs:
               echo "pip install fairagro-middleware-api-client==${PYPI_VERSION}"
               echo '```'
               echo ""
-              echo "### Fallback (install from source)"
+            fi
+
+            # --- Fallback section (shared clone/checkout, then per-artifact instructions) ---
+            if [[ "$DOCKER_SUCCESS" == "true" || "$PYPI_SUCCESS" == "true" ]]; then
+              echo "## Build from Source"
+              echo ""
               echo '```bash'
               echo "git clone https://github.com/${{ github.repository }}.git"
               echo "cd ${REPO_BASENAME}"
               echo "git checkout ${TAG}"
-              echo "pip install middleware/shared middleware/api_client"
               echo '```'
+              echo ""
+              if [[ "$DOCKER_SUCCESS" == "true" ]]; then
+                echo "Build the Docker image:"
+                echo '```bash'
+                echo "docker build -f docker/Dockerfile.${COMPONENT} -t ${COMPONENT}:${{ inputs.version }} ."
+                echo '```'
+                echo ""
+              fi
+              if [[ "$PYPI_SUCCESS" == "true" ]]; then
+                echo "Install Python packages:"
+                echo '```bash'
+                echo "pip install middleware/shared middleware/api_client"
+                echo '```'
+                echo ""
+              fi
             fi
-            echo ""
-            echo "## Fallback (Build Docker image from source)"
-            echo '```bash'
-            echo "git clone https://github.com/${{ github.repository }}.git"
-            echo "cd ${REPO_BASENAME}"
-            echo "git checkout ${TAG}"
-            echo "docker build -f docker/Dockerfile.${COMPONENT} -t ${COMPONENT}:${{ inputs.version }} ."
-            echo '```'
           } > release-body.md
 
       - name: Create GitHub Release (Draft)
