@@ -110,7 +110,7 @@ pipelines run on GitHub Actions.
 - [ ] PyPI packages must use the exact same semantic version as the Docker image.
 - [ ] Final release from `main`: `MAJOR.MINOR.PATCH`.
 - [ ] Feature branch pre-release: `MAJOR.MINOR.PATCH-rc.{branch-label}.{run_number}`.
-- [ ] If a github release is created, the packages must added to the artifact list.
+- [ ] If a GitHub release is created, the packages must be added to the artifact list.
 - [ ] If a github release is created, include `pip install` commands for each package with exact version information.
 - [ ] If a github release is created, provide fallback instructions for local installation from source
 
