@@ -39,7 +39,7 @@ jobs:
 
     steps:
       - name: Download Docker image artifact
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: docker-image-${{ matrix.component }}-${{ inputs.version }}
 
@@ -71,12 +71,12 @@ jobs:
 
     steps:
       - name: Download Docker image artifact
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: docker-image-${{ matrix.component }}-${{ inputs.version }}
 
       - name: Download SBOM artifact
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: sbom-${{ matrix.component }}-${{ inputs.version }}
 
@@ -104,14 +104,14 @@ jobs:
           severity: 'CRITICAL,HIGH'
 
       - name: Upload Trivy scan results
-        uses: github/codeql-action/upload-sarif@v3
+        uses: github/codeql-action/upload-sarif@v4
         if: always()
         with:
           sarif_file: 'trivy-image-results.sarif'
           category: "trivy-image-scan-${{ matrix.component }}"
 
       - name: Upload Trivy SBOM scan results
-        uses: github/codeql-action/upload-sarif@v3
+        uses: github/codeql-action/upload-sarif@v4
         if: always()
         with:
           sarif_file: 'trivy-sbom-results.sarif'
@@ -133,11 +133,11 @@ jobs:
 
       - name: Checkout code
         if: ${{ !inputs.skip }}
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Download Docker image artifact
         if: ${{ !inputs.skip }}
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: docker-image-${{ matrix.component }}-${{ inputs.version }}
 

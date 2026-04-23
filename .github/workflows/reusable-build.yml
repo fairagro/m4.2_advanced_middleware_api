@@ -42,7 +42,7 @@ jobs:
       pep440_version: ${{ steps.calc-version.outputs.pep440_version }}
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           fetch-depth: 0
 
@@ -115,13 +115,13 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
+        uses: docker/setup-buildx-action@v4
 
       - name: Build Docker image
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v7
         with:
           context: .
           file: docker/Dockerfile.${{ matrix.component }}
@@ -140,7 +140,7 @@ jobs:
           docker save "$IMAGE_TAG" | gzip > docker-image-${{ matrix.component }}.tar.gz
 
       - name: Upload Docker image artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: docker-image-${{ matrix.component }}-${{ needs.version.outputs.version }}
           path: docker-image-${{ matrix.component }}.tar.gz
@@ -158,7 +158,7 @@ jobs:
 
     steps:
       - name: Download Docker image artifact
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: docker-image-${{ matrix.component }}-${{ needs.version.outputs.version }}
 
@@ -179,7 +179,7 @@ jobs:
           format: spdx-json
 
       - name: Upload SBOM artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: sbom-${{ matrix.component }}-${{ needs.version.outputs.version }}
           path: sboms/sbom-${{ matrix.component }}.spdx.json
@@ -193,11 +193,11 @@ jobs:
       contents: read
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           fetch-depth: 0
 
-      - uses: astral-sh/setup-uv@v5
+      - uses: astral-sh/setup-uv@v7
 
       - name: Build Python packages (wheels + sdists)
         env:
@@ -208,7 +208,7 @@ jobs:
           uv build --package fairagro-middleware-api-client --out-dir dist
 
       - name: Upload Python packages artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: python-packages-${{ needs.version.outputs.version }}
           path: dist/
