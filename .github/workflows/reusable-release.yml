@@ -10,6 +10,11 @@ on:
         description: 'Version calculated in Build phase'
         required: true
         type: string
+      pep440_version:
+        description: 'PEP 440 compliant version for Python packages'
+        required: false
+        type: string
+        default: ''
       components:
         description: 'A JSON string array of components to release'
         required: false
@@ -34,6 +39,10 @@ on:
         required: true
       DOCKERHUB_TOKEN:
         required: true
+      PYPI_TOKEN:
+        required: false
+      TEST_PYPI_TOKEN:
+        required: false
 
 env:
   GIT_USER_NAME: ${{ vars.GIT_USER_NAME || 'GitHub Pipeline' }}
@@ -43,17 +52,16 @@ env:
   GHCR_NAMESPACE: ${{ github.repository_owner }}
 
 jobs:
-  docker-push:
-    name: DockerPush/Release
+  push-dockerhub:
+    name: DockerPush/DockerHub
     runs-on: ubuntu-latest
     permissions:
       contents: read
-      packages: write
     strategy:
       matrix:
         component: ${{ fromJson(inputs.components) }}
     outputs:
-      digests: ${{ steps.outputs.outputs.digests }}
+      digest: ${{ steps.push.outputs.digest }}
 
     steps:
       - name: Download Docker image artifact
@@ -64,14 +72,44 @@ jobs:
       - name: Load Docker image
         run: |
           docker load < docker-image-${{ matrix.component }}.tar.gz
-          LOCAL_TAG="local/${{ env.IMAGE_BASE_NAME }}-${{ matrix.component }}:${{ inputs.version }}"
-          echo "LOCAL_TAG=$LOCAL_TAG" >> $GITHUB_ENV
+          echo "LOCAL_TAG=local/${{ env.IMAGE_BASE_NAME }}-${{ matrix.component }}:${{ inputs.version }}" >> $GITHUB_ENV
 
       - name: Login to DockerHub
         uses: docker/login-action@v3
         with:
           username: ${{ secrets.DOCKERHUB_USER }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Tag and Push to DockerHub
+        id: push
+        run: |
+          DH_TAG="${{ env.DOCKERHUB_NAMESPACE }}/${{ env.IMAGE_BASE_NAME }}-${{ matrix.component }}:${{ inputs.version }}"
+          docker tag ${{ env.LOCAL_TAG }} $DH_TAG
+          docker push $DH_TAG
+          DIGEST=$(docker inspect --format='{{index .RepoDigests 0}}' $DH_TAG | cut -d'@' -f2)
+          echo "digest=$DIGEST" >> $GITHUB_OUTPUT
+          echo "✅ Pushed to DockerHub: $DH_TAG"
+
+  push-ghcr:
+    name: DockerPush/GHCR
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    strategy:
+      matrix:
+        component: ${{ fromJson(inputs.components) }}
+
+    steps:
+      - name: Download Docker image artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: docker-image-${{ matrix.component }}-${{ inputs.version }}
+
+      - name: Load Docker image
+        run: |
+          docker load < docker-image-${{ matrix.component }}.tar.gz
+          echo "LOCAL_TAG=local/${{ env.IMAGE_BASE_NAME }}-${{ matrix.component }}:${{ inputs.version }}" >> $GITHUB_ENV
 
       - name: Login to GitHub Container Registry
         uses: docker/login-action@v3
@@ -80,32 +118,40 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Tag and Push Images
-        id: push
+      - name: Tag and Push to GHCR
         run: |
-          # DockerHub
-          DH_TAG="${{ env.DOCKERHUB_NAMESPACE }}/${{ env.IMAGE_BASE_NAME }}-${{ matrix.component }}:${{ inputs.version }}"
-          docker tag ${{ env.LOCAL_TAG }} $DH_TAG
-          docker push $DH_TAG
-          echo "✅ Pushed to DockerHub: $DH_TAG"
-
-          # GHCR
           REPO_LOWER=$(echo "${{ github.repository }}" | tr '[:upper:]' '[:lower:]')
           GHCR_TAG="ghcr.io/$REPO_LOWER/${{ matrix.component }}:${{ inputs.version }}"
           docker tag ${{ env.LOCAL_TAG }} $GHCR_TAG
           docker push $GHCR_TAG
           echo "✅ Pushed to GHCR: $GHCR_TAG"
 
-          # Extract digest
-          DIGEST=$(docker inspect --format='{{index .RepoDigests 0}}' $DH_TAG | cut -d'@' -f2)
-          echo "digest=$DIGEST" >> $GITHUB_OUTPUT
+  publish-pypi:
+    name: PyPI/Publish
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
 
-      - name: Collect digests
-        id: outputs
-        run: |
-          # Since matrix runs in parallel, we need a way to collect them if there were more than 1.
-          # For now, with one component, we just output it.
-          echo "digests={\"${{ matrix.component }}\": \"${{ steps.push.outputs.digest }}\"}" >> $GITHUB_OUTPUT
+    steps:
+      - name: Download Python packages artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: python-packages-${{ inputs.version }}
+          path: dist/
+
+      - uses: astral-sh/setup-uv@v5
+
+      - name: Publish to PyPI (final release)
+        if: inputs.release_type == 'final'
+        env:
+          UV_PUBLISH_TOKEN: ${{ secrets.PYPI_TOKEN }}
+        run: uv publish --publish-url https://upload.pypi.org/legacy/ dist/*
+
+      - name: Publish to TestPyPI (pre-release)
+        if: inputs.release_type == 'feature'
+        env:
+          UV_PUBLISH_TOKEN: ${{ secrets.TEST_PYPI_TOKEN }}
+        run: uv publish --publish-url https://test.pypi.org/legacy/ dist/*
 
   create-release-tag:
     name: CreateReleaseTag/Release
@@ -133,8 +179,8 @@ jobs:
 
   github-release:
     name: GitHubRelease/Release
-    if: inputs.create_github_release == true
-    needs: [docker-push, create-release-tag]
+    if: ${{ always() && inputs.create_github_release == true && needs.create-release-tag.result == 'success' }}
+    needs: [push-dockerhub, push-ghcr, publish-pypi, create-release-tag]
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -147,35 +193,73 @@ jobs:
           merge-multiple: true
           path: sboms
 
+      - name: Download Python packages artifact
+        if: needs.publish-pypi.result == 'success'
+        uses: actions/download-artifact@v4
+        with:
+          name: python-packages-${{ inputs.version }}
+          path: pypi-dist/
+
       - name: Generate release body
         run: |
           COMPONENT=$(echo '${{ inputs.components }}' | jq -r '.[0]')
-          DIGEST=$(echo '${{ needs.docker-push.outputs.digests }}' | jq -r ".[\"$COMPONENT\"]")
           DH_IMAGE="${{ env.DOCKERHUB_NAMESPACE }}/${{ env.IMAGE_BASE_NAME }}-${COMPONENT}:${{ inputs.version }}"
           REPO_LOWER=$(echo "${{ github.repository }}" | tr '[:upper:]' '[:lower:]')
           GHCR_IMAGE="ghcr.io/${REPO_LOWER}/${COMPONENT}:${{ inputs.version }}"
           TAG="${{ needs.create-release-tag.outputs.timestamp }}-${{ inputs.tag_prefix }}${{ inputs.version }}"
           REPO_BASENAME=$(basename "${{ github.repository }}")
+          PYPI_VERSION="${{ inputs.pep440_version || inputs.version }}"
+          PYPI_REGISTRY=$([ "${{ inputs.release_type }}" = "final" ] && echo "https://pypi.org" || echo "https://test.pypi.org")
 
           {
             echo "## Docker Images"
             echo ""
             echo "| Platform | Image Digest |"
             echo "| --- | --- |"
-            echo "| linux/amd64 | \`$DIGEST\` |"
+            if [[ "${{ needs.push-dockerhub.result }}" == "success" ]]; then
+              echo "| linux/amd64 (DockerHub) | \`${{ needs.push-dockerhub.outputs.digest }}\` |"
+            fi
             echo ""
             echo "### Registry Links"
-            echo "* **DockerHub**: [${DH_IMAGE}](https://hub.docker.com/r/${{ env.DOCKERHUB_NAMESPACE }}/${{ env.IMAGE_BASE_NAME }}-${COMPONENT})"
-            echo "* **GHCR**: \`${GHCR_IMAGE}\`"
+            if [[ "${{ needs.push-dockerhub.result }}" == "success" ]]; then
+              echo "* **DockerHub**: [${DH_IMAGE}](https://hub.docker.com/r/${{ env.DOCKERHUB_NAMESPACE }}/${{ env.IMAGE_BASE_NAME }}-${COMPONENT})"
+              echo ""
+              echo "Pull from DockerHub:"
+              echo '```bash'
+              echo "docker pull ${DH_IMAGE}"
+              echo '```'
+            fi
+            if [[ "${{ needs.push-ghcr.result }}" == "success" ]]; then
+              echo "* **GHCR**: \`${GHCR_IMAGE}\`"
+              echo ""
+              echo "Pull from GHCR:"
+              echo '```bash'
+              echo "docker pull ${GHCR_IMAGE}"
+              echo '```'
+            fi
+            if [[ "${{ needs.push-dockerhub.result }}" != "success" && "${{ needs.push-ghcr.result }}" != "success" ]]; then
+              echo "_No Docker registries were successfully updated for this release._"
+            fi
+            if [[ "${{ needs.publish-pypi.result }}" == "success" ]]; then
+              echo ""
+              echo "## Python Packages"
+              echo ""
+              echo "Published to [$PYPI_REGISTRY]($PYPI_REGISTRY):"
+              echo '```bash'
+              echo "pip install fairagro-middleware-shared==${PYPI_VERSION}"
+              echo "pip install fairagro-middleware-api-client==${PYPI_VERSION}"
+              echo '```'
+              echo ""
+              echo "### Fallback (install from source)"
+              echo '```bash'
+              echo "git clone https://github.com/${{ github.repository }}.git"
+              echo "cd ${REPO_BASENAME}"
+              echo "git checkout ${TAG}"
+              echo "pip install middleware/shared middleware/api_client"
+              echo '```'
+            fi
             echo ""
-            echo "## Usage"
-            echo ""
-            echo "Pull the Docker image:"
-            echo '```bash'
-            echo "docker pull ${DH_IMAGE}"
-            echo '```'
-            echo ""
-            echo "## Fallback (Build from source)"
+            echo "## Fallback (Build Docker image from source)"
             echo '```bash'
             echo "git clone https://github.com/${{ github.repository }}.git"
             echo "cd ${REPO_BASENAME}"
@@ -194,7 +278,9 @@ jobs:
           draft: true
           prerelease: ${{ inputs.release_type == 'feature' }}
           generate_release_notes: true
-          files: sboms/*
+          files: |
+            sboms/*
+            ${{ needs.publish-pypi.result == 'success' && 'pypi-dist/*' || '' }}
 
       - name: Publish Release
         env:
@@ -205,14 +291,11 @@ jobs:
           # Give GitHub API a moment to index the new release
           sleep 5
 
-          # Try to get the release ID from the draft release we just created
           if RELEASE_ID=$(gh api repos/${{ github.repository }}/releases/tags/${{ needs.create-release-tag.outputs.timestamp }}-${{ inputs.tag_prefix }}${{ inputs.version }} --jq '.id' 2>/dev/null); then
             echo "✅ Found release ID via tag: $RELEASE_ID"
           else
             echo "⚠️ Release not found via tag, searching in all releases..."
-            # Search for the release by tag name in all release list (including drafts)
             RELEASE_ID=$(gh api repos/${{ github.repository }}/releases --jq '.[] | select(.tag_name == "${{ needs.create-release-tag.outputs.timestamp }}-${{ inputs.tag_prefix }}${{ inputs.version }}") | .id')
-
             if [[ -n "$RELEASE_ID" ]]; then
               echo "✅ Found release ID via search: $RELEASE_ID"
             else

@@ -15,6 +15,10 @@ On workflow_dispatch (Pre Release, any branch):
         ├─→ reusable-build.yml        (push=true)
         ├─→ reusable-check.yml
         └─→ reusable-release.yml      (no GitHub Release)
+               ├─→ push-dockerhub     (independent)
+               ├─→ push-ghcr          (independent)
+               ├─→ publish-pypi       (TestPyPI, independent)
+               └─→ create-release-tag
 
 On workflow_dispatch (Release, main only):
     release.yml
@@ -22,6 +26,11 @@ On workflow_dispatch (Release, main only):
         ├─→ reusable-build.yml        (push=true)
         ├─→ reusable-check.yml
         └─→ reusable-release.yml      (creates GitHub Release)
+               ├─→ push-dockerhub     (independent)
+               ├─→ push-ghcr          (independent)
+               ├─→ publish-pypi       (PyPI, independent)
+               ├─→ create-release-tag
+               └─→ github-release     (runs if tag created, regardless of upload outcomes)
 
 On workflow_dispatch (Helm Chart Release):
     helm-release.yml
@@ -37,83 +46,100 @@ On push feature/* or schedule:
 | File | Purpose |
 | --- | --- |
 | `reusable-code-quality.yml` | Ruff, Pylint, MyPy, Bandit, pytest |
-| `reusable-build.yml` | Version calc, Docker build, SBOM generation |
+| `reusable-build.yml` | Version calc, Docker build, SBOM generation, Python package build |
 | `reusable-check.yml` | Licence scan, Trivy vuln scan, container structure tests |
-| `reusable-release.yml` | Docker push (DockerHub + GHCR), Git tag, GitHub Release |
+| `reusable-release.yml` | Independent upload jobs (DockerHub, GHCR, PyPI) + Git tag + GitHub Release |
 
 ## Key Decisions
 
-1. **Bash-based version calculation**
-   — Versions are calculated with a short bash script: find the latest
-   semver Git tag in the appropriate namespace (docker-v* for Docker, chart-v*
-   for Helm), parse it, apply the bump, and produce the new version.
-   GitVersion (a .NET tool) was considered but rejected because it introduces
-   a heavyweight external dependency for a task that a few lines of bash
-   handle transparently and auditably inside the workflow file itself.
+1. **Bash for version calculation**
+   — GitVersion (a .NET tool) was considered but rejected because it introduces
+   a heavyweight external dependency. A short bash script that finds the latest
+   semver tag in the appropriate namespace (`docker-v*`, `chart-v*`), parses it,
+   and applies the bump handles this transparently with zero external dependencies.
 
-2. **Timestamp as ordering prefix for Git tags**
-   — The GitHub releases page sorts releases by tag name. Sorting by semver
-   alone is unreliable when patch and minor releases interleave. The spec
-   requires a lexically monotone ordering prefix; a `YYYYMMDDhhmmss` timestamp
-   generated via `date +%Y%m%d%H%M%S` at job start satisfies this because its
-   fixed length (14 characters) ensures lexical sort equals chronological sort.
-   The ordering prefix is stripped from the human-readable GitHub Release name,
-   so releases display as `docker-v1.2.3` or `chart-v1.2.3-rc.my-feature.42`.
+2. **`YYYYMMDDhhmmss` as ordering prefix**
+   — A fixed-length 14-character timestamp satisfies the spec's lexical monotone
+   requirement because its fixed length guarantees that lexical sort equals
+   chronological sort. The prefix is stripped from the human-readable GitHub
+   Release name.
 
 3. **Draft → Publish pattern for immutable releases**
-   — GitHub repository releases have immutability enabled (`Enable release
-   immutability` setting). Once published, a release cannot be modified —
-   including adding assets. To support attaching files, releases are always
-   created as `draft: true` first (allowing asset uploads), then published
-   by a separate `gh api PATCH draft=false` call. This applies to both
-   Docker releases (`reusable-release.yml`) and Helm chart releases
-   (`helm-release.yml`).
+   — The spec requires asset attachment even when repository release immutability
+   is enabled. The only way to satisfy both constraints is to create the release
+   as `draft: true` first (asset uploads are allowed on drafts), then finalize it
+   with a separate `gh api PATCH draft=false` call. This applies to both
+   `reusable-release.yml` and `helm-release.yml`.
 
 4. **Feature branch releases always create a Git tag**
-   — A Git tag is created on every release run, including feature branch
-   pre-releases that produce no GitHub Release entry. This ensures the version
-   calculator always finds a valid baseline when calculating the next version,
-   regardless of whether the previous run produced a published release.
-   The suffix order `rc.{branch-label}.{run_number}` is chosen so that
-   pre-release versions sort first by branch (grouping all builds from the
-   same feature together) and then by run number within that branch.
+   — Even when no GitHub Release entry is produced, a Git tag is required so the
+   version calculator always has a valid baseline for the next run. The suffix
+   order `rc.{branch-label}.{run_number}` groups all builds from the same branch
+   together and sorts them chronologically within that group.
 
-5. **Build phase: Docker image as the transfer artifact**
-   — `reusable-build.yml` builds the Docker image, saves it as a gzip
-   artifact (`docker-image-{component}-{version}`), and generates an SBOM
-   (`sbom-{component}-{version}`). Downstream jobs (`reusable-check.yml`,
-   `reusable-release.yml`) download these artifacts rather than rebuilding.
-   This guarantees that the checked and released image are byte-for-byte
-   identical to the built image.
+5. **Transfer artifact pattern**
+   — `reusable-build.yml` saves the Docker image and SBOM as GitHub Actions
+   artifacts; downstream jobs (`reusable-check.yml`, `reusable-release.yml`)
+   download them rather than rebuilding. This guarantees that the image that
+   passed the check phase is byte-for-byte identical to the one released.
 
-6. **Check phase: licence, security, and container structure**
-   — `reusable-check.yml` runs three independent job groups:
-   `licence-check` (Trivy licence scanner), `security-check` (Trivy vuln
-   scan on image + SBOM, SARIF upload to GitHub Security), and
-   `container-structure-tests`. All three must pass before a release job runs.
+6. **Check phase: three independent job groups**
+   — `licence-check` (Trivy licence scanner), `security-check` (Trivy vuln scan
+   + SARIF upload), and `container-structure-tests` run in parallel. All three
+   must succeed before any release job is triggered.
 
-7. **Bandit uses project `.bandit` config; pass/fail driven by JSON report**
-   — Bandit runs as `bandit -r middleware/ -c .bandit -f json`, capturing all
-   findings regardless of severity. A post-processing step prints every finding
-   (including LOW) for visibility, then exits non-zero only when MEDIUM or HIGH
-   findings are present. This keeps exclusion and threshold configuration in the
-   `.bandit` file and avoids the `-ll` flag, which would suppress LOW findings
-   entirely and contradict the requirement to log them.
+7. **Bandit pass/fail via JSON post-processing**
+   — Bandit is invoked with `-f json` so all findings are captured regardless
+   of severity. A post-processing step logs everything (including LOW) but exits
+   non-zero only for MEDIUM/HIGH. This avoids the `-ll` flag, which would
+   silently suppress LOW findings entirely.
 
-8. **CodeQL config excludes `dev_environment/`**
-   — A `.github/codeql/codeql-config.yml` file instructs CodeQL to skip the
-   `dev_environment/` directory, which contains Docker Compose configuration
-   and secrets that are not part of the application code.
+8. **CodeQL exclusion via config file**
+   — `dev_environment/` is excluded through `.github/codeql/codeql-config.yml`
+   rather than inline `paths-ignore` in the workflow, keeping the exclusion
+   auditable alongside other tool configs.
 
-9. **Helm chart version: Git tag is authoritative**
-   — `Chart.yaml` is never modified by the CI pipeline. The authoritative
-   chart version is the Git tag; CI passes it to `helm package --version` at
-   package time. This mirrors the hatch-vcs pattern used for Python packages.
+9. **Helm chart version injected at package time**
+   — `Chart.yaml` is never modified by CI. The authoritative version is the Git
+   tag, injected via `helm package --version` at build time. This mirrors the
+   hatch-vcs pattern used for Python packages.
 
-10. **Change detection on pull requests**
-    — `feature-pull-request.yml` runs a `detect-changes` job first using
-    `dorny/paths-filter`. All downstream jobs (`code-quality`, `build`,
-    `check`) are skipped unless at least one of the following paths changed:
-    `middleware/**`, `pyproject.toml`, `docker/**`, `scripts/**`,
-    `.github/workflows/**`. PRs that only touch documentation, specs, or
-    Helm chart YAML finish instantly without consuming CI minutes.
+10. **Change detection uses `dorny/paths-filter`**
+    — Relevant paths: `middleware/**`, `pyproject.toml`, `docker/**`,
+    `scripts/**`, `.github/workflows/**`. PRs that touch only docs, specs, or
+    Helm YAML skip all CI jobs without consuming runner minutes.
+
+11. **Upload jobs: no cross-dependency**
+    — `push-dockerhub`, `push-ghcr`, and `publish-pypi` have no `needs`
+    dependency on each other; they run in parallel. `github-release` uses
+    `if: always() && needs.create-release-tag.result == 'success'` so the
+    GitHub Release is created regardless of which uploads succeeded. The release
+    body is generated dynamically from the individual job results.
+
+12. **Python package distribution names differ from uv workspace names**
+    — The uv workspace uses short internal identifiers (`shared`, `api_client`).
+    The PyPI distribution names (`fairagro-middleware-shared`,
+    `fairagro-middleware-api-client`) are globally namespaced for uniqueness.
+    The import path (`middleware.shared`, `middleware.api_client`) is unaffected
+    because it is controlled separately by
+    `[tool.hatch.build.targets.wheel] packages` in each `pyproject.toml`.
+
+13. **PEP 440 parallel version for Python packages**
+    — Docker semver pre-release format (`1.2.3-rc.branch.42`) is not valid
+    PEP 440. The build phase computes a parallel `pep440_version` in the format
+    `1.2.3.dev42+branch.name` and injects it via
+    `SETUPTOOLS_SCM_PRETEND_VERSION` to override hatch-vcs version discovery,
+    so Docker and Python packages share the same numeric baseline.
+
+14. **Registry selection via `release_type` input**
+    — The `publish-pypi` job selects `https://upload.pypi.org/legacy/` for
+    `release_type == 'final'` and `https://test.pypi.org/legacy/` for
+    `release_type == 'feature'`. Separate secrets (`PYPI_TOKEN`,
+    `TEST_PYPI_TOKEN`) are used for each registry.
+
+15. **Python packages built once in the build phase, reused in release**
+    — `reusable-build.yml` includes a `python-build` job that produces wheels
+    and sdists for both publishable packages and uploads them as the artifact
+    `python-packages-{version}`. This mirrors the Docker transfer-artifact
+    pattern (Decision 5): the artifact that passed the check phase is the one
+    that gets published.
