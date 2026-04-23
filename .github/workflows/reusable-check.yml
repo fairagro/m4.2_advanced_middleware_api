@@ -6,7 +6,7 @@ permissions:
 on:
   workflow_call:
     inputs:
-      version:
+      version:  # required if skip is false, but allowing default to enable skipping both checks when no code changes
         description: 'Version calculated in Build phase'
         required: false
         type: string
