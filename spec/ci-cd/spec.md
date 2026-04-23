@@ -112,7 +112,7 @@ pipelines run on GitHub Actions.
 - [ ] Feature branch pre-release: `MAJOR.MINOR.PATCH-rc.{branch-label}.{run_number}`.
 - [ ] If a GitHub release is created, the packages must be added to the artifact list.
 - [ ] If a github release is created, include `pip install` commands for each package with exact version information.
-- [ ] If a github release is created, provide fallback instructions for local installation from source
+- [ ] If a GitHub release is created, provide fallback instructions for local installation from source.
 
 <!-- General considerations -->
 
