@@ -39,8 +39,8 @@
 
   "packageRules": [
     {
-      "description": "🔒 Python 3.12 global lock (Docker + Devcontainer)",
-      "matchManagers": ["dockerfile", "devcontainer"],
+      "description": "🔒 Python 3.12 global lock (Docker + Devcontainer + GitHub Actions)",
+      "matchManagers": ["dockerfile", "devcontainer", "github-actions"],
       "matchPackagePatterns": ["python"],
       "allowedVersions": "/^3\\.12/",
       "groupName": "Python 3.12 runtime"
