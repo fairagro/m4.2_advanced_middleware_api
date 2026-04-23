@@ -60,7 +60,7 @@ pipelines run on GitHub Actions.
       build, check, and release jobs in sequence.
 - [ ] On a manually triggered pre-release (any branch), run the same pipeline
       but push images without creating a GitHub Release entry.
-- [ ] Push Docker images to DockerHub and GitHub Container Registry (GHCR) in independant job.
+- [ ] Push Docker images to DockerHub and GitHub Container Registry (GHCR) in independent jobs.
 - [ ] Run container structure tests and Trivy scans before pushing; do not push
       a broken image.
 - [ ] Generate an SBOM for every built image.
@@ -114,13 +114,13 @@ pipelines run on GitHub Actions.
 - [ ] If a github release is created, include `pip install` commands for each package with exact version information.
 - [ ] If a github release is created, provide fallback instructions for local installation from source
 
-<! -- General consideration >
+<!-- General considerations -->
 
-- [ ] Each Upload to an external service (dockerhub, ghcr, pypi) must be modelled as a standalone job, independant from other upload jobs.
+- [ ] Each upload to an external service (DockerHub, GHCR, PyPI) must be modelled as a standalone job, independent from other upload jobs.
 - [ ] If an upload job fails, the release is still considered successful
-- [ ] If there a github releases is created, the body must document the usage of successfully uploaded artifacts, as specified above.
-- [ ] If an upload job fails and a git release is created, issue a corresponding warning message in the github release.
-- [ ] If the credentials for an external service are missing, treat this like an upload failure. Adapt the github release body warning accordingly.
+- [ ] If a GitHub release is created, the body must document the usage of successfully uploaded artifacts, as specified above.
+- [ ] If an upload job fails and a GitHub release is created, issue a corresponding warning message in the GitHub release.
+- [ ] If the credentials for an external service are missing, treat this like an upload failure. Adapt the GitHub release body warning accordingly.
 
 ### Edge Cases
 
