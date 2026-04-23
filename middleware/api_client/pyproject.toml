@@ -1,5 +1,5 @@
 [project]
-name = "api_client"
+name = "fairagro-middleware-api-client"
 dynamic = ["version"]
 description = "The FAIRagro advanced middleware API client"
 readme = "README.md"

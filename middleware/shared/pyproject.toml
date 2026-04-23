@@ -1,5 +1,5 @@
 [project]
-name = "shared"
+name = "fairagro-middleware-shared"
 dynamic = ["version"]
 description = "The FAIRagro advanced middleware shared components"
 readme = "README.md"

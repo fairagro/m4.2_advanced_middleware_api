@@ -6,15 +6,21 @@ permissions:
 on:
   workflow_call:
     inputs:
-      version:
+      version:  # required if skip is false, but allowing default to enable skipping both checks when no code changes
         description: 'Version calculated in Build phase'
-        required: true
+        required: false
         type: string
+        default: ''
       components:
         description: 'A JSON string array of components to check'
         required: false
         type: string
         default: '["api"]'
+      skip:
+        description: 'Exit immediately with success without running any checks (for PRs with no code changes)'
+        required: false
+        type: boolean
+        default: false
 
 env:
   IMAGE_BASE_NAME: ${{ vars.IMAGE_BASE_NAME || 'fairagro-advanced-middleware' }}
@@ -23,6 +29,7 @@ env:
 jobs:
   licence-check:
     name: Licence Check
+    if: ${{ !inputs.skip }}
     runs-on: ubuntu-latest
     strategy:
       matrix:
@@ -53,6 +60,7 @@ jobs:
 
   security-check:
     name: Security Check
+    if: ${{ !inputs.skip }}
     runs-on: ubuntu-latest
     strategy:
       matrix:
@@ -119,21 +127,29 @@ jobs:
       contents: read
 
     steps:
+      - name: No code changes — skipping checks
+        if: ${{ inputs.skip }}
+        run: echo "No code files changed. Exiting with success."
+
       - name: Checkout code
+        if: ${{ !inputs.skip }}
         uses: actions/checkout@v4
 
       - name: Download Docker image artifact
+        if: ${{ !inputs.skip }}
         uses: actions/download-artifact@v4
         with:
           name: docker-image-${{ matrix.component }}-${{ inputs.version }}
 
       - name: Load Docker image
+        if: ${{ !inputs.skip }}
         run: |
           docker load < docker-image-${{ matrix.component }}.tar.gz
           IMAGE_TAG="local/${{ env.IMAGE_BASE_NAME }}-${{ matrix.component }}:${{ inputs.version }}"
           echo "IMAGE_TAG=$IMAGE_TAG" >> $GITHUB_ENV
 
       - name: Run Container Structure Tests
+        if: ${{ !inputs.skip }}
         uses: plexsystems/container-structure-test-action@v0.3.0
         with:
           image: ${{ env.IMAGE_TAG }}

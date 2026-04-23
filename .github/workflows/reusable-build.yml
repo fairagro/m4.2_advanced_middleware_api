@@ -184,3 +184,32 @@ jobs:
           name: sbom-${{ matrix.component }}-${{ needs.version.outputs.version }}
           path: sboms/sbom-${{ matrix.component }}.spdx.json
           retention-days: 1
+
+  python-build:
+    name: Python Package Build
+    needs: version
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: astral-sh/setup-uv@v5
+
+      - name: Build Python packages (wheels + sdists)
+        env:
+          SETUPTOOLS_SCM_PRETEND_VERSION: ${{ needs.version.outputs.pep440_version }}
+        run: |
+          mkdir -p dist
+          uv build --package fairagro-middleware-shared --out-dir dist
+          uv build --package fairagro-middleware-api-client --out-dir dist
+
+      - name: Upload Python packages artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: python-packages-${{ needs.version.outputs.version }}
+          path: dist/
+          retention-days: 1

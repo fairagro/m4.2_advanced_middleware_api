@@ -39,6 +39,7 @@ jobs:
     uses: ./.github/workflows/reusable-release.yml
     with:
       version: ${{ needs.build.outputs.version }}
+      pep440_version: ${{ needs.build.outputs.pep440_version }}
       components: '["api"]'
       release_type: 'feature'
       create_github_release: false

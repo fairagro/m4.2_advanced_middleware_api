@@ -6,8 +6,8 @@ readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
   "api",
-  "api_client",
-  "shared",
+  "fairagro-middleware-api-client",
+  "fairagro-middleware-shared",
 ]
 
 [dependency-groups]
@@ -30,8 +30,8 @@ dev = [
 
 [tool.uv.sources]
 api = { workspace = true }
-api_client = { workspace = true }
-shared = { workspace = true }
+fairagro-middleware-api-client = { workspace = true }
+fairagro-middleware-shared = { workspace = true }
 
 [tool.uv.workspace]
 members = [
