@@ -113,7 +113,7 @@ pipelines run on GitHub Actions.
 - [ ] If a github release is created, include `pip install` commands for each package with exact version information.
 - [ ] If a github release is created, provide fallback instructions for local installation from source
 
-<! -- General consideration >
+<!-- General considerations -->
 
 - [ ] Each Upload to an external service (dockerhub, ghcr, pypi) must be modelled as a standalone job, independant from other upload jobs.
 - [ ] If an upload job fails, the release is still considered successful
