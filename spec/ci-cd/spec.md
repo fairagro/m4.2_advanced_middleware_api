@@ -59,7 +59,7 @@ pipelines run on GitHub Actions.
       build, check, and release jobs in sequence.
 - [ ] On a manually triggered pre-release (any branch), run the same pipeline
       but push images without creating a GitHub Release entry.
-- [ ] Push Docker images to DockerHub and GitHub Container Registry (GHCR) in independant job.
+- [ ] Push Docker images to DockerHub and GitHub Container Registry (GHCR) in independent jobs.
 - [ ] Run container structure tests and Trivy scans before pushing; do not push
       a broken image.
 - [ ] Generate an SBOM for every built image.
