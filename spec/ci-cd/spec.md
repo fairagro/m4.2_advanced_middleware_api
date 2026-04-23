@@ -17,7 +17,7 @@ pipelines run on GitHub Actions.
       are not required are skipped.
 - [ ] When code files were modified, all required checks run normally; failures
       block the PR merge.
-- [ ] Required Checks are: "Container Structure Tests" and "Code Qulity Check"
+- [ ] Required Checks are: "Container Structure Tests" and "Code Quality Check"
 
 <!-- Code Quality -->
 - [ ] Enforce consistent code formatting with Ruff; fail when committed code
