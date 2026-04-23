@@ -117,7 +117,7 @@ pipelines run on GitHub Actions.
 <!-- General considerations -->
 
 - [ ] Each upload to an external service (DockerHub, GHCR, PyPI) must be modelled as a standalone job, independent from other upload jobs.
-- [ ] If an upload job fails, the release is still considered successful
+- [ ] If an upload job fails, the release is still considered successful.
 - [ ] If a GitHub release is created, the body must document the usage of successfully uploaded artifacts, as specified above.
 - [ ] If an upload job fails and a GitHub release is created, issue a corresponding warning message in the GitHub release.
 - [ ] If the credentials for an external service are missing, treat this like an upload failure. Adapt the GitHub release body warning accordingly.
