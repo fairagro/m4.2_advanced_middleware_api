@@ -13,7 +13,7 @@ pipelines run on GitHub Actions.
       never be skipped.
 - [ ] When only non-code files (docs, specs, Helm chart YAML) were modified, all
       required checks must complete immediately with a success status, without
-      performing any actual work (no builds, no test runs, no scans). Job that
+      performing any actual work (no builds, no test runs, no scans). Jobs that
       are not required are skipped.
 - [ ] When code files were modified, all required checks run normally; failures
       block the PR merge.
