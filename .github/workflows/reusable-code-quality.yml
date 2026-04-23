@@ -11,6 +11,11 @@ on:
         required: false
         type: string
         default: '["api"]'
+      skip:
+        description: 'Exit immediately with success without running any checks (for PRs with no code changes)'
+        required: false
+        type: boolean
+        default: false
 
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
@@ -26,21 +31,30 @@ jobs:
       contents: read
 
     steps:
+      - name: No code changes — skipping checks
+        if: ${{ inputs.skip }}
+        run: echo "No code files changed. Exiting with success."
+
       - name: Checkout code
+        if: ${{ !inputs.skip }}
         uses: actions/checkout@v4
 
       - name: Install uv
+        if: ${{ !inputs.skip }}
         uses: astral-sh/setup-uv@v4
         with:
           version: "latest"
 
       - name: Set up Python ${{ matrix.python-version }}
+        if: ${{ !inputs.skip }}
         run: uv python install ${{ matrix.python-version }}
 
       - name: Install dependencies
+        if: ${{ !inputs.skip }}
         run: uv sync --dev --all-packages
 
       - name: Code formatting and linting
+        if: ${{ !inputs.skip }}
         run: |
           uv run ruff format --check --diff middleware/
           uv run ruff check middleware/
@@ -48,6 +62,7 @@ jobs:
           uv run mypy middleware/
 
       - name: Security check with bandit
+        if: ${{ !inputs.skip }}
         run: |
           uv run bandit -r middleware/ -c .bandit -f json -o bandit-report.json || true
           python3 -c "
@@ -67,4 +82,5 @@ jobs:
           "
 
       - name: Run tests
+        if: ${{ !inputs.skip }}
         run: uv run pytest middleware/ -v --junitxml=pytest-report.xml

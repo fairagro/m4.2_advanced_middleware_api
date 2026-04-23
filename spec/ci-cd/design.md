@@ -109,14 +109,25 @@ On push feature/* or schedule:
     `scripts/**`, `.github/workflows/**`. PRs that touch only docs, specs, or
     Helm YAML skip all CI jobs without consuming runner minutes.
 
-11. **Upload jobs: no cross-dependency**
+11. **Required checks always produce a status via step-level `skip` input**
+    — GitHub required status checks block PR merges when the job is absent or
+    skipped. The solution is a `skip: boolean` input on `reusable-code-quality.yml`
+    and `reusable-check.yml`. When `skip: true`, each job in those workflows runs
+    but all substantive steps are guarded by `if: ${{ !inputs.skip }}`; only a
+    single no-op echo step executes. The job completes with success and GitHub
+    records the status. Non-required jobs (`licence-check`, `security-check`,
+    `build`) retain their existing `if:` guards and may be skipped entirely.
+    `feature-pull-request.yml` always calls both required-check workflows and
+    passes `skip: ${{ needs.detect-changes.outputs.code != 'true' }}`.
+
+12. **Upload jobs: no cross-dependency**
     — `push-dockerhub`, `push-ghcr`, and `publish-pypi` have no `needs`
     dependency on each other; they run in parallel. `github-release` uses
     `if: always() && needs.create-release-tag.result == 'success'` so the
     GitHub Release is created regardless of which uploads succeeded. The release
     body is generated dynamically from the individual job results.
 
-12. **Python package distribution names differ from uv workspace names**
+13. **Python package distribution names differ from uv workspace names**
     — The uv workspace uses short internal identifiers (`shared`, `api_client`).
     The PyPI distribution names (`fairagro-middleware-shared`,
     `fairagro-middleware-api-client`) are globally namespaced for uniqueness.
@@ -124,20 +135,20 @@ On push feature/* or schedule:
     because it is controlled separately by
     `[tool.hatch.build.targets.wheel] packages` in each `pyproject.toml`.
 
-13. **PEP 440 parallel version for Python packages**
+14. **PEP 440 parallel version for Python packages**
     — Docker semver pre-release format (`1.2.3-rc.branch.42`) is not valid
     PEP 440. The build phase computes a parallel `pep440_version` in the format
     `1.2.3.dev42+branch.name` and injects it via
     `SETUPTOOLS_SCM_PRETEND_VERSION` to override hatch-vcs version discovery,
     so Docker and Python packages share the same numeric baseline.
 
-14. **Registry selection via `release_type` input**
+15. **Registry selection via `release_type` input**
     — The `publish-pypi` job selects `https://upload.pypi.org/legacy/` for
     `release_type == 'final'` and `https://test.pypi.org/legacy/` for
     `release_type == 'feature'`. Separate secrets (`PYPI_TOKEN`,
     `TEST_PYPI_TOKEN`) are used for each registry.
 
-15. **Python packages built once in the build phase, reused in release**
+16. **Python packages built once in the build phase, reused in release**
     — `reusable-build.yml` includes a `python-build` job that produces wheels
     and sdists for both publishable packages and uploads them as the artifact
     `python-packages-{version}`. This mirrors the Docker transfer-artifact
