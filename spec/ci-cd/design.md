@@ -144,13 +144,7 @@ On push feature/* or schedule:
     — This simple `.devN` format was chosen for maximum compatibility with both
     hatchling and PyPI, using a global run number for uniqueness across all branches.
 
-15. **Registry selection via `release_type` input**
-    — The `publish-pypi` job selects `https://upload.pypi.org/legacy/` for
-    `release_type == 'final'` and `https://test.pypi.org/legacy/` for
-    `release_type == 'feature'`. Separate secrets (`PYPI_TOKEN`,
-    `TEST_PYPI_TOKEN`) are used for each registry.
-
-16. **Python packages built once in the build phase, reused in release**
+15. **Python packages built once in the build phase, reused in release**
     — `reusable-build.yml` includes a `python-build` job that produces wheels
     and sdists for both publishable packages and uploads them as the artifact
     `python-packages-{version}`. This mirrors the Docker transfer-artifact
