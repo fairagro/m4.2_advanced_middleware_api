@@ -138,12 +138,11 @@ On push feature/* or schedule:
 14. **PEP 440 parallel version for Python packages**
     — Docker semver pre-release format (`1.2.3-rc.branch.42`) is not valid
     PEP 440. The build phase computes a parallel `pep440_version` in the format
-    `1.2.3a42branch.name` and injects it via
+    `1.2.3.dev42` and injects it via
     `SETUPTOOLS_SCM_PRETEND_VERSION` to override hatch-vcs version discovery,
     so Docker and Python packages share the same numeric baseline.
-    — This format was chosen to be compatible with both hatchling (which cannot
-    parse complex multi-segment pre-releases) and PyPI (which forbids local
-    version identifiers containing `+`).
+    — This simple `.devN` format was chosen for maximum compatibility with both
+    hatchling and PyPI, using a global run number for uniqueness across all branches.
 
 15. **Registry selection via `release_type` input**
     — The `publish-pypi` job selects `https://upload.pypi.org/legacy/` for

@@ -109,7 +109,7 @@ pipelines run on GitHub Actions.
 - [ ] Each package must include required dependencies from `pyproject.toml`.
 - [ ] PyPI packages must use the exact same semantic version as the Docker image.
 - [ ] Final release from `main`: `MAJOR.MINOR.PATCH`.
-- [ ] Feature branch pre-release: `MAJOR.MINOR.PATCHa{RUN_NUMBER}{branch-label}` (PEP 440 compliant format without local version identifiers).
+- [ ] Feature branch pre-release: `MAJOR.MINOR.PATCH.dev{RUN_NUMBER}` (PEP 440 compliant format using global run number for uniqueness).
 - [ ] If a GitHub release is created, the packages must be added to the artifact list.
 - [ ] If a github release is created, include `pip install` commands for each package with exact version information.
 - [ ] If a GitHub release is created, provide fallback instructions for local installation from source.
