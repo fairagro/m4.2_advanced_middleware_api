@@ -74,17 +74,17 @@ jobs:
             NEW_VERSION="${BASE_VERSION}-rc.${BRANCH_LABEL}.${{ github.run_number }}"
 
             # PEP 440 compliant variant for Python package builds (hatch-vcs / setuptools-scm).
-            # For pre-releases, integrate branch info into pre-release segment instead of using local version identifiers
-            # Format: X.Y.ZrcN.branch.name.devM (PEP 440 compliant, no + separator)
+            # For pre-releases, use simpler format that hatchling can parse: X.Y.ZaN.branch
+            # This is PEP 440 compliant and works with hatchling's version parser
             PEP440_BRANCH=$(echo "$GITHUB_REF_NAME" \
               | sed 's|feature/||' \
               | tr '[:upper:]' '[:lower:]' \
               | sed -E 's/[^a-z0-9]+/./g; s/^\.+//; s/\.+$//; s/\.{2,}/./g' \
-              | cut -c1-30)
+              | cut -c1-20)  # Shorter for hatchling compatibility
             if [[ -z "$PEP440_BRANCH" ]]; then
               PEP440_BRANCH="feature"
             fi
-            PEP440_VERSION="${BASE_VERSION}rc1.${PEP440_BRANCH}.${{ github.run_number }}"
+            PEP440_VERSION="${BASE_VERSION}a${{ github.run_number }}.${PEP440_BRANCH}"
           else
             NEW_VERSION="${BASE_VERSION}"
             PEP440_VERSION="${BASE_VERSION}"
