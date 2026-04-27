@@ -138,7 +138,7 @@ On push feature/* or schedule:
 14. **PEP 440 parallel version for Python packages**
     — Docker semver pre-release format (`1.2.3-rc.branch.42`) is not valid
     PEP 440. The build phase computes a parallel `pep440_version` in the format
-    `1.2.3.dev42+branch.name` and injects it via
+    `1.2.3a42.branch.name` and injects it via
     `SETUPTOOLS_SCM_PRETEND_VERSION` to override hatch-vcs version discovery,
     so Docker and Python packages share the same numeric baseline.
 
