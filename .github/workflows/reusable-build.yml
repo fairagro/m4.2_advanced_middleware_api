@@ -74,7 +74,8 @@ jobs:
             NEW_VERSION="${BASE_VERSION}-rc.${BRANCH_LABEL}.${{ github.run_number }}"
 
             # PEP 440 compliant variant for Python package builds (hatch-vcs / setuptools-scm).
-            # Format: X.Y.Z.devN+branch.name
+            # For pre-releases, integrate branch info into pre-release segment instead of using local version identifiers
+            # Format: X.Y.ZrcN.branch.name.devM (PEP 440 compliant, no + separator)
             PEP440_BRANCH=$(echo "$GITHUB_REF_NAME" \
               | sed 's|feature/||' \
               | tr '[:upper:]' '[:lower:]' \
@@ -83,7 +84,7 @@ jobs:
             if [[ -z "$PEP440_BRANCH" ]]; then
               PEP440_BRANCH="feature"
             fi
-            PEP440_VERSION="${BASE_VERSION}.dev${{ github.run_number }}+${PEP440_BRANCH}"
+            PEP440_VERSION="${BASE_VERSION}rc1.${PEP440_BRANCH}.${{ github.run_number }}"
           else
             NEW_VERSION="${BASE_VERSION}"
             PEP440_VERSION="${BASE_VERSION}"
