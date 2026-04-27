@@ -138,17 +138,13 @@ On push feature/* or schedule:
 14. **PEP 440 parallel version for Python packages**
     — Docker semver pre-release format (`1.2.3-rc.branch.42`) is not valid
     PEP 440. The build phase computes a parallel `pep440_version` in the format
-    `1.2.3.dev42+branch.name` and injects it via
+    `1.2.3.dev42` and injects it via
     `SETUPTOOLS_SCM_PRETEND_VERSION` to override hatch-vcs version discovery,
     so Docker and Python packages share the same numeric baseline.
+    — This simple `.devN` format was chosen for maximum compatibility with both
+    hatchling and PyPI, using a global run number for uniqueness across all branches.
 
-15. **Registry selection via `release_type` input**
-    — The `publish-pypi` job selects `https://upload.pypi.org/legacy/` for
-    `release_type == 'final'` and `https://test.pypi.org/legacy/` for
-    `release_type == 'feature'`. Separate secrets (`PYPI_TOKEN`,
-    `TEST_PYPI_TOKEN`) are used for each registry.
-
-16. **Python packages built once in the build phase, reused in release**
+15. **Python packages built once in the build phase, reused in release**
     — `reusable-build.yml` includes a `python-build` job that produces wheels
     and sdists for both publishable packages and uploads them as the artifact
     `python-packages-{version}`. This mirrors the Docker transfer-artifact

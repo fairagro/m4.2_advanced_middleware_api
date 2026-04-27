@@ -147,11 +147,11 @@ jobs:
           UV_PUBLISH_TOKEN: ${{ secrets.PYPI_TOKEN }}
         run: uv publish --publish-url https://upload.pypi.org/legacy/ dist/*
 
-      - name: Publish to TestPyPI (pre-release)
+      - name: Publish to PyPI (pre-release)
         if: inputs.release_type == 'feature'
         env:
-          UV_PUBLISH_TOKEN: ${{ secrets.TEST_PYPI_TOKEN }}
-        run: uv publish --publish-url https://test.pypi.org/legacy/ dist/*
+          UV_PUBLISH_TOKEN: ${{ secrets.PYPI_TOKEN }}
+        run: uv publish --publish-url https://upload.pypi.org/legacy/ dist/*
 
   create-release-tag:
     name: CreateReleaseTag/Release

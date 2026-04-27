@@ -97,8 +97,7 @@ pipelines run on GitHub Actions.
 
 - [ ] Publish Python packages to PyPI for `middleware/api_client` and `middleware/shared` components.
 - [ ] PyPI packages must be published whenever a Docker image is successfully pushed to a registry.
-- [ ] Final releases from `main` branch must publish packages to **PyPI** (<https://pypi.org>).
-- [ ] Feature branch pre-releases must publish packages to **TestPyPI** (<https://test.pypi.org/>).
+- [ ] Both final releases from `main` and feature branch pre-releases must publish packages to **PyPI** (<https://pypi.org>).
 - [ ] Packages must be published only after the `reusable-check.yml` security scans have passed.
 - [ ] Publish the `middleware/api_client` component under the name `fairagro-middleware-api-client`.
 - [ ] Publish the `middleware/shared` component under the name `fairagro-middleware-shared`.
@@ -109,7 +108,7 @@ pipelines run on GitHub Actions.
 - [ ] Each package must include required dependencies from `pyproject.toml`.
 - [ ] PyPI packages must use the exact same semantic version as the Docker image.
 - [ ] Final release from `main`: `MAJOR.MINOR.PATCH`.
-- [ ] Feature branch pre-release: `MAJOR.MINOR.PATCH-rc.{branch-label}.{run_number}`.
+- [ ] Feature branch pre-release: `MAJOR.MINOR.PATCH.dev{RUN_NUMBER}` (PEP 440 compliant format using global run number for uniqueness).
 - [ ] If a GitHub release is created, the packages must be added to the artifact list.
 - [ ] If a github release is created, include `pip install` commands for each package with exact version information.
 - [ ] If a GitHub release is created, provide fallback instructions for local installation from source.
