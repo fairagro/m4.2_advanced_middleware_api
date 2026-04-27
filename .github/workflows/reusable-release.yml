@@ -139,7 +139,7 @@ jobs:
           name: python-packages-${{ inputs.version }}
           path: dist/
 
-      - uses: astral-sh/setup-uv@v7
+      - uses: astral-sh/setup-uv@v8.1.0
 
       - name: Publish to PyPI (final release)
         if: inputs.release_type == 'final'
