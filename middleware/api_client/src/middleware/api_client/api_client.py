@@ -452,7 +452,10 @@ class ApiClient:
             return arc
         if isinstance(arc, str):
             try:
-                return cast(dict[str, Any], json.loads(arc))
+                data = json.loads(arc)
+                if not isinstance(data, dict):
+                    raise ApiClientError(f"JSON string must represent a dictionary, got {type(data).__name__}")
+                return cast(dict[str, Any], data)
             except json.JSONDecodeError as e:
                 raise ApiClientError(f"Invalid JSON string provided for ARC: {e}") from e
         return cast(dict[str, Any], json.loads(arc.ToROCrateJsonString()))
