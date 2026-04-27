@@ -51,13 +51,13 @@ async def main():
         # Send a single ARC
         response = await client.create_or_update_arc(
             rdi="my-rdi",
-            arc=arc,
+            arc=arc,  # Can be ARC object, dict, or JSON string
         )
         print(f"ARC status: {response.status}")
 
         # Or run a harvest workflow
         async def arc_stream():
-            yield arc
+            yield arc  # Can yield ARC objects, dicts, or JSON strings
 
         harvest = await client.harvest_arcs(
             rdi="my-rdi",
@@ -85,14 +85,14 @@ asyncio.run(main())
 
 ## API Methods
 
-### `create_or_update_arc(rdi: str, arc: ARC | dict) -> ArcResult`
+### `create_or_update_arc(rdi: str, arc: ARC | dict | str) -> ArcResult`
 
 Create or update one ARC in the Middleware API.
 
 **Parameters:**
 
 - `rdi` (str): The RDI identifier (e.g., "edaphobase").
-- `arc` (ARC | dict): ARC object from arctrl or pre-serialised RO-Crate dict.
+- `arc` (ARC | dict | str): ARC object from arctrl, pre-serialised RO-Crate dict, or JSON string.
 
 **Returns:**
 
@@ -100,7 +100,7 @@ Create or update one ARC in the Middleware API.
 
 **Raises:**
 
-- `ApiClientError`: If the request fails due to HTTP errors or network issues.
+- `ApiClientError`: If the request fails due to HTTP errors, network issues, or invalid JSON.
 
 **Example:**
 
@@ -112,17 +112,18 @@ arc = ARC.from_arc_investigation(inv)
 
 response = await client.create_or_update_arc(
     rdi="edaphobase",
-    arc=arc,
+    arc=arc,  # Can also be dict or JSON string
 )
 ```
 
-### `harvest_arcs(rdi: str, arcs: AsyncIterator[ARC | dict], expected_datasets: int | None = None) -> HarvestResult`
+### `harvest_arcs(rdi: str, arcs: AsyncIterator[ARC | dict | str], expected_datasets: int | None = None) -> HarvestResult`
 
 Convenience workflow to create a harvest, upload all ARCs from an async iterator, and complete the harvest.
 
 - Uses `config.max_concurrency` by default.
 - Continues on item-level submission errors and skips failed items.
 - Cancels the harvest only for catastrophic errors.
+- Supports ARC objects, pre-serialised RO-Crate dicts, and JSON strings.
 
 All errors are raised as `ApiClientError` exceptions:
 
@@ -132,24 +133,7 @@ from middleware.api_client import ApiClientError
 try:
     response = await client.create_or_update_arc(
         rdi="my-rdi",
-        arc=arc,
+        arc=arc,  # Can be ARC object, dict, or JSON string
     )
 except ApiClientError as e:
     print(f"API Error: {e}")
-```
-
-## Configuration via Environment Variables
-
-You can override configuration values using environment variables:
-
-```bash
-export API_URL="https://production-api:8000"
-export CLIENT_CERT_PATH="/secure/certs/prod-cert.pem"
-export CLIENT_KEY_PATH="/secure/certs/prod-key.pem"
-```
-
-Or use Docker secrets in `/run/secrets/`.
-
-## License
-
-This is part of the FAIRagro Advanced Middleware project.

@@ -228,6 +228,28 @@ async def test_create_or_update_arc_with_dict(client_config: Config) -> None:
 
 @pytest.mark.asyncio
 @respx.mock
+async def test_create_or_update_arc_with_json_string(client_config: Config) -> None:
+    """Test create_or_update_arc with a JSON string."""
+    route = respx.post(f"{client_config.api_url}v3/arcs").mock(
+        return_value=httpx.Response(http.HTTPStatus.OK, json=_ARC_RESPONSE)
+    )
+    async with ApiClient(client_config) as client:
+        response = await client.create_or_update_arc(rdi="test-rdi", arc='{"id": "mock-arc"}')
+    assert route.called
+    assert isinstance(response, ArcResult)
+    assert response.arc_id == "arc-123"
+
+
+@pytest.mark.asyncio
+async def test_create_or_update_arc_with_invalid_json_string(client_config: Config) -> None:
+    """Test create_or_update_arc with an invalid JSON string."""
+    async with ApiClient(client_config) as client:
+        with pytest.raises(ApiClientError, match="Invalid JSON string provided for ARC"):
+            await client.create_or_update_arc(rdi="test-rdi", arc='{"id": "mock-arc"')
+
+
+@pytest.mark.asyncio
+@respx.mock
 async def test_create_or_update_arc_http_error(client_config: Config) -> None:
     """Test create_or_update_arc with an HTTP error response."""
     respx.post(f"{client_config.api_url}v3/arcs").mock(
@@ -495,13 +517,35 @@ async def test_submit_arc_in_harvest_invalid_response(client_config: Config) -> 
             await client.submit_arc_in_harvest("harvest-456", arc={"id": "mock"})
 
 
+@pytest.mark.asyncio
+@respx.mock
+async def test_submit_arc_in_harvest_with_json_string(client_config: Config) -> None:
+    """Test submit_arc_in_harvest with a JSON string."""
+    route = respx.post(f"{client_config.api_url}v3/harvests/harvest-456/arcs").mock(
+        return_value=httpx.Response(http.HTTPStatus.OK, json=_ARC_RESPONSE)
+    )
+    async with ApiClient(client_config) as client:
+        response = await client.submit_arc_in_harvest("harvest-456", arc='{"id": "mock-arc"}')
+    assert route.called
+    assert isinstance(response, ArcResult)
+    assert response.arc_id == "arc-123"
+
+
+@pytest.mark.asyncio
+async def test_submit_arc_in_harvest_with_invalid_json_string(client_config: Config) -> None:
+    """Test submit_arc_in_harvest with an invalid JSON string."""
+    async with ApiClient(client_config) as client:
+        with pytest.raises(ApiClientError, match="Invalid JSON string provided for ARC"):
+            await client.submit_arc_in_harvest("harvest-456", arc='{"id": "mock-arc"')
+
+
 # ---------------------------------------------------------------------------
 # harvest_arcs
 # ---------------------------------------------------------------------------
 
 
-async def _arc_gen(*arcs: "dict[str, Any]") -> AsyncGenerator["dict[str, Any]", None]:
-    """Yield the provided arc dicts as an async generator."""
+async def _arc_gen(*arcs: "dict[str, Any] | str | ARC") -> AsyncGenerator["dict[str, Any] | str | ARC", None]:
+    """Yield the provided arc dicts, JSON strings, or ARC objects as an async generator."""
     for arc in arcs:
         yield arc
 
@@ -648,6 +692,52 @@ async def test_harvest_arcs_cancels_on_catastrophic_error(client_config: Config)
             await client.harvest_arcs("test-rdi", _arc_gen({"id": "arc-1"}))
 
     assert cancel_route.called
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_harvest_arcs_with_json_string(client_config: Config) -> None:
+    """harvest_arcs supports JSON strings in async generator."""
+    completed_response = {**_HARVEST_RESPONSE, "status": "COMPLETED", "completed_at": "2024-01-01T01:00:00Z"}
+    respx.post(f"{client_config.api_url}v3/harvests").mock(
+        return_value=httpx.Response(http.HTTPStatus.OK, json=_HARVEST_RESPONSE)
+    )
+    respx.post(f"{client_config.api_url}v3/harvests/harvest-456/arcs").mock(
+        return_value=httpx.Response(http.HTTPStatus.OK, json=_ARC_RESPONSE)
+    )
+    respx.post(f"{client_config.api_url}v3/harvests/harvest-456/complete").mock(
+        return_value=httpx.Response(http.HTTPStatus.OK, json=completed_response)
+    )
+
+    arcs = _arc_gen(
+        '{"id": "arc-1-string"}',
+        {"id": "arc-2-dict"},
+        ARC.from_arc_investigation(ArcInvestigation.create(identifier="test", title="Test")),
+    )
+    async with ApiClient(client_config) as client:
+        result = await client.harvest_arcs("test-rdi", arcs, expected_datasets=3)
+
+    assert isinstance(result, HarvestResult)
+    assert result.status == "COMPLETED"
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_harvest_arcs_with_invalid_json_string(client_config: Config) -> None:
+    """harvest_arcs raises ApiClientError when JSON string is invalid."""
+    # Mock the harvest creation endpoint to prevent actual HTTP requests
+    respx.post(f"{client_config.api_url}v3/harvests").mock(
+        return_value=httpx.Response(http.HTTPStatus.OK, json=_HARVEST_RESPONSE)
+    )
+    # Mock the harvest cancellation endpoint
+    respx.delete(f"{client_config.api_url}v3/harvests/harvest-456").mock(
+        return_value=httpx.Response(http.HTTPStatus.NO_CONTENT)
+    )
+
+    async with ApiClient(client_config) as client:
+        arcs = _arc_gen('{"id": "arc-1"')  # Single invalid JSON string
+        with pytest.raises(ApiClientError, match="Invalid JSON string provided for ARC"):
+            await client.harvest_arcs("test-rdi", arcs)
 
 
 @pytest.mark.asyncio

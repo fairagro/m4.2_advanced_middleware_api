@@ -262,13 +262,13 @@ class ApiClient:
     async def _submit_arcs_parallel(
         self,
         harvest_id: str,
-        arcs: "AsyncGenerator[ARC | dict[str, Any], None] | AsyncIterator[ARC | dict[str, Any]]",
+        arcs: "AsyncGenerator[ARC | dict[str, Any] | str, None] | AsyncIterator[ARC | dict[str, Any] | str]",
     ) -> int:
         """Submit all ARCs in bounded parallelism and return number of skipped ARC submissions."""
         pending_tasks: set[asyncio.Task[None]] = set()
         failed_submissions = 0
 
-        async def submit_one(arc_item: "ARC | dict[str, Any]") -> None:
+        async def submit_one(arc_item: "ARC | dict[str, Any] | str") -> None:
             await self.submit_arc_in_harvest(harvest_id, arc_item)
 
         async for arc in arcs:
@@ -446,10 +446,15 @@ class ApiClient:
     # ------------------------------------------------------------------
 
     @classmethod
-    def _serialize_arc(cls, arc: "ARC | dict[str, Any]") -> dict[str, Any]:
-        """Serialize an ARC object to a plain RO-Crate JSON dict."""
+    def _serialize_arc(cls, arc: "ARC | dict[str, Any] | str") -> dict[str, Any]:
+        """Serialize an ARC object, dict, or JSON string to a plain RO-Crate JSON dict."""
         if isinstance(arc, dict):
             return arc
+        if isinstance(arc, str):
+            try:
+                return cast(dict[str, Any], json.loads(arc))
+            except json.JSONDecodeError as e:
+                raise ApiClientError(f"Invalid JSON string provided for ARC: {e}") from e
         return cast(dict[str, Any], json.loads(arc.ToROCrateJsonString()))
 
     @classmethod
@@ -473,7 +478,7 @@ class ApiClient:
     async def create_or_update_arc(
         self,
         rdi: str,
-        arc: "ARC | dict[str, Any]",
+        arc: "ARC | dict[str, Any] | str",
     ) -> ArcResult:
         """Create or update an ARC.
 
@@ -483,7 +488,7 @@ class ApiClient:
 
         Args:
             rdi: RDI identifier.
-            arc: ARC object or a pre-serialised RO-Crate JSON dict.
+            arc: ARC object, a pre-serialised RO-Crate JSON dict, or a JSON string.
 
         Returns:
             :class:`ArcResult` with the result of the operation.
@@ -579,7 +584,7 @@ class ApiClient:
     async def submit_arc_in_harvest(
         self,
         harvest_id: str,
-        arc: "ARC | dict[str, Any]",
+        arc: "ARC | dict[str, Any] | str",
     ) -> ArcResult:
         """Submit an ARC within an active harvest run.
 
@@ -588,7 +593,7 @@ class ApiClient:
 
         Args:
             harvest_id: Harvest identifier.
-            arc: ARC object or a pre-serialised RO-Crate JSON dict.
+            arc: ARC object, a pre-serialised RO-Crate JSON dict, or a JSON string.
 
         Returns:
             :class:`ArcResult` with the result of the operation.
@@ -601,7 +606,7 @@ class ApiClient:
     async def harvest_arcs(
         self,
         rdi: str,
-        arcs: "AsyncGenerator[ARC | dict[str, Any], None] | AsyncIterator[ARC | dict[str, Any]]",
+        arcs: "AsyncGenerator[ARC | dict[str, Any] | str, None] | AsyncIterator[ARC | dict[str, Any] | str]",
         expected_datasets: int | None = None,
     ) -> HarvestResult:
         """Create a harvest, upload all ARCs from an async generator, then complete it.
@@ -618,8 +623,8 @@ class ApiClient:
 
         Args:
             rdi: RDI identifier for the harvest.
-            arcs: Async generator or async iterator yielding ARC objects or
-                pre-serialised RO-Crate dicts.
+            arcs: Async generator or async iterator yielding ARC objects,
+                pre-serialised RO-Crate dicts, or JSON strings.
             expected_datasets: Optional hint about the total number of ARCs.
 
         Returns:
@@ -631,7 +636,7 @@ class ApiClient:
 
         Example::
 
-            async def my_arcs() -> AsyncGenerator[dict, None]:
+            async def my_arcs() -> AsyncGenerator[dict | str, None]:
                 for arc in source:
                     yield arc
 
