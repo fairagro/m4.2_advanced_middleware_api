@@ -9,12 +9,12 @@ from arctrl import ARC  # type: ignore[import-untyped]
 from opentelemetry import trace
 
 from middleware.api.arc_store import ArcStore, ArcStoreTransientError
-from middleware.api.document_store import DocumentStore
+from middleware.api.document_store import DocumentStore, DuplicateArcError
 from middleware.api.document_store.arc_document import ArcEvent, ArcEventType
 from middleware.api.utils import calculate_arc_id, extract_identifier
 from middleware.shared.api_models.common.models import ArcOperationResult, ArcResponse, ArcStatus
 
-from .exceptions import BusinessLogicError, InvalidJsonSemanticError, TransientError
+from .exceptions import BusinessLogicError, DuplicateArcInHarvestError, InvalidJsonSemanticError, TransientError
 from .ports import TaskDispatcher
 from .task_payloads import ArcSyncTask
 
@@ -147,6 +147,8 @@ class ArcManager:
                     raise
                 if isinstance(e, BusinessLogicError):
                     raise
+                if isinstance(e, DuplicateArcError):
+                    raise DuplicateArcInHarvestError(str(e)) from e
                 raise BusinessLogicError(f"unexpected error encountered: {str(e)}") from e
 
     async def sync_to_gitlab(self, rdi: str, arc: dict[str, Any]) -> None:

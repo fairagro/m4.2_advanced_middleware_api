@@ -4,13 +4,14 @@ Provides async access to CouchDB for ARC and Harvest document storage.
 """
 
 import logging
+from collections.abc import Callable
 from http import HTTPStatus
 from typing import Any, Self
 from urllib.parse import quote
 
 import aiohttp
 from aiocouch import CouchDB, Database
-from aiocouch.exception import NotFoundError, PreconditionFailedError
+from aiocouch.exception import ConflictError, NotFoundError, PreconditionFailedError
 
 from middleware.api.document_store.config import CouchDBConfig
 
@@ -24,29 +25,18 @@ class DocumentConflictError(RuntimeError):
 class CouchDBClient:
     """Async CouchDB client wrapper."""
 
-    def __init__(
-        self,
-        url: str,
-        db_name: str,
-        user: str | None = None,
-        password: str | None = None,
-        *,
-        default_query_limit: int,
-    ):
+    def __init__(self, config: CouchDBConfig) -> None:
         """Initialize CouchDB client.
 
         Args:
-            url: CouchDB URL (e.g., http://localhost:5984)
-            db_name: Database name to use
-            user: CouchDB username (optional)
-            password: CouchDB password (optional)
-            default_query_limit: Default maximum number of documents returned by a Mango query.
+            config: CouchDB configuration.
         """
-        self._url = url
-        self._db_name = db_name
-        self._user = user
-        self._password = password
-        self._default_query_limit = default_query_limit
+        self._url = config.url
+        self._db_name = config.db_name
+        self._user = config.user
+        self._password = config.password.get_secret_value() if config.password else None
+        self._default_query_limit = config.default_query_limit
+        self._max_save_retries = config.max_save_retries
         self._client: CouchDB | None = None
         self._db: Database | None = None
         # Shared HTTP session for raw CouchDB calls (e.g. index management).
@@ -63,13 +53,7 @@ class CouchDBClient:
         Returns:
             CouchDBClient: Initialized client
         """
-        return cls(
-            url=config.url,
-            db_name=config.db_name,
-            user=config.user,
-            password=config.password.get_secret_value() if config.password else None,
-            default_query_limit=config.default_query_limit,
-        )
+        return cls(config)
 
     async def connect(self) -> None:
         """Connect to CouchDB and ensure database exists."""
@@ -175,33 +159,78 @@ class CouchDBClient:
         except NotFoundError:
             return None
 
-    async def save_document(self, doc_id: str, data: dict[str, Any]) -> dict[str, Any]:
-        """Save or update a document.
+    async def save_document(
+        self,
+        doc_id: str,
+        data: dict[str, Any],
+        pre_save_validator: Callable[[dict[str, Any]], None] | None = None,
+    ) -> dict[str, Any]:
+        """Save or update a document with optimistic-concurrency retry.
+
+        ``_id`` and ``_rev`` are stripped from *data* before writing: the
+        revision is always sourced from a fresh CouchDB fetch so that a stale
+        ``_rev`` carried in *data* cannot trigger a spurious 409 Conflict.
+
+        On a genuine concurrent-write conflict the operation is retried up to
+        ``max_save_retries`` times (re-fetching the document on each attempt)
+        before raising :class:`DocumentConflictError`.
+
+        *pre_save_validator* is called with the **freshly fetched** document dict
+        on every attempt (including retries).  Raising from the validator aborts
+        the write immediately without retrying — use this to enforce invariants
+        that must be checked against the current CouchDB state (e.g. detecting
+        duplicate submissions in the same harvest run after a concurrent write
+        has landed).
 
         Args:
             doc_id: Document ID
-            data: Document data (without _id)
+            data: Document data (``_id`` / ``_rev`` are ignored if present)
+            pre_save_validator: Optional callable that receives the current
+                document dict and may raise to abort the write.
 
         Returns:
-            Saved document with _id and _rev
+            Saved document with ``_id`` and ``_rev``
+
+        Raises:
+            DocumentConflictError: If the conflict persists after all retries.
         """
         if not self._db:
             raise RuntimeError("Not connected to CouchDB")
 
-        try:
-            # Attempt to fetch the document
-            doc = await self._db[doc_id]
-            # If successful, it's an update
-            doc.update(data)
-            await doc.save()
-        except NotFoundError:
-            # If not found, it's a create
-            # NOTE: aiocouch.Database.create() only creates a local object;
-            # doc.save() is required to actually PUT the document to CouchDB.
-            doc = await self._db.create(doc_id, data=data)
-            await doc.save()
+        # Strip CouchDB internal fields: we always re-fetch to get the current
+        # _rev, so any _rev/_id carried in `data` would be stale and would
+        # cause a spurious 409 on concurrent writes.
+        content = {k: v for k, v in data.items() if k not in {"_id", "_rev"}}
 
-        return dict(doc)
+        for attempt in range(1, self._max_save_retries + 1):
+            try:
+                try:
+                    # Attempt to fetch the document (update path)
+                    doc = await self._db[doc_id]
+                    if pre_save_validator is not None:
+                        pre_save_validator(dict(doc))
+                    doc.update(content)
+                    await doc.save()
+                except NotFoundError:
+                    # Document does not exist yet (create path)
+                    # NOTE: aiocouch.Database.create() only creates a local object;
+                    # doc.save() is required to actually PUT the document to CouchDB.
+                    doc = await self._db.create(doc_id, data=content)
+                    await doc.save()
+                return dict(doc)
+            except ConflictError as err:
+                if attempt >= self._max_save_retries:
+                    raise DocumentConflictError(
+                        f"Concurrent modification conflict for document {doc_id} after {self._max_save_retries} retries"
+                    ) from err
+                logger.debug(
+                    "CouchDB write conflict on %s (attempt %d/%d), retrying",
+                    doc_id,
+                    attempt,
+                    self._max_save_retries,
+                )
+
+        raise DocumentConflictError(f"Failed to save document {doc_id}")  # pragma: no cover
 
     async def delete_document(self, doc_id: str) -> bool:
         """Delete a document.

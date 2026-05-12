@@ -714,6 +714,40 @@ async def test_harvest_arcs_cancels_on_catastrophic_error(client_config: Config)
 
 @pytest.mark.asyncio
 @respx.mock
+async def test_harvest_arcs_fails_on_duplicate_identifier(client_config: Config) -> None:
+    """harvest_arcs marks harvest as failed when the same ARC identifier appears twice."""
+    # Two ARC dicts that share the same RO-Crate identifier — simulates a
+    # client-side data error where two distinct ARCs were accidentally given
+    # the same identifier field.
+    arc_a = {
+        "@context": "https://w3id.org/ro/crate/1.1/context",
+        "@graph": [{"@id": "./", "@type": "Dataset", "identifier": "duplicate-arc", "name": "ARC A"}],
+    }
+    arc_b = {
+        "@context": "https://w3id.org/ro/crate/1.1/context",
+        "@graph": [{"@id": "./", "@type": "Dataset", "identifier": "duplicate-arc", "name": "ARC B"}],
+    }
+    failed_response = {**_HARVEST_RESPONSE, "status": "FAILED"}
+    respx.post(f"{client_config.api_url}v3/harvests").mock(
+        return_value=httpx.Response(http.HTTPStatus.OK, json=_HARVEST_RESPONSE)
+    )
+    # The first ARC is submitted successfully before the duplicate is detected.
+    respx.post(f"{client_config.api_url}v3/harvests/harvest-456/arcs").mock(
+        return_value=httpx.Response(http.HTTPStatus.OK, json=_ARC_RESPONSE)
+    )
+    fail_route = respx.patch(f"{client_config.api_url}v3/harvests/harvest-456").mock(
+        return_value=httpx.Response(http.HTTPStatus.OK, json=failed_response)
+    )
+
+    async with ApiClient(client_config) as client:
+        with pytest.raises(ApiClientError, match="Duplicate ARC identifier 'duplicate-arc'"):
+            await client.harvest_arcs("test-rdi", _arc_gen(arc_a, arc_b))
+
+    assert fail_route.called
+
+
+@pytest.mark.asyncio
+@respx.mock
 async def test_harvest_arcs_with_json_string(client_config: Config) -> None:
     """harvest_arcs supports JSON strings in async generator."""
     completed_response = {**_HARVEST_RESPONSE, "status": "COMPLETED", "completed_at": "2024-01-01T01:00:00Z"}

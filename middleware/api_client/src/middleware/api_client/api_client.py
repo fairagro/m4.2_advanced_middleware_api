@@ -269,12 +269,25 @@ class ApiClient:
         """Submit all ARCs in bounded parallelism and return number of skipped ARC submissions."""
         pending_tasks: set[asyncio.Task[None]] = set()
         failed_submissions = 0
+        seen_identifiers: set[str] = set()
 
         async def submit_one(arc_item: "ARC | dict[str, Any] | str") -> None:
             await self.submit_arc_in_harvest(harvest_id, arc_item)
 
         async for arc in arcs:
-            task = asyncio.create_task(submit_one(arc))
+            serialized = self._serialize_arc(arc)
+            identifier = self._extract_identifier_from_rocrate(serialized)
+            if identifier is not None:
+                if identifier in seen_identifiers:
+                    await self._cancel_pending_arc_tasks(pending_tasks)
+                    raise ApiClientError(
+                        f"Duplicate ARC identifier '{identifier}' submitted more than once "
+                        f"in harvest {harvest_id}. This is likely a client-side data error "
+                        "(two different ARCs sharing the same identifier)."
+                    )
+                seen_identifiers.add(identifier)
+
+            task = asyncio.create_task(submit_one(serialized))
             pending_tasks.add(task)
 
             if len(pending_tasks) >= self._config.max_concurrency:
@@ -455,6 +468,25 @@ class ApiClient:
     # ------------------------------------------------------------------
     # Helper
     # ------------------------------------------------------------------
+
+    @staticmethod
+    def _extract_identifier_from_rocrate(arc_content: dict[str, Any]) -> str | None:
+        """Extract the RO-Crate identifier from a serialized ARC dict.
+
+        Looks for the Root Data Entity (``@id == "./"``), then returns its
+        ``identifier`` field.  Returns ``None`` when the field is absent or
+        the dict does not follow the RO-Crate structure — validation is left
+        to the server.
+        """
+        graph = arc_content.get("@graph")
+        if isinstance(graph, list):
+            for item in graph:
+                if item.get("@id") == "./":
+                    identifier = item.get("identifier")
+                    if isinstance(identifier, list):
+                        identifier = identifier[0] if identifier else None
+                    return str(identifier) if identifier else None
+        return None
 
     @classmethod
     def _serialize_arc(cls, arc: "ARC | dict[str, Any] | str") -> dict[str, Any]:

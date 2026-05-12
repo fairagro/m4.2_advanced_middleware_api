@@ -14,6 +14,7 @@ from middleware.api.api.common.dependencies import (
     get_content_type,
 )
 from middleware.api.business_logic import BusinessLogic, ConflictError
+from middleware.api.business_logic.exceptions import DuplicateArcInHarvestError
 from middleware.api.document_store.harvest_document import HarvestDocument
 from middleware.shared.api_models.v3 import models as v3_models
 
@@ -181,7 +182,10 @@ async def submit_arc_in_harvest(  # noqa: PLR0913, PLR0917
     rdi = harvest.rdi
     await deps.validate_rdi_authorized(rdi, request)
 
-    result = await bl.create_or_update_arc(rdi, request_body.arc, client_id, harvest_id=harvest_id)
+    try:
+        result = await bl.create_or_update_arc(rdi, request_body.arc, client_id, harvest_id=harvest_id)
+    except DuplicateArcInHarvestError as exc:
+        raise HTTPException(status_code=HTTPStatus.CONFLICT, detail=str(exc)) from exc
 
     arc_id = result.arc.id
     metadata = await bl.get_metadata(arc_id)

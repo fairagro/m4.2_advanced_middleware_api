@@ -8,7 +8,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from middleware.api.api.fastapi_app import Api
-from middleware.api.business_logic import BusinessLogicError, InvalidJsonSemanticError
+from middleware.api.business_logic import BusinessLogicError, DuplicateArcInHarvestError, InvalidJsonSemanticError
 from middleware.api.business_logic.exceptions import ConflictError
 from middleware.api.document_store.harvest_document import HarvestDocument, HarvestStatistics
 from middleware.shared.api_models import ArcOperationResult, ArcResponse, ArcStatus
@@ -124,6 +124,51 @@ def test_submit_arc_in_harvest_success(client: TestClient, cert: str, middleware
         # Check that harvest_id was passed if possible, but at least verify success
         mock_create_arc.assert_called_once()
         assert mock_create_arc.call_args[1]["harvest_id"] == harvest_id
+
+
+@pytest.mark.unit
+def test_submit_arc_in_harvest_duplicate_returns_conflict(client: TestClient, cert: str, middleware_api: Api) -> None:
+    """submit_arc_in_harvest returns 409 when the ARC was already submitted in this harvest."""
+    harvest_id = "harvest-123"
+    mock_harvest = HarvestDocument(
+        doc_id=harvest_id,
+        rdi="rdi-1",
+        client_id="test-client-cn",
+        status=HarvestStatus.RUNNING,
+        started_at=datetime.now(UTC),
+        statistics=HarvestStatistics(),
+    )
+    rocrate = {
+        "@context": "https://w3id.org/ro/crate/1.1/context",
+        "@graph": [{"@id": "./", "identifier": "ARC-dup"}],
+    }
+
+    with (
+        patch.object(
+            middleware_api.business_logic.harvest_manager, "get_harvest", new_callable=AsyncMock
+        ) as mock_get_harvest,
+        patch.object(middleware_api.app.state.common_deps, "get_authorized_rdis", new_callable=AsyncMock) as mock_auth,
+        patch.object(middleware_api.business_logic, "create_or_update_arc", new_callable=AsyncMock) as mock_create_arc,
+    ):
+        mock_get_harvest.return_value = mock_harvest
+        mock_auth.return_value = ["rdi-1"]
+        mock_create_arc.side_effect = DuplicateArcInHarvestError(
+            f"ARC 'ARC-dup' was already submitted in harvest '{harvest_id}'."
+        )
+
+        r = client.post(
+            f"/v3/harvests/{harvest_id}/arcs",
+            headers={
+                "ssl-client-cert": cert,
+                "ssl-client-verify": "SUCCESS",
+                "content-type": "application/json",
+                "accept": "application/json",
+            },
+            json={"arc": rocrate},
+        )
+
+        assert r.status_code == http.HTTPStatus.CONFLICT
+        assert "ARC-dup" in r.json()["detail"]
 
 
 # ---------------------------------------------------------------------------

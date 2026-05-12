@@ -12,6 +12,10 @@ class DocumentStoreError(Exception):
     """Base exception for document store errors."""
 
 
+class DuplicateArcError(DocumentStoreError):
+    """Raised when the same ARC is submitted more than once within the same harvest run."""
+
+
 class ArcStoreResult:
     """Result of storing an ARC."""
 

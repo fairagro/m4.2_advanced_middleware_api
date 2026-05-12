@@ -17,6 +17,10 @@ class ConflictError(BusinessLogicError):
     """Arises when the request conflicts with the current resource state."""
 
 
+class DuplicateArcInHarvestError(ConflictError):
+    """Arises when the same ARC is submitted more than once within a harvest run."""
+
+
 class InvalidJsonSemanticError(BusinessLogicError):
     """Arises when the ARC JSON syntax is valid but semantically incorrect.
 

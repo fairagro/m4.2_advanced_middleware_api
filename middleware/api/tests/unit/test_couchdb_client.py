@@ -259,6 +259,57 @@ async def test_couchdb_client_save_document_update(couchdb_client: CouchDBClient
 
 
 @pytest.mark.asyncio
+async def test_couchdb_client_save_document_validator_called_with_fresh_doc(
+    couchdb_client: CouchDBClient,
+) -> None:
+    """pre_save_validator receives the freshly fetched document dict."""
+    fresh_doc_data = {"_id": "doc1", "val": 99}
+    mock_doc = MagicMock()
+    mock_doc.update = MagicMock()
+    mock_doc.save = AsyncMock()
+    # dict(mock_doc) uses mock_doc.keys() + mock_doc[k] — configure both
+    mock_doc.keys.return_value = list(fresh_doc_data.keys())
+    mock_doc.__getitem__.side_effect = fresh_doc_data.__getitem__
+
+    mock_db = MagicMock()
+    mock_db.__getitem__ = AsyncMock(return_value=mock_doc)
+    couchdb_client._db = mock_db  # noqa: SLF001
+
+    validator = MagicMock()
+    await couchdb_client.save_document("doc1", {"val": 100}, pre_save_validator=validator)
+
+    validator.assert_called_once_with(dict(fresh_doc_data))
+
+
+@pytest.mark.asyncio
+async def test_couchdb_client_save_document_validator_exception_propagates(
+    couchdb_client: CouchDBClient,
+) -> None:
+    """An exception raised by pre_save_validator propagates immediately without retry."""
+
+    class SentinelError(Exception):
+        pass
+
+    fresh_doc_data = {"_id": "doc1", "state": "taken"}
+    mock_doc = MagicMock()
+    mock_doc.__iter__.return_value = iter(fresh_doc_data.keys())
+    mock_doc.__getitem__.side_effect = fresh_doc_data.__getitem__
+
+    mock_db = MagicMock()
+    mock_db.__getitem__ = AsyncMock(return_value=mock_doc)
+    couchdb_client._db = mock_db  # noqa: SLF001
+
+    def raising_validator(doc: dict) -> None:  # noqa: ARG001
+        raise SentinelError("invariant violated")
+
+    with pytest.raises(SentinelError, match="invariant violated"):
+        await couchdb_client.save_document("doc1", {"state": "new"}, pre_save_validator=raising_validator)
+
+    # save() must NOT have been called — write was aborted before it happened
+    mock_doc.save.assert_not_called()
+
+
+@pytest.mark.asyncio
 async def test_couchdb_client_delete_document_success(couchdb_client: CouchDBClient) -> None:
     """Test deleting a document successfully.
 

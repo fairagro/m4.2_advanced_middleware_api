@@ -13,7 +13,7 @@ from middleware.api.document_store.couchdb_client import CouchDBClient, Document
 from middleware.api.utils import calculate_arc_id, extract_identifier
 from middleware.shared.api_models.common.models import ArcEventType, ArcLifecycleStatus, HarvestStatus
 
-from . import ArcStoreResult, DocumentStore
+from . import ArcStoreResult, DocumentStore, DuplicateArcError
 from .arc_document import (
     ArcDocument,
     ArcEvent,
@@ -94,6 +94,9 @@ class CouchDB(DocumentStore):
             )
         else:
             is_new = False
+            # Reject duplicate submissions within the same harvest run.
+            if harvest_id and existing_doc.metadata.last_harvest_id == harvest_id:
+                raise DuplicateArcError(f"ARC '{resolved_identifier}' was already submitted in harvest '{harvest_id}'.")
             # Check for changes
             has_changes = existing_doc.metadata.arc_hash != content_hash
 
@@ -155,7 +158,21 @@ class CouchDB(DocumentStore):
         # - mode="json": converts datetime/enum values to JSON-safe primitives
         doc_data = doc.model_dump(mode="json", by_alias=True, exclude_none=True)
 
-        await self._client.save_document(doc_id, doc_data)
+        # Build a validator closure that re-checks the duplicate invariant on the
+        # freshly fetched document inside save_document's retry loop.  This closes
+        # the TOCTOU window between the initial get_document call above and the
+        # actual CouchDB write: if a concurrent request landed between those two
+        # points, the retry re-fetches the doc and the validator sees the updated
+        # last_harvest_id before writing.
+        def _check_duplicate_on_retry(fresh_doc: dict[str, Any]) -> None:
+            if harvest_id and fresh_doc.get("metadata", {}).get("last_harvest_id") == harvest_id:
+                raise DuplicateArcError(f"ARC '{resolved_identifier}' was already submitted in harvest '{harvest_id}'.")
+
+        await self._client.save_document(
+            doc_id,
+            doc_data,
+            pre_save_validator=_check_duplicate_on_retry if harvest_id else None,
+        )
 
         return ArcStoreResult(arc_id=arc_id, is_new=is_new, has_changes=has_changes)
 
