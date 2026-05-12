@@ -88,7 +88,7 @@ async def get_harvest(
     return _map_harvest(harvest)
 
 
-@router.post("/{harvest_id}/complete", response_model=v3_models.HarvestResponse)
+@router.post("/{harvest_id}/complete", response_model=v3_models.HarvestResponse, deprecated=True)
 async def complete_harvest(  # noqa: PLR0913, PLR0917
     request: Request,
     harvest_id: str,
@@ -96,7 +96,10 @@ async def complete_harvest(  # noqa: PLR0913, PLR0917
     deps: Annotated[CommonApiDependencies, Depends(get_common_deps)],
     client_id: Annotated[str | None, Depends(get_client_id)],
 ) -> v3_models.HarvestResponse:
-    """Mark a harvest as completed."""
+    """Mark a harvest as completed. [DEPRECATED].
+
+    Use ``PATCH /v3/harvests/{harvest_id}`` with ``status=COMPLETED`` instead.
+    """
     # Fetch once — used for both RDI auth and passed to complete_harvest (C2).
     harvest = await bl.harvest_manager.get_harvest(harvest_id)
     if not harvest:
@@ -137,7 +140,7 @@ async def patch_harvest_status(  # noqa: PLR0913, PLR0917
     return _map_harvest(harvest)
 
 
-@router.delete("/{harvest_id}", status_code=HTTPStatus.NO_CONTENT)
+@router.delete("/{harvest_id}", status_code=HTTPStatus.NO_CONTENT, deprecated=True)
 async def cancel_harvest(
     request: Request,
     harvest_id: str,
@@ -145,7 +148,10 @@ async def cancel_harvest(
     deps: Annotated[CommonApiDependencies, Depends(get_common_deps)],
     client_id: Annotated[str | None, Depends(get_client_id)],
 ) -> None:
-    """Cancel a harvest run."""
+    """Cancel a harvest run. [DEPRECATED].
+
+    Use ``PATCH /v3/harvests/{harvest_id}`` with ``status=CANCELLED`` instead.
+    """
     # Fetch once — used for both RDI auth and passed to cancel_harvest (C2).
     harvest = await bl.harvest_manager.get_harvest(harvest_id)
     if not harvest:
