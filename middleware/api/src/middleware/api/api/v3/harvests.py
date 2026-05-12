@@ -13,7 +13,7 @@ from middleware.api.api.common.dependencies import (
     get_common_deps,
     get_content_type,
 )
-from middleware.api.business_logic import BusinessLogic
+from middleware.api.business_logic import BusinessLogic, ConflictError
 from middleware.api.document_store.harvest_document import HarvestDocument
 from middleware.shared.api_models.v3 import models as v3_models
 
@@ -104,7 +104,36 @@ async def complete_harvest(  # noqa: PLR0913, PLR0917
 
     await deps.validate_rdi_authorized(harvest.rdi, request)
 
-    harvest = await bl.harvest_manager.complete_harvest(harvest_id, client_id=client_id, pre_fetched=harvest)
+    harvest = await bl.harvest_manager.complete_harvest(harvest, client_id=client_id)
+    return _map_harvest(harvest)
+
+
+@router.patch("/{harvest_id}", response_model=v3_models.HarvestResponse)
+async def patch_harvest_status(  # noqa: PLR0913, PLR0917
+    request: Request,
+    harvest_id: str,
+    request_body: v3_models.PatchHarvestRequest,
+    bl: Annotated[BusinessLogic, Depends(get_business_logic)],
+    deps: Annotated[CommonApiDependencies, Depends(get_common_deps)],
+    client_id: Annotated[str | None, Depends(get_client_id)],
+    _content_type: Annotated[None, Depends(get_content_type)],
+) -> v3_models.HarvestResponse:
+    """Transition a harvest run to a terminal status (COMPLETED, CANCELLED, or FAILED).
+
+    Only a ``RUNNING`` harvest may be transitioned; any other current status returns
+    409 Conflict.
+    """
+    harvest = await bl.harvest_manager.get_harvest(harvest_id)
+    if not harvest:
+        raise HTTPException(status_code=HTTPStatus.NOT_FOUND, detail="Harvest not found")
+
+    await deps.validate_rdi_authorized(harvest.rdi, request)
+
+    try:
+        harvest = await bl.harvest_manager.transition_harvest(harvest, request_body.status, client_id=client_id)
+    except ConflictError as exc:
+        raise HTTPException(status_code=HTTPStatus.CONFLICT, detail=str(exc)) from exc
+
     return _map_harvest(harvest)
 
 
@@ -123,7 +152,7 @@ async def cancel_harvest(
         raise HTTPException(status_code=HTTPStatus.NOT_FOUND, detail="Harvest not found")
 
     await deps.validate_rdi_authorized(harvest.rdi, request)
-    await bl.harvest_manager.cancel_harvest(harvest_id, client_id=client_id, pre_fetched=harvest)
+    await bl.harvest_manager.cancel_harvest(harvest, client_id=client_id)
 
 
 @router.post("/{harvest_id}/arcs", response_model=v3_models.ArcResponse)

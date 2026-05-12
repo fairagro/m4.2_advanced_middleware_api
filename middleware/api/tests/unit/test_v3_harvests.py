@@ -9,6 +9,7 @@ from fastapi.testclient import TestClient
 
 from middleware.api.api.fastapi_app import Api
 from middleware.api.business_logic import BusinessLogicError, InvalidJsonSemanticError
+from middleware.api.business_logic.exceptions import ConflictError
 from middleware.api.document_store.harvest_document import HarvestDocument, HarvestStatistics
 from middleware.shared.api_models import ArcOperationResult, ArcResponse, ArcStatus
 from middleware.shared.api_models.common.models import HarvestStatus
@@ -323,7 +324,102 @@ def test_complete_harvest_not_found(client: TestClient, cert: str, middleware_ap
 
 
 # ---------------------------------------------------------------------------
-# cancel_harvest
+# patch_harvest_status
+# ---------------------------------------------------------------------------
+@pytest.mark.unit
+@pytest.mark.parametrize("target_status", [HarvestStatus.COMPLETED, HarvestStatus.CANCELLED, HarvestStatus.FAILED])
+def test_patch_harvest_status_success(
+    client: TestClient, cert: str, middleware_api: Api, target_status: HarvestStatus
+) -> None:
+    """PATCH returns the updated harvest for all terminal statuses."""
+    harvest = _make_harvest_doc()
+    updated_harvest = HarvestDocument(
+        doc_id="h-1",
+        rdi="rdi-1",
+        client_id="test-client-cn",
+        status=target_status,
+        started_at=datetime.now(UTC),
+        statistics=HarvestStatistics(),
+    )
+
+    with (
+        patch.object(middleware_api.business_logic.harvest_manager, "get_harvest", new_callable=AsyncMock) as mock_get,
+        patch.object(middleware_api.app.state.common_deps, "get_authorized_rdis", new_callable=AsyncMock) as mock_auth,
+        patch.object(
+            middleware_api.business_logic.harvest_manager, "transition_harvest", new_callable=AsyncMock
+        ) as mock_transition,
+    ):
+        mock_get.return_value = harvest
+        mock_auth.return_value = ["rdi-1"]
+        mock_transition.return_value = updated_harvest
+
+        r = client.patch(
+            "/v3/harvests/h-1",
+            headers={
+                "ssl-client-cert": cert,
+                "ssl-client-verify": "SUCCESS",
+                "content-type": "application/json",
+                "accept": "application/json",
+            },
+            json={"status": target_status.value},
+        )
+
+    assert r.status_code == http.HTTPStatus.OK
+    assert r.json()["status"] == target_status.value
+
+
+@pytest.mark.unit
+def test_patch_harvest_status_not_found(client: TestClient, cert: str, middleware_api: Api) -> None:
+    """PATCH returns 404 when the harvest does not exist."""
+    with patch.object(middleware_api.business_logic.harvest_manager, "get_harvest", new_callable=AsyncMock) as mock_get:
+        mock_get.return_value = None
+
+        r = client.patch(
+            "/v3/harvests/no-such",
+            headers={
+                "ssl-client-cert": cert,
+                "ssl-client-verify": "SUCCESS",
+                "content-type": "application/json",
+                "accept": "application/json",
+            },
+            json={"status": "CANCELLED"},
+        )
+
+    assert r.status_code == http.HTTPStatus.NOT_FOUND
+
+
+@pytest.mark.unit
+def test_patch_harvest_status_conflict(client: TestClient, cert: str, middleware_api: Api) -> None:
+    """PATCH returns 409 when the harvest is not in RUNNING state."""
+    harvest = _make_harvest_doc()
+
+    with (
+        patch.object(middleware_api.business_logic.harvest_manager, "get_harvest", new_callable=AsyncMock) as mock_get,
+        patch.object(middleware_api.app.state.common_deps, "get_authorized_rdis", new_callable=AsyncMock) as mock_auth,
+        patch.object(
+            middleware_api.business_logic.harvest_manager, "transition_harvest", new_callable=AsyncMock
+        ) as mock_transition,
+    ):
+        mock_get.return_value = harvest
+        mock_auth.return_value = ["rdi-1"]
+        mock_transition.side_effect = ConflictError("harvest h-1 cannot transition: current status is COMPLETED")
+
+        r = client.patch(
+            "/v3/harvests/h-1",
+            headers={
+                "ssl-client-cert": cert,
+                "ssl-client-verify": "SUCCESS",
+                "content-type": "application/json",
+                "accept": "application/json",
+            },
+            json={"status": "CANCELLED"},
+        )
+
+    assert r.status_code == http.HTTPStatus.CONFLICT
+
+
+# ---------------------------------------------------------------------------
+# cancel_harvest (DELETE — legacy)
 # ---------------------------------------------------------------------------
 @pytest.mark.unit
 def test_cancel_harvest_success(client: TestClient, cert: str, middleware_api: Api) -> None:

@@ -95,6 +95,15 @@ class CreateHarvestRequest(BaseModel):
     ] = None
 
 
+class PatchHarvestRequest(BaseModel):
+    """Request model for transitioning a harvest run to a terminal state via PATCH."""
+
+    status: Annotated[
+        HarvestStatus,
+        Field(description="Target terminal status: COMPLETED, CANCELLED, or FAILED."),
+    ]
+
+
 class HarvestResponse(ApiResponse):
     """Response model for harvest details."""
 

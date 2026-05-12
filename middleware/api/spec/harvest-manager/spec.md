@@ -15,6 +15,10 @@ finalization — and enforce client ownership of harvest resources.
 - [ ] Increment per-harvest statistics (new-ARC counter and changed-ARC counter)
       via `increment_harvest_statistics` for each processed ARC.
 - [ ] Finalize a harvest run, marking it complete and recording the final statistics.
+- [ ] Transition a harvest run to a target terminal status (`COMPLETED`, `CANCELLED`,
+      or `FAILED`) via an explicit state-transition operation.
+- [ ] Enforce the transition guard: only a `RUNNING` harvest may transition to a
+      terminal status; raise `ConflictError` otherwise.
 
 ## Edge Cases
 
@@ -25,3 +29,5 @@ finalization — and enforce client ownership of harvest resources.
 `expected_datasets` not provided → harvest document is created without a progress denominator; progress reporting shows raw counts only.
 
 Finalize called before all ARCs arrive → harvest is marked complete with whatever statistics are current; no enforcement of `expected_datasets`.
+
+Transition called on a non-`RUNNING` harvest → raise `ConflictError` with the current status in the message.

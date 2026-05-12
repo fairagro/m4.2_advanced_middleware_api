@@ -13,9 +13,11 @@ from typing import TYPE_CHECKING, Any, cast
 import httpx
 from pydantic import BaseModel, ValidationError
 
+from middleware.shared.api_models.common.models import HarvestStatus as SharedHarvestStatus
 from middleware.shared.api_models.v3.models import (
     CreateArcRequest,
     CreateHarvestRequest,
+    PatchHarvestRequest,
     SubmitHarvestArcRequest,
 )
 
@@ -226,12 +228,12 @@ class ApiClient:
             or status_code >= HTTPStatus.INTERNAL_SERVER_ERROR
         )
 
-    async def _cancel_harvest_safely(self, rdi: str, harvest_id: str) -> None:
-        """Try cancelling a harvest and suppress cancellation failures."""
+    async def _fail_harvest_safely(self, rdi: str, harvest_id: str) -> None:
+        """Try marking a harvest as failed and suppress any secondary failures."""
         try:
-            await self.cancel_harvest(harvest_id)
+            await self.fail_harvest(harvest_id)
         except ApiClientError:
-            logger.warning("[%s] Failed to cancel harvest %s", rdi, harvest_id)
+            logger.warning("[%s] Failed to mark harvest %s as failed", rdi, harvest_id)
 
     @classmethod
     async def _cancel_pending_arc_tasks(cls, pending_tasks: set[asyncio.Task[None]]) -> None:
@@ -441,6 +443,15 @@ class ApiClient:
         """DELETE request, ignoring a 204 No Content response."""
         await self._request_with_retries("DELETE", path)
 
+    async def _patch(self, path: str, body: BaseModel) -> Any:
+        """PATCH with a Pydantic request body."""
+        return await self._request_with_retries(
+            "PATCH",
+            path,
+            content=body.model_dump_json(),
+            headers={"content-type": "application/json"},
+        )
+
     # ------------------------------------------------------------------
     # Helper
     # ------------------------------------------------------------------
@@ -574,15 +585,39 @@ class ApiClient:
         data = await self._post_empty(f"v3/harvests/{harvest_id}/complete")
         return self._parse_harvest_response(data)
 
-    async def cancel_harvest(self, harvest_id: str) -> None:
-        """Cancel (delete) a harvest run.
+    async def cancel_harvest(self, harvest_id: str) -> HarvestResult:
+        """Mark a harvest run as cancelled.
 
-        Uses ``DELETE /v3/harvests/{harvest_id}``.
+        Uses ``PATCH /v3/harvests/{harvest_id}`` with ``status=CANCELLED``.
 
         Args:
             harvest_id: Harvest identifier.
+
+        Returns:
+            Updated :class:`HarvestResult`.
         """
-        await self._delete(f"v3/harvests/{harvest_id}")
+        data = await self._patch(
+            f"v3/harvests/{harvest_id}",
+            PatchHarvestRequest(status=SharedHarvestStatus.CANCELLED),
+        )
+        return self._parse_harvest_response(data)
+
+    async def fail_harvest(self, harvest_id: str) -> HarvestResult:
+        """Mark a harvest run as failed.
+
+        Uses ``PATCH /v3/harvests/{harvest_id}`` with ``status=FAILED``.
+
+        Args:
+            harvest_id: Harvest identifier.
+
+        Returns:
+            Updated :class:`HarvestResult`.
+        """
+        data = await self._patch(
+            f"v3/harvests/{harvest_id}",
+            PatchHarvestRequest(status=SharedHarvestStatus.FAILED),
+        )
+        return self._parse_harvest_response(data)
 
     async def submit_arc_in_harvest(
         self,
@@ -635,7 +670,7 @@ class ApiClient:
 
         Raises:
             ApiClientError: On catastrophic HTTP or serialization errors. The
-                harvest is cancelled before the exception propagates.
+                harvest is marked as failed before the exception propagates.
 
         Example::
 
@@ -653,8 +688,10 @@ class ApiClient:
         try:
             failed_submissions = await self._submit_arcs_parallel(harvest_id, arcs)
         except Exception:
-            logger.warning("[%s] Catastrophic error during ARC submission, cancelling harvest %s", rdi, harvest_id)
-            await self._cancel_harvest_safely(rdi, harvest_id)
+            logger.warning(
+                "[%s] Catastrophic error during ARC submission, marking harvest %s as failed", rdi, harvest_id
+            )
+            await self._fail_harvest_safely(rdi, harvest_id)
             raise
 
         if failed_submissions > 0:
