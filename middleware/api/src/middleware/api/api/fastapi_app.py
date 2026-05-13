@@ -168,11 +168,14 @@ class Api:
 
         logger.debug("API configuration: %s", self._config.model_dump())
 
-        # Apply polling log filter to uvicorn access logger
-        logging.getLogger("uvicorn.access").addFilter(PollingLogFilter())
-
         @asynccontextmanager
         async def lifespan(_app: FastAPI) -> AsyncGenerator[None, None]:
+            # Re-apply our log format after uvicorn has finished its own log setup.
+            # uvicorn.main() installs its own handlers on uvicorn.access/uvicorn.error
+            # *after* this module is imported, so we must reconfigure here.
+            _configure_uvicorn_loggers(self._config.log_level)
+            logging.getLogger("uvicorn.access").addFilter(PollingLogFilter())
+
             # Initialize business logic and its stores
             try:
                 try:
