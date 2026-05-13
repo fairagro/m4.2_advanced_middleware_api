@@ -65,61 +65,16 @@ class HarvestManager:
         harvest: HarvestDocument,
         client_id: str | None,
     ) -> HarvestDocument:
-        """Mark a harvest as completed and return the updated document.
-
-        Args:
-            harvest: Already-fetched harvest document.
-            client_id: Client that issued the request (used for ownership check).
-        """
-        harvest_id = harvest.doc_id
-        if harvest.client_id != client_id:
-            logger.warning(
-                "[%s] Client ID mismatch for harvest %s: expected %s", client_id, harvest_id, harvest.client_id
-            )
-            raise AccessDeniedError(f"Harvest {harvest_id} does not belong to client {client_id}")
-
-        # Compute statistics from ARC documents once at finalization.
-        statistics = await self._doc_store.get_harvest_statistics(harvest_id)
-        if harvest.statistics and harvest.statistics.expected_datasets is not None:
-            statistics.expected_datasets = harvest.statistics.expected_datasets
-
-        updates: dict[str, Any] = {
-            "status": HarvestStatus.COMPLETED,
-            "statistics": statistics.model_dump(),
-        }
-
-        updated = await self._doc_store.update_harvest(harvest_id, updates)
-        logger.info("[%s] Completed harvest: %s", client_id, harvest_id)
-        return updated
+        """Mark a harvest as completed and return the updated document."""
+        return await self.transition_harvest(harvest, HarvestStatus.COMPLETED, client_id)
 
     async def cancel_harvest(
         self,
         harvest: HarvestDocument,
         client_id: str | None,
     ) -> None:
-        """Cancel a harvest run.
-
-        Args:
-            harvest: Already-fetched harvest document.
-            client_id: Client that issued the request (used for ownership check).
-        """
-        harvest_id = harvest.doc_id
-        if harvest.client_id != client_id:
-            logger.warning(
-                "[%s] Client ID mismatch for harvest %s: expected %s", client_id, harvest_id, harvest.client_id
-            )
-            raise AccessDeniedError(f"Harvest {harvest_id} does not belong to client {client_id}")
-
-        # Compute statistics from ARC documents once at finalization.
-        statistics = await self._doc_store.get_harvest_statistics(harvest_id)
-        if harvest.statistics and harvest.statistics.expected_datasets is not None:
-            statistics.expected_datasets = harvest.statistics.expected_datasets
-        updates: dict[str, Any] = {
-            "status": HarvestStatus.CANCELLED,
-            "statistics": statistics.model_dump(),
-        }
-        await self._doc_store.update_harvest(harvest_id, updates)
-        logger.info("[%s] Cancelled harvest: %s", client_id, harvest_id)
+        """Cancel a harvest run."""
+        await self.transition_harvest(harvest, HarvestStatus.CANCELLED, client_id)
 
     async def transition_harvest(
         self,
