@@ -292,7 +292,7 @@ async def test_couchdb_client_save_document_validator_exception_propagates(
 
     fresh_doc_data = {"_id": "doc1", "state": "taken"}
     mock_doc = MagicMock()
-    mock_doc.__iter__.return_value = iter(fresh_doc_data.keys())
+    mock_doc.keys.return_value = fresh_doc_data.keys()
     mock_doc.__getitem__.side_effect = fresh_doc_data.__getitem__
 
     mock_db = MagicMock()
