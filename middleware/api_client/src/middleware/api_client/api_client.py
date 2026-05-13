@@ -484,7 +484,7 @@ class ApiClient:
         graph = arc_content.get("@graph")
         if isinstance(graph, list):
             for item in graph:
-                if item.get("@id") == "./":
+                if isinstance(item, dict) and item.get("@id") == "./":
                     identifier = item.get("identifier")
                     if isinstance(identifier, list):
                         identifier = identifier[0] if identifier else None
