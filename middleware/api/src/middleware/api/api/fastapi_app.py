@@ -89,6 +89,7 @@ else:
 logging.basicConfig(
     level=getattr(logging, loaded_config.log_level),
     format="%(asctime)s %(levelname)s %(name)s: %(message)s",
+    force=True,
 )
 
 
