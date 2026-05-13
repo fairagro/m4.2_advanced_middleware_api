@@ -31,15 +31,6 @@ class CouchDBConfig(BaseModel):
             description="Maximum retry attempts for save_document on CouchDB revision conflicts",
         ),
     ] = 3
-    harvest_stats_max_retries: Annotated[
-        int,
-        Field(
-            default=5,
-            ge=1,
-            le=100,
-            description="Maximum retry attempts for atomic harvest statistics updates on CouchDB revision conflicts",
-        ),
-    ] = 5
 
     @field_validator("url")
     @classmethod

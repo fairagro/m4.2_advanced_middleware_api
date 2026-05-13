@@ -136,6 +136,7 @@ async def test_complete_harvest_success(manager: HarvestManager, doc_store: Magi
     harvest = _make_harvest(client_id="client-a", statistics=stats)
     updated = _make_harvest(client_id="client-a", status=HarvestStatus.COMPLETED, statistics=stats)
 
+    doc_store.get_harvest_statistics = AsyncMock(return_value=HarvestStatistics(arcs_submitted=5))
     doc_store.update_harvest = AsyncMock(return_value=updated)
 
     result = await manager.complete_harvest(harvest, "client-a")
@@ -149,6 +150,7 @@ async def test_complete_harvest_preserves_expected_datasets(manager: HarvestMana
     harvest = _make_harvest(client_id="client-a", statistics=HarvestStatistics(expected_datasets=10))
     updated = _make_harvest(client_id="client-a", status=HarvestStatus.COMPLETED)
 
+    doc_store.get_harvest_statistics = AsyncMock(return_value=HarvestStatistics())
     doc_store.update_harvest = AsyncMock(return_value=updated)
 
     await manager.complete_harvest(harvest, "client-a")
@@ -171,8 +173,9 @@ async def test_complete_harvest_client_id_mismatch(manager: HarvestManager) -> N
 # ---------------------------------------------------------------------------
 @pytest.mark.asyncio
 async def test_cancel_harvest_success(manager: HarvestManager, doc_store: MagicMock) -> None:
-    """cancel_harvest updates status to CANCELLED."""
+    """cancel_harvest updates status to CANCELLED and persists statistics."""
     harvest = _make_harvest(client_id="client-a")
+    doc_store.get_harvest_statistics = AsyncMock(return_value=HarvestStatistics())
     doc_store.update_harvest = AsyncMock()
 
     await manager.cancel_harvest(harvest, "client-a")
@@ -220,6 +223,7 @@ async def test_transition_harvest_success(
     """transition_harvest updates status for all terminal states when harvest is RUNNING."""
     harvest = _make_harvest(client_id="client-a", status=HarvestStatus.RUNNING)
     updated = _make_harvest(client_id="client-a", status=target_status)
+    doc_store.get_harvest_statistics = AsyncMock(return_value=HarvestStatistics())
     doc_store.update_harvest = AsyncMock(return_value=updated)
 
     result = await manager.transition_harvest(harvest, target_status, "client-a")

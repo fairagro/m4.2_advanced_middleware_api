@@ -36,6 +36,7 @@ def test_create_or_update_arc_v3_success(client: TestClient, cert: str, middlewa
         status=ArcLifecycleStatus.ACTIVE,
         first_seen=now,
         last_seen=now,
+        last_changed=now,
         events=[ArcEvent(timestamp=now, type=ArcEventType.ARC_CREATED, message="ARC first seen")],
     )
 

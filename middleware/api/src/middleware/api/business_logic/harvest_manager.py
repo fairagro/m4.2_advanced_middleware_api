@@ -6,7 +6,7 @@ from typing import Any, Self
 from middleware.api.business_logic.config import HarvestConfig
 from middleware.api.business_logic.exceptions import AccessDeniedError, ConflictError, ResourceNotFoundError
 from middleware.api.document_store import DocumentStore
-from middleware.api.document_store.harvest_document import HarvestDocument, HarvestStatistics
+from middleware.api.document_store.harvest_document import HarvestDocument
 from middleware.shared.api_models.common.models import HarvestStatus
 
 logger = logging.getLogger(__name__)
@@ -78,8 +78,10 @@ class HarvestManager:
             )
             raise AccessDeniedError(f"Harvest {harvest_id} does not belong to client {client_id}")
 
-        # Statistics are maintained incrementally during ARC submission.
-        statistics = harvest.statistics or HarvestStatistics()
+        # Compute statistics from ARC documents once at finalization.
+        statistics = await self._doc_store.get_harvest_statistics(harvest_id)
+        if harvest.statistics and harvest.statistics.expected_datasets is not None:
+            statistics.expected_datasets = harvest.statistics.expected_datasets
 
         updates: dict[str, Any] = {
             "status": HarvestStatus.COMPLETED,
@@ -108,8 +110,13 @@ class HarvestManager:
             )
             raise AccessDeniedError(f"Harvest {harvest_id} does not belong to client {client_id}")
 
-        updates = {
+        # Compute statistics from ARC documents once at finalization.
+        statistics = await self._doc_store.get_harvest_statistics(harvest_id)
+        if harvest.statistics and harvest.statistics.expected_datasets is not None:
+            statistics.expected_datasets = harvest.statistics.expected_datasets
+        updates: dict[str, Any] = {
             "status": HarvestStatus.CANCELLED,
+            "statistics": statistics.model_dump(),
         }
         await self._doc_store.update_harvest(harvest_id, updates)
         logger.info("[%s] Cancelled harvest: %s", client_id, harvest_id)
@@ -142,9 +149,11 @@ class HarvestManager:
             )
 
         updates: dict[str, Any] = {"status": target_status}
-        if target_status == HarvestStatus.COMPLETED:
-            statistics = harvest.statistics or HarvestStatistics()
-            updates["statistics"] = statistics.model_dump()
+        # Compute statistics from ARC documents once at finalization.
+        statistics = await self._doc_store.get_harvest_statistics(harvest_id)
+        if harvest.statistics and harvest.statistics.expected_datasets is not None:
+            statistics.expected_datasets = harvest.statistics.expected_datasets
+        updates["statistics"] = statistics.model_dump()
 
         updated = await self._doc_store.update_harvest(harvest_id, updates)
         logger.info("[%s] Transitioned harvest %s to %s", client_id, harvest_id, target_status)
