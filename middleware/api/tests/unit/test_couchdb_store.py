@@ -8,11 +8,10 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 from pydantic import SecretStr
 
+from middleware.api.document_store import DuplicateArcError
 from middleware.api.document_store.arc_document import ArcDocument, ArcEvent, ArcMetadata
 from middleware.api.document_store.config import CouchDBConfig
 from middleware.api.document_store.couchdb import CouchDB
-from middleware.api.document_store.couchdb_client import DocumentConflictError
-from middleware.api.document_store.harvest_document import HarvestStatistics
 from middleware.shared.api_models.common.models import ArcEventType, ArcLifecycleStatus
 
 
@@ -226,6 +225,124 @@ async def test_store_arc_no_change(store: CouchDB, mock_client_instance: MagicMo
     mock_client_instance.save_document.assert_called_once()
 
 
+def _make_existing_arc_doc(rdi: str, arc_content: dict, last_harvest_id: str | None = None) -> dict:
+    """Build a minimal existing ARC document dict for mocking."""
+    json_str = json.dumps(arc_content, sort_keys=True)
+    content_hash = hashlib.sha256(json_str.encode("utf-8")).hexdigest()
+    return {
+        "_id": "arc_...",
+        "_rev": "1-rev",
+        "rdi": rdi,
+        "arc_content": arc_content,
+        "metadata": {
+            "arc_hash": content_hash,
+            "status": "ACTIVE",
+            "first_seen": "2023-01-01T00:00:00Z",
+            "last_seen": "2023-01-01T00:00:00Z",
+            "last_harvest_id": last_harvest_id,
+            "events": [],
+        },
+    }
+
+
+@pytest.mark.asyncio
+async def test_store_arc_duplicate_in_same_harvest_raises(store: CouchDB, mock_client_instance: MagicMock) -> None:
+    """store_arc raises DuplicateArcError when the same ARC is re-submitted in the same harvest."""
+    rdi = "test_rdi"
+    harvest_id = "harvest-abc"
+    arc_content = {
+        "@context": "https://w3id.org/ro/crate/1.1/context",
+        "@graph": [{"@id": "./", "identifier": "arc_dup"}],
+    }
+    mock_client_instance.get_document.return_value = _make_existing_arc_doc(
+        rdi, arc_content, last_harvest_id=harvest_id
+    )
+
+    with pytest.raises(DuplicateArcError, match="arc_dup"):
+        await store.store_arc(rdi, arc_content, harvest_id=harvest_id)
+
+    mock_client_instance.save_document.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_store_arc_concurrent_duplicate_detected_via_validator(
+    store: CouchDB, mock_client_instance: MagicMock
+) -> None:
+    """Validator passed to save_document raises DuplicateArcError for same harvest.
+
+    This test verifies the TOCTOU fix: even when the initial get_document returns a
+    doc from a *different* harvest (so the early check passes), the validator closure
+    that store_arc registers is still wired correctly and will fire with the right
+    harvest_id if called with a freshly-fetched doc that already carries the same
+    harvest_id.  We simulate this by capturing the validator from the save_document
+    call and invoking it manually with a document whose last_harvest_id matches.
+    """
+    rdi = "test_rdi"
+    harvest_id = "harvest-concurrent"
+    arc_content = {
+        "@context": "https://w3id.org/ro/crate/1.1/context",
+        "@graph": [{"@id": "./", "identifier": "arc_concurrent"}],
+    }
+    # Initial fetch returns a doc from a *previous* harvest → early check passes
+    mock_client_instance.get_document.return_value = _make_existing_arc_doc(
+        rdi, arc_content, last_harvest_id="harvest-previous"
+    )
+    mock_client_instance.save_document.return_value = {"ok": True}
+
+    await store.store_arc(rdi, arc_content, harvest_id=harvest_id)
+
+    # Extract the validator that was passed to save_document
+    _, kwargs = mock_client_instance.save_document.call_args
+    validator = kwargs.get("pre_save_validator")
+    assert validator is not None, "store_arc must pass pre_save_validator when harvest_id is set"
+
+    # Simulate: on the retry, the freshly fetched doc now carries the *same* harvest_id
+    # (because a concurrent request already wrote it).  The validator must raise.
+    fresh_doc_with_concurrent_write = {
+        "metadata": {"last_harvest_id": harvest_id},
+    }
+    with pytest.raises(DuplicateArcError, match="arc_concurrent"):
+        validator(fresh_doc_with_concurrent_write)
+
+
+@pytest.mark.asyncio
+async def test_store_arc_same_arc_different_harvest_is_allowed(store: CouchDB, mock_client_instance: MagicMock) -> None:
+    """store_arc allows re-submitting an ARC that was seen in a *different* harvest."""
+    rdi = "test_rdi"
+    arc_content = {
+        "@context": "https://w3id.org/ro/crate/1.1/context",
+        "@graph": [{"@id": "./", "identifier": "arc_dup"}],
+    }
+    mock_client_instance.get_document.return_value = _make_existing_arc_doc(
+        rdi, arc_content, last_harvest_id="harvest-previous"
+    )
+    mock_client_instance.save_document.return_value = {"ok": True}
+
+    result = await store.store_arc(rdi, arc_content, harvest_id="harvest-new")
+
+    assert result.is_new is False
+    mock_client_instance.save_document.assert_called_once()
+
+
+@pytest.mark.asyncio
+async def test_store_arc_no_harvest_context_allows_resubmit(store: CouchDB, mock_client_instance: MagicMock) -> None:
+    """store_arc never raises DuplicateArcError for stand-alone ARC submissions (no harvest_id)."""
+    rdi = "test_rdi"
+    arc_content = {
+        "@context": "https://w3id.org/ro/crate/1.1/context",
+        "@graph": [{"@id": "./", "identifier": "arc_dup"}],
+    }
+    mock_client_instance.get_document.return_value = _make_existing_arc_doc(
+        rdi, arc_content, last_harvest_id="harvest-any"
+    )
+    mock_client_instance.save_document.return_value = {"ok": True}
+
+    result = await store.store_arc(rdi, arc_content, harvest_id=None)
+
+    assert result.is_new is False
+    mock_client_instance.save_document.assert_called_once()
+
+
 @pytest.mark.asyncio
 async def test_add_event_trimming(store: CouchDB, mock_client_instance: MagicMock) -> None:  # noqa: ARG001
     """Test that event log is trimmed according to configuration."""
@@ -235,6 +352,7 @@ async def test_add_event_trimming(store: CouchDB, mock_client_instance: MagicMoc
 
     arc_id = "some_id"
 
+    now = datetime.now(UTC)
     initial_doc = ArcDocument(
         doc_id=f"arc_{arc_id}",
         rdi="test_rdi",
@@ -242,8 +360,9 @@ async def test_add_event_trimming(store: CouchDB, mock_client_instance: MagicMoc
         metadata=ArcMetadata(
             arc_hash="abc",
             status=ArcLifecycleStatus.ACTIVE,
-            first_seen=datetime.now(UTC),
-            last_seen=datetime.now(UTC),
+            first_seen=now,
+            last_seen=now,
+            last_changed=now,
             events=[],
         ),
     )
@@ -280,69 +399,34 @@ async def test_add_event_trimming(store: CouchDB, mock_client_instance: MagicMoc
 
 
 @pytest.mark.asyncio
-async def test_increment_harvest_statistics_atomic_success(store: CouchDB, mock_client_instance: MagicMock) -> None:
-    """Test atomic harvest stats increment succeeds on first attempt."""
-    harvest_id = "harvest-1"
-    mock_client_instance.get_document.return_value = {
-        "_id": harvest_id,
-        "_rev": "1-a",
-        "type": "harvest",
-        "rdi": "test-rdi",
-        "client_id": "client",
-        "started_at": datetime.now(UTC).isoformat(),
-        "status": "RUNNING",
-        "statistics": HarvestStatistics().model_dump(),
-    }
-
-    await store.increment_harvest_statistics(harvest_id, is_new=True, has_changes=True)
-
-    mock_client_instance.save_document_if_revision_matches.assert_called_once()
-    _, kwargs = mock_client_instance.save_document_if_revision_matches.call_args
-    assert kwargs["expected_rev"] == "1-a"
-    payload = mock_client_instance.save_document_if_revision_matches.call_args[0][1]
-    assert payload["statistics"]["arcs_submitted"] == 1  # noqa: PLR2004
-    assert payload["statistics"]["arcs_new"] == 1  # noqa: PLR2004
-
-
-@pytest.mark.asyncio
-async def test_increment_harvest_statistics_retries_on_conflict(
+@pytest.mark.parametrize(
+    "meta_patch, expected_new, expected_updated, expected_unchanged",
+    [
+        # ARC created in this harvest
+        ({"first_harvest_id": "h1", "last_changed_harvest_id": "h1"}, 1, 0, 0),
+        # ARC updated in this harvest (existed before)
+        ({"first_harvest_id": "h0", "last_changed_harvest_id": "h1"}, 0, 1, 0),
+        # ARC seen but unchanged
+        ({"first_harvest_id": "h0", "last_changed_harvest_id": "h0"}, 0, 0, 1),
+        # ARC seen but last_changed_harvest_id is None (old document, no field)
+        ({"first_harvest_id": "h0", "last_changed_harvest_id": None}, 0, 0, 1),
+    ],
+)
+async def test_get_harvest_statistics(  # noqa: PLR0913, PLR0917
     store: CouchDB,
     mock_client_instance: MagicMock,
+    meta_patch: dict,
+    expected_new: int,
+    expected_updated: int,
+    expected_unchanged: int,
 ) -> None:
-    """Test atomic harvest stats increment retries and succeeds after conflict."""
-    harvest_id = "harvest-1"
+    """get_harvest_statistics classifies ARCs via first_harvest_id and last_changed_harvest_id."""
+    harvest_id = "h1"
+    mock_client_instance.find_projected = AsyncMock(return_value=[{"metadata": meta_patch}])
 
-    first_doc = {
-        "_id": harvest_id,
-        "_rev": "1-a",
-        "type": "harvest",
-        "rdi": "test-rdi",
-        "client_id": "client",
-        "started_at": datetime.now(UTC).isoformat(),
-        "status": "RUNNING",
-        "statistics": HarvestStatistics().model_dump(),
-    }
-    second_doc = {
-        "_id": harvest_id,
-        "_rev": "2-b",
-        "type": "harvest",
-        "rdi": "test-rdi",
-        "client_id": "client",
-        "started_at": datetime.now(UTC).isoformat(),
-        "status": "RUNNING",
-        "statistics": HarvestStatistics(arcs_submitted=1, arcs_updated=1).model_dump(),
-    }
+    stats = await store.get_harvest_statistics(harvest_id)
 
-    mock_client_instance.get_document.side_effect = [first_doc, second_doc]
-    mock_client_instance.save_document_if_revision_matches.side_effect = [
-        DocumentConflictError("conflict"),
-        {"_id": harvest_id, "_rev": "3-c"},
-    ]
-
-    await store.increment_harvest_statistics(harvest_id, is_new=False, has_changes=False)
-
-    assert mock_client_instance.save_document_if_revision_matches.call_count == 2  # noqa: PLR2004
-    second_call_payload = mock_client_instance.save_document_if_revision_matches.call_args_list[1][0][1]
-    assert second_call_payload["statistics"]["arcs_submitted"] == 2  # noqa: PLR2004
-    assert second_call_payload["statistics"]["arcs_unchanged"] == 1  # noqa: PLR2004
-    assert second_call_payload["statistics"]["arcs_updated"] == 1  # noqa: PLR2004
+    assert stats.arcs_submitted == 1
+    assert stats.arcs_new == expected_new
+    assert stats.arcs_updated == expected_updated
+    assert stats.arcs_unchanged == expected_unchanged

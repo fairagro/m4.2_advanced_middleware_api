@@ -13,9 +13,11 @@ import uuid
 from collections.abc import AsyncGenerator, Generator
 
 import pytest
+from pydantic import SecretStr
 from testcontainers.core.container import DockerContainer  # type: ignore[import-untyped]
 from testcontainers.core.wait_strategies import LogMessageWaitStrategy  # type: ignore[import-untyped]
 
+from middleware.api.document_store.config import CouchDBConfig
 from middleware.api.document_store.couchdb_client import CouchDBClient
 
 _COUCHDB_IMAGE = "couchdb:3.3"
@@ -57,11 +59,12 @@ async def couchdb_client(couchdb_container: DockerContainer) -> AsyncGenerator[C
     # Each test gets its own database to guarantee isolation
     db_name = f"{_DB_NAME}_{uuid.uuid4().hex[:8]}"
     client = CouchDBClient(
-        url=f"http://{host}:{port}",
-        db_name=db_name,
-        user=_COUCHDB_USER,
-        password=_COUCHDB_PASSWORD,
-        default_query_limit=100,
+        CouchDBConfig(
+            url=f"http://{host}:{port}",
+            db_name=db_name,
+            user=_COUCHDB_USER,
+            password=SecretStr(_COUCHDB_PASSWORD),
+        )
     )
     await client.connect()
     yield client

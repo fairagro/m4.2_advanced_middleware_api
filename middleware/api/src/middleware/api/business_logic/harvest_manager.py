@@ -4,9 +4,9 @@ import logging
 from typing import Any, Self
 
 from middleware.api.business_logic.config import HarvestConfig
-from middleware.api.business_logic.exceptions import AccessDeniedError, ResourceNotFoundError
+from middleware.api.business_logic.exceptions import AccessDeniedError, ConflictError, ResourceNotFoundError
 from middleware.api.document_store import DocumentStore
-from middleware.api.document_store.harvest_document import HarvestDocument, HarvestStatistics
+from middleware.api.document_store.harvest_document import HarvestDocument
 from middleware.shared.api_models.common.models import HarvestStatus
 
 logger = logging.getLogger(__name__)
@@ -62,71 +62,57 @@ class HarvestManager:
 
     async def complete_harvest(
         self,
-        harvest_id: str,
+        harvest: HarvestDocument,
         client_id: str | None,
-        *,
-        pre_fetched: HarvestDocument | None = None,
     ) -> HarvestDocument:
-        """Mark a harvest as completed and return the updated document.
-
-        Args:
-            harvest_id: Harvest run identifier.
-            client_id: Client that issued the request (used for ownership check).
-            pre_fetched: Already-fetched harvest document to avoid a second DB
-                         round-trip.  When ``None`` the document is fetched here.
-        """
-        # Reuse pre-fetched document when available (C2: avoid double DB fetch).
-        harvest = pre_fetched or await self.get_harvest(harvest_id)
-        if not harvest:
-            raise ResourceNotFoundError(f"Harvest {harvest_id} not found")
-        if harvest.client_id != client_id:
-            logger.warning(
-                "[%s] Client ID mismatch for harvest %s: expected %s", client_id, harvest_id, harvest.client_id
-            )
-            raise AccessDeniedError(f"Harvest {harvest_id} does not belong to client {client_id}")
-
-        # Statistics are maintained incrementally during ARC submission.
-        statistics = harvest.statistics or HarvestStatistics()
-
-        updates: dict[str, Any] = {
-            "status": HarvestStatus.COMPLETED,
-            "statistics": statistics.model_dump(),
-        }
-
-        updated = await self._doc_store.update_harvest(harvest_id, updates)
-        logger.info("[%s] Completed harvest: %s", client_id, harvest_id)
-        return updated
+        """Mark a harvest as completed and return the updated document."""
+        return await self.transition_harvest(harvest, HarvestStatus.COMPLETED, client_id)
 
     async def cancel_harvest(
         self,
-        harvest_id: str,
+        harvest: HarvestDocument,
         client_id: str | None,
-        *,
-        pre_fetched: HarvestDocument | None = None,
     ) -> None:
-        """Cancel a harvest run.
+        """Cancel a harvest run."""
+        await self.transition_harvest(harvest, HarvestStatus.CANCELLED, client_id)
+
+    async def transition_harvest(
+        self,
+        harvest: HarvestDocument,
+        target_status: HarvestStatus,
+        client_id: str | None,
+    ) -> HarvestDocument:
+        """Transition a harvest run to a terminal status.
+
+        Only a ``RUNNING`` harvest may transition; any other current status raises
+        ``ConflictError``.
 
         Args:
-            harvest_id: Harvest run identifier.
+            harvest: Already-fetched harvest document.
+            target_status: Target terminal status (COMPLETED, CANCELLED, or FAILED).
             client_id: Client that issued the request (used for ownership check).
-            pre_fetched: Already-fetched harvest document to avoid a second DB
-                         round-trip.  When ``None`` the document is fetched here.
         """
-        # Reuse pre-fetched document when available (C2: avoid double DB fetch).
-        harvest = pre_fetched or await self.get_harvest(harvest_id)
-        if not harvest:
-            raise ResourceNotFoundError(f"Harvest {harvest_id} not found")
+        harvest_id = harvest.doc_id
         if harvest.client_id != client_id:
             logger.warning(
                 "[%s] Client ID mismatch for harvest %s: expected %s", client_id, harvest_id, harvest.client_id
             )
             raise AccessDeniedError(f"Harvest {harvest_id} does not belong to client {client_id}")
+        if harvest.status != HarvestStatus.RUNNING:
+            raise ConflictError(
+                f"Harvest {harvest_id} cannot transition to {target_status}: current status is {harvest.status}"
+            )
 
-        updates = {
-            "status": HarvestStatus.CANCELLED,
-        }
-        await self._doc_store.update_harvest(harvest_id, updates)
-        logger.info("[%s] Cancelled harvest: %s", client_id, harvest_id)
+        updates: dict[str, Any] = {"status": target_status}
+        # Compute statistics from ARC documents once at finalization.
+        statistics = await self._doc_store.get_harvest_statistics(harvest_id)
+        if harvest.statistics and harvest.statistics.expected_datasets is not None:
+            statistics.expected_datasets = harvest.statistics.expected_datasets
+        updates["statistics"] = statistics.model_dump()
+
+        updated = await self._doc_store.update_harvest(harvest_id, updates)
+        logger.info("[%s] Transitioned harvest %s to %s", client_id, harvest_id, target_status)
+        return updated
 
     async def list_harvests(
         self, rdi: str | None = None, *, skip: int = 0, limit: int | None = None

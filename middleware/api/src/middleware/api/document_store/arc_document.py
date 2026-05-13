@@ -3,7 +3,7 @@
 from datetime import datetime
 from typing import Annotated, Any
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from middleware.shared.api_models.common.models import ArcEventType, ArcLifecycleStatus
 
@@ -33,8 +33,23 @@ class ArcMetadata(BaseModel):
     status: Annotated[ArcLifecycleStatus, Field(description="Current lifecycle status")]
     first_seen: Annotated[datetime, Field(description="First time ARC was seen")]
     last_seen: Annotated[datetime, Field(description="Last time ARC was seen")]
+    last_changed: Annotated[datetime, Field(description="Last time ARC content changed (new or updated)")]
+    first_harvest_id: Annotated[str | None, Field(description="Harvest that first created this ARC")] = None
     last_harvest_id: Annotated[str | None, Field(description="Last harvest run that included this ARC")] = None
+    last_changed_harvest_id: Annotated[
+        str | None, Field(description="Last harvest run in which the ARC content changed (new or updated)")
+    ] = None
     missing_since: Annotated[datetime | None, Field(description="Timestamp when marked as missing")] = None
+
+    @model_validator(mode="before")
+    @classmethod
+    def _backfill_last_changed(cls, data: Any) -> Any:
+        """Backward compat: old documents without last_changed default to last_seen."""
+        if isinstance(data, dict) and not data.get("last_changed"):
+            data = dict(data)
+            data["last_changed"] = data.get("last_seen") or data.get("first_seen")
+        return data
+
     events: Annotated[list[ArcEvent], Field(description="Event log")] = Field(default_factory=list)
     git: Annotated[GitMetadata, Field(description="Git-related metadata")] = Field(default_factory=GitMetadata)
 

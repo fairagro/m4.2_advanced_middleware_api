@@ -76,14 +76,19 @@ condition and the expected output or side-effect.
 - One behaviour per checkbox — if you need "and" it is two requirements.
 - State the outcome, not the implementation (`→ return 404` not `→ use Flask abort()`).
 - Every edge case ends with a concrete outcome — no open-ended statements.
-- **Avoid naming concrete classes, methods, or modules in `spec.md`** unless it
-  is a deliberate act. Naming a class in a requirement couples that requirement to
-  a design decision — which is fine when the decision is intentional and should be
-  locked in by the spec, but must be recognised as such. Class names, method names,
-  and module paths that are not yet decided belong in `design.md`, not `spec.md`.
-  *Exception:* simple classes whose name fully describes their behaviour — in
-  particular exception classes (e.g. `InvalidJsonSemanticError`) — may be
-  referenced freely in `spec.md` without implying a design constraint.
+- **`spec.md` must not reference function names, method names, or variable names
+  unless that element was previously explicitly specified earlier in the same spec.**
+  Naming an implementation detail in a requirement couples it to a design decision —
+  such decisions belong in `design.md`. Class names and module paths that are not yet
+  decided also belong in `design.md`, not `spec.md`.
+  *Exemptions:*
+  - Exception classes whose name fully describes their behaviour (e.g.
+    `InvalidJsonSemanticError`, `DocumentConflictError`) may be referenced freely.
+  - String or numeric literals that belong to an external protocol (e.g. CouchDB's
+    `_rev`, `_id`) are not implementation names and may be used freely.
+  - Domain-level identifiers that also appear as code names (e.g. `arc_id`,
+    `harvest_id`) may be used when they function as domain terms rather than as
+    references to a specific code symbol.
 
 ---
 

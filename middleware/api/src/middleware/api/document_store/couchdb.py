@@ -1,6 +1,5 @@
 """CouchDB implementation of DocumentStore."""
 
-import asyncio
 import hashlib
 import json
 import logging
@@ -9,11 +8,11 @@ from datetime import UTC, datetime
 from typing import Any
 
 from middleware.api.document_store.config import CouchDBConfig
-from middleware.api.document_store.couchdb_client import CouchDBClient, DocumentConflictError
+from middleware.api.document_store.couchdb_client import CouchDBClient
 from middleware.api.utils import calculate_arc_id, extract_identifier
 from middleware.shared.api_models.common.models import ArcEventType, ArcLifecycleStatus, HarvestStatus
 
-from . import ArcStoreResult, DocumentStore
+from . import ArcStoreResult, DocumentStore, DuplicateArcError
 from .arc_document import (
     ArcDocument,
     ArcEvent,
@@ -85,7 +84,10 @@ class CouchDB(DocumentStore):
                 status=ArcLifecycleStatus.ACTIVE,
                 first_seen=now,
                 last_seen=now,
+                last_changed=now,
+                first_harvest_id=harvest_id,
                 last_harvest_id=harvest_id,
+                last_changed_harvest_id=harvest_id,
                 events=[
                     ArcEvent(
                         timestamp=now, type=ArcEventType.ARC_CREATED, message="ARC first seen", harvest_id=harvest_id
@@ -94,6 +96,9 @@ class CouchDB(DocumentStore):
             )
         else:
             is_new = False
+            # Reject duplicate submissions within the same harvest run.
+            if harvest_id and existing_doc.metadata.last_harvest_id == harvest_id:
+                raise DuplicateArcError(f"ARC '{resolved_identifier}' was already submitted in harvest '{harvest_id}'.")
             # Check for changes
             has_changes = existing_doc.metadata.arc_hash != content_hash
 
@@ -105,6 +110,8 @@ class CouchDB(DocumentStore):
             if has_changes:
                 logger.info("ARC %s changed (old: %s, new: %s)", arc_id, metadata.arc_hash[:8], content_hash[:8])
                 metadata.arc_hash = content_hash
+                metadata.last_changed = now
+                metadata.last_changed_harvest_id = harvest_id
                 metadata.status = ArcLifecycleStatus.ACTIVE  # Reset to active if it was missing/deleted
                 metadata.missing_since = None
 
@@ -155,7 +162,21 @@ class CouchDB(DocumentStore):
         # - mode="json": converts datetime/enum values to JSON-safe primitives
         doc_data = doc.model_dump(mode="json", by_alias=True, exclude_none=True)
 
-        await self._client.save_document(doc_id, doc_data)
+        # Build a validator closure that re-checks the duplicate invariant on the
+        # freshly fetched document inside save_document's retry loop.  This closes
+        # the TOCTOU window between the initial get_document call above and the
+        # actual CouchDB write: if a concurrent request landed between those two
+        # points, the retry re-fetches the doc and the validator sees the updated
+        # last_harvest_id before writing.
+        def _check_duplicate_on_retry(fresh_doc: dict[str, Any]) -> None:
+            if harvest_id and fresh_doc.get("metadata", {}).get("last_harvest_id") == harvest_id:
+                raise DuplicateArcError(f"ARC '{resolved_identifier}' was already submitted in harvest '{harvest_id}'.")
+
+        await self._client.save_document(
+            doc_id,
+            doc_data,
+            pre_save_validator=_check_duplicate_on_retry if harvest_id else None,
+        )
 
         return ArcStoreResult(arc_id=arc_id, is_new=is_new, has_changes=has_changes)
 
@@ -266,60 +287,6 @@ class CouchDB(DocumentStore):
         await self._client.save_document(harvest_id, doc_data)
         return doc
 
-    async def increment_harvest_statistics(
-        self,
-        harvest_id: str,
-        *,
-        is_new: bool,
-        has_changes: bool,
-    ) -> None:
-        """Atomically increment harvest counters with optimistic-concurrency retry."""
-        max_retries = self._config.harvest_stats_max_retries
-
-        for attempt in range(1, max_retries + 1):
-            doc_dict = await self._client.get_document(harvest_id)
-            if not doc_dict:
-                logger.warning("Harvest %s not found while incrementing statistics", harvest_id)
-                return
-
-            harvest_doc = HarvestDocument.model_validate(doc_dict)
-            if not harvest_doc.doc_rev:
-                raise RuntimeError(f"Harvest {harvest_id} has no _rev; cannot apply atomic update")
-
-            stats = harvest_doc.statistics or HarvestStatistics()
-            stats.arcs_submitted += 1
-
-            if is_new:
-                stats.arcs_new += 1
-            elif has_changes:
-                stats.arcs_updated += 1
-            else:
-                stats.arcs_unchanged += 1
-
-            harvest_doc.statistics = stats
-            payload = harvest_doc.model_dump(mode="json", by_alias=True, exclude_none=True)
-
-            try:
-                await self._client.save_document_if_revision_matches(
-                    harvest_id,
-                    payload,
-                    expected_rev=harvest_doc.doc_rev,
-                )
-                return
-            except DocumentConflictError:
-                logger.debug(
-                    "Conflict incrementing harvest statistics for %s (attempt %d/%d)",
-                    harvest_id,
-                    attempt,
-                    max_retries,
-                )
-                await asyncio.sleep(0.1)  # Add a small delay before retrying
-
-        raise RuntimeError(
-            f"Failed to increment harvest statistics for {harvest_id} after "
-            f"{max_retries} retries due to revision conflicts"
-        )
-
     async def list_harvests(
         self,
         rdi: str | None = None,
@@ -337,29 +304,21 @@ class CouchDB(DocumentStore):
     async def get_harvest_statistics(self, harvest_id: str) -> HarvestStatistics:
         """Calculate and return statistics for a specific harvest run."""
         selector = {"type": "arc", "metadata.last_harvest_id": harvest_id}
-        docs = await self._client.find_projected(selector, fields=["metadata.events"])
+        docs = await self._client.find_projected(
+            selector,
+            fields=["metadata.first_harvest_id", "metadata.last_changed_harvest_id"],
+        )
 
         stats = HarvestStatistics()
         stats.arcs_submitted = len(docs)
 
         for doc_dict in docs:
-            # We need to look at the event log to see what happened to this ARC during THIS harvest
-            events = doc_dict.get("metadata", {}).get("events", [])
-            harvest_events = [e for e in events if e.get("harvest_id") == harvest_id]
-
-            if not harvest_events:
-                # Should not happen based on selector, but let's be safe
-                stats.arcs_unchanged += 1
-                continue
-
-            # Check if it was created or updated
-            event_types = {e.get("type") for e in harvest_events}
-            if ArcEventType.ARC_CREATED in event_types:
+            meta = doc_dict.get("metadata", {})
+            if meta.get("first_harvest_id") == harvest_id:
                 stats.arcs_new += 1
-            elif ArcEventType.ARC_UPDATED in event_types:
+            elif meta.get("last_changed_harvest_id") == harvest_id:
                 stats.arcs_updated += 1
             else:
-                # If no CREATED/UPDATED event, it was just "seen" but unchanged
                 stats.arcs_unchanged += 1
 
         return stats

@@ -12,6 +12,10 @@ class DocumentStoreError(Exception):
     """Base exception for document store errors."""
 
 
+class DuplicateArcError(DocumentStoreError):
+    """Raised when the same ARC is submitted more than once within the same harvest run."""
+
+
 class ArcStoreResult:
     """Result of storing an ARC."""
 
@@ -154,26 +158,6 @@ class DocumentStore(ABC):
         Args:
             harvest_id: Harvest identifier
             updates: Dictionary of fields to update
-        """
-        raise NotImplementedError
-
-    @abstractmethod
-    async def increment_harvest_statistics(
-        self,
-        harvest_id: str,
-        *,
-        is_new: bool,
-        has_changes: bool,
-    ) -> None:
-        """Atomically increment harvest counters for one submitted ARC.
-
-        Implementations must be safe under concurrent updates (e.g. optimistic
-        concurrency with retry on revision conflicts).
-
-        Args:
-            harvest_id: Harvest identifier.
-            is_new: Whether the ARC was newly created.
-            has_changes: Whether an existing ARC changed.
         """
         raise NotImplementedError
 

@@ -22,15 +22,15 @@ class CouchDBConfig(BaseModel):
             description="Default maximum number of documents returned by a Mango query",
         ),
     ] = 100
-    harvest_stats_max_retries: Annotated[
+    max_save_retries: Annotated[
         int,
         Field(
-            default=5,
+            default=3,
             ge=1,
             le=100,
-            description="Maximum retry attempts for atomic harvest statistics updates on CouchDB revision conflicts",
+            description="Maximum retry attempts for save_document on CouchDB revision conflicts",
         ),
-    ] = 5
+    ] = 3
 
     @field_validator("url")
     @classmethod

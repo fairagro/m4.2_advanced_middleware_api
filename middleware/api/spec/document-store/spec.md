@@ -22,8 +22,9 @@ prefix, not by separate databases.
       exist if they do not yet exist.
 - [ ] Handle `412 Precondition Failed` (database already exists) as a success
       during initialization — parallel service startups must not cause crashes.
-- [ ] Store ARC documents keyed by `arc_id`; return `is_new` and `has_changes`
-      flags based on content hash comparison.
+- [ ] Store ARC documents keyed by `arc_id`; return flags indicating whether the
+      document was newly created and whether its content changed, based on content
+      hash comparison.
 - [ ] Support harvest run lifecycle operations: create, retrieve, increment
       statistics counters, and finalize a harvest run.
 - [ ] Append event records to an ARC document's event log.
@@ -34,7 +35,13 @@ prefix, not by separate databases.
 Parallel service startup (two containers connecting simultaneously) → both attempt
 database creation; `412 Precondition Failed` is treated as success, not an error.
 
-ARC document already exists with identical content → `has_changes = False`; no
-CouchDB write performed for the body; only timestamp fields may be updated.
+ARC document already exists with identical content → the content-changed flag is
+`false`; no CouchDB write performed for the body; only timestamp fields may be updated.
 
-`get_harvest` for unknown ID → returns `None`; callers raise `ResourceNotFoundError`.
+Concurrent writes to the same ARC document (e.g. two harvest workers submitting the
+same ARC simultaneously) → the store strips the stale `_rev` from the payload,
+re-fetches the current revision on each attempt, and retries up to a configurable
+maximum (default 3) on `ConflictError` before raising `DocumentConflictError`.
+
+Fetching a harvest by an unknown ID → the store returns nothing; callers raise
+`ResourceNotFoundError`.

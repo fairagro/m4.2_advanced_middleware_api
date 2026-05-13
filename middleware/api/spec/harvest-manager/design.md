@@ -11,6 +11,7 @@ API endpoint
     └─→ HarvestManager
             ├─→ DocumentStore.create_harvest
             ├─→ DocumentStore.get_harvest
+            ├─→ DocumentStore.update_harvest          (transition_harvest)
             ├─→ DocumentStore.increment_harvest_statistics
             └─→ DocumentStore.finalize_harvest
 ```
@@ -32,3 +33,26 @@ API endpoint
    `HarvestConfig` (a Pydantic model). Application code reads them from the
    config object rather than hardcoding values, making them overridable via
    environment variables or YAML without a code change.
+
+4. **`transition_harvest` accepts a pre-fetched `HarvestDocument`, not a `harvest_id`**
+   — The router always fetches the harvest before calling into the service layer
+   (for RDI auth and existence checks). Passing the already-fetched document
+   avoids a redundant round-trip to CouchDB and removes the dead
+   `pre_fetched or await get_harvest()` fallback path. Responsibility for
+   handling a missing harvest therefore stays in the router (HTTP 404), while
+   `transition_harvest` focuses solely on ownership validation, the RUNNING
+   guard, and the DB write.
+
+5. **Single `transition_harvest` replaces separate `complete_harvest` / `cancel_harvest` / `fail_harvest` methods**
+   — All three terminal transitions share the same shape: ownership check →
+   RUNNING guard → `DocumentStore.update_harvest`. A single generic method
+   parameterised over `target_status` avoids duplicating that logic three
+   times. The only special case is `COMPLETED`: it also persists the current
+   statistics snapshot (same behaviour as the old `complete_harvest`).
+
+6. **`PATCH /v3/harvests/{harvest_id}` as the canonical state-transition endpoint**
+   — A single PATCH endpoint with `{"status": "..."}` in the body covers all
+   terminal transitions. The legacy `DELETE /{harvest_id}` (cancel) and
+   `POST /{harvest_id}/complete` endpoints are kept for backward compatibility
+   but are not the preferred path for new clients. The API client's
+   `cancel_harvest()` and `fail_harvest()` methods both call PATCH internally.

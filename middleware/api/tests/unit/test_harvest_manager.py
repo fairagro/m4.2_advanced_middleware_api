@@ -6,7 +6,7 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 
 from middleware.api.business_logic.config import HarvestConfig
-from middleware.api.business_logic.exceptions import AccessDeniedError, ResourceNotFoundError
+from middleware.api.business_logic.exceptions import AccessDeniedError, ConflictError, ResourceNotFoundError
 from middleware.api.business_logic.harvest_manager import HarvestManager
 from middleware.api.document_store.harvest_document import HarvestDocument, HarvestStatistics
 from middleware.shared.api_models.common.models import HarvestStatus
@@ -136,10 +136,10 @@ async def test_complete_harvest_success(manager: HarvestManager, doc_store: Magi
     harvest = _make_harvest(client_id="client-a", statistics=stats)
     updated = _make_harvest(client_id="client-a", status=HarvestStatus.COMPLETED, statistics=stats)
 
-    doc_store.get_harvest = AsyncMock(return_value=harvest)
+    doc_store.get_harvest_statistics = AsyncMock(return_value=HarvestStatistics(arcs_submitted=5))
     doc_store.update_harvest = AsyncMock(return_value=updated)
 
-    result = await manager.complete_harvest("harvest-1", "client-a")
+    result = await manager.complete_harvest(harvest, "client-a")
     assert result.status == HarvestStatus.COMPLETED
     doc_store.update_harvest.assert_called_once()
 
@@ -150,10 +150,10 @@ async def test_complete_harvest_preserves_expected_datasets(manager: HarvestMana
     harvest = _make_harvest(client_id="client-a", statistics=HarvestStatistics(expected_datasets=10))
     updated = _make_harvest(client_id="client-a", status=HarvestStatus.COMPLETED)
 
-    doc_store.get_harvest = AsyncMock(return_value=harvest)
+    doc_store.get_harvest_statistics = AsyncMock(return_value=HarvestStatistics())
     doc_store.update_harvest = AsyncMock(return_value=updated)
 
-    await manager.complete_harvest("harvest-1", "client-a")
+    await manager.complete_harvest(harvest, "client-a")
 
     # expected_datasets should be forwarded to the update call
     call_args = doc_store.update_harvest.call_args
@@ -161,20 +161,11 @@ async def test_complete_harvest_preserves_expected_datasets(manager: HarvestMana
 
 
 @pytest.mark.asyncio
-async def test_complete_harvest_not_found(manager: HarvestManager, doc_store: MagicMock) -> None:
-    """complete_harvest raises ResourceNotFoundError when harvest not found."""
-    doc_store.get_harvest = AsyncMock(return_value=None)
-    with pytest.raises(ResourceNotFoundError, match="not found"):
-        await manager.complete_harvest("no-such-harvest", "client-a")
-
-
-@pytest.mark.asyncio
-async def test_complete_harvest_client_id_mismatch(manager: HarvestManager, doc_store: MagicMock) -> None:
+async def test_complete_harvest_client_id_mismatch(manager: HarvestManager) -> None:
     """complete_harvest raises AccessDeniedError when client_id does not match."""
     harvest = _make_harvest(client_id="client-a")
-    doc_store.get_harvest = AsyncMock(return_value=harvest)
     with pytest.raises(AccessDeniedError, match="does not belong"):
-        await manager.complete_harvest("harvest-1", "wrong-client")
+        await manager.complete_harvest(harvest, "wrong-client")
 
 
 # ---------------------------------------------------------------------------
@@ -182,32 +173,23 @@ async def test_complete_harvest_client_id_mismatch(manager: HarvestManager, doc_
 # ---------------------------------------------------------------------------
 @pytest.mark.asyncio
 async def test_cancel_harvest_success(manager: HarvestManager, doc_store: MagicMock) -> None:
-    """cancel_harvest updates status to CANCELLED."""
+    """cancel_harvest updates status to CANCELLED and persists statistics."""
     harvest = _make_harvest(client_id="client-a")
-    doc_store.get_harvest = AsyncMock(return_value=harvest)
+    doc_store.get_harvest_statistics = AsyncMock(return_value=HarvestStatistics())
     doc_store.update_harvest = AsyncMock()
 
-    await manager.cancel_harvest("harvest-1", "client-a")
+    await manager.cancel_harvest(harvest, "client-a")
     doc_store.update_harvest.assert_called_once()
     call_args = doc_store.update_harvest.call_args
     assert call_args[0][1]["status"] == HarvestStatus.CANCELLED
 
 
 @pytest.mark.asyncio
-async def test_cancel_harvest_not_found(manager: HarvestManager, doc_store: MagicMock) -> None:
-    """cancel_harvest raises ResourceNotFoundError when harvest not found."""
-    doc_store.get_harvest = AsyncMock(return_value=None)
-    with pytest.raises(ResourceNotFoundError, match="not found"):
-        await manager.cancel_harvest("no-such-harvest", "client-a")
-
-
-@pytest.mark.asyncio
-async def test_cancel_harvest_client_id_mismatch(manager: HarvestManager, doc_store: MagicMock) -> None:
+async def test_cancel_harvest_client_id_mismatch(manager: HarvestManager) -> None:
     """cancel_harvest raises AccessDeniedError when client_id does not match."""
     harvest = _make_harvest(client_id="client-a")
-    doc_store.get_harvest = AsyncMock(return_value=harvest)
     with pytest.raises(AccessDeniedError, match="does not belong"):
-        await manager.cancel_harvest("harvest-1", "wrong-client")
+        await manager.cancel_harvest(harvest, "wrong-client")
 
 
 # ---------------------------------------------------------------------------
@@ -228,3 +210,42 @@ async def test_list_harvests_filtered(manager: HarvestManager, doc_store: MagicM
     doc_store.list_harvests = AsyncMock(return_value=[_make_harvest()])
     await manager.list_harvests(rdi="rdi-1")
     doc_store.list_harvests.assert_called_once_with("rdi-1", skip=0, limit=None)
+
+
+# ---------------------------------------------------------------------------
+# transition_harvest
+# ---------------------------------------------------------------------------
+@pytest.mark.asyncio
+@pytest.mark.parametrize("target_status", [HarvestStatus.COMPLETED, HarvestStatus.CANCELLED, HarvestStatus.FAILED])
+async def test_transition_harvest_success(
+    manager: HarvestManager, doc_store: MagicMock, target_status: HarvestStatus
+) -> None:
+    """transition_harvest updates status for all terminal states when harvest is RUNNING."""
+    harvest = _make_harvest(client_id="client-a", status=HarvestStatus.RUNNING)
+    updated = _make_harvest(client_id="client-a", status=target_status)
+    doc_store.get_harvest_statistics = AsyncMock(return_value=HarvestStatistics())
+    doc_store.update_harvest = AsyncMock(return_value=updated)
+
+    result = await manager.transition_harvest(harvest, target_status, "client-a")
+
+    doc_store.update_harvest.assert_called_once()
+    call_args = doc_store.update_harvest.call_args
+    assert call_args[0][1]["status"] == target_status
+    assert result.status == target_status
+
+
+@pytest.mark.asyncio
+async def test_transition_harvest_client_id_mismatch(manager: HarvestManager) -> None:
+    """transition_harvest raises AccessDeniedError when client_id does not match."""
+    harvest = _make_harvest(client_id="client-a", status=HarvestStatus.RUNNING)
+    with pytest.raises(AccessDeniedError, match="does not belong"):
+        await manager.transition_harvest(harvest, HarvestStatus.CANCELLED, "wrong-client")
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("current_status", [HarvestStatus.COMPLETED, HarvestStatus.CANCELLED, HarvestStatus.FAILED])
+async def test_transition_harvest_conflict(manager: HarvestManager, current_status: HarvestStatus) -> None:
+    """transition_harvest raises ConflictError when harvest is not RUNNING."""
+    harvest = _make_harvest(client_id="client-a", status=current_status)
+    with pytest.raises(ConflictError, match="cannot transition"):
+        await manager.transition_harvest(harvest, HarvestStatus.CANCELLED, "client-a")

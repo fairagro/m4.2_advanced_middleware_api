@@ -58,7 +58,6 @@ except (PackageNotFoundError, ImportError):
         __version__ = "0.0.0"
 
 
-loaded_config = None
 if "pytest" in sys.modules:
     # pytest is executing this file during a test discovery run.
     # No config file is available, so we create a dummy config so that pytest does not fail.
@@ -88,8 +87,26 @@ else:
         sys.exit(1)
 
 logging.basicConfig(
-    level=getattr(logging, loaded_config.log_level), format="%(asctime)s %(levelname)s %(name)s: %(message)s"
+    level=getattr(logging, loaded_config.log_level),
+    format="%(asctime)s %(levelname)s %(name)s: %(message)s",
+    force=True,
 )
+
+
+def _configure_uvicorn_loggers(log_level: str) -> None:
+    """Ensure uvicorn loggers use the same format as the middleware logs."""
+    root_handlers = logging.root.handlers[:]
+    if not root_handlers:
+        return
+
+    for logger_name in ("uvicorn.access", "uvicorn.error"):
+        uvicorn_logger = logging.getLogger(logger_name)
+        uvicorn_logger.handlers = root_handlers[:]
+        uvicorn_logger.setLevel(getattr(logging, log_level))
+        uvicorn_logger.propagate = False
+
+
+_configure_uvicorn_loggers(loaded_config.log_level)
 
 logger = logging.getLogger("middleware_api")
 
@@ -151,11 +168,14 @@ class Api:
 
         logger.debug("API configuration: %s", self._config.model_dump())
 
-        # Apply polling log filter to uvicorn access logger
-        logging.getLogger("uvicorn.access").addFilter(PollingLogFilter())
-
         @asynccontextmanager
         async def lifespan(_app: FastAPI) -> AsyncGenerator[None, None]:
+            # Re-apply our log format after uvicorn has finished its own log setup.
+            # uvicorn.main() installs its own handlers on uvicorn.access/uvicorn.error
+            # *after* this module is imported, so we must reconfigure here.
+            _configure_uvicorn_loggers(self._config.log_level)
+            logging.getLogger("uvicorn.access").addFilter(PollingLogFilter())
+
             # Initialize business logic and its stores
             try:
                 try:

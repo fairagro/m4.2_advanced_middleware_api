@@ -482,14 +482,31 @@ async def test_complete_harvest(client_config: Config) -> None:
 @pytest.mark.asyncio
 @respx.mock
 async def test_cancel_harvest(client_config: Config) -> None:
-    """Test cancelling a harvest run."""
-    route = respx.delete(f"{client_config.api_url}v3/harvests/harvest-456").mock(
-        return_value=httpx.Response(http.HTTPStatus.NO_CONTENT)
+    """Test cancelling a harvest run via PATCH."""
+    cancelled_response = {**_HARVEST_RESPONSE, "status": "CANCELLED"}
+    route = respx.patch(f"{client_config.api_url}v3/harvests/harvest-456").mock(
+        return_value=httpx.Response(http.HTTPStatus.OK, json=cancelled_response)
     )
     async with ApiClient(client_config) as client:
-        await client.cancel_harvest("harvest-456")
+        result = await client.cancel_harvest("harvest-456")
     assert route.called
+    assert isinstance(result, HarvestResult)
+    assert result.status == "CANCELLED"
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_fail_harvest(client_config: Config) -> None:
+    """Test marking a harvest run as failed via PATCH."""
+    failed_response = {**_HARVEST_RESPONSE, "status": "FAILED"}
+    route = respx.patch(f"{client_config.api_url}v3/harvests/harvest-456").mock(
+        return_value=httpx.Response(http.HTTPStatus.OK, json=failed_response)
+    )
+    async with ApiClient(client_config) as client:
+        result = await client.fail_harvest("harvest-456")
     assert route.called
+    assert isinstance(result, HarvestResult)
+    assert result.status == "FAILED"
 
 
 @pytest.mark.asyncio
@@ -676,22 +693,60 @@ async def test_harvest_arcs_continues_on_item_error(client_config: Config) -> No
 @pytest.mark.asyncio
 @respx.mock
 async def test_harvest_arcs_cancels_on_catastrophic_error(client_config: Config) -> None:
-    """harvest_arcs cancels the harvest on catastrophic submission errors."""
+    """harvest_arcs marks the harvest as failed on catastrophic submission errors."""
+    failed_response = {**_HARVEST_RESPONSE, "status": "FAILED"}
     respx.post(f"{client_config.api_url}v3/harvests").mock(
         return_value=httpx.Response(http.HTTPStatus.OK, json=_HARVEST_RESPONSE)
     )
     respx.post(f"{client_config.api_url}v3/harvests/harvest-456/arcs").mock(
         return_value=httpx.Response(http.HTTPStatus.INTERNAL_SERVER_ERROR, text="server unavailable")
     )
-    cancel_route = respx.delete(f"{client_config.api_url}v3/harvests/harvest-456").mock(
-        return_value=httpx.Response(http.HTTPStatus.NO_CONTENT)
+    fail_route = respx.patch(f"{client_config.api_url}v3/harvests/harvest-456").mock(
+        return_value=httpx.Response(http.HTTPStatus.OK, json=failed_response)
     )
 
     async with ApiClient(client_config) as client:
         with pytest.raises(ApiClientError):
             await client.harvest_arcs("test-rdi", _arc_gen({"id": "arc-1"}))
 
-    assert cancel_route.called
+    assert fail_route.called
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_harvest_arcs_skips_duplicate_identifier(client_config: Config) -> None:
+    """harvest_arcs skips a duplicate ARC and completes the harvest successfully.
+
+    When the same RO-Crate identifier appears twice in the input, the second
+    occurrence is counted as a failed submission and the harvest continues.
+    This prevents a single client-side data error from aborting the whole harvest.
+    """
+    arc_a = {
+        "@context": "https://w3id.org/ro/crate/1.1/context",
+        "@graph": [{"@id": "./", "@type": "Dataset", "identifier": "duplicate-arc", "name": "ARC A"}],
+    }
+    arc_b = {
+        "@context": "https://w3id.org/ro/crate/1.1/context",
+        "@graph": [{"@id": "./", "@type": "Dataset", "identifier": "duplicate-arc", "name": "ARC B"}],
+    }
+    completed_response = {**_HARVEST_RESPONSE, "status": "COMPLETED", "completed_at": "2024-01-01T01:00:00Z"}
+    respx.post(f"{client_config.api_url}v3/harvests").mock(
+        return_value=httpx.Response(http.HTTPStatus.OK, json=_HARVEST_RESPONSE)
+    )
+    # Only the first ARC is submitted; the duplicate is skipped client-side.
+    arc_route = respx.post(f"{client_config.api_url}v3/harvests/harvest-456/arcs").mock(
+        return_value=httpx.Response(http.HTTPStatus.OK, json=_ARC_RESPONSE)
+    )
+    complete_route = respx.post(f"{client_config.api_url}v3/harvests/harvest-456/complete").mock(
+        return_value=httpx.Response(http.HTTPStatus.OK, json=completed_response)
+    )
+
+    async with ApiClient(client_config) as client:
+        result = await client.harvest_arcs("test-rdi", _arc_gen(arc_a, arc_b))
+
+    assert result.status == "COMPLETED"
+    assert arc_route.call_count == 1  # duplicate was skipped, not submitted
+    assert complete_route.called
 
 
 @pytest.mark.asyncio
@@ -725,13 +780,12 @@ async def test_harvest_arcs_with_json_string(client_config: Config) -> None:
 @respx.mock
 async def test_harvest_arcs_with_invalid_json_string(client_config: Config) -> None:
     """harvest_arcs raises ApiClientError when JSON string is invalid."""
-    # Mock the harvest creation endpoint to prevent actual HTTP requests
+    failed_response = {**_HARVEST_RESPONSE, "status": "FAILED"}
     respx.post(f"{client_config.api_url}v3/harvests").mock(
         return_value=httpx.Response(http.HTTPStatus.OK, json=_HARVEST_RESPONSE)
     )
-    # Mock the harvest cancellation endpoint
-    respx.delete(f"{client_config.api_url}v3/harvests/harvest-456").mock(
-        return_value=httpx.Response(http.HTTPStatus.NO_CONTENT)
+    respx.patch(f"{client_config.api_url}v3/harvests/harvest-456").mock(
+        return_value=httpx.Response(http.HTTPStatus.OK, json=failed_response)
     )
 
     async with ApiClient(client_config) as client:
@@ -743,16 +797,16 @@ async def test_harvest_arcs_with_invalid_json_string(client_config: Config) -> N
 @pytest.mark.asyncio
 @respx.mock
 async def test_harvest_arcs_cancel_failure_does_not_mask_original_error(client_config: Config) -> None:
-    """If cancel itself raises, the original submission error is still propagated."""
+    """If fail_harvest itself raises, the original submission error is still propagated."""
     respx.post(f"{client_config.api_url}v3/harvests").mock(
         return_value=httpx.Response(http.HTTPStatus.OK, json=_HARVEST_RESPONSE)
     )
     respx.post(f"{client_config.api_url}v3/harvests/harvest-456/arcs").mock(
         return_value=httpx.Response(http.HTTPStatus.INTERNAL_SERVER_ERROR, text="arc error")
     )
-    # Also make the cancel fail
-    respx.delete(f"{client_config.api_url}v3/harvests/harvest-456").mock(
-        return_value=httpx.Response(http.HTTPStatus.INTERNAL_SERVER_ERROR, text="cancel error")
+    # Also make the fail call fail
+    respx.patch(f"{client_config.api_url}v3/harvests/harvest-456").mock(
+        return_value=httpx.Response(http.HTTPStatus.INTERNAL_SERVER_ERROR, text="fail error")
     )
 
     async with ApiClient(client_config) as client:
