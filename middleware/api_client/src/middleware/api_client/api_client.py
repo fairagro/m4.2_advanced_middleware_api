@@ -271,8 +271,9 @@ class ApiClient:
         failed_submissions = 0
         seen_identifiers: set[str] = set()
 
-        async def submit_one(arc_item: "ARC | dict[str, Any] | str") -> None:
-            await self.submit_arc_in_harvest(harvest_id, arc_item)
+        async def submit_one(arc_item: dict[str, Any]) -> None:
+            request = SubmitHarvestArcRequest(arc=arc_item)
+            await self._post(f"v3/harvests/{harvest_id}/arcs", request)
 
         async for arc in arcs:
             serialized = self._serialize_arc(arc)
