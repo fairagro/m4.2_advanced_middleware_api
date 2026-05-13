@@ -280,12 +280,14 @@ class ApiClient:
             identifier = self._extract_identifier_from_rocrate(serialized)
             if identifier is not None:
                 if identifier in seen_identifiers:
-                    await self._cancel_pending_arc_tasks(pending_tasks)
-                    raise ApiClientError(
-                        f"Duplicate ARC identifier '{identifier}' submitted more than once "
-                        f"in harvest {harvest_id}. This is likely a client-side data error "
-                        "(two different ARCs sharing the same identifier)."
+                    logger.error(
+                        "Skipping duplicate ARC identifier '%s' in harvest %s. "
+                        "Two ARCs share the same identifier — this is a client-side data error.",
+                        identifier,
+                        harvest_id,
                     )
+                    failed_submissions += 1
+                    continue
                 seen_identifiers.add(identifier)
 
             task = asyncio.create_task(submit_one(serialized))
