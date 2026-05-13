@@ -1,6 +1,7 @@
 """Unit tests for the FastAPI middleware API endpoints."""
 
 import http
+import logging
 import unittest.mock
 import uuid
 from collections.abc import Callable
@@ -20,6 +21,16 @@ from middleware.shared.api_models import (
 )
 
 pytestmark = pytest.mark.filterwarnings("ignore:gitlab_api configuration is deprecated.*:DeprecationWarning")
+
+
+def test_uvicorn_access_logger_uses_api_format() -> None:
+    """Ensure uvicorn access logs use the same timestamped format as middleware logs."""
+    access_logger = logging.getLogger("uvicorn.access")
+    assert access_logger.propagate is False
+    assert access_logger.handlers, "uvicorn.access logger must have a handler"
+    formatter = access_logger.handlers[0].formatter
+    assert formatter is not None
+    assert formatter._fmt == "%(asctime)s %(levelname)s %(name)s: %(message)s"
 
 
 def test_whoami_success(client: TestClient, middleware_api: Api, cert: str) -> None:

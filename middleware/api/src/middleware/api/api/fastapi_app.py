@@ -58,7 +58,6 @@ except (PackageNotFoundError, ImportError):
         __version__ = "0.0.0"
 
 
-loaded_config = None
 if "pytest" in sys.modules:
     # pytest is executing this file during a test discovery run.
     # No config file is available, so we create a dummy config so that pytest does not fail.
@@ -88,8 +87,25 @@ else:
         sys.exit(1)
 
 logging.basicConfig(
-    level=getattr(logging, loaded_config.log_level), format="%(asctime)s %(levelname)s %(name)s: %(message)s"
+    level=getattr(logging, loaded_config.log_level),
+    format="%(asctime)s %(levelname)s %(name)s: %(message)s",
 )
+
+
+def _configure_uvicorn_loggers(log_level: str) -> None:
+    """Ensure uvicorn loggers use the same format as the middleware logs."""
+    root_handlers = logging.root.handlers[:]
+    if not root_handlers:
+        return
+
+    for logger_name in ("uvicorn.access", "uvicorn.error"):
+        uvicorn_logger = logging.getLogger(logger_name)
+        uvicorn_logger.handlers = root_handlers[:]
+        uvicorn_logger.setLevel(getattr(logging, log_level))
+        uvicorn_logger.propagate = False
+
+
+_configure_uvicorn_loggers(loaded_config.log_level)
 
 logger = logging.getLogger("middleware_api")
 
