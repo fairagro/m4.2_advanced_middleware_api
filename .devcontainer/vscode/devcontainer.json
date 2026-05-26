@@ -8,8 +8,6 @@
 		"ghcr.io/devcontainers/features/docker-in-docker:3": {
 			"moby": true,
 			"installDockerBuildx": true,
-			"dockerDashComposeVersion": "v2",
-			"installDockerComposeSwitch": true,
 			"disableIp6tables": true,
 			"version": "latest"
 		},
