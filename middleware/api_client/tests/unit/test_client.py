@@ -359,12 +359,12 @@ async def test_global_max_concurrency_limits_parallel_requests(client_config: Co
         await asyncio.sleep(0.02)
         async with counter_lock:
             in_flight -= 1
-        return httpx.Response(http.HTTPStatus.OK, json=[_HARVEST_RESPONSE])
+        return httpx.Response(http.HTTPStatus.OK, json=_HARVEST_RESPONSE)
 
-    route = respx.get(f"{client_config.api_url}v3/harvests").mock(side_effect=slow_response)
+    route = respx.get(f"{client_config.api_url}v3/harvests/harvest-456").mock(side_effect=slow_response)
 
     async with ApiClient(client_config) as client:
-        await asyncio.gather(*(client.list_harvests() for _ in range(6)))
+        await asyncio.gather(*(client.get_harvest("harvest-456") for _ in range(6)))
 
     assert route.call_count == 6  # noqa: PLR2004
     assert peak_in_flight <= 2  # noqa: PLR2004
@@ -424,31 +424,6 @@ async def test_create_harvest_503_not_retried(client_config: Config) -> None:
         with pytest.raises(ApiClientError, match="HTTP error 503"):
             await client.create_harvest(rdi="test-rdi")
     assert route.call_count == 1
-
-
-@pytest.mark.asyncio
-@respx.mock
-async def test_list_harvests(client_config: Config) -> None:
-    """Test listing harvest runs."""
-    respx.get(f"{client_config.api_url}v3/harvests").mock(
-        return_value=httpx.Response(http.HTTPStatus.OK, json=[_HARVEST_RESPONSE, _HARVEST_RESPONSE])
-    )
-    async with ApiClient(client_config) as client:
-        harvests = await client.list_harvests()
-    assert len(harvests) == 2  # noqa: PLR2004
-    assert all(isinstance(h, HarvestResult) for h in harvests)
-
-
-@pytest.mark.asyncio
-@respx.mock
-async def test_list_harvests_with_rdi_filter(client_config: Config) -> None:
-    """Test listing harvest runs filtered by RDI."""
-    route = respx.get(f"{client_config.api_url}v3/harvests").mock(
-        return_value=httpx.Response(http.HTTPStatus.OK, json=[_HARVEST_RESPONSE])
-    )
-    async with ApiClient(client_config) as client:
-        await client.list_harvests(rdi="test-rdi")
-    assert "rdi=test-rdi" in str(route.calls.last.request.url)
 
 
 @pytest.mark.asyncio

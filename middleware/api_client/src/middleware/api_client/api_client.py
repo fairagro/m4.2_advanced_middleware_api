@@ -23,7 +23,7 @@ from middleware.shared.api_models.v3.models import (
 )
 
 from .config import Config
-from .models import ArcResult, HarvestError, HarvestErrorType, HarvestResult
+from .models import ArcResult, HarvestError, HarvestErrorType, HarvestResult, HarvestStatus
 
 if TYPE_CHECKING:
     from arctrl import ARC  # type: ignore[import-untyped]
@@ -595,25 +595,32 @@ class ApiClient:
         data = await self._post("v3/harvests", request)
         return self._parse_harvest_response(data)
 
-    async def list_harvests(self, rdi: str | None = None) -> list[HarvestResult]:
-        """List harvest runs.
+    async def list_harvests(
+        self,
+        rdi: str | None = None,
+        status: HarvestStatus | None = None,
+        limit: int = 20,
+        offset: int = 0,
+    ) -> list[HarvestResult]:
+        """List harvest runs, newest first.
 
-        Uses ``GET /v3/harvests``.
+        .. note::
+            Not yet implemented — requires server-side changes (status filter,
+            guaranteed newest-first sort order). Tracked in GitHub issue #242.
 
         Args:
             rdi: Optional RDI filter.
+            status: Optional status filter (e.g. ``HarvestStatus.RUNNING``).
+            limit: Maximum number of results to return (default 20).
+            offset: Number of records to skip for pagination (default 0).
 
-        Returns:
-            List of :class:`HarvestResult` objects.
+        Raises:
+            NotImplementedError: Always — pending server-side support.
         """
-        params: dict[str, str] | None = None
-        if rdi:
-            params = {"rdi": rdi}
-        data = await self._get("v3/harvests", params=params)
-        try:
-            return [HarvestResult.model_validate(d) for d in data]
-        except ValidationError as e:
-            raise ApiClientError(f"Invalid harvest list response from API: {e}") from e
+        raise NotImplementedError(
+            "list_harvests requires server-side changes (status filter, guaranteed "
+            "newest-first sort order). See GitHub issue #242."
+        )
 
     async def get_harvest(self, harvest_id: str) -> HarvestResult:
         """Get a single harvest run by ID.
