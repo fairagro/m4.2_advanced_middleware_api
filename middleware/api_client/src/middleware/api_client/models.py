@@ -40,6 +40,32 @@ class HarvestStatus(StrEnum):
     CANCELLED = "CANCELLED"
 
 
+class HarvestErrorType(StrEnum):
+    """Category of a per-item error recorded during a harvest run."""
+
+    DUPLICATE = "duplicate"
+    SUBMISSION_FAILED = "submission_failed"
+
+
+class HarvestError(BaseModel):
+    """A single per-item error recorded during a harvest run.
+
+    Once the server persists errors natively (issue #240), this list is
+    populated directly from the server response returned by any harvest
+    query method.  Until then, :meth:`~middleware.api_client.ApiClient.harvest_arcs`
+    collects errors client-side and injects them into the returned
+    :class:`HarvestResult` as a compatibility shim.
+    """
+
+    arc_id: Annotated[
+        str | None,
+        Field(description="ARC identifier (RO-Crate identifier field), None if not applicable or not extractable"),
+    ] = None
+    error_type: Annotated[HarvestErrorType, Field(description="Category of the error")]
+    message: Annotated[str, Field(description="Human-readable error description")]
+    timestamp: Annotated[str, Field(description="ISO 8601 timestamp when the error occurred")] = ""
+
+
 class ArcEventSummary(BaseModel):
     """Summary of a single event recorded against an ARC."""
 
@@ -89,5 +115,13 @@ class HarvestResult(BaseModel):
     started_at: Annotated[str, Field(description="ISO 8601 start timestamp")]
     completed_at: Annotated[str | None, Field(description="ISO 8601 completion timestamp")] = None
     statistics: Annotated[dict, Field(description="Harvest statistics")] = Field(default_factory=dict)
+    errors: Annotated[
+        list[HarvestError],
+        Field(
+            description="Per-item errors encountered during the harvest run. "
+            "Populated client-side by harvest_arcs() until the server supports "
+            "error persistence natively (issue #240)."
+        ),
+    ] = Field(default_factory=list)
     message: Annotated[str, Field(description="Human-readable result message")] = ""
     client_id: Annotated[str | None, Field(description="Authenticated client identifier")] = None
