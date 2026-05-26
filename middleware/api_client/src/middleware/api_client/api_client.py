@@ -253,6 +253,7 @@ class ApiClient:
         errors: list[HarvestError] = []
 
         for done_task in done_tasks:
+            arc_id = task_identifiers.pop(done_task, None)
             try:
                 done_task.result()
             except Exception as e:  # noqa: BLE001
@@ -260,7 +261,7 @@ class ApiClient:
                     return errors, e
                 errors.append(
                     HarvestError(
-                        arc_id=task_identifiers.get(done_task),
+                        arc_id=arc_id,
                         error_type=HarvestErrorType.SUBMISSION_FAILED,
                         message=str(e),
                         timestamp=datetime.now(UTC).isoformat(),
