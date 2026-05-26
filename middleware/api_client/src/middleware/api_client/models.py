@@ -102,6 +102,26 @@ class ArcResult(BaseModel):
     client_id: Annotated[str | None, Field(description="Authenticated client identifier")] = None
 
 
+class HarvestStatistics(BaseModel):
+    """Statistics for a completed harvest run.
+
+    Mirrors the server-side ``HarvestStatistics`` wire format so that
+    :meth:`~middleware.api_client.ApiClient.HarvestResult.statistics` is
+    validated and typed rather than an opaque ``dict``.
+    """
+
+    expected_datasets: Annotated[
+        int | None,
+        Field(description="Number of datasets expected to be harvested, as reported by the client."),
+    ] = None
+    arcs_submitted: Annotated[int, Field(description="Total ARCs submitted")] = 0
+    arcs_new: Annotated[int, Field(description="New ARCs created")] = 0
+    arcs_updated: Annotated[int, Field(description="Existing ARCs updated")] = 0
+    arcs_unchanged: Annotated[int, Field(description="ARCs with no changes")] = 0
+    arcs_missing: Annotated[int, Field(description="ARCs marked as missing")] = 0
+    errors: Annotated[int, Field(description="Number of errors encountered")] = 0
+
+
 class HarvestResult(BaseModel):
     """Result returned by harvest-related methods on :class:`~middleware.api_client.ApiClient`.
 
@@ -114,7 +134,9 @@ class HarvestResult(BaseModel):
     status: Annotated[HarvestStatus, Field(description="Current harvest status")]
     started_at: Annotated[str, Field(description="ISO 8601 start timestamp")]
     completed_at: Annotated[str | None, Field(description="ISO 8601 completion timestamp")] = None
-    statistics: Annotated[dict, Field(description="Harvest statistics")] = Field(default_factory=dict)
+    statistics: Annotated[HarvestStatistics, Field(description="Harvest statistics")] = Field(
+        default_factory=HarvestStatistics
+    )
     errors: Annotated[
         list[HarvestError],
         Field(
