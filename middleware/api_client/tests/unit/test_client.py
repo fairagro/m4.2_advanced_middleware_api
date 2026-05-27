@@ -13,7 +13,14 @@ import pytest
 import respx
 from arctrl import ARC, ArcInvestigation  # type: ignore[import-untyped]
 
-from middleware.api_client import ApiClient, ApiClientError, ArcResult, Config, HarvestResult
+from middleware.api_client import (
+    ApiClient,
+    ApiClientError,
+    ArcResult,
+    Config,
+    HarvestErrorType,
+    HarvestResult,
+)
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -663,6 +670,10 @@ async def test_harvest_arcs_continues_on_item_error(client_config: Config) -> No
     assert route_submit.call_count == EXPECTED_ARC_UPLOADS
     assert complete_route.called
     assert not cancel_route.called
+    assert len(result.errors) == 1
+    assert result.errors[0].error_type == HarvestErrorType.SUBMISSION_FAILED
+    assert result.errors[0].arc_id is None
+    assert "HTTP error 400" in result.errors[0].message
 
 
 @pytest.mark.asyncio
@@ -722,6 +733,10 @@ async def test_harvest_arcs_skips_duplicate_identifier(client_config: Config) ->
     assert result.status == "COMPLETED"
     assert arc_route.call_count == 1  # duplicate was skipped, not submitted
     assert complete_route.called
+    assert len(result.errors) == 1
+    assert result.errors[0].error_type == HarvestErrorType.DUPLICATE
+    assert result.errors[0].arc_id == "duplicate-arc"
+    assert "duplicate-arc" in result.errors[0].message
 
 
 @pytest.mark.asyncio
