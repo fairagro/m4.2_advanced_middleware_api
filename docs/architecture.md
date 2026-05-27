@@ -9,13 +9,17 @@ architecture-beta
 
     group rdi2(database)[RDI 2]
     service rdi2db(database)[DB] in rdi2
-    service csw(server)[csw] in rdi2
+    service csw(server)["CSW / INSPIRE"] in rdi2
+
+    group rdi3(database)[RDI 3]
+    service rdi3db(database)[DB] in rdi3
+    service web(internet)["Web / schema.org"] in rdi3
 
     group middleware(cloud)[Middleware]
     service api(server)[API] in middleware
     service db(database)[CouchDB] in middleware
     service git(database)[DataHUB] in middleware
-    service inspire2arc(server)[inspire2arc] in middleware
+    service harvester(server)[Harvester] in middleware
 
     service searchhub(server)[SearchHUB]
     service sciwin(server)[SciWIn]
@@ -25,8 +29,10 @@ architecture-beta
     sql2arc:L --> R:rdi1db
     sql2arc:R --> L:api
     csw:L --> R:rdi2db
-    inspire2arc:T --> B:api
-    inspire2arc:L --> R:csw
+    web:L --> R:rdi3db
+    harvester:T --> B:api
+    harvester:L --> R:csw
+    harvester:B --> T:web
     searchhub:L --> R:git
     sciwin:L --> B:git
 ```

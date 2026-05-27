@@ -7,6 +7,7 @@ import ssl
 import threading
 from collections.abc import AsyncGenerator, AsyncIterator
 from contextlib import asynccontextmanager
+from datetime import UTC, datetime
 from http import HTTPStatus
 from typing import TYPE_CHECKING, Any, cast
 
@@ -22,7 +23,7 @@ from middleware.shared.api_models.v3.models import (
 )
 
 from .config import Config
-from .models import ArcResult, HarvestResult
+from .models import ArcResult, HarvestError, HarvestErrorType, HarvestResult, HarvestStatus
 
 if TYPE_CHECKING:
     from arctrl import ARC  # type: ignore[import-untyped]
@@ -246,29 +247,46 @@ class ApiClient:
         self,
         harvest_id: str,
         done_tasks: set[asyncio.Task[None]],
-    ) -> tuple[int, Exception | None]:
-        """Return (failed_count, catastrophic_error) for completed submission tasks."""
-        failed_submissions = 0
+        task_identifiers: dict[asyncio.Task[None], str | None],
+    ) -> tuple[list[HarvestError], Exception | None]:
+        """Return (errors, catastrophic_error) for completed submission tasks."""
+        errors: list[HarvestError] = []
+        catastrophic_error: Exception | None = None
 
         for done_task in done_tasks:
+            arc_id = task_identifiers.pop(done_task, None)
             try:
                 done_task.result()
             except Exception as e:  # noqa: BLE001
                 if self._is_catastrophic_harvest_error(e):
-                    return failed_submissions, e
-                failed_submissions += 1
-                logger.warning("Skipping failed ARC submission in harvest %s: %s", harvest_id, e)
+                    if catastrophic_error is None:
+                        catastrophic_error = e
+                else:
+                    errors.append(
+                        HarvestError(
+                            arc_id=arc_id,
+                            error_type=HarvestErrorType.SUBMISSION_FAILED,
+                            message=str(e),
+                            timestamp=datetime.now(UTC).isoformat(),
+                        )
+                    )
+                    logger.warning("Skipping failed ARC submission in harvest %s: %s", harvest_id, e)
 
-        return failed_submissions, None
+        return errors, catastrophic_error
 
     async def _submit_arcs_parallel(
         self,
         harvest_id: str,
         arcs: "AsyncGenerator[ARC | dict[str, Any] | str, None] | AsyncIterator[ARC | dict[str, Any] | str]",
-    ) -> int:
-        """Submit all ARCs in bounded parallelism and return number of skipped ARC submissions."""
+    ) -> list[HarvestError]:
+        """Submit all ARCs in bounded parallelism and return per-item errors.
+
+        Compatibility shim (issue #240): duplicate detection and submission
+        failures are recorded client-side until the server persists them natively.
+        """
         pending_tasks: set[asyncio.Task[None]] = set()
-        failed_submissions = 0
+        task_identifiers: dict[asyncio.Task[None], str | None] = {}
+        errors: list[HarvestError] = []
         seen_identifiers: set[str] = set()
 
         async def submit_one(arc_item: dict[str, Any]) -> None:
@@ -281,35 +299,43 @@ class ApiClient:
             if identifier is not None:
                 if identifier in seen_identifiers:
                     logger.error(
-                        "Skipping duplicate ARC identifier '%s' in harvest %s. "
-                        "Two ARCs share the same identifier — this is a client-side data error.",
+                        "Duplicate ARC identifier '%s' in harvest %s — "
+                        "two ARCs share the same identifier (client-side data error).",
                         identifier,
                         harvest_id,
                     )
-                    failed_submissions += 1
+                    errors.append(
+                        HarvestError(
+                            arc_id=identifier,
+                            error_type=HarvestErrorType.DUPLICATE,
+                            message=f"Duplicate ARC identifier '{identifier}' — two ARCs share the same identifier",
+                            timestamp=datetime.now(UTC).isoformat(),
+                        )
+                    )
                     continue
                 seen_identifiers.add(identifier)
 
             task = asyncio.create_task(submit_one(serialized))
+            task_identifiers[task] = identifier
             pending_tasks.add(task)
 
             if len(pending_tasks) >= self._config.max_concurrency:
                 done, pending = await asyncio.wait(pending_tasks, return_when=asyncio.FIRST_COMPLETED)
                 pending_tasks = pending
-                failed_delta, catastrophic_error = self._process_completed_arc_tasks(harvest_id, done)
-                failed_submissions += failed_delta
+                new_errors, catastrophic_error = self._process_completed_arc_tasks(harvest_id, done, task_identifiers)
+                errors.extend(new_errors)
                 if catastrophic_error is not None:
                     await self._cancel_pending_arc_tasks(pending_tasks)
                     raise catastrophic_error
 
         if pending_tasks:
             done, _ = await asyncio.wait(pending_tasks)
-            failed_delta, catastrophic_error = self._process_completed_arc_tasks(harvest_id, done)
-            failed_submissions += failed_delta
+            new_errors, catastrophic_error = self._process_completed_arc_tasks(harvest_id, done, task_identifiers)
+            errors.extend(new_errors)
             if catastrophic_error is not None:
                 raise catastrophic_error
 
-        return failed_submissions
+        return errors
 
     def __init__(self, config: Config) -> None:
         """Initialize the ApiClient.
@@ -572,25 +598,32 @@ class ApiClient:
         data = await self._post("v3/harvests", request)
         return self._parse_harvest_response(data)
 
-    async def list_harvests(self, rdi: str | None = None) -> list[HarvestResult]:
-        """List harvest runs.
+    async def list_harvests(
+        self,
+        rdi: str | None = None,
+        status: HarvestStatus | None = None,
+        limit: int = 20,
+        offset: int = 0,
+    ) -> list[HarvestResult]:
+        """List harvest runs, newest first.
 
-        Uses ``GET /v3/harvests``.
+        .. note::
+            Not yet implemented — requires server-side changes (status filter,
+            guaranteed newest-first sort order). Tracked in GitHub issue #242.
 
         Args:
             rdi: Optional RDI filter.
+            status: Optional status filter (e.g. ``HarvestStatus.RUNNING``).
+            limit: Maximum number of results to return (default 20).
+            offset: Number of records to skip for pagination (default 0).
 
-        Returns:
-            List of :class:`HarvestResult` objects.
+        Raises:
+            NotImplementedError: Always — pending server-side support.
         """
-        params: dict[str, str] | None = None
-        if rdi:
-            params = {"rdi": rdi}
-        data = await self._get("v3/harvests", params=params)
-        try:
-            return [HarvestResult.model_validate(d) for d in data]
-        except ValidationError as e:
-            raise ApiClientError(f"Invalid harvest list response from API: {e}") from e
+        raise NotImplementedError(
+            "list_harvests requires server-side changes (status filter, guaranteed "
+            "newest-first sort order). See GitHub issue #242."
+        )
 
     async def get_harvest(self, harvest_id: str) -> HarvestResult:
         """Get a single harvest run by ID.
@@ -721,7 +754,7 @@ class ApiClient:
         logger.info("[%s] Started harvest %s for RDI %s", rdi, harvest_id, rdi)
 
         try:
-            failed_submissions = await self._submit_arcs_parallel(harvest_id, arcs)
+            client_errors = await self._submit_arcs_parallel(harvest_id, arcs)
         except Exception:
             logger.warning(
                 "[%s] Catastrophic error during ARC submission, marking harvest %s as failed", rdi, harvest_id
@@ -729,15 +762,21 @@ class ApiClient:
             await self._fail_harvest_safely(rdi, harvest_id)
             raise
 
-        if failed_submissions > 0:
+        if client_errors:
             logger.warning(
-                "[%s] Harvest %s completed with %d skipped ARC submissions",
+                "[%s] Harvest %s has %d per-item error(s)",
                 rdi,
                 harvest_id,
-                failed_submissions,
+                len(client_errors),
             )
 
         result = await self.complete_harvest(harvest_id)
+        # Compatibility shim (issue #240): inject client-side errors into the result
+        # until the server persists and returns them natively via the harvest response.
+        # When the server supports it, result.errors will already be populated here
+        # and this merge can be removed.
+        if client_errors:
+            result = result.model_copy(update={"errors": result.errors + client_errors})
         logger.info("[%s] Completed harvest %s", rdi, harvest_id)
         return result
 
