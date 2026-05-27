@@ -251,6 +251,7 @@ class ApiClient:
     ) -> tuple[list[HarvestError], Exception | None]:
         """Return (errors, catastrophic_error) for completed submission tasks."""
         errors: list[HarvestError] = []
+        catastrophic_error: Exception | None = None
 
         for done_task in done_tasks:
             arc_id = task_identifiers.pop(done_task, None)
@@ -258,18 +259,20 @@ class ApiClient:
                 done_task.result()
             except Exception as e:  # noqa: BLE001
                 if self._is_catastrophic_harvest_error(e):
-                    return errors, e
-                errors.append(
-                    HarvestError(
-                        arc_id=arc_id,
-                        error_type=HarvestErrorType.SUBMISSION_FAILED,
-                        message=str(e),
-                        timestamp=datetime.now(UTC).isoformat(),
+                    if catastrophic_error is None:
+                        catastrophic_error = e
+                else:
+                    errors.append(
+                        HarvestError(
+                            arc_id=arc_id,
+                            error_type=HarvestErrorType.SUBMISSION_FAILED,
+                            message=str(e),
+                            timestamp=datetime.now(UTC).isoformat(),
+                        )
                     )
-                )
-                logger.warning("Skipping failed ARC submission in harvest %s: %s", harvest_id, e)
+                    logger.warning("Skipping failed ARC submission in harvest %s: %s", harvest_id, e)
 
-        return errors, None
+        return errors, catastrophic_error
 
     async def _submit_arcs_parallel(
         self,
