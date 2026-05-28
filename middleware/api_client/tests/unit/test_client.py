@@ -679,20 +679,25 @@ async def test_harvest_arcs_continues_on_item_error(client_config: Config) -> No
 @pytest.mark.asyncio
 @respx.mock
 async def test_harvest_arcs_cancels_on_catastrophic_error(client_config: Config) -> None:
-    """harvest_arcs marks the harvest as failed on catastrophic submission errors."""
+    """harvest_arcs marks the harvest as failed on catastrophic submission errors.
+
+    409 Conflict (harvest in wrong state) is catastrophic → the harvest is
+    immediately aborted and marked as failed.  HTTP 500 is *not* catastrophic;
+    see test_harvest_arcs_500_is_submission_failed for that behaviour.
+    """
     failed_response = {**_HARVEST_RESPONSE, "status": "FAILED"}
     respx.post(f"{client_config.api_url}v3/harvests").mock(
         return_value=httpx.Response(http.HTTPStatus.OK, json=_HARVEST_RESPONSE)
     )
     respx.post(f"{client_config.api_url}v3/harvests/harvest-456/arcs").mock(
-        return_value=httpx.Response(http.HTTPStatus.INTERNAL_SERVER_ERROR, text="server unavailable")
+        return_value=httpx.Response(http.HTTPStatus.CONFLICT, text="harvest already closed")
     )
     fail_route = respx.patch(f"{client_config.api_url}v3/harvests/harvest-456").mock(
         return_value=httpx.Response(http.HTTPStatus.OK, json=failed_response)
     )
 
     async with ApiClient(client_config) as client:
-        with pytest.raises(ApiClientError):
+        with pytest.raises(ApiClientError, match="HTTP error 409"):
             await client.harvest_arcs("test-rdi", _arc_gen({"id": "arc-1"}))
 
     assert fail_route.called
@@ -791,8 +796,9 @@ async def test_harvest_arcs_cancel_failure_does_not_mask_original_error(client_c
     respx.post(f"{client_config.api_url}v3/harvests").mock(
         return_value=httpx.Response(http.HTTPStatus.OK, json=_HARVEST_RESPONSE)
     )
+    # 409 is catastrophic → triggers fail_harvest; 500 is NOT (see dedicated test).
     respx.post(f"{client_config.api_url}v3/harvests/harvest-456/arcs").mock(
-        return_value=httpx.Response(http.HTTPStatus.INTERNAL_SERVER_ERROR, text="arc error")
+        return_value=httpx.Response(http.HTTPStatus.CONFLICT, text="harvest already closed")
     )
     # Also make the fail call fail
     respx.patch(f"{client_config.api_url}v3/harvests/harvest-456").mock(
@@ -800,5 +806,133 @@ async def test_harvest_arcs_cancel_failure_does_not_mask_original_error(client_c
     )
 
     async with ApiClient(client_config) as client:
-        with pytest.raises(ApiClientError, match="HTTP error 500"):
+        with pytest.raises(ApiClientError, match="HTTP error 409"):
             await client.harvest_arcs("test-rdi", _arc_gen({"id": "arc-1"}))
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_harvest_arcs_all_exceptions_retrieved_when_multiple_tasks_catastrophic(
+    client_config: Config,
+) -> None:
+    """All task exceptions are retrieved when multiple tasks fail catastrophically.
+
+    Regression test for the "Task exception was never retrieved" asyncio warning
+    (confirmed in production: Task-1149, HTTP 500 for harvest arc submission).
+
+    Root cause: the old `_process_completed_arc_tasks` returned early after the
+    first catastrophic error, leaving the remaining done tasks' exceptions
+    unretrieved. asyncio then emitted a RuntimeWarning.
+
+    With max_concurrency=10 and 3 ARCs, all three tasks land in the same done
+    batch during the final drain (asyncio.wait). The early-return bug would leave
+    the 2nd and 3rd exceptions unretrieved. This test is run with
+    -W error::RuntimeWarning (see pyproject.toml) so any unretrieved exception
+    would immediately fail the test.
+
+    Note: 409 Conflict is used here because it is catastrophic (abort harvest).
+    HTTP 500 is *not* catastrophic since this fix — see
+    test_harvest_arcs_500_is_submission_failed for the non-catastrophic path.
+    The asyncio-warning fix (no early return in _process_completed_arc_tasks)
+    applies to both paths.
+    """
+    respx.post(f"{client_config.api_url}v3/harvests").mock(
+        return_value=httpx.Response(http.HTTPStatus.OK, json=_HARVEST_RESPONSE)
+    )
+    respx.post(f"{client_config.api_url}v3/harvests/harvest-456/arcs").mock(
+        return_value=httpx.Response(http.HTTPStatus.CONFLICT, text="harvest already closed")
+    )
+    fail_route = respx.patch(f"{client_config.api_url}v3/harvests/harvest-456").mock(
+        return_value=httpx.Response(http.HTTPStatus.OK, json={**_HARVEST_RESPONSE, "status": "FAILED"})
+    )
+
+    # 3 ARCs all returning 409 (catastrophic). With max_concurrency=10, no
+    # intermediate wait fires — all three tasks accumulate in pending_tasks and
+    # are drained together. If _process_completed_arc_tasks returned early after
+    # the first catastrophic error, the remaining two exceptions would be
+    # unretrieved → RuntimeWarning (promoted to error by -W error).
+    async with ApiClient(client_config) as client:
+        with pytest.raises(ApiClientError, match="HTTP error 409"):
+            await client.harvest_arcs(
+                "test-rdi",
+                _arc_gen({"id": "arc-1"}, {"id": "arc-2"}, {"id": "arc-3"}),
+            )
+
+    assert fail_route.called
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_harvest_arcs_500_is_submission_failed(client_config: Config) -> None:
+    """HTTP 5xx from ARC submission yields SUBMISSION_FAILED; the harvest continues.
+
+    All 5xx responses are treated as transient: a server error on one ARC does
+    not mean the next ARC will fail too.  Only auth/state errors (401, 403, 404,
+    409) are truly catastrophic and abort the harvest.
+    """
+    completed_response = {**_HARVEST_RESPONSE, "status": "COMPLETED", "completed_at": "2024-01-01T01:00:00Z"}
+    respx.post(f"{client_config.api_url}v3/harvests").mock(
+        return_value=httpx.Response(http.HTTPStatus.OK, json=_HARVEST_RESPONSE)
+    )
+    # arc-1: 500, arc-2: success, arc-3: 500 → 2 SUBMISSION_FAILED errors
+    respx.post(f"{client_config.api_url}v3/harvests/harvest-456/arcs").mock(
+        side_effect=[
+            httpx.Response(http.HTTPStatus.INTERNAL_SERVER_ERROR, text="processing error"),
+            httpx.Response(http.HTTPStatus.OK, json=_ARC_RESPONSE),
+            httpx.Response(http.HTTPStatus.INTERNAL_SERVER_ERROR, text="processing error"),
+        ]
+    )
+    fail_route = respx.patch(f"{client_config.api_url}v3/harvests/harvest-456").mock(
+        return_value=httpx.Response(http.HTTPStatus.OK, json={**_HARVEST_RESPONSE, "status": "FAILED"})
+    )
+    complete_route = respx.post(f"{client_config.api_url}v3/harvests/harvest-456/complete").mock(
+        return_value=httpx.Response(http.HTTPStatus.OK, json=completed_response)
+    )
+
+    async with ApiClient(client_config) as client:
+        result = await client.harvest_arcs(
+            "test-rdi",
+            _arc_gen({"id": "arc-1"}, {"id": "arc-2"}, {"id": "arc-3"}),
+        )
+
+    assert complete_route.called
+    assert not fail_route.called
+    assert len(result.errors) == 2  # noqa: PLR2004
+    assert all(e.error_type == HarvestErrorType.SUBMISSION_FAILED for e in result.errors)
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_harvest_arcs_502_is_submission_failed(client_config: Config) -> None:
+    """HTTP 502/503/504 from ARC submission yields SUBMISSION_FAILED; harvest continues.
+
+    A gateway or service-unavailable error on one ARC does not mean the next
+    ARC will also fail — the API may recover mid-harvest.  The harvest continues
+    and the failed ARC is recorded as SUBMISSION_FAILED rather than aborting.
+    """
+    completed_response = {**_HARVEST_RESPONSE, "status": "COMPLETED", "completed_at": "2024-01-01T01:00:00Z"}
+    respx.post(f"{client_config.api_url}v3/harvests").mock(
+        return_value=httpx.Response(http.HTTPStatus.OK, json=_HARVEST_RESPONSE)
+    )
+    # arc-1: 502, arc-2: success → 1 SUBMISSION_FAILED, harvest completes
+    respx.post(f"{client_config.api_url}v3/harvests/harvest-456/arcs").mock(
+        side_effect=[
+            httpx.Response(http.HTTPStatus.BAD_GATEWAY, text="gateway error"),
+            httpx.Response(http.HTTPStatus.OK, json=_ARC_RESPONSE),
+        ]
+    )
+    fail_route = respx.patch(f"{client_config.api_url}v3/harvests/harvest-456").mock(
+        return_value=httpx.Response(http.HTTPStatus.OK, json={**_HARVEST_RESPONSE, "status": "FAILED"})
+    )
+    complete_route = respx.post(f"{client_config.api_url}v3/harvests/harvest-456/complete").mock(
+        return_value=httpx.Response(http.HTTPStatus.OK, json=completed_response)
+    )
+
+    async with ApiClient(client_config) as client:
+        result = await client.harvest_arcs("test-rdi", _arc_gen({"id": "arc-1"}, {"id": "arc-2"}))
+
+    assert complete_route.called
+    assert not fail_route.called
+    assert len(result.errors) == 1
+    assert result.errors[0].error_type == HarvestErrorType.SUBMISSION_FAILED
+    assert "502" in result.errors[0].message

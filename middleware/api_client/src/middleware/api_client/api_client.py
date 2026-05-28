@@ -218,16 +218,21 @@ class ApiClient:
         if status_code is None:
             return True
 
-        return (
-            status_code
-            in {
-                HTTPStatus.UNAUTHORIZED,
-                HTTPStatus.FORBIDDEN,
-                HTTPStatus.NOT_FOUND,
-                HTTPStatus.CONFLICT,
-            }
-            or status_code >= HTTPStatus.INTERNAL_SERVER_ERROR
-        )
+        # Only auth, permissions, and harvest-state errors are truly catastrophic:
+        # every subsequent ARC request would fail the same way, so there is no
+        # point continuing the harvest.
+        #
+        # All 5xx responses (500, 502, 503, 504, …) are treated as transient and
+        # recorded as SUBMISSION_FAILED instead.  A server error on one ARC does
+        # not mean the next ARC will also fail — the API may recover mid-harvest.
+        # Connection errors (status_code is None) still abort the harvest because
+        # the API is fundamentally unreachable.
+        return status_code in {
+            HTTPStatus.UNAUTHORIZED,
+            HTTPStatus.FORBIDDEN,
+            HTTPStatus.NOT_FOUND,
+            HTTPStatus.CONFLICT,
+        }
 
     async def _fail_harvest_safely(self, rdi: str, harvest_id: str) -> None:
         """Try marking a harvest as failed and suppress any secondary failures."""
