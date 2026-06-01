@@ -1,0 +1,104 @@
+{
+  "features": {
+    "ghcr.io/devcontainers-extra/features/actions-runner:1": {
+      "version": "1.0.13",
+      "resolved": "ghcr.io/devcontainers-extra/features/actions-runner@sha256:d5b302251d0d02dd5ed824438f56f3ba856d152a8059a80a1f44500c076314a8",
+      "integrity": "sha256:d5b302251d0d02dd5ed824438f56f3ba856d152a8059a80a1f44500c076314a8"
+    },
+    "ghcr.io/devcontainers-extra/features/age:1": {
+      "version": "1.0.16",
+      "resolved": "ghcr.io/devcontainers-extra/features/age@sha256:78469fe5d5ded6a24d50bdb5dbd083c5cd44639969563f122a6a92d3a9326136",
+      "integrity": "sha256:78469fe5d5ded6a24d50bdb5dbd083c5cd44639969563f122a6a92d3a9326136"
+    },
+    "ghcr.io/devcontainers-extra/features/apt-packages:1": {
+      "version": "1.0.6",
+      "resolved": "ghcr.io/devcontainers-extra/features/apt-packages@sha256:55c54412112da81b9381e470cdbbe55278564950d1ff536ce925b1e8e096babd",
+      "integrity": "sha256:55c54412112da81b9381e470cdbbe55278564950d1ff536ce925b1e8e096babd"
+    },
+    "ghcr.io/devcontainers-extra/features/curl-apt-get:1": {
+      "version": "1.0.18",
+      "resolved": "ghcr.io/devcontainers-extra/features/curl-apt-get@sha256:7fb32e4ebdd440369a598e7a27b1ed56c9e73eb6b4f595d30969862d2fc68e40",
+      "integrity": "sha256:7fb32e4ebdd440369a598e7a27b1ed56c9e73eb6b4f595d30969862d2fc68e40"
+    },
+    "ghcr.io/devcontainers-extra/features/pre-commit:2": {
+      "version": "2.0.18",
+      "resolved": "ghcr.io/devcontainers-extra/features/pre-commit@sha256:6e0bb2ce80caca1d94f44dab5d0653d88a1c00984e590adb7c6bce012d0ade6e",
+      "integrity": "sha256:6e0bb2ce80caca1d94f44dab5d0653d88a1c00984e590adb7c6bce012d0ade6e"
+    },
+    "ghcr.io/devcontainers-extra/features/renovate-cli:2": {
+      "version": "2.0.16",
+      "resolved": "ghcr.io/devcontainers-extra/features/renovate-cli@sha256:3653309f6b17363ce9cd63d07b35a3c986b08ad24b2aeecf418d9e5e3aaf3520",
+      "integrity": "sha256:3653309f6b17363ce9cd63d07b35a3c986b08ad24b2aeecf418d9e5e3aaf3520"
+    },
+    "ghcr.io/devcontainers-extra/features/sops:1": {
+      "version": "1.0.15",
+      "resolved": "ghcr.io/devcontainers-extra/features/sops@sha256:4cf07db9322cbe261fd103de5ba390907df63cd48d9e0d68517656fc35a27e6e",
+      "integrity": "sha256:4cf07db9322cbe261fd103de5ba390907df63cd48d9e0d68517656fc35a27e6e"
+    },
+    "ghcr.io/devcontainers-extra/features/starship:1": {
+      "version": "1.0.10",
+      "resolved": "ghcr.io/devcontainers-extra/features/starship@sha256:3184b569f58b9106a27fff1e76566f2ac7a03835c3bc01b0853566b8503b2b54",
+      "integrity": "sha256:3184b569f58b9106a27fff1e76566f2ac7a03835c3bc01b0853566b8503b2b54"
+    },
+    "ghcr.io/devcontainers-extra/features/wget-apt-get:1": {
+      "version": "1.0.17",
+      "resolved": "ghcr.io/devcontainers-extra/features/wget-apt-get@sha256:35dbf105e38d7772cfe363b2fc4aedb3348f274822bc6fbf9c18be6d6b0ea471",
+      "integrity": "sha256:35dbf105e38d7772cfe363b2fc4aedb3348f274822bc6fbf9c18be6d6b0ea471"
+    },
+    "ghcr.io/devcontainers/features/docker-in-docker:3": {
+      "version": "3.0.1",
+      "resolved": "ghcr.io/devcontainers/features/docker-in-docker@sha256:ca2508495b01ba29eba93e8153772a2daa65eaa86471cc6863fe2a3d21933df9",
+      "integrity": "sha256:ca2508495b01ba29eba93e8153772a2daa65eaa86471cc6863fe2a3d21933df9"
+    },
+    "ghcr.io/devcontainers/features/github-cli:1": {
+      "version": "1.1.0",
+      "resolved": "ghcr.io/devcontainers/features/github-cli@sha256:d22f50b70ed75339b4eed1ba9ecde3a1791f90e88d37936517e3bace0bbad671",
+      "integrity": "sha256:d22f50b70ed75339b4eed1ba9ecde3a1791f90e88d37936517e3bace0bbad671"
+    },
+    "ghcr.io/devcontainers/features/kubectl-helm-minikube:1": {
+      "version": "1.3.1",
+      "resolved": "ghcr.io/devcontainers/features/kubectl-helm-minikube@sha256:bbe8adf6b37fff8c67412ab0a4579f4c2f30bbaba1d9a5cebd9e38bade54025b",
+      "integrity": "sha256:bbe8adf6b37fff8c67412ab0a4579f4c2f30bbaba1d9a5cebd9e38bade54025b"
+    },
+    "ghcr.io/devcontainers/features/python:1": {
+      "version": "1.8.0",
+      "resolved": "ghcr.io/devcontainers/features/python@sha256:fbcad6955caeecc5ad3f7886baf652e25cba5225a6c4c2287c536de2e5607511",
+      "integrity": "sha256:fbcad6955caeecc5ad3f7886baf652e25cba5225a6c4c2287c536de2e5607511"
+    },
+    "ghcr.io/dhoeric/features/hadolint:1": {
+      "version": "1.0.0",
+      "resolved": "ghcr.io/dhoeric/features/hadolint@sha256:993e7e6f14b7f53aafefb081eb8396ea08f3d48aebb23c91fbaa10651ca0a835",
+      "integrity": "sha256:993e7e6f14b7f53aafefb081eb8396ea08f3d48aebb23c91fbaa10651ca0a835"
+    },
+    "ghcr.io/eitsupi/devcontainer-features/jq-likes:2": {
+      "version": "2.1.1",
+      "resolved": "ghcr.io/eitsupi/devcontainer-features/jq-likes@sha256:6a8b044f9f424097ec6d212167836b26994a76a556cbcb202084be79fe8032bd",
+      "integrity": "sha256:6a8b044f9f424097ec6d212167836b26994a76a556cbcb202084be79fe8032bd"
+    },
+    "ghcr.io/jungaretti/features/vim:1": {
+      "version": "1.0.0",
+      "resolved": "ghcr.io/jungaretti/features/vim@sha256:f3e6b230408ad16309d1dad72f43e5db50c4eb3550f6e09a62cb35927570b8fc",
+      "integrity": "sha256:f3e6b230408ad16309d1dad72f43e5db50c4eb3550f6e09a62cb35927570b8fc"
+    },
+    "ghcr.io/schlich/cst-devcontainer-feature/container-structure-test:1": {
+      "version": "1.0.0",
+      "resolved": "ghcr.io/schlich/cst-devcontainer-feature/container-structure-test@sha256:ecdd624fd0d4dcca40543f1db5855a3b0075918a60c7783236e3039dd48df191",
+      "integrity": "sha256:ecdd624fd0d4dcca40543f1db5855a3b0075918a60c7783236e3039dd48df191"
+    },
+    "ghcr.io/stuartleeks/dev-container-features/shell-history:0": {
+      "version": "0.0.6",
+      "resolved": "ghcr.io/stuartleeks/dev-container-features/shell-history@sha256:f266af2d093e0611921ccf510046e53affeccb353405ee05d2b91fcc4f69c1c9",
+      "integrity": "sha256:f266af2d093e0611921ccf510046e53affeccb353405ee05d2b91fcc4f69c1c9"
+    },
+    "ghcr.io/va-h/devcontainers-features/difftastic:1": {
+      "version": "1.1.0",
+      "resolved": "ghcr.io/va-h/devcontainers-features/difftastic@sha256:0531484b814537884ee86f3df8a03e643d022e06d4057edb72141b495b3faeff",
+      "integrity": "sha256:0531484b814537884ee86f3df8a03e643d022e06d4057edb72141b495b3faeff"
+    },
+    "ghcr.io/va-h/devcontainers-features/uv:1": {
+      "version": "1.1.4",
+      "resolved": "ghcr.io/va-h/devcontainers-features/uv@sha256:a15737142539d150ef4d358e2d6a7424a0a2f3dc43b29a3aa1b50162a8b11bc1",
+      "integrity": "sha256:a15737142539d150ef4d358e2d6a7424a0a2f3dc43b29a3aa1b50162a8b11bc1"
+    }
+  }
+}

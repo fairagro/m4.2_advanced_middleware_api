@@ -1,0 +1,74 @@
+@startuml MiddlewareArchitecture
+skinparam packageStyle rectangle
+skinparam rectangle<<dashedRect>> {
+    BorderStyle dashed
+}
+skinparam node<<internal>> {
+    BackgroundColor LightSkyBlue
+    BorderColor DarkBlue
+    FontColor Black
+}
+skinparam node<<internal-dashed>> {
+    BackgroundColor LightSkyBlue
+    BorderColor DarkBlue
+    FontColor Black
+    BorderStyle dashed
+}
+skinparam node<<external>> {
+    BackgroundColor White
+    BorderColor Gray
+    FontColor Black
+}
+hide stereotype
+
+package "Edaphobase" as edaphobaseOriginal {
+    database "DB" as edaphobaseOriginalDb
+    node "sql2arc" as sql2arcOriginal <<internal-dashed>>
+}
+
+package "Bonares" {
+    database "DB" as bonaresDb
+    node "INSPIRE\nendpoint" as inspire <<external>>
+}
+
+package "e!DAL" {
+    database "DB" as edaldDb
+    node "Web site with\nschema.org" as web <<external>>
+}
+
+package "Middleware" {
+    rectangle "Edaphobase Mirror" as edaphobaseDumped <<dashedRect>> {
+        database "DB" as edaphobaseDumpedDb
+        node "sql2arc" as sql2arcDumped <<internal>>
+    }
+
+    queue "RabbitMQ" as rabbitmq
+    node "API" as api <<internal>>
+    database "CouchDB" as couchdb
+    node "Background\nWorker" as worker <<internal>>
+    database "DataHUB" as datahub
+    node "Harvester" as harvester <<internal>>
+}
+
+node "SearchHUB" as searchhub <<external>>
+node "SciWIn" as sciwin <<external>>
+
+api -right-> couchdb : JSON
+api -right-> rabbitmq : publish task
+rabbitmq --> worker : consume task
+worker --> couchdb : JSON
+worker --> datahub : git sync
+sql2arcOriginal -left-> edaphobaseOriginalDb
+sql2arcOriginal --> api : RO-Crate\nJSON-LD
+sql2arcDumped -left-> edaphobaseDumpedDb
+sql2arcDumped --> api : RO-Crate\nJSON-LD
+edaphobaseOriginalDb --> edaphobaseDumpedDb : SQL dump
+inspire -right-> bonaresDb
+web -right-> edaldDb
+harvester -right-> api : RO-Crate\nJSON-LD
+harvester --> inspire : CSW
+harvester -left-> web : HTML
+searchhub --> datahub : to be\ndefined
+sciwin -up-> datahub : to be\ndefined
+
+@enduml
