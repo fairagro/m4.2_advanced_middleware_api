@@ -305,7 +305,7 @@ class ApiClient:
                 if identifier in seen_identifiers:
                     logger.error(
                         "Duplicate ARC identifier '%s' in harvest %s — "
-                        "two ARCs share the same identifier (client-side data error).",
+                        "several ARCs share the same identifier (client-side data error).",
                         identifier,
                         harvest_id,
                     )
