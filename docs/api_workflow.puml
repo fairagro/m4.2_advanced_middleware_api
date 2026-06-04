@@ -1,0 +1,27 @@
+@startuml API_Workflow
+title Middleware API Workflow
+
+start
+:HTTP request arrives;
+:Validate RDI authorization via mTLS client certificate;
+
+switch (REST Endpoint?)
+case (/v3/harvests POST)
+  :Create Harvest Object in CouchDB;
+  stop
+case(/v3/arcs POST)
+case(/v3/harvests/{id}/arcs POST)
+  :Validate harvest object exists in CouchDB;
+  :Validate harvest ownership;
+endswitch
+
+:Validate ARC identifier is present;
+:Persist ARC and harvest-related metadata in CouchDB, using the ARC identifier as document ID;
+
+if (Document is new or updated?) then (yes)
+  :Add ArcSyncTask to background worker queue;
+endif
+
+stop
+
+@enduml

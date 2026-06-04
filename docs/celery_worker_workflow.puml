@@ -1,0 +1,16 @@
+@startuml Celery_Worker_Workflow
+title Celery Worker Workflow for ARC GitLab Sync
+
+start
+:Celery worker process starts;
+
+:Receive task via RabbitMQ broker;
+:Retrieve RO-Crate JSON-LD from CouchDB;
+:Parse ARC from JSON-LD via ARCtrl library;
+:Write ARC scaffold to temporary directory;
+:Synchronize ARC scaffold to DataHUB;
+:Update metadata in CouchDB;
+
+stop
+
+@enduml
