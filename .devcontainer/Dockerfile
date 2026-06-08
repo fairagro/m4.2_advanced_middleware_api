@@ -34,6 +34,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     git-lfs \
     jq \
     bash-completion \
+    default-jre-headless \
+    graphviz \
     && git lfs install --system \
     && rm -rf /var/lib/apt/lists/*
 
