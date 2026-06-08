@@ -40,7 +40,8 @@
 				"github.copilot-chat",
 				"charliermarsh.ruff",
 				"tim-koehler.helm-intellisense",
-				"vadzimnestsiarenka.helm-template-preview-and-more"
+				"vadzimnestsiarenka.helm-template-preview-and-more",
+				"jebbs.plantuml"
 			]
 		}
 	},
