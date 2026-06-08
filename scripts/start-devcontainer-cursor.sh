@@ -19,7 +19,7 @@ set -euo pipefail
 
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 repo_root="$(cd "${script_dir}/.." && pwd)"
-devcontainer_path="${repo_root}/.devcontainer/cursor/devcontainer.json"
+devcontainer_path=".devcontainer/cursor/devcontainer.json"
 
 extra_args=()
 for arg in "$@"; do
