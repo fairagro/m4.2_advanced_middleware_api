@@ -1,6 +1,6 @@
 #!/bin/bash
 # Run mypy on all workspace packages
-# This script reads the mypy_path from pyproject.toml and converts it to package names
+# This script runs mypy on the specified workspace packages.
 
 set -e
 
