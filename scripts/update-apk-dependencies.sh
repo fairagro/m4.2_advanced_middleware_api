@@ -81,8 +81,8 @@ while IFS= read -r match; do
 
   echo "⬆️  $pkg: $current → $latest"
 
-  # Replace exact Alpine package version pins in the Dockerfile.
-  sed -i "s|${pkg}=${current}|${pkg}=${latest}|g" "$DOCKERFILE"
+  escaped_current="${current//./\\.}"
+  sed -i "s|\(^\|[[:space:]]\)${pkg}=${escaped_current}\([[:space:]]\|$\)|\1${pkg}=${latest}\2|g" "$DOCKERFILE"
 
 done < <(grep -oE '[a-z0-9][a-z0-9_-]*=[0-9][a-z0-9._]+-r[0-9]+' "$DOCKERFILE" || true)
 
