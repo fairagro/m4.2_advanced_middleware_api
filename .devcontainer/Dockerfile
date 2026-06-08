@@ -112,7 +112,7 @@ RUN mkdir -p /usr/share/bash-completion/completions && \
     minikube completion bash > /usr/share/bash-completion/completions/minikube && \
     uv generate-shell-completion bash > /usr/share/bash-completion/completions/uv && \
     ln -sf /usr/share/bash-completion/completions/uv /usr/share/bash-completion/completions/uvx && \
-    yq completion bash > /usr/share/bash-completion/completions/yq && \
+    yq shell-completion bash > /usr/share/bash-completion/completions/yq && \
     starship completions bash > /usr/share/bash-completion/completions/starship
 
 # ── Shell init (must run each session; not installable as static completions) ─
