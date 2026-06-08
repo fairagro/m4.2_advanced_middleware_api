@@ -48,12 +48,12 @@
 			]
 		}
 	},
-	"postCreateCommand": [
-		"sudo chown -R vscode:vscode /commandhistory",
-		"bash ${containerWorkspaceFolder}/scripts/uv-sync-dev.sh",
-		"bash ${containerWorkspaceFolder}/scripts/install-dev-hooks.sh",
-		"bash ${containerWorkspaceFolder}/scripts/setup-container-gpg.sh",
-		"grep -qF 'source \\${containerWorkspaceFolder}/scripts/load-env.sh' ~/.bashrc || echo 'source \\${containerWorkspaceFolder}/scripts/load-env.sh' >> ~/.bashrc"
-	],
+	"postCreateCommand": {
+		"fix commandhistory permissions": "sudo chown -R vscode:vscode /commandhistory",
+		"install dependencies": "bash ${containerWorkspaceFolder}/scripts/uv-sync-dev.sh",
+		"install dev hooks": "bash ${containerWorkspaceFolder}/scripts/install-dev-hooks.sh",
+		"setup container gpg": "bash ${containerWorkspaceFolder}/scripts/setup-container-gpg.sh",
+		"setup bashrc": "grep -qF 'source \\${containerWorkspaceFolder}/scripts/load-env.sh' ~/.bashrc || echo 'source \\${containerWorkspaceFolder}/scripts/load-env.sh' >> ~/.bashrc"
+	},
 	"remoteUser": "vscode"
 }
