@@ -36,33 +36,27 @@ if [ ! -d "$REPO_ROOT/.git" ]; then
     exit 1
 fi
 
-# Backup existing hooks if they exist and are not our hooks
+# Repo-local only: devcontainer bind-mounts host ~/.gitconfig read-only.
+# --force: overwrite default hooks; project hooks below replace pre-push again.
+echo "🚀 Initializing Git LFS (local config)..."
+(cd "$REPO_ROOT" && git lfs install --local --skip-smudge --force)
+
 for hook in pre-push post-checkout post-commit post-merge; do
     target_hook="$HOOKS_TARGET_DIR/$hook"
     source_hook="$HOOKS_SOURCE_DIR/$hook"
 
-    if [ -f "$target_hook" ] && [ -f "$source_hook" ]; then
-        # Check if it's already our hook
-        if grep -q "version-controlled and should be installed via" "$target_hook" 2>/dev/null; then
-            echo "🔄 Hook $hook is already installed (our version)"
-            continue
-        fi
+    [ -f "$source_hook" ] || continue
 
-        # Backup existing hook
+    if [ -f "$target_hook" ] && ! grep -q "version-controlled and should be installed via" "$target_hook" 2>/dev/null; then
         echo "📋 Backing up existing $hook hook to $hook.backup"
         cp "$target_hook" "$target_hook.backup"
-    fi
-
-    if [ -f "$source_hook" ]; then
+    else
         echo "📝 Installing $hook hook"
-        cp "$source_hook" "$target_hook"
-        chmod +x "$target_hook"
     fi
-done
 
-# Initialize Git LFS (this is safe to run multiple times)
-echo "🚀 Initializing Git LFS..."
-git lfs install --skip-smudge
+    cp "$source_hook" "$target_hook"
+    chmod +x "$target_hook"
+done
 
 echo ""
 echo "✅ Git LFS hooks setup complete!"
