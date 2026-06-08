@@ -3,6 +3,11 @@
 # Code Quality Check Script
 # Führt alle Qualitätsprüfungen lokal aus
 
+repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+if [ -d "${repo_root}/.venv/bin" ]; then
+    export PATH="${repo_root}/.venv/bin:${PATH}"
+fi
+
 echo "🔍 Starting Code Quality Checks..."
 echo "=================================="
 

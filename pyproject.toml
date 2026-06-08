@@ -24,6 +24,7 @@ dev = [
   "bandit>=1.7.0",
   "ruff>=0.15.10",
   "pre-commit>=4.0.0",
+  "ggshield>=1.51.0",
   "respx>=0.23.1",
   "testcontainers>=4.14.2",
 ]
@@ -39,6 +40,13 @@ members = [
     "middleware/api_client",
     "middleware/shared",
     "middleware/tools",
+]
+
+# ggshield 1.51 pins cryptography<43.1; api/api_client require >=45.0.6.
+# Override keeps harvester-style ggshield in dev deps with workspace crypto.
+[tool.uv]
+override-dependencies = [
+    "cryptography>=45.0.6",
 ]
 
 [tool.ruff]

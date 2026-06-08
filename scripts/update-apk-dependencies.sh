@@ -5,6 +5,16 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
 DOCKERFILE="${PROJECT_DIR}/docker/Dockerfile.api"
 
+# Allow an optional Dockerfile path override for other repository variants.
+if [[ $# -gt 0 ]]; then
+  DOCKERFILE="$1"
+fi
+
+if [[ ! -f "$DOCKERFILE" ]]; then
+  echo "❌ Dockerfile not found: $DOCKERFILE" >&2
+  exit 1
+fi
+
 # Extract Alpine version dynamically from the base image in the Dockerfile
 # Matches e.g. "FROM python:3.12.12-alpine3.23" → "3.23"
 ALPINE_VERSION=$(grep -m1 '^FROM ' "$DOCKERFILE" | grep -oE 'alpine([0-9]+\.[0-9]+)' | grep -oE '[0-9]+\.[0-9]+')
@@ -71,9 +81,8 @@ while IFS= read -r match; do
 
   echo "⬆️  $pkg: $current → $latest"
 
-  # Escape dots in version string (literal in versions, but special in sed regex)
   escaped_current="${current//./\\.}"
-  sed -i "s/\(^\|[[:space:]]\)${pkg}=${escaped_current}\([[:space:]]\|$\)/\1${pkg}=${latest}\2/g" "$DOCKERFILE"
+  sed -i "s|\(^\|[[:space:]]\)${pkg}=${escaped_current}\([[:space:]]\|$\)|\1${pkg}=${latest}\2|g" "$DOCKERFILE"
 
 done < <(grep -oE '[a-z0-9][a-z0-9_-]*=[0-9][a-z0-9._]+-r[0-9]+' "$DOCKERFILE" || true)
 
@@ -101,7 +110,7 @@ while IFS= read -r match; do
   echo "⬆️  $pkg: $current → $latest"
 
   escaped_current="${current//./\\.}"
-  sed -i "s/\(^\|[[:space:]]\)${pkg}==${escaped_current}\([[:space:]]\|$\)/\1${pkg}==${latest}\2/g" "$DOCKERFILE"
+  sed -i "s|\(^\|[[:space:]]\)${pkg}==${escaped_current}\([[:space:]]\|$\)|\1${pkg}==${latest}\2|g" "$DOCKERFILE"
 
 done < <(grep -oE '[a-zA-Z0-9][a-zA-Z0-9_-]*==[0-9][a-z0-9._]*' "$DOCKERFILE" || true)
 
