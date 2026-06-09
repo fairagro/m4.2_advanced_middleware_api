@@ -42,11 +42,14 @@ members = [
     "middleware/tools",
 ]
 
-# ggshield 1.51 pins cryptography<43.1; api/api_client require >=45.0.6.
-# Override keeps harvester-style ggshield in dev deps with workspace crypto.
+# ggshield 1.51 pins outdated transitive deps; overrides align with workspace
+# requirements and resolve Dependabot advisories without dropping ggshield.
 [tool.uv]
 override-dependencies = [
     "cryptography>=45.0.6",
+    "pyjwt>=2.12.0",
+    "requests>=2.33.0",
+    "python-dotenv>=1.2.2",
 ]
 
 [tool.ruff]
