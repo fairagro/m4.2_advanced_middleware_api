@@ -19,6 +19,10 @@ if [ -d "${repo_root}/.venv/bin" ]; then
     esac
 fi
 
+# DevPod credsStore is host-only; DinD needs a container-local Docker config.
+# shellcheck source=/dev/null
+source "${mydir}/setup-container-docker.sh"
+
 # Setup aliases (completions: static files in image + bash-completion lazy-load)
 alias k=kubectl
 alias d=docker
