@@ -227,4 +227,6 @@ helmchart/**/client_ext.conf
 .cache_ggshield
 
 docker/Dockerfile.api.bak
-.devcontainer/docker-config/
+# Docker DinD: ignore runtime state in docker-config, keep minimal config.json tracked
+.devcontainer/docker-config/*
+!.devcontainer/docker-config/config.json
