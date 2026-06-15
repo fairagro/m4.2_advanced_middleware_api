@@ -24,36 +24,49 @@ if [[ -z "$ALPINE_VERSION" ]]; then
 fi
 echo "🏔️  Detected Alpine version: $ALPINE_VERSION"
 
-APK_INDEX_URL="https://dl-cdn.alpinelinux.org/alpine/v${ALPINE_VERSION}/main/x86_64/APKINDEX.tar.gz"
-
 TMP_DIR=$(mktemp -d)
 trap 'rm -rf "$TMP_DIR"' EXIT
 
-echo "⬇️ Downloading Alpine index..."
-curl -sL "$APK_INDEX_URL" -o "$TMP_DIR/APKINDEX.tar.gz"
+declare -A PKG_VERSIONS
 
-tar -xzf "$TMP_DIR/APKINDEX.tar.gz" -C "$TMP_DIR"
+parse_apkindex() {
+  local index_file="$1"
+  local pkg=""
 
-INDEX_FILE="$TMP_DIR/APKINDEX"
+  while IFS= read -r line; do
+    case "$line" in
+      P:*)
+        pkg="${line#P:}"
+        ;;
+      V:*)
+        if [[ -n "$pkg" ]]; then
+          PKG_VERSIONS["$pkg"]+="${line#V:}"$'\n'
+        fi
+        ;;
+      "")
+        pkg=""
+        ;;
+    esac
+  done < "$index_file"
+}
 
-declare -A PKG_MAP
+echo "⬇️ Downloading Alpine package indices..."
+for repo in main community; do
+  index_archive="${TMP_DIR}/${repo}.tar.gz"
+  curl -sL "https://dl-cdn.alpinelinux.org/alpine/v${ALPINE_VERSION}/${repo}/x86_64/APKINDEX.tar.gz" \
+    -o "$index_archive"
+  tar -xzf "$index_archive" -C "$TMP_DIR"
+  parse_apkindex "${TMP_DIR}/APKINDEX"
+  rm -f "${TMP_DIR}/APKINDEX"
+done
 
-echo "📦 Parsing APKINDEX..."
-pkg=""
+latest_apk_version() {
+  local pkg="$1"
+  local versions="${PKG_VERSIONS[$pkg]:-}"
 
-while IFS= read -r line; do
-  case "$line" in
-    P:*)
-      pkg="${line#P:}"
-      ;;
-    V:*)
-      [[ -n "$pkg" ]] && PKG_MAP["$pkg"]="${line#V:}"
-      ;;
-    "")
-      pkg=""
-      ;;
-  esac
-done < "$INDEX_FILE"
+  [[ -n "$versions" ]] || return 1
+  printf '%s\n' "$versions" | sed '/^$/d' | sort -V | tail -1
+}
 
 echo "🔍 Updating Dockerfile..."
 
@@ -67,7 +80,7 @@ while IFS= read -r match; do
 
   pkg="${BASH_REMATCH[1]}"
   current="${BASH_REMATCH[2]}"
-  latest="${PKG_MAP[$pkg]:-}"
+  latest="$(latest_apk_version "$pkg" || true)"
 
   if [[ -z "$latest" ]]; then
     echo "⚠️  $pkg not found in index"
