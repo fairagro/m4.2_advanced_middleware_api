@@ -227,3 +227,4 @@ helmchart/**/client_ext.conf
 .cache_ggshield
 
 docker/Dockerfile.api.bak
+.devcontainer/docker-config/

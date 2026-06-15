@@ -142,6 +142,27 @@ Common issues:
 
 - Database connection → verify db-init completed successfully
 
+### Docker credential helper fails in DevPod (DinD)
+
+Symptom:
+
+```text
+Error retrieving credentials: Post "http://localhost:12049/docker-credentials": dial tcp [::1]:12049: connect: connection refused
+```
+
+DevPod injects `credsStore: devpod` into `~/.docker/config.json`, but the helper
+runs on the host and is unreachable inside Docker-in-Docker.
+
+Fix (automatic after container recreate): `scripts/setup-container-docker.sh` sets
+`DOCKER_CONFIG` to `.devcontainer/docker-config/` (no credential helper).
+
+Immediate workaround in an existing shell:
+
+```bash
+source scripts/setup-container-docker.sh
+./start.sh --build
+```
+
 ## Development Workflow
 
 1. Make changes to API code

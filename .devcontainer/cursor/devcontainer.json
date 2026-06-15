@@ -54,6 +54,7 @@
 		"install dependencies": "bash ${containerWorkspaceFolder}/scripts/uv-sync-dev.sh",
 		"install dev hooks": "bash ${containerWorkspaceFolder}/scripts/install-dev-hooks.sh",
 		"setup container gpg": "bash ${containerWorkspaceFolder}/scripts/setup-container-gpg.sh",
+		"setup container docker": "bash ${containerWorkspaceFolder}/scripts/setup-container-docker.sh",
 		"setup bashrc": "grep -qF 'source \\${containerWorkspaceFolder}/scripts/load-env.sh' ~/.bashrc || echo 'source \\${containerWorkspaceFolder}/scripts/load-env.sh' >> ~/.bashrc"
 	},
 	"remoteUser": "vscode"
