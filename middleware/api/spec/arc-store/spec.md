@@ -20,20 +20,21 @@ recording CouchDB events, and handling retry logic.
       specifically.
 - [ ] Keep the Git repository path (slug) equal to `arc_id` so clone URLs remain
       stable regardless of display metadata.
-- [ ] When the remote backend is GitLab, set the project title to the ARC
-      `identifier`, falling back to `arc_id`.
-- [ ] When the remote backend is GitLab, set the project description from the
-      RO-Crate root dataset `name` and `description` when present. Do not repeat
-      `identifier`, `rdi`, or `arc_id` in the description — those are already
-      visible as the project title, topic tag, and repository path respectively.
-- [ ] When the remote backend is GitLab, set a project topic (tag) to the
-      originating `rdi` name so operators can filter repositories by RDI. The
-      `rdi` is already an allowed deployment identifier (see configuration
-      `known_rdis` and `arc-upload/` / `harvest-arc-upload/`); the Git store
-      does not accept arbitrary RDI strings.
-- [ ] When a GitLab project already exists for an `arc_id`, update its title,
-      description, and RDI topic on the next sync if they differ from the
-      values derived from the current ARC payload.
+- [ ] When the remote backend is GitLab via `GitRepo`, set the project title from
+      the parsed ARC's ``Identifier`` (stripped), matching the normalization used
+      by ``calculate_arc_id``.
+- [ ] When the remote backend is GitLab via `GitRepo`, set the project description
+      from the RO-Crate root dataset `name` and `description` when present. Do
+      not repeat `identifier`, `rdi`, or `arc_id` in the description — those are
+      already visible as the project title, topic tag, and repository path
+      respectively.
+- [ ] When the remote backend is GitLab via `GitRepo`, set a project topic (tag)
+      to the originating `rdi` name so operators can filter repositories by RDI
+      (RDI allowlisting is enforced by the API; see `arc-upload/` and
+      `harvest-arc-upload/`).
+- [ ] When a GitLab project already exists for an `arc_id` (via `GitRepo`), update
+      its title, description, and RDI topic on the next sync if they differ from
+      the values derived from the current ARC payload.
 
 ## Edge Cases
 
@@ -46,7 +47,6 @@ ARC identifier missing or malformed → raise permanent error before any Git ope
 RO-Crate root dataset has no `name` → pass `display_name=""`; the GitLab project
 description omits the name line but may still include the RO-Crate `description`.
 
-Unknown or disallowed `rdi` → rejected by the API before Git sync (`known_rdis`
-in deployment configuration, intersected with client-certificate authorization
-in `arc-upload/` and `harvest-arc-upload/`). The Git store only receives
+Unknown or disallowed `rdi` → rejected by the API before Git sync (see
+`arc-upload/` and `harvest-arc-upload/`). The Git store only receives
 already-validated `rdi` values.

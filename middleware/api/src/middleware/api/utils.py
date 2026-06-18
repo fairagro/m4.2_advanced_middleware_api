@@ -13,5 +13,5 @@ def calculate_arc_id(identifier: str, rdi: str) -> str:
     Returns:
         A SHA256 hash string.
     """
-    input_str = f"{identifier}:{rdi}"
+    input_str = f"{identifier.strip()}:{rdi.strip()}"
     return hashlib.sha256(input_str.encode("utf-8")).hexdigest()

@@ -18,15 +18,17 @@ prefix, not by separate databases.
 ## Requirements
 
 - [ ] On initialization, ensure the application database exists before use.
-- [ ] On initialization, ensure CouchDB system databases (`_users`, `_replicator`)
-      exist if they do not yet exist.
+- [ ] On initialization, ensure CouchDB system databases (`_users`, `_replicator`,
+      `_global_changes`) exist if they do not yet exist.
 - [ ] Handle `412 Precondition Failed` (database already exists) as a success
       during initialization — parallel service startups must not cause crashes.
-- [ ] Store ARC documents keyed by `arc_id`; return flags indicating whether the
-      document was newly created and whether its content changed, based on content
-      hash comparison.
-- [ ] Support harvest run lifecycle operations: create, retrieve, increment
-      statistics counters, and finalize a harvest run.
+- [ ] Store ARC documents keyed by `arc_id` (derived from the RO-Crate root
+      `identifier` and `rdi` via `calculate_arc_id`; see `document-store/design.md`);
+      return flags indicating whether the document was newly created and whether
+      its content changed, based on content hash comparison.
+- [ ] Support harvest run lifecycle operations: create, retrieve, compute statistics
+      (`get_harvest_statistics`), and update harvest documents (including terminal
+      status transitions).
 - [ ] Append event records to an ARC document's event log.
 - [ ] Release the underlying HTTP session and database client on shutdown.
 

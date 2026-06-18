@@ -18,8 +18,9 @@ JSON, selecting the configured backend, and recording CouchDB events. The store
 itself only handles Git.
 
 ```text
-ArcManager.sync_to_gitlab(rdi, arc_json_string)
-    ├─→ ARC.from_rocrate_json_string(arc_json_string)  ← arctrl parse
+ArcManager.sync_to_gitlab(rdi, arc)
+    ├─→ parse_rocrate(arc)
+    ├─→ ARC.from_rocrate_json_string(...)     ← arctrl parse (worker only)
     └─→ ArcStore.create_or_update(arc_id, arc_obj, rdi=...)
             └─→ GitRepo  (or GitlabApi — deprecated)
                     ├─→ RemoteGitProvider.ensure_repo_exists(arc_id, metadata)
@@ -54,21 +55,18 @@ not limited to the hashed `arc_id`. The provider also sets human-readable GitLab
 project fields so operators can browse ARC repositories without decoding hashes.
 
 `GitProjectMetadata` (`remote_git_provider.py`) carries the display fields.
-`GitRepo` builds it via ``git_project_metadata_from_arc(arc, rdi)`` before calling
-``GitlabGitProvider.ensure_repo_exists``. The helper reads ``arc.Identifier``,
-``arc.Title`` (RO-Crate ``name``), and ``arc.Description`` directly from the
-arctrl object. ``display_name`` is always a string; when ``Title`` is absent,
-the helper passes ``""``.
-Root fields are validated on the root data entity (the ``@graph`` node with
-``@id: "./"``). ``RoCratePayload`` keeps that node as an open JSON-LD dict;
-``identifier``, ``name``, and ``description`` are extracted via validator
-functions and exposed as read-only properties. They are not duplicated at the
-document top level.
+`GitRepo` builds it via ``git_project_metadata_from_arc(arc, rdi, arc_id=...)``
+before calling ``GitlabGitProvider.ensure_repo_exists``. The GitLab project title
+uses ``arc.Identifier`` (stripped); ``calculate_arc_id`` applies the same
+normalization when deriving ``arc_id``. Display fields ``Title`` (RO-Crate
+``name``) and ``Description`` are read from the arctrl object. ``display_name``
+is always a string; when ``Title`` is absent, the helper passes ``""``.
+Structural RO-Crate validation on ingest is specified in `arc-manager/`.
 
 | Field | Required | Source |
 | ----- | -------- | ------ |
 | `rdi` | yes | originating RDI name passed into the sync |
-| `identifier` | yes | ``arc.Identifier`` |
+| `identifier` | yes | ``arc.Identifier`` (stripped) |
 | `display_name` | yes (`""` if absent) | ``arc.Title`` (RO-Crate ``name``) |
 | `description` | no | ``arc.Description`` |
 
@@ -87,15 +85,10 @@ in the group project list, and the full text on the project overview page.
 
 ### RDI names and GitLab topics
 
-RDI identifiers are not free-form strings. Deployments declare the allowed set in
-configuration (`known_rdis` on the API `Config` model — same identifiers used for
-client-certificate authorization). New RDIs are added by configuration change, not
-by code change; there is intentionally no hard-coded enum.
-
-By the time `GitlabGitProvider` runs, the `rdi` on `GitProjectMetadata` has
-already passed API validation. `normalize_gitlab_topic` only adapts the
-already-known name to GitLab's topic format (lowercase; map characters outside
-`a-z`, `0-9`, and `-` to hyphens). It is not a substitute for RDI allowlisting.
+By the time `GitlabGitProvider` runs, `rdi` has already passed API validation
+(see `arc-upload/` and `harvest-arc-upload/`). `normalize_gitlab_topic` only
+adapts the name to GitLab's topic format (lowercase; map characters outside
+`a-z`, `0-9`, and `-` to hyphens).
 
 `ensure_repo_exists` applies metadata on project creation. For projects that
 already exist, `apply_gitlab_project_metadata` compares the current GitLab values
@@ -128,14 +121,9 @@ parameter for a uniform interface but ignore it when creating bare repos.
    itself has no knowledge of authentication schemes. SSH and HTTPS credential
    formats differ; the provider abstracts that difference.
 
-5. **Hashed `path`, `identifier` as GitLab title**
-   — GitLab project paths are part of clone URLs and must stay equal to `arc_id`
-   for idempotency. The project `name` shows the ARC `identifier` so the group
-   project list is scannable by dataset ID. Longer RO-Crate text (`name`,
-   `description`) goes into the GitLab `description` field, which is truncated
-   in the list but shown in full on the project home page. `rdi` is a topic tag,
-   not duplicated in the description. The `rdi` value is taken from the
-   deployment allowlist (`known_rdis`), not normalized as if it were arbitrary input.
+5. **Hashed `path`, identifier as GitLab title**
+   — See the GitLab Project Metadata table above. `rdi` is a topic tag, not
+   duplicated in the project description.
 
 6. **GitLab metadata refreshed on every sync**
    — Existing GitLab projects created before metadata support only stored the

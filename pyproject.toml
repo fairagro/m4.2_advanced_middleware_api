@@ -123,7 +123,7 @@ disallow_untyped_defs = true
 disallow_incomplete_defs = true
 explicit_package_bases = true
 namespace_packages = true
-mypy_path = "middleware/api/src:middleware/api_client/src:middleware/shared/src"
+mypy_path = "middleware/api/src:middleware/api_client/src:middleware/shared/src:middleware/api/tests:middleware/api_client/tests:middleware/shared/tests"
 
 # Exclude directories from type checking
 exclude = [
@@ -136,6 +136,8 @@ exclude = [
   ".pytest_cache",
   ".mypy_cache",
   ".ruff_cache",
+  ".*/tests/conftest\\.py$",
+  ".*/tests/.+/conftest\\.py$",
 ]
 
 # Docstring-Regeln aktivieren, damit es wie pylint C0114/15/16 meckert

@@ -187,7 +187,11 @@ class ArcManager:
                 arc_obj = ARC.from_rocrate_json_string(arc_json)
 
                 logger.info("Triggering Git storage for ARC %s", arc_id)
-                await self._store.create_or_update(arc_id, arc_obj, rdi=rdi)
+                await self._store.create_or_update(
+                    arc_id,
+                    arc_obj,
+                    rdi=rdi,
+                )
 
                 await self._doc_store.add_event(
                     arc_id,

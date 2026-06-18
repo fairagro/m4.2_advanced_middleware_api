@@ -20,9 +20,16 @@ from middleware.api.arc_store.remote_git_provider import (
     GitProjectMetadata,
     RemoteGitProvider,
     git_project_metadata_from_arc,
+    normalize_gitlab_topic,
+    sanitize_gitlab_project_name,
 )
 
-_TEST_GIT_METADATA = GitProjectMetadata(rdi="test-rdi", identifier="test-arc", display_name="")
+_TEST_GIT_METADATA = GitProjectMetadata(
+    rdi="test-rdi",
+    arc_id="abc123hash",
+    identifier="test-arc",
+    display_name="",
+)
 
 
 @pytest.fixture
@@ -119,6 +126,7 @@ class TestGitlabGitProvider:
         provider = GitlabGitProvider(url="https://gitlab.com", group_name="my-group", token="secret")  # nosec
         metadata = GitProjectMetadata(
             rdi="rdi-1",
+            arc_id="abc123hash",
             display_name="Arabidopsis thaliana cold acclimation",
             identifier="AthalianaColdStressSugar",
             description="Cold stress experiment",
@@ -146,12 +154,13 @@ class TestGitlabGitProvider:
         mock_project = MagicMock()
         mock_project.name = "old-hash-name"
         mock_project.description = "old description"
-        mock_project.topics = []
+        mock_project.topics = ["existing"]
         mock_gl.projects.get.return_value = mock_project
 
         provider = GitlabGitProvider(url="https://gitlab.com", group_name="my-group", token="secret")  # nosec
         metadata = GitProjectMetadata(
             rdi="rdi-2",
+            arc_id="abc123hash",
             display_name="Readable title",
             identifier="dataset-42",
         )
@@ -161,7 +170,7 @@ class TestGitlabGitProvider:
         mock_gl.projects.create.assert_not_called()
         assert mock_project.name == "dataset-42"
         assert mock_project.description == "Readable title"
-        assert mock_project.topics == ["rdi-2"]
+        assert mock_project.topics == ["existing", "rdi-2"]
         mock_project.save.assert_called_once()
 
     @staticmethod
@@ -253,12 +262,6 @@ class TestRemoteGitProviderFactory:
             RemoteGitProvider.from_url("ftp://server.local", "group")
 
 
-def test_git_project_metadata_rejects_empty_identifier() -> None:
-    """GitProjectMetadata requires a non-empty identifier."""
-    with pytest.raises(ValueError, match="identifier must not be empty"):
-        GitProjectMetadata(rdi="rdi-1", identifier="", display_name="")
-
-
 def test_git_project_metadata_from_arc() -> None:
     """git_project_metadata_from_arc derives display fields from the ARC object."""
     arc = MagicMock()
@@ -266,9 +269,42 @@ def test_git_project_metadata_from_arc() -> None:
     arc.Title = "My Study"
     arc.Description = "A test"
 
-    metadata = git_project_metadata_from_arc(arc, rdi="my-rdi")
+    metadata = git_project_metadata_from_arc(
+        arc,
+        rdi="my-rdi",
+        arc_id="hash123",
+    )
 
     assert metadata.rdi == "my-rdi"
+    assert metadata.arc_id == "hash123"
     assert metadata.identifier == "ARC-001"
     assert metadata.display_name == "My Study"
     assert metadata.description == "A test"
+
+
+def test_sanitize_gitlab_project_name_replaces_slashes() -> None:
+    """Slashes in identifiers are replaced for GitLab project titles."""
+    assert sanitize_gitlab_project_name("study/2024") == "study-2024"
+
+
+def test_sanitize_gitlab_project_name_rejects_empty() -> None:
+    """Whitespace-only identifiers cannot become GitLab project titles."""
+    with pytest.raises(ValueError, match="cannot be empty"):
+        sanitize_gitlab_project_name("   ")
+
+
+def test_git_project_metadata_rejects_empty_identifier() -> None:
+    """git_project_metadata_from_arc requires a non-empty ARC identifier."""
+    arc = MagicMock()
+    arc.Identifier = "   "
+    arc.Title = ""
+    arc.Description = None
+
+    with pytest.raises(ValueError, match="identifier is required"):
+        git_project_metadata_from_arc(arc, rdi="my-rdi", arc_id="hash123")
+
+
+def test_normalize_gitlab_topic_empty_rdi_alnum_fallback() -> None:
+    """RDI names with only stripped characters yield no GitLab topic."""
+    assert normalize_gitlab_topic("---") is None
+    assert normalize_gitlab_topic("rdi-1") == "rdi-1"

@@ -29,7 +29,10 @@ DocumentStore
 3. **Content hash for idempotency**
    — Comparing a SHA-256 hash of the serialized ARC JSON avoids unnecessary
    CouchDB writes and downstream Celery tasks when a client re-submits an
-   unchanged ARC. The hash is stored as a field on the document.
+   unchanged ARC. The hash is stored as a field on the document. Document keys
+   use `arc_id`, derived by `calculate_arc_id(identifier, rdi)` with leading and
+   trailing whitespace stripped from both inputs (same normalization as
+   `arc-store/`).
 
 4. **Concrete types for `_client` and `_db`**
    — Annotating `_client: CouchDB | None` and `_db: Database | None` (instead

@@ -302,7 +302,11 @@ class GitRepo(ArcStore):
                 set_status_on_exception=False,
             ) as span:
                 # Ensure remote exists before doing anything else (if manager is configured)
-                git_metadata = git_project_metadata_from_arc(arc, rdi)
+                git_metadata = git_project_metadata_from_arc(
+                    arc,
+                    rdi,
+                    arc_id=arc_id,
+                )
                 self._remote_provider.ensure_repo_exists(arc_id, metadata=git_metadata)
 
                 ctx_config = self._get_context_config(arc_id)

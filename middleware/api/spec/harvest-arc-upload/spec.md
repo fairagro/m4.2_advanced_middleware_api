@@ -9,29 +9,28 @@ to `arc-manager/`; harvest statistics tracking is part of that layer.
 
 - [ ] Accept `harvest_id` as a path parameter and a JSON request body conforming
       to `SubmitHarvestArcRequest` containing `arc` as a `RoCratePayload` but
-      **not** `rdi`.
-- [ ] Reject structurally invalid RO-Crate JSON during request parsing with
-      `422 Unprocessable Entity` before calling business logic.
+      **not** `rdi` (see `arc-manager/` RoCrate wire contract).
 - [ ] Fetch the harvest document by `harvest_id`; return `404` if it does not exist.
 - [ ] Resolve `rdi` from the harvest document.
-- [ ] Validate that the resolved `rdi` is in the list of authorized RDIs for this
-      client; return `403` if not authorized.
+- [ ] Validate that the resolved `rdi` is known to the deployment and authorized
+      for this client; return `400` if not recognized, `403` if not authorized.
 - [ ] Delegate to the ARC ingestion pipeline (see `arc-manager/`)
       with the resolved `rdi` and `harvest_id`.
 - [ ] On success, fetch the updated ARC metadata from the document store and
       return an `ArcResponse` containing `client_id`, `arc_id`, `status`,
       `metadata` (hash, timestamps), and the current event log.
-- [ ] Return `500` when metadata cannot be retrieved after a successful store.
-- [ ] Map `InvalidJsonSemanticError` to `422 Unprocessable Entity`.
-- [ ] Map `BusinessLogicError` to `500 Internal Server Error`.
+- [ ] Apply HTTP status mapping per `arc-manager/` HTTP caller contract.
 
 ## Edge Cases
 
 `harvest_id` not found → `404` before calling business logic; `rdi` is never resolved.
 
-Resolved `rdi` not authorized for this client → `403`.
+Resolved `rdi` not in deployment `known_rdis` → `400`.
 
-ARC stored successfully but metadata fetch returns `None` → `500`; internal inconsistency.
+Resolved `rdi` known but not authorized for this client → `403`.
 
-Invalid RO-Crate JSON (missing `@context`, `@graph`, root data entity, or
-non-empty `identifier`) → `422` from request validation.
+Same ARC submitted twice in one harvest → `409 Conflict` (`DuplicateArcInHarvestError`).
+
+For RO-Crate validation failures, arctrl parse failures in the worker, metadata
+fetch failures, and generic pipeline errors, see `arc-manager/` edge cases and
+HTTP caller contract.

@@ -22,6 +22,8 @@ from . import ArcStoreError
 logger = logging.getLogger(__name__)
 
 _GITLAB_TOPIC_RE = re.compile(r"[^a-z0-9-]+")
+_GITLAB_NAME_MAX_LEN = 255
+_GITLAB_NAME_UNSAFE_RE = re.compile(r"[\r\n\t]+")
 
 
 @dataclass(frozen=True)
@@ -29,30 +31,63 @@ class GitProjectMetadata:
     """Human-readable GitLab project fields alongside the hashed repository path."""
 
     rdi: str
+    arc_id: str
     identifier: str
     display_name: str
     description: str | None = None
 
-    def __post_init__(self) -> None:
-        """Reject empty identifiers — ARC sync cannot proceed without one."""
-        if not self.identifier:
-            msg = "GitProjectMetadata.identifier must not be empty"
-            raise ValueError(msg)
+
+def sanitize_gitlab_project_name(name: str) -> str:
+    """Normalize a RO-Crate identifier for GitLab project titles."""
+    collapsed = _GITLAB_NAME_UNSAFE_RE.sub(" ", name.strip())
+    collapsed = " ".join(collapsed.split())
+    collapsed = collapsed.replace("/", "-").replace("\\", "-")
+    if not collapsed:
+        msg = "GitLab project name cannot be empty after sanitization"
+        raise ValueError(msg)
+    if len(collapsed) > _GITLAB_NAME_MAX_LEN:
+        return collapsed[:_GITLAB_NAME_MAX_LEN].rstrip()
+    return collapsed
 
 
-def git_project_metadata_from_arc(arc: ARC, rdi: str) -> GitProjectMetadata:
+def git_project_metadata_from_arc(
+    arc: ARC,
+    rdi: str,
+    *,
+    arc_id: str,
+) -> GitProjectMetadata:
     """Build GitLab project metadata from an arctrl ARC and the originating RDI."""
+    canonical = (arc.Identifier or "").strip()
+    if not canonical:
+        msg = "ARC identifier is required for GitLab project metadata"
+        raise ValueError(msg)
     return GitProjectMetadata(
         rdi=rdi,
-        identifier=arc.Identifier,
+        arc_id=arc_id,
+        identifier=sanitize_gitlab_project_name(canonical),
         display_name=arc.Title or "",
         description=arc.Description,
     )
 
 
-def normalize_gitlab_topic(rdi: str) -> str:
+def normalize_gitlab_topic(rdi: str) -> str | None:
     """Normalize an RDI name for GitLab project topics (lowercase alphanumeric + hyphens)."""
-    return _GITLAB_TOPIC_RE.sub("-", rdi.strip().lower()).strip("-")
+    normalized = _GITLAB_TOPIC_RE.sub("-", rdi.strip().lower()).strip("-")
+    if normalized:
+        return normalized
+    alnum = re.sub(r"[^a-z0-9]", "", rdi.lower())
+    return alnum or None
+
+
+def merge_rdi_gitlab_topic(existing_topics: list[str] | None, rdi: str) -> list[str] | None:
+    """Return updated topics with the RDI tag present, or None when unchanged."""
+    rdi_topic = normalize_gitlab_topic(rdi)
+    if rdi_topic is None:
+        return None
+    topics = list(existing_topics or [])
+    if rdi_topic in topics:
+        return None
+    return [*topics, rdi_topic]
 
 
 def build_gitlab_project_description(metadata: GitProjectMetadata) -> str:
@@ -81,9 +116,8 @@ def apply_gitlab_project_metadata(
         project.description = description
         changed = True
 
-    topics = [normalize_gitlab_topic(metadata.rdi)]
-    current_topics = sorted(project.topics or [])
-    if current_topics != sorted(topics):
+    topics = merge_rdi_gitlab_topic(project.topics, metadata.rdi)
+    if topics is not None:
         project.topics = topics
         changed = True
 
@@ -219,7 +253,9 @@ class GitlabGitProvider(RemoteGitProvider):
                     project_description = build_gitlab_project_description(metadata)
                     if project_description:
                         create_attrs["description"] = project_description
-                    create_attrs["topics"] = [normalize_gitlab_topic(metadata.rdi)]
+                    rdi_topic = normalize_gitlab_topic(metadata.rdi)
+                    if rdi_topic is not None:
+                        create_attrs["topics"] = [rdi_topic]
                     self._gl.projects.create(create_attrs)
             except GitlabError as e:
                 msg = f"GitLab API error: {e}"

@@ -12,8 +12,11 @@ finalization — and enforce client ownership of harvest resources.
 - [ ] Validate that the requesting `client_id` matches the `client_id` stored in
       the harvest document; raise `AccessDeniedError` on mismatch.
 - [ ] Raise `ResourceNotFoundError` when a `harvest_id` does not exist in CouchDB.
-- [ ] Increment per-harvest statistics (new-ARC counter and changed-ARC counter)
-      via `increment_harvest_statistics` for each processed ARC.
+- [ ] Derive per-harvest statistics at finalize time via
+      `DocumentStore.get_harvest_statistics`, classifying ARCs whose
+      `metadata.last_harvest_id` matches the harvest as submitted and bucketing
+      them into new / updated / unchanged using `first_harvest_id` and
+      `last_changed_harvest_id` (see `document-store/`).
 - [ ] Finalize a harvest run, marking it complete and recording the final statistics.
 - [ ] Transition a harvest run to a target terminal status (`COMPLETED`, `CANCELLED`,
       or `FAILED`) via an explicit state-transition operation.
@@ -31,3 +34,5 @@ finalization — and enforce client ownership of harvest resources.
 Finalize called before all ARCs arrive → harvest is marked complete with whatever statistics are current; no enforcement of `expected_datasets`.
 
 Transition called on a non-`RUNNING` harvest → raise `ConflictError` with the current status in the message.
+
+Same ARC submitted twice within one harvest → rejected at ingest with `DuplicateArcError` (see `arc-manager/` and `harvest-arc-upload/`).

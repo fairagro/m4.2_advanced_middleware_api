@@ -9,7 +9,12 @@ from middleware.shared.api_models.common.rocrate import RoCratePayload
 
 
 def parse_rocrate(arc: RoCratePayload | dict[str, Any]) -> RoCratePayload:
-    """Parse and validate a RO-Crate payload, mapping schema errors to domain errors."""
+    """Parse and validate a RO-Crate payload, mapping schema errors to domain errors.
+
+    Lightweight structural validation only (``RoCratePayload`` / Pydantic). Does
+    not call arctrl — that parse is deferred to the Celery worker (see
+    ``arc-manager`` spec).
+    """
     if isinstance(arc, RoCratePayload):
         return arc
     try:
