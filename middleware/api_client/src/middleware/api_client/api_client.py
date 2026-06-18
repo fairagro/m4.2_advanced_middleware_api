@@ -15,6 +15,7 @@ import httpx
 from pydantic import BaseModel, ValidationError
 
 from middleware.shared.api_models.common.models import HarvestStatus as SharedHarvestStatus
+from middleware.shared.api_models.common.rocrate import RoCratePayload
 from middleware.shared.api_models.v3.models import (
     CreateArcRequest,
     CreateHarvestRequest,
@@ -295,7 +296,7 @@ class ApiClient:
         seen_identifiers: set[str] = set()
 
         async def submit_one(arc_item: dict[str, Any]) -> None:
-            request = SubmitHarvestArcRequest(arc=arc_item)
+            request = SubmitHarvestArcRequest(arc=self._validate_rocrate(arc_item))
             await self._post(f"v3/harvests/{harvest_id}/arcs", request)
 
         async for arc in arcs:
@@ -504,23 +505,20 @@ class ApiClient:
     # ------------------------------------------------------------------
 
     @staticmethod
-    def _extract_identifier_from_rocrate(arc_content: dict[str, Any]) -> str | None:
-        """Extract the RO-Crate identifier from a serialized ARC dict.
+    def _validate_rocrate(arc_content: dict[str, Any]) -> RoCratePayload:
+        """Validate a RO-Crate dict before sending it to the API."""
+        try:
+            return RoCratePayload.model_validate(arc_content)
+        except ValidationError as e:
+            raise ApiClientError(f"Invalid RO-Crate JSON: {e}") from e
 
-        Looks for the Root Data Entity (``@id == "./"``), then returns its
-        ``identifier`` field.  Returns ``None`` when the field is absent or
-        the dict does not follow the RO-Crate structure — validation is left
-        to the server.
-        """
-        graph = arc_content.get("@graph")
-        if isinstance(graph, list):
-            for item in graph:
-                if isinstance(item, dict) and item.get("@id") == "./":
-                    identifier = item.get("identifier")
-                    if isinstance(identifier, list):
-                        identifier = identifier[0] if identifier else None
-                    return str(identifier) if identifier else None
-        return None
+    @staticmethod
+    def _extract_identifier_from_rocrate(arc_content: dict[str, Any]) -> str | None:
+        """Return the RO-Crate identifier when the payload is structurally valid."""
+        try:
+            return RoCratePayload.model_validate(arc_content).identifier
+        except ValidationError:
+            return None
 
     @classmethod
     def _serialize_arc(cls, arc: "ARC | dict[str, Any] | str") -> dict[str, Any]:
@@ -575,7 +573,7 @@ class ApiClient:
         """
         logger.info("Creating/updating ARC for RDI: %s", rdi)
         serialized = self._serialize_arc(arc)
-        request = CreateArcRequest(rdi=rdi, arc=serialized)
+        request = CreateArcRequest(rdi=rdi, arc=self._validate_rocrate(serialized))
         data = await self._post("v3/arcs", request)
         return self._parse_arc_response(data)
 
@@ -710,7 +708,7 @@ class ApiClient:
             :class:`ArcResult` with the result of the operation.
         """
         serialized = self._serialize_arc(arc)
-        request = SubmitHarvestArcRequest(arc=serialized)
+        request = SubmitHarvestArcRequest(arc=self._validate_rocrate(serialized))
         data = await self._post(f"v3/harvests/{harvest_id}/arcs", request)
         return self._parse_arc_response(data)
 

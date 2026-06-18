@@ -203,10 +203,9 @@ async def test_worker_mode_sync_to_gitlab_success(worker_logic: BusinessLogic, m
 
     # Verify store called
     mock_store.create_or_update.assert_called_once()
-    args, _ = mock_store.create_or_update.call_args
+    args, kwargs = mock_store.create_or_update.call_args
     assert args[0] == "arc_id"
-    # Can't check isinstance ARC because we mocked it
-    # assert isinstance(args[1], ARC)
+    assert kwargs["rdi"] == rdi
 
 
 @pytest.mark.asyncio
@@ -298,7 +297,7 @@ def test_factory_create_api_mode() -> None:
 async def test_create_or_update_arc_parse_failure(api_logic: BusinessLogic) -> None:
     """Test create_or_update_arc with missing identifier."""
     # Since we now use fast validation, an empty dict fails the identifier check
-    with pytest.raises(InvalidJsonSemanticError, match="must contain an 'identifier'"):
+    with pytest.raises(InvalidJsonSemanticError):
         await api_logic.create_or_update_arc("test_rdi", {}, "client_1")
 
 
@@ -308,7 +307,7 @@ async def test_create_or_update_missing_identifier(api_logic: BusinessLogic) -> 
     # Data has @graph but no "@id": "./" element with identifier
     arc_data = {"@context": "https://w3id.org/ro/crate/1.1/context", "@graph": [{"@id": "not-root"}]}
 
-    with pytest.raises(InvalidJsonSemanticError, match="must contain an 'identifier'"):
+    with pytest.raises(InvalidJsonSemanticError):
         await api_logic.create_or_update_arc("test_rdi", arc_data, "client_1")
 
 
@@ -328,7 +327,7 @@ async def test_sync_to_gitlab_missing_identifier(worker_logic: BusinessLogic) ->
     """Test sync_to_gitlab with missing Identifier."""
     arc_data = {"@context": "https://w3id.org/ro/crate/1.1/context", "@graph": [{"@id": "arc"}]}
 
-    with pytest.raises(InvalidJsonSemanticError, match="must contain an 'identifier'"):
+    with pytest.raises(InvalidJsonSemanticError):
         await worker_logic.sync_to_gitlab("test_rdi", arc_data)
 
 

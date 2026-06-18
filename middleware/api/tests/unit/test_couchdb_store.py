@@ -60,7 +60,7 @@ async def test_store_arc_new(store: CouchDB, mock_client_instance: MagicMock) ->
     mock_client_instance.save_document.return_value = {"id": "arc_...", "rev": "1-..."}
 
     # Execute
-    result = await store.store_arc(rdi, arc_content)
+    result = await store.store_arc(rdi, arc_content, "arc_123")
 
     # Verify
     assert result.is_new is True
@@ -166,7 +166,7 @@ async def test_store_arc_update_changed(store: CouchDB, mock_client_instance: Ma
     mock_client_instance.save_document.return_value = {"ok": True}
 
     # Execute
-    result = await store.store_arc(rdi, arc_content)
+    result = await store.store_arc(rdi, arc_content, "arc_123")
 
     # Verify
     assert result.is_new is False
@@ -214,7 +214,7 @@ async def test_store_arc_no_change(store: CouchDB, mock_client_instance: MagicMo
     mock_client_instance.save_document.return_value = {"ok": True}
 
     # Execute
-    result = await store.store_arc(rdi, arc_content)
+    result = await store.store_arc(rdi, arc_content, "arc_123")
 
     # Verify
     assert result.is_new is False
@@ -259,7 +259,7 @@ async def test_store_arc_duplicate_in_same_harvest_raises(store: CouchDB, mock_c
     )
 
     with pytest.raises(DuplicateArcError, match="arc_dup"):
-        await store.store_arc(rdi, arc_content, harvest_id=harvest_id)
+        await store.store_arc(rdi, arc_content, "arc_dup", harvest_id=harvest_id)
 
     mock_client_instance.save_document.assert_not_called()
 
@@ -289,7 +289,7 @@ async def test_store_arc_concurrent_duplicate_detected_via_validator(
     )
     mock_client_instance.save_document.return_value = {"ok": True}
 
-    await store.store_arc(rdi, arc_content, harvest_id=harvest_id)
+    await store.store_arc(rdi, arc_content, "arc_concurrent", harvest_id=harvest_id)
 
     # Extract the validator that was passed to save_document
     _, kwargs = mock_client_instance.save_document.call_args
@@ -318,7 +318,7 @@ async def test_store_arc_same_arc_different_harvest_is_allowed(store: CouchDB, m
     )
     mock_client_instance.save_document.return_value = {"ok": True}
 
-    result = await store.store_arc(rdi, arc_content, harvest_id="harvest-new")
+    result = await store.store_arc(rdi, arc_content, "arc_dup", harvest_id="harvest-new")
 
     assert result.is_new is False
     mock_client_instance.save_document.assert_called_once()
@@ -337,7 +337,7 @@ async def test_store_arc_no_harvest_context_allows_resubmit(store: CouchDB, mock
     )
     mock_client_instance.save_document.return_value = {"ok": True}
 
-    result = await store.store_arc(rdi, arc_content, harvest_id=None)
+    result = await store.store_arc(rdi, arc_content, "arc_dup", harvest_id=None)
 
     assert result.is_new is False
     mock_client_instance.save_document.assert_called_once()

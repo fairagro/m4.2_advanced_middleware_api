@@ -8,8 +8,10 @@ to `arc-manager/`; harvest statistics tracking is part of that layer.
 ## Requirements
 
 - [ ] Accept `harvest_id` as a path parameter and a JSON request body conforming
-      to `SubmitHarvestArcRequest` containing `arc` (RO-Crate JSON) but **not**
-      `rdi`.
+      to `SubmitHarvestArcRequest` containing `arc` as a `RoCratePayload` but
+      **not** `rdi`.
+- [ ] Reject structurally invalid RO-Crate JSON during request parsing with
+      `422 Unprocessable Entity` before calling business logic.
 - [ ] Fetch the harvest document by `harvest_id`; return `404` if it does not exist.
 - [ ] Resolve `rdi` from the harvest document.
 - [ ] Validate that the resolved `rdi` is in the list of authorized RDIs for this
@@ -31,4 +33,5 @@ Resolved `rdi` not authorized for this client → `403`.
 
 ARC stored successfully but metadata fetch returns `None` → `500`; internal inconsistency.
 
-Invalid RO-Crate JSON (missing `identifier`) → `422`.
+Invalid RO-Crate JSON (missing `@context`, `@graph`, root data entity, or
+non-empty `identifier`) → `422` from request validation.

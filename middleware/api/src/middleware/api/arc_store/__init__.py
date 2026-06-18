@@ -1,5 +1,7 @@
 """Contains the ArcStore interface and its implementations."""
 
+from __future__ import annotations
+
 import logging
 from abc import ABC, abstractmethod
 
@@ -38,7 +40,13 @@ class ArcStore(ABC):
         return calculate_arc_id(identifier, rdi)
 
     @abstractmethod
-    async def _create_or_update(self, arc_id: str, arc: ARC) -> None:
+    async def _create_or_update(
+        self,
+        arc_id: str,
+        arc: ARC,
+        *,
+        rdi: str,
+    ) -> None:
         """Create or updates an ARC."""
         raise NotImplementedError("`ArcStore._create_or_update` is not implemented")
 
@@ -70,12 +78,19 @@ class ArcStore(ABC):
         """
         return  # no-op default; subclasses (e.g. GitRepo) override
 
-    async def create_or_update(self, arc_id: str, arc: ARC) -> None:
+    async def create_or_update(
+        self,
+        arc_id: str,
+        arc: ARC,
+        *,
+        rdi: str,
+    ) -> None:
         """_Create or update an ARC.
 
         Args:
             arc_id (str): ID of the ARC to create or update.
             arc (ARC): ARC object to create or update.
+            rdi: Originating Research Data Infrastructure identifier.
 
         Raises:
             ArcStoreError: If an error occurs during the operation.
@@ -86,10 +101,10 @@ class ArcStore(ABC):
         """
         with self._tracer.start_as_current_span(
             "api.ArcStore.create_or_update",
-            attributes={"arc_id": arc_id},
+            attributes={"arc_id": arc_id, "rdi": rdi},
         ) as span:
             try:
-                return await self._create_or_update(arc_id, arc)
+                return await self._create_or_update(arc_id, arc, rdi=rdi)
             except ArcStoreError as e:
                 span.record_exception(e)
                 raise

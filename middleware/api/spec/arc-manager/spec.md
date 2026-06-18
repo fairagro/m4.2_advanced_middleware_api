@@ -8,8 +8,8 @@ specified in `arc-store/`.
 
 ## Requirements
 
-- [ ] Reject an ARC payload that does not contain an `identifier` field; callers
-      map this rejection to a `422` response.
+- [ ] Accept only a validated `RoCratePayload` (or raw dict validated to the
+      same contract) with a non-empty root-dataset `identifier`.
 - [ ] Persist the validated ARC in the document store.
 - [ ] Report `CREATED` when no prior record exists for this ARC.
 - [ ] Report `UPDATED` when a prior record exists and the content has changed.
@@ -17,6 +17,9 @@ specified in `arc-store/`.
       identical to what is already stored — without writing to the store again.
 - [ ] Schedule a background GitLab sync if and only if the ARC is new or its
       content has changed.
+- [ ] During GitLab sync, derive human-readable display metadata from the ARC
+      payload (root dataset `name` and `description`, `identifier`, and `rdi`)
+      and pass it to the Git store (see `arc-store/`).
 - [ ] When a harvest context is provided, increment the harvest run's counters
       (new-ARC and changed-ARC) in the document store after persisting, regardless
       of whether a background sync was scheduled.
@@ -28,7 +31,8 @@ specified in `arc-store/`.
 
 ## Edge Cases
 
-Missing `identifier` in payload → reject with a descriptive error; callers map this to `422`.
+Missing or invalid RO-Crate structure → `422` at the HTTP layer; worker path
+re-validates queued payloads and maps failures to `InvalidJsonSemanticError`.
 
 Unchanged ARC re-submitted → no write to the store, no background sync scheduled; harvest
 counters still incremented (the ARC was received and processed).

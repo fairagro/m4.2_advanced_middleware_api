@@ -11,8 +11,10 @@ from opentelemetry import trace
 from middleware.api.arc_store import ArcStore, ArcStoreTransientError
 from middleware.api.document_store import DocumentStore, DuplicateArcError
 from middleware.api.document_store.arc_document import ArcEvent, ArcEventType
-from middleware.api.utils import calculate_arc_id, extract_identifier
+from middleware.api.rocrate import parse_rocrate
+from middleware.api.utils import calculate_arc_id
 from middleware.shared.api_models.common.models import ArcOperationResult, ArcResponse, ArcStatus
+from middleware.shared.api_models.common.rocrate import RoCratePayload
 
 from .exceptions import BusinessLogicError, DuplicateArcInHarvestError, InvalidJsonSemanticError, TransientError
 from .ports import TaskDispatcher
@@ -57,7 +59,11 @@ class ArcManager:
         await self._store.shutdown()
 
     async def create_or_update_arc(
-        self, rdi: str, arc: dict[str, Any], client_id: str | None, harvest_id: str | None = None
+        self,
+        rdi: str,
+        arc: RoCratePayload | dict[str, Any],
+        client_id: str | None,
+        harvest_id: str | None = None,
     ) -> ArcOperationResult:
         """Create or update an ARC with fast CouchDB storage and async GitLab sync.
 
@@ -66,7 +72,7 @@ class ArcManager:
 
         Args:
             rdi: Research Data Infrastructure identifier.
-            arc: ARC definition.
+            arc: Validated or raw RO-Crate payload.
             client_id: The client identifier.
             harvest_id: Optional harvest run identifier.
 
@@ -80,20 +86,21 @@ class ArcManager:
         if not self._dispatcher:
             raise BusinessLogicError("create_or_update_arc can only be called in API mode")
 
+        rocrate = parse_rocrate(arc)
+        arc_content = rocrate.model_dump(by_alias=True)
+
         with self._tracer.start_as_current_span(
             "api.ArcManager.create_or_update_arc",
             attributes={"rdi": rdi, "client_id": client_id if client_id is not None else ""},
         ) as span:
             logger.info("[%s] Starting ARC creation/update: rdi=%s", client_id, rdi)
             try:
-                # Fast validation: Ensure identifier is present
-                identifier = extract_identifier(arc)
-                if identifier is None:
-                    raise InvalidJsonSemanticError("RO-Crate JSON must contain an 'identifier' (e.g. in ISA object).")
-
-                # Store in CouchDB (fast) - pass the already-extracted identifier to
-                # avoid a second graph traversal inside the document store.
-                doc_result = await self._doc_store.store_arc(rdi, arc, harvest_id=harvest_id, identifier=identifier)
+                doc_result = await self._doc_store.store_arc(
+                    rdi,
+                    arc_content,
+                    rocrate.identifier,
+                    harvest_id=harvest_id,
+                )
                 arc_id = doc_result.arc_id
                 span.set_attribute("arc_id", arc_id)
 
@@ -110,10 +117,15 @@ class ArcManager:
                     should_trigger_git,
                 )
 
-                # Enqueue GitLab sync if needed
                 if should_trigger_git:
                     logger.info("[%s] Enqueueing GitLab sync task for ARC %s", client_id, arc_id)
-                    self._dispatcher.dispatch_sync_arc(ArcSyncTask(rdi=rdi, arc=arc, client_id=client_id))
+                    self._dispatcher.dispatch_sync_arc(
+                        ArcSyncTask(
+                            rdi=rdi,
+                            arc=arc_content,
+                            client_id=client_id,
+                        )
+                    )
                 else:
                     logger.info("[%s] Skipping GitLab sync for ARC %s (unchanged)", client_id, arc_id)
 
@@ -144,7 +156,7 @@ class ArcManager:
                     raise DuplicateArcInHarvestError(str(e)) from e
                 raise BusinessLogicError(f"unexpected error encountered: {str(e)}") from e
 
-    async def sync_to_gitlab(self, rdi: str, arc: dict[str, Any]) -> None:
+    async def sync_to_gitlab(self, rdi: str, arc: RoCratePayload | dict[str, Any]) -> None:
         """Synchronize ARC to GitLab storage.
 
         This method performs the slow GitLab sync operation. It must only be
@@ -152,7 +164,7 @@ class ArcManager:
 
         Args:
             rdi: Research Data Infrastructure identifier.
-            arc: ARC definition.
+            arc: Validated or raw RO-Crate payload.
 
         Raises:
             InvalidJsonSemanticError: If the JSON is semantically incorrect.
@@ -161,31 +173,22 @@ class ArcManager:
         if self._dispatcher:
             raise BusinessLogicError("sync_to_gitlab must not be called in API mode")
 
-        arc_id: str | None = None
-        identifier: str | None = None
+        rocrate = parse_rocrate(arc)
+        arc_id = calculate_arc_id(rocrate.identifier, rdi)
+        arc_content = rocrate.model_dump(by_alias=True)
 
         with self._tracer.start_as_current_span(
             "api.ArcManager.sync_to_gitlab",
-            attributes={"rdi": rdi},
+            attributes={"rdi": rdi, "arc_id": arc_id},
         ) as span:
             logger.info("Starting GitLab sync for RDI: %s", rdi)
             try:
-                identifier = extract_identifier(arc)
-                if identifier is None:
-                    raise InvalidJsonSemanticError("RO-Crate JSON must contain an 'identifier' (e.g. in ISA object).")
-
-                arc_id = calculate_arc_id(identifier, rdi)
-                span.set_attribute("arc_id", arc_id)
-
-                # Parse ARC for storage (slow, but fine in worker)
-                arc_json = json.dumps(arc)
+                arc_json = json.dumps(arc_content)
                 arc_obj = ARC.from_rocrate_json_string(arc_json)
 
-                # Store in Git
                 logger.info("Triggering Git storage for ARC %s", arc_id)
-                await self._store.create_or_update(arc_id, arc_obj)
+                await self._store.create_or_update(arc_id, arc_obj, rdi=rdi)
 
-                # Record success in CouchDB
                 await self._doc_store.add_event(
                     arc_id,
                     ArcEvent(
@@ -207,19 +210,15 @@ class ArcManager:
                 logger.error("Unexpected error while syncing ARC to GitLab: %s", e, exc_info=True)
                 span.record_exception(e)
 
-                # Try to record failure in CouchDB if we have an arc_id
                 try:
-                    identifier = identifier or extract_identifier(arc)
-                    if identifier:
-                        arc_id = arc_id or calculate_arc_id(identifier, rdi)
-                        await self._doc_store.add_event(
-                            arc_id,
-                            ArcEvent(
-                                timestamp=datetime.now(UTC),
-                                type=ArcEventType.GIT_PUSH_FAILED,
-                                message=f"GitLab sync failed: {str(e)}",
-                            ),
-                        )
+                    await self._doc_store.add_event(
+                        arc_id,
+                        ArcEvent(
+                            timestamp=datetime.now(UTC),
+                            type=ArcEventType.GIT_PUSH_FAILED,
+                            message=f"GitLab sync failed: {str(e)}",
+                        ),
+                    )
                 except Exception as log_error:  # noqa: BLE001
                     logger.warning("Could not log sync failure to CouchDB: %s", log_error)
 

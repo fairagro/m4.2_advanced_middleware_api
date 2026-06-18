@@ -97,8 +97,8 @@ def config(
         },
         "require_client_cert": False,
         "gitlab_api": {
-            "url": "https://datahub-dev.ipk-gatersleben.de",
-            "group": "FAIRagro-advanced-middleware-integration-tests",
+            "url": "https://datahub.ipk-gatersleben.de",
+            "group": "FAIRagro-advanced-middleware-dev-test",
             "token": gitlab_token,
         },
         "celery": {

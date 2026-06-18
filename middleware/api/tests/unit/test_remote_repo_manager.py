@@ -17,8 +17,12 @@ from middleware.api.arc_store import ArcStoreError
 from middleware.api.arc_store.remote_git_provider import (
     FileSystemGitProvider,
     GitlabGitProvider,
+    GitProjectMetadata,
     RemoteGitProvider,
+    git_project_metadata_from_arc,
 )
+
+_TEST_GIT_METADATA = GitProjectMetadata(rdi="test-rdi", identifier="test-arc", display_name="")
 
 
 @pytest.fixture
@@ -38,7 +42,7 @@ class TestFileSystemGitProvider:
         provider = FileSystemGitProvider(base_url=f"file://{temp_remote_dir}", group="my-group")
         arc_id = "test-arc"
 
-        provider.ensure_repo_exists(arc_id)
+        provider.ensure_repo_exists(arc_id, _TEST_GIT_METADATA)
 
         expected_path = temp_remote_dir / "my-group" / f"{arc_id}.git"
         assert expected_path.exists()
@@ -87,14 +91,78 @@ class TestGitlabGitProvider:
         provider = GitlabGitProvider(url="https://gitlab.com", group_name="my-group", token="secret")  # nosec
         arc_id = "test-arc"
 
-        provider.ensure_repo_exists(arc_id)
+        provider.ensure_repo_exists(arc_id, metadata=_TEST_GIT_METADATA)
 
         mock_gl.groups.get.assert_called_with("my-group")
         mock_gl.projects.get.assert_called_with("my-group-path/test-arc")
         mock_gl.projects.create.assert_called_once()
         args = mock_gl.projects.create.call_args[0][0]
-        assert args["name"] == arc_id
+        assert args["name"] == "test-arc"
+        assert args["path"] == arc_id
         assert args["namespace_id"] == NAMESPACE_ID
+
+    @staticmethod
+    @patch("middleware.api.arc_store.remote_git_provider.gitlab.Gitlab")
+    def test_ensure_repo_exists_sets_gitlab_metadata(mock_gitlab_class: MagicMock) -> None:
+        """Test that human-readable metadata is applied when creating a project."""
+        NAMESPACE_ID = 123  # noqa: N806
+
+        mock_gl = MagicMock()
+        mock_gitlab_class.return_value = mock_gl
+
+        mock_group = MagicMock()
+        mock_group.full_path = "my-group-path"
+        mock_group.id = NAMESPACE_ID
+        mock_gl.groups.get.return_value = mock_group
+        mock_gl.projects.get.side_effect = GitlabGetError("Not Found", response_code=HTTPStatus.NOT_FOUND)
+
+        provider = GitlabGitProvider(url="https://gitlab.com", group_name="my-group", token="secret")  # nosec
+        metadata = GitProjectMetadata(
+            rdi="rdi-1",
+            display_name="Arabidopsis thaliana cold acclimation",
+            identifier="AthalianaColdStressSugar",
+            description="Cold stress experiment",
+        )
+
+        provider.ensure_repo_exists("abc123hash", metadata=metadata)
+
+        args = mock_gl.projects.create.call_args[0][0]
+        assert args["name"] == "AthalianaColdStressSugar"
+        assert args["path"] == "abc123hash"
+        assert args["topics"] == ["rdi-1"]
+        assert args["description"] == "Arabidopsis thaliana cold acclimation\nCold stress experiment"
+
+    @staticmethod
+    @patch("middleware.api.arc_store.remote_git_provider.gitlab.Gitlab")
+    def test_ensure_repo_exists_updates_existing_project_metadata(mock_gitlab_class: MagicMock) -> None:
+        """Test that metadata is refreshed when the GitLab project already exists."""
+        mock_gl = MagicMock()
+        mock_gitlab_class.return_value = mock_gl
+
+        mock_group = MagicMock()
+        mock_group.full_path = "my-group-path"
+        mock_gl.groups.get.return_value = mock_group
+
+        mock_project = MagicMock()
+        mock_project.name = "old-hash-name"
+        mock_project.description = "old description"
+        mock_project.topics = []
+        mock_gl.projects.get.return_value = mock_project
+
+        provider = GitlabGitProvider(url="https://gitlab.com", group_name="my-group", token="secret")  # nosec
+        metadata = GitProjectMetadata(
+            rdi="rdi-2",
+            display_name="Readable title",
+            identifier="dataset-42",
+        )
+
+        provider.ensure_repo_exists("abc123hash", metadata=metadata)
+
+        mock_gl.projects.create.assert_not_called()
+        assert mock_project.name == "dataset-42"
+        assert mock_project.description == "Readable title"
+        assert mock_project.topics == ["rdi-2"]
+        mock_project.save.assert_called_once()
 
     @staticmethod
     @patch("middleware.api.arc_store.remote_git_provider.gitlab.Gitlab")
@@ -110,7 +178,7 @@ class TestGitlabGitProvider:
         provider = GitlabGitProvider(url="https://gitlab.com", group_name="my-group", token="invalid")  # nosec
 
         with pytest.raises(ArcStoreError, match="401 Unauthorized"):
-            provider.ensure_repo_exists("some-arc")
+            provider.ensure_repo_exists("some-arc", metadata=_TEST_GIT_METADATA)
 
     @staticmethod
     def test_get_repo_url() -> None:
@@ -142,6 +210,20 @@ class TestGitlabGitProvider:
         mock_gl.auth.side_effect = GitlabAuthenticationError()
         assert provider.check_health() is False
 
+    @staticmethod
+    @patch("urllib.request.urlopen")
+    def test_check_health_without_token(mock_urlopen: MagicMock) -> None:
+        """Test reachability fallback when no GitLab token is configured."""
+        mock_response = MagicMock()
+        mock_response.status = HTTPStatus.OK
+        mock_response.__enter__.return_value = mock_response
+        mock_urlopen.return_value = mock_response
+
+        provider = GitlabGitProvider(url="https://gitlab.com", group_name="g", token=None)
+
+        assert provider.check_health() is True
+        mock_urlopen.assert_called_once_with("https://gitlab.com", timeout=5)
+
 
 class TestRemoteGitProviderFactory:
     """Tests for RemoteGitProvider factory method."""
@@ -169,3 +251,24 @@ class TestRemoteGitProviderFactory:
         """Test that unknown protocols fail."""
         with pytest.raises(ValueError, match="Could not determine git provider"):
             RemoteGitProvider.from_url("ftp://server.local", "group")
+
+
+def test_git_project_metadata_rejects_empty_identifier() -> None:
+    """GitProjectMetadata requires a non-empty identifier."""
+    with pytest.raises(ValueError, match="identifier must not be empty"):
+        GitProjectMetadata(rdi="rdi-1", identifier="", display_name="")
+
+
+def test_git_project_metadata_from_arc() -> None:
+    """git_project_metadata_from_arc derives display fields from the ARC object."""
+    arc = MagicMock()
+    arc.Identifier = "ARC-001"
+    arc.Title = "My Study"
+    arc.Description = "A test"
+
+    metadata = git_project_metadata_from_arc(arc, rdi="my-rdi")
+
+    assert metadata.rdi == "my-rdi"
+    assert metadata.identifier == "ARC-001"
+    assert metadata.display_name == "My Study"
+    assert metadata.description == "A test"

@@ -9,7 +9,7 @@ from typing import Any
 
 from middleware.api.document_store.config import CouchDBConfig
 from middleware.api.document_store.couchdb_client import CouchDBClient
-from middleware.api.utils import calculate_arc_id, extract_identifier
+from middleware.api.utils import calculate_arc_id
 from middleware.shared.api_models.common.models import ArcEventType, ArcLifecycleStatus, HarvestStatus
 
 from . import ArcStoreResult, DocumentStore, DuplicateArcError
@@ -55,16 +55,14 @@ class CouchDB(DocumentStore):
         self,
         rdi: str,
         arc_content: dict[str, Any],
+        identifier: str,
         harvest_id: str | None = None,
-        identifier: str | None = None,
     ) -> ArcStoreResult:
         """Store ARC with change detection."""
-        # Re-use pre-extracted identifier when available (avoids a second graph traversal).
-        resolved_identifier = identifier or extract_identifier(arc_content)
-        if not resolved_identifier:
+        if not identifier:
             raise ValueError("ARC content must contain a valid identifier")
 
-        arc_id = calculate_arc_id(resolved_identifier, rdi)
+        arc_id = calculate_arc_id(identifier, rdi)
         doc_id = f"arc_{arc_id}"
 
         content_hash = self._calculate_content_hash(arc_content)
@@ -98,7 +96,7 @@ class CouchDB(DocumentStore):
             is_new = False
             # Reject duplicate submissions within the same harvest run.
             if harvest_id and existing_doc.metadata.last_harvest_id == harvest_id:
-                raise DuplicateArcError(f"ARC '{resolved_identifier}' was already submitted in harvest '{harvest_id}'.")
+                raise DuplicateArcError(f"ARC '{identifier}' was already submitted in harvest '{harvest_id}'.")
             # Check for changes
             has_changes = existing_doc.metadata.arc_hash != content_hash
 
@@ -170,7 +168,7 @@ class CouchDB(DocumentStore):
         # last_harvest_id before writing.
         def _check_duplicate_on_retry(fresh_doc: dict[str, Any]) -> None:
             if harvest_id and fresh_doc.get("metadata", {}).get("last_harvest_id") == harvest_id:
-                raise DuplicateArcError(f"ARC '{resolved_identifier}' was already submitted in harvest '{harvest_id}'.")
+                raise DuplicateArcError(f"ARC '{identifier}' was already submitted in harvest '{harvest_id}'.")
 
         await self._client.save_document(
             doc_id,

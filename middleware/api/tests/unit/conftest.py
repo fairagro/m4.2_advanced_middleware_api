@@ -21,8 +21,9 @@ from middleware.api.business_logic.ports import BusinessLogicPorts
 from middleware.api.config import Config
 from middleware.api.document_store import ArcStoreResult
 from middleware.api.document_store.config import CouchDBConfig
-from middleware.api.utils import calculate_arc_id, extract_identifier
+from middleware.api.utils import calculate_arc_id
 from middleware.api.worker.config import CeleryConfig
+from middleware.shared.api_models.common.rocrate import RoCratePayload
 from middleware.shared.config.config_base import OtelConfig
 
 
@@ -120,11 +121,11 @@ def service(config: Config) -> BusinessLogic:
     async def mock_store_arc(
         rdi: str,
         arc: dict,
-        harvest_id: str | None = None,  # noqa: ARG001
         identifier: str | None = None,  # noqa: ARG001
+        harvest_id: str | None = None,  # noqa: ARG001
     ) -> ArcStoreResult:
-        identifier = extract_identifier(arc)
-        arc_id = calculate_arc_id(identifier, rdi) if identifier else "mock-arc-id"
+        resolved = identifier or RoCratePayload.model_validate(arc).identifier
+        arc_id = calculate_arc_id(resolved, rdi)
         return ArcStoreResult(arc_id=arc_id, is_new=True, has_changes=True)
 
     doc_store.store_arc = AsyncMock(side_effect=mock_store_arc)

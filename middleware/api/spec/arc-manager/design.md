@@ -13,13 +13,15 @@ arc-upload/               arc-harvest-upload/
     └─────────────┬─────────────┘
                   ▼
     ArcManager.create_or_update_arc(rdi, arc, client_id, harvest_id=None)
-        ├─→ extract_identifier(arc)              ← validation
+        ├─→ RoCratePayload validation              ← HTTP or parse_rocrate
         ├─→ DocumentStore.store_arc(...)         ← fast CouchDB write
         ├─→ DocumentStore.increment_harvest_statistics(...)  ← if harvest_id
         └─→ TaskDispatcher.dispatch_sync_arc(...)            ← if new or changed
 
 ArcManager also owns the worker-side counterpart (separate spec: arc-store/):
     └─→ ArcManager.sync_to_gitlab(rdi, arc)
+            ├─→ parse_rocrate (defence in depth for queued payloads)
+            └─→ ArcStore.create_or_update(..., rdi=rdi)
 ```
 
 ## Key Decisions
@@ -43,10 +45,11 @@ ArcManager also owns the worker-side counterpart (separate spec: arc-store/):
    Calling `create_or_update_arc` without a dispatcher raises `BusinessLogicError`
    immediately, making accidental misuse visible during development.
 
-4. **`identifier` extracted once before storage**
-   — `extract_identifier` traverses the RO-Crate JSON graph. The extracted
-   value is passed directly into `DocumentStore.store_arc`, avoiding a second
-   traversal inside the store.
+4. **`identifier` extracted once during RO-Crate validation**
+   — `RoCratePayload` validates the wire format (`@context`, `@graph`, root
+   dataset `./` with non-empty `identifier`). Validator functions read
+   `identifier`, `name`, and `description` from that root node; other root
+   properties remain in `@graph` unchanged.
 
 5. **Idempotency via content hash**
    — `DocumentStore.store_arc` computes a hash of the serialized ARC and sets
@@ -65,3 +68,10 @@ ArcManager also owns the worker-side counterpart (separate spec: arc-store/):
    ingestion pipeline dispatches the raw `dict` to Celery; the worker
    re-parses it with `ARC.from_rocrate_json_string`. This avoids serialization
    errors and keeps the Celery task payload simple JSON.
+
+8. **Display metadata derived inside `GitRepo`, not at ingest time**
+   — Human-readable GitLab labels (`name`, `description`, RDI topic) are built
+   by ``git_project_metadata_from_arc`` when ``GitRepo`` calls
+   ``GitlabGitProvider.ensure_repo_exists``. Ingest (`create_or_update_arc`) does
+   not need this metadata because CouchDB stores the full ARC document; only
+   ``rdi`` crosses into ``ArcStore`` as middleware context.

@@ -19,6 +19,7 @@ from . import ArcStore, ArcStoreTransientError
 from .config import GitRepoConfig
 from .remote_git_provider import (
     RemoteGitProvider,
+    git_project_metadata_from_arc,
 )
 
 logger = logging.getLogger(__name__)
@@ -284,18 +285,25 @@ class GitRepo(ArcStore):
             http_low_speed_time=self._config.http_low_speed_time,
         )
 
-    async def _create_or_update(self, arc_id: str, arc: ARC) -> None:
+    async def _create_or_update(
+        self,
+        arc_id: str,
+        arc: ARC,
+        *,
+        rdi: str,
+    ) -> None:
         """Create or update ARC using Git CLI."""
         logger.debug("Creating/updating ARC %s via Git CLI", arc_id)
 
         def _task() -> None:
             with self._tracer.start_as_current_span(
                 "api.GitRepo._create_or_update",
-                attributes={"arc_id": arc_id},
+                attributes={"arc_id": arc_id, "rdi": rdi},
                 set_status_on_exception=False,
             ) as span:
                 # Ensure remote exists before doing anything else (if manager is configured)
-                self._remote_provider.ensure_repo_exists(arc_id)
+                git_metadata = git_project_metadata_from_arc(arc, rdi)
+                self._remote_provider.ensure_repo_exists(arc_id, metadata=git_metadata)
 
                 ctx_config = self._get_context_config(arc_id)
                 try:

@@ -27,6 +27,7 @@ dev = [
   "ggshield>=1.51.0",
   "respx>=0.23.1",
   "testcontainers>=4.14.2",
+  "httpx2>=2.4.0",
 ]
 
 [tool.uv.sources]

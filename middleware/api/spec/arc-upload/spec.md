@@ -7,7 +7,10 @@ Processing is delegated to `arc-manager/`.
 ## Requirements
 
 - [ ] Accept a JSON request body conforming to `CreateArcRequest` containing
-      `rdi` and `arc` (RO-Crate JSON).
+      `rdi` and `arc` as a `RoCratePayload` (RO-Crate JSON with `@context`,
+      `@graph`, root data entity `@id: "./"`, and non-empty `identifier`).
+- [ ] Reject structurally invalid RO-Crate JSON during request parsing with
+      `422 Unprocessable Entity` before calling business logic.
 - [ ] Validate that `rdi` is in the list of authorized RDIs for this client;
       return `403` if not authorized.
 - [ ] Delegate to the ARC ingestion pipeline (see `arc-manager/`)
@@ -26,5 +29,8 @@ Processing is delegated to `arc-manager/`.
 ARC stored successfully but metadata fetch returns `None` → `500`; this indicates
 an internal inconsistency.
 
-Invalid RO-Crate JSON (missing `identifier`) → `422`, business logic raises
-`InvalidJsonSemanticError`.
+Invalid RO-Crate JSON (missing `@context`, `@graph`, root data entity, or
+non-empty `identifier`) → `422` from request validation.
+
+Semantically invalid RO-Crate JSON accepted by the HTTP layer but rejected in
+the worker queue → `422` via `InvalidJsonSemanticError` (defence in depth).
