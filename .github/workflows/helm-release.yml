@@ -47,7 +47,7 @@ jobs:
       version: ${{ steps.calc-version.outputs.version }}
 
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0
 
@@ -103,7 +103,7 @@ jobs:
         id: timestamp
         run: echo "value=$(date +%Y%m%d%H%M%S)" >> $GITHUB_OUTPUT
 
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0
 
