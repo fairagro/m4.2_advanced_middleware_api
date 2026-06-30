@@ -24,6 +24,7 @@ from middleware.api.arc_store.remote_git_provider import (
     build_gitlab_project_name,
     git_project_metadata_from_arc,
     normalize_gitlab_topic,
+    resolve_gitlab_topic,
     sanitize_gitlab_api_project_name,
     sanitize_gitlab_project_name,
 )
@@ -134,6 +135,7 @@ class TestGitlabGitProvider:
             display_name="Arabidopsis thaliana cold acclimation",
             identifier="AthalianaColdStressSugar",
             description="Cold stress experiment",
+            gitlab_topic="rdi-1",
         )
 
         provider.ensure_repo_exists("abc123hash", metadata=metadata)
@@ -167,6 +169,7 @@ class TestGitlabGitProvider:
             arc_id="abc123hash",
             display_name="Readable title",
             identifier="dataset-42",
+            gitlab_topic="rdi-2",
         )
 
         provider.ensure_repo_exists("abc123hash", metadata=metadata)
@@ -174,7 +177,7 @@ class TestGitlabGitProvider:
         mock_gl.projects.create.assert_not_called()
         assert mock_project.name == "dataset-42"
         assert mock_project.description == "Readable title"
-        assert mock_project.topics == ["existing", "rdi-2"]
+        assert mock_project.topics == ["rdi-2"]
         mock_project.save.assert_called_once()
 
     @staticmethod
@@ -190,6 +193,7 @@ class TestGitlabGitProvider:
             identifier="dataset-42 - rdi-1",
             display_name="",
             description="",
+            gitlab_topic="rdi-1",
         )
 
         apply_gitlab_project_metadata(mock_project, "abc123hash", metadata)
@@ -301,8 +305,29 @@ def test_git_project_metadata_from_arc() -> None:
     assert metadata.rdi == "my-rdi"
     assert metadata.arc_id == "hash123"
     assert metadata.identifier == "ARC-001 - my-rdi"
-    assert metadata.display_name == "My Study"
-    assert metadata.description == "A test"
+    assert metadata.gitlab_topic == "my-rdi"
+
+
+def test_git_project_metadata_from_arc_uses_topic_mapping() -> None:
+    """Configured topic mapping overrides normalized RDI names."""
+    arc = MagicMock()
+    arc.Identifier = "ARC-001"
+    arc.Title = ""
+    arc.Description = None
+
+    metadata = git_project_metadata_from_arc(
+        arc,
+        rdi="edal",
+        arc_id="hash123",
+        rdi_gitlab_topics={"edal": "e!DAL"},
+    )
+
+    assert metadata.gitlab_topic == "e!DAL"
+
+
+def test_resolve_gitlab_topic_uses_mapping_case_insensitively() -> None:
+    """Topic mapping keys match RDIs case-insensitively."""
+    assert resolve_gitlab_topic("Edal", {"edal": "e!DAL"}) == "e!DAL"
 
 
 def test_build_gitlab_project_name_appends_rdi() -> None:

@@ -6,6 +6,7 @@ import re
 import urllib.error
 import urllib.request
 from abc import ABC, abstractmethod
+from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import Path
 from urllib.parse import quote, unquote, urlparse
@@ -37,6 +38,7 @@ class GitProjectMetadata:
     identifier: str
     display_name: str
     description: str | None = None
+    gitlab_topic: str | None = None
 
 
 def sanitize_gitlab_project_name(name: str) -> str:
@@ -81,6 +83,7 @@ def git_project_metadata_from_arc(
     rdi: str,
     *,
     arc_id: str,
+    rdi_gitlab_topics: Mapping[str, str] | None = None,
 ) -> GitProjectMetadata:
     """Build GitLab project metadata from an arctrl ARC and the originating RDI."""
     canonical = (arc.Identifier or "").strip()
@@ -94,7 +97,28 @@ def git_project_metadata_from_arc(
         identifier=build_gitlab_project_name(sanitized_name, rdi),
         display_name=arc.Title or "",
         description=arc.Description,
+        gitlab_topic=resolve_gitlab_topic(rdi, rdi_gitlab_topics),
     )
+
+
+def resolve_gitlab_topic(
+    rdi: str,
+    topic_mapping: Mapping[str, str] | None = None,
+) -> str | None:
+    """Resolve the GitLab project topic for an RDI.
+
+    Mapped values are used as-is (e.g. ``e!DAL``). Unmapped RDIs fall back to
+    ``normalize_gitlab_topic``.
+    """
+    rdi_key = rdi.strip()
+    if topic_mapping:
+        if rdi_key in topic_mapping:
+            return topic_mapping[rdi_key].strip()
+        rdi_lower = rdi_key.lower()
+        for key, value in topic_mapping.items():
+            if key.lower() == rdi_lower:
+                return value.strip()
+    return normalize_gitlab_topic(rdi)
 
 
 def normalize_gitlab_topic(rdi: str) -> str | None:
@@ -106,15 +130,11 @@ def normalize_gitlab_topic(rdi: str) -> str | None:
     return alnum or None
 
 
-def merge_rdi_gitlab_topic(existing_topics: list[str] | None, rdi: str) -> list[str] | None:
-    """Return updated topics with the RDI tag present, or None when unchanged."""
-    rdi_topic = normalize_gitlab_topic(rdi)
-    if rdi_topic is None:
+def desired_gitlab_topics(metadata: GitProjectMetadata) -> list[str] | None:
+    """Return the sole GitLab topic list for an ARC project, or None when unset."""
+    if metadata.gitlab_topic is None:
         return None
-    topics = list(existing_topics or [])
-    if rdi_topic in topics:
-        return None
-    return [*topics, rdi_topic]
+    return [metadata.gitlab_topic]
 
 
 def build_gitlab_project_description(metadata: GitProjectMetadata) -> str:
@@ -145,7 +165,7 @@ def apply_gitlab_project_metadata(
         changed = True
 
     current_topics = list(project.topics or [])
-    topics = merge_rdi_gitlab_topic(project.topics, metadata.rdi)
+    topics = desired_gitlab_topics(metadata)
     if topics is not None and topics != current_topics:
         project.topics = topics
         changed = True
@@ -285,7 +305,7 @@ class GitlabGitProvider(RemoteGitProvider):
                     project_description = build_gitlab_project_description(metadata)
                     if project_description:
                         create_attrs["description"] = project_description
-                    rdi_topic = normalize_gitlab_topic(metadata.rdi)
+                    rdi_topic = metadata.gitlab_topic
                     if rdi_topic is not None:
                         create_attrs["topics"] = [rdi_topic]
                     self._gl.projects.create(create_attrs)

@@ -20,10 +20,49 @@ from middleware.api.config import Config
 pytestmark = pytest.mark.filterwarnings("ignore:gitlab_api configuration is deprecated.*:DeprecationWarning")
 
 
-def _git_repo(tmp_path: Path, group: str = "g") -> dict[str, str]:
+def _git_repo(tmp_path: Path, group: str = "g") -> dict[str, str | dict[str, str]]:
     repo_dir = tmp_path / "repo"
     repo_dir.mkdir(exist_ok=True)
-    return {"url": repo_dir.as_uri(), "group": group, "path": str(repo_dir)}
+    return {
+        "url": repo_dir.as_uri(),
+        "group": group,
+        "path": str(repo_dir),
+        "rdi_gitlab_topics": {
+            "valid-rdi": "valid-rdi",
+            "rdi.123": "rdi.123",
+            "under_score": "under_score",
+        },
+    }
+
+
+def test_config_validate_rdi_gitlab_topics_requires_full_mapping(tmp_path: Path) -> None:
+    """Every known RDI must have a GitLab topic mapping when git_repo is configured."""
+    config_data = {
+        "known_rdis": ["bonares", "edal"],
+        "git_repo": {
+            **_git_repo(tmp_path),
+            "rdi_gitlab_topics": {"edal": "e!DAL"},
+        },
+        "couchdb": {"url": "http://localhost:5984"},
+        "celery": {"broker_url": "memory://", "result_backend": "cache+memory://"},
+    }
+    with pytest.raises(ValidationError, match="missing from rdi_gitlab_topics"):
+        Config.model_validate(config_data)
+
+
+def test_config_validate_rdi_gitlab_topics_rejects_unknown_keys(tmp_path: Path) -> None:
+    """GitLab topic mapping keys must be a subset of known_rdis."""
+    config_data = {
+        "known_rdis": ["edal"],
+        "git_repo": {
+            **_git_repo(tmp_path),
+            "rdi_gitlab_topics": {"edal": "e!DAL", "bonares": "bonares"},
+        },
+        "couchdb": {"url": "http://localhost:5984"},
+        "celery": {"broker_url": "memory://", "result_backend": "cache+memory://"},
+    }
+    with pytest.raises(ValidationError, match="not in known_rdis"):
+        Config.model_validate(config_data)
 
 
 def test_config_validate_known_rdis_valid(tmp_path: Path) -> None:

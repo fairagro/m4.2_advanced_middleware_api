@@ -87,9 +87,15 @@ in the group project list, and the full text on the project overview page.
 ### RDI names and GitLab topics
 
 By the time `GitlabGitProvider` runs, `rdi` has already passed API validation
-(see `arc-upload/` and `harvest-arc-upload/`). `normalize_gitlab_topic` only
-adapts the name to GitLab's topic format (lowercase; map characters outside
-`a-z`, `0-9`, and `-` to hyphens).
+(see `arc-upload/` and `harvest-arc-upload/`). ``GitRepoConfig.rdi_gitlab_topics``
+maps middleware RDI names to instance topic labels when they differ (for example
+``edal`` → ``e!DAL``). Mapped values are sent to GitLab as-is. Unmapped RDIs use
+``normalize_gitlab_topic`` only when ``known_rdis`` is empty (tests); otherwise
+``Config`` and ``WorkerConfig`` require exactly one non-empty mapping entry per
+``known_rdis`` key at startup.
+
+Each sync sets the project ``topics`` list to exactly one resolved RDI topic,
+replacing any previous topics on that project.
 
 `ensure_repo_exists` applies metadata on project creation. For projects that
 already exist, `apply_gitlab_project_metadata` compares the current GitLab values

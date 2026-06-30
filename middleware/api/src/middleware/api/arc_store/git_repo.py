@@ -306,6 +306,7 @@ class GitRepo(ArcStore):
                     arc,
                     rdi,
                     arc_id=arc_id,
+                    rdi_gitlab_topics=self._config.rdi_gitlab_topics,
                 )
                 self._remote_provider.ensure_repo_exists(arc_id, metadata=git_metadata)
 

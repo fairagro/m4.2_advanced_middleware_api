@@ -67,6 +67,7 @@ def config(oid: x509.ObjectIdentifier, known_rdis: list[str]) -> Config:
             url="http://localhost:8080",
             group="test-group",
             branch="main",
+            rdi_gitlab_topics={"rdi-1": "rdi-1", "rdi-2": "rdi-2"},
         ),
         celery=CeleryConfig(
             broker_url=SecretStr("amqp://guest:guest@localhost:5672//"),

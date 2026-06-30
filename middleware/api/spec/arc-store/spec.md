@@ -32,7 +32,11 @@ recording CouchDB events, and handling retry logic.
 - [ ] When the remote backend is GitLab via `GitRepo`, set a project topic (tag)
       to the originating `rdi` name so operators can filter repositories by RDI
       (RDI allowlisting is enforced by the API; see `arc-upload/` and
-      `harvest-arc-upload/`).
+      `harvest-arc-upload/`). Use ``git_repo.rdi_gitlab_topics`` when the GitLab
+      instance topic catalog uses a different label (for example ``edal`` →
+      ``e!DAL``). When ``known_rdis`` is non-empty, the mapping must contain
+      exactly one non-empty entry per known RDI. Each sync replaces the project
+      topic list with that single RDI topic.
 - [ ] When a GitLab project already exists for an `arc_id` (via `GitRepo`), update
       its title, description, and RDI topic on the next sync if they differ from
       the values derived from the current ARC payload.

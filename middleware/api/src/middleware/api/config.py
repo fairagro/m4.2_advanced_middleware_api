@@ -93,9 +93,15 @@ class Config(ConfigBase):
 
     @model_validator(mode="after")
     def validate_mutual_exclusivity(self) -> Self:
-        """Validate that exactly one backend is configured."""
+        """Validate storage backend and GitLab topic mapping."""
         if self.git_repo is None and self.gitlab_api is None:
             raise ValueError("Either git_repo or gitlab_api must be configured")
         if self.git_repo is not None and self.gitlab_api is not None:
             raise ValueError("Only one of git_repo or gitlab_api can be configured")
+        if self.git_repo is not None and self.known_rdis:
+            validated_topics = GitRepoConfig.validate_rdi_gitlab_topics_for_known_rdis(
+                self.known_rdis,
+                self.git_repo.rdi_gitlab_topics,
+            )
+            self.git_repo = self.git_repo.model_copy(update={"rdi_gitlab_topics": validated_topics})
         return self
