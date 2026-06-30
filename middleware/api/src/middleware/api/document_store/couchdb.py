@@ -220,7 +220,7 @@ class CouchDB(DocumentStore):
         # We assume connect() has been called before setup()
         # Create indices for common queries
         await self._client.create_index(["type", "rdi"], name="idx_type_rdi")
-        await self._client.create_index(["type", "metadata.last_harvest_id"], name="idx_type_harvest")
+        await self._client.create_index(["doc_type", "metadata.last_harvest_id"], name="idx_doc_type_harvest")
         logger.info("CouchDB document store indices initialized")
 
     async def connect(self) -> None:
@@ -301,7 +301,7 @@ class CouchDB(DocumentStore):
 
     async def get_harvest_statistics(self, harvest_id: str) -> HarvestStatistics:
         """Calculate and return statistics for a specific harvest run."""
-        selector = {"type": "arc", "metadata.last_harvest_id": harvest_id}
+        selector = {"doc_type": "arc", "metadata.last_harvest_id": harvest_id}
         docs = await self._client.find_projected(
             selector,
             fields=["metadata.first_harvest_id", "metadata.last_changed_harvest_id"],
