@@ -15,10 +15,12 @@ from gitlab.exceptions import GitlabAuthenticationError, GitlabGetError
 
 from middleware.api.arc_store import ArcStoreError
 from middleware.api.arc_store.remote_git_provider import (
+    GITLAB_PROJECT_NAME_MAX_LEN,
     FileSystemGitProvider,
     GitlabGitProvider,
     GitProjectMetadata,
     RemoteGitProvider,
+    build_gitlab_project_name,
     git_project_metadata_from_arc,
     normalize_gitlab_topic,
     sanitize_gitlab_project_name,
@@ -277,9 +279,23 @@ def test_git_project_metadata_from_arc() -> None:
 
     assert metadata.rdi == "my-rdi"
     assert metadata.arc_id == "hash123"
-    assert metadata.identifier == "ARC-001"
+    assert metadata.identifier == "ARC-001 (my-rdi)"
     assert metadata.display_name == "My Study"
     assert metadata.description == "A test"
+
+
+def test_build_gitlab_project_name_appends_rdi() -> None:
+    """GitLab project titles include RDI so names stay unique within a group."""
+    assert build_gitlab_project_name("study-2024", "my-rdi") == "study-2024 (my-rdi)"
+
+
+def test_build_gitlab_project_name_truncates_long_identifier() -> None:
+    """Very long ARC identifiers are truncated before the RDI suffix is appended."""
+    long_id = "x" * 300
+    rdi = "rdi-1"
+    result = build_gitlab_project_name(long_id, rdi)
+    assert result.endswith(f" ({rdi})")
+    assert len(result) <= GITLAB_PROJECT_NAME_MAX_LEN
 
 
 def test_sanitize_gitlab_project_name_replaces_slashes() -> None:

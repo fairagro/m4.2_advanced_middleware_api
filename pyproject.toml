@@ -27,6 +27,8 @@ dev = [
   "ggshield>=1.51.0",
   "respx>=0.23.1",
   "testcontainers>=4.14.2",
+  # Starlette TestClient (FastAPI API tests) uses httpx2 when installed; avoids
+  # StarletteDeprecationWarning. Production api_client still uses httpx + respx.
   "httpx2>=2.4.0",
 ]
 

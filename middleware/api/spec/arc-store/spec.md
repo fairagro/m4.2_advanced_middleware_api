@@ -20,9 +20,10 @@ recording CouchDB events, and handling retry logic.
       specifically.
 - [ ] Keep the Git repository path (slug) equal to `arc_id` so clone URLs remain
       stable regardless of display metadata.
-- [ ] When the remote backend is GitLab via `GitRepo`, set the project title from
-      the parsed ARC's ``Identifier`` (stripped), matching the normalization used
-      by ``calculate_arc_id``.
+- [ ] When the remote backend is GitLab via `GitRepo`, set the project title to
+      ``{sanitized Identifier} ({rdi})`` so the GitLab `name` stays unique within
+      the group namespace when the same ARC identifier is used across RDIs. The
+      repository path remains ``arc_id`` (see above).
 - [ ] When the remote backend is GitLab via `GitRepo`, set the project description
       from the RO-Crate root dataset `name` and `description` when present. Do
       not repeat `identifier`, `rdi`, or `arc_id` in the description — those are

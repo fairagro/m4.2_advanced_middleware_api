@@ -22,7 +22,8 @@ from . import ArcStoreError
 logger = logging.getLogger(__name__)
 
 _GITLAB_TOPIC_RE = re.compile(r"[^a-z0-9-]+")
-_GITLAB_NAME_MAX_LEN = 255
+GITLAB_PROJECT_NAME_MAX_LEN = 255
+_GITLAB_NAME_MAX_LEN = GITLAB_PROJECT_NAME_MAX_LEN
 _GITLAB_NAME_UNSAFE_RE = re.compile(r"[\r\n\t]+")
 
 
@@ -50,6 +51,20 @@ def sanitize_gitlab_project_name(name: str) -> str:
     return collapsed
 
 
+def build_gitlab_project_name(sanitized_identifier: str, rdi: str) -> str:
+    """Build a GitLab project title that is unique per RDI within a group namespace."""
+    rdi_label = rdi.strip()
+    suffix = f" ({rdi_label})"
+    max_base_len = _GITLAB_NAME_MAX_LEN - len(suffix)
+    if max_base_len < 1:
+        msg = "RDI is too long for GitLab project name"
+        raise ValueError(msg)
+    base = sanitized_identifier
+    if len(base) > max_base_len:
+        base = base[:max_base_len].rstrip()
+    return f"{base}{suffix}"
+
+
 def git_project_metadata_from_arc(
     arc: ARC,
     rdi: str,
@@ -61,10 +76,11 @@ def git_project_metadata_from_arc(
     if not canonical:
         msg = "ARC identifier is required for GitLab project metadata"
         raise ValueError(msg)
+    sanitized_name = sanitize_gitlab_project_name(canonical)
     return GitProjectMetadata(
         rdi=rdi,
         arc_id=arc_id,
-        identifier=sanitize_gitlab_project_name(canonical),
+        identifier=build_gitlab_project_name(sanitized_name, rdi),
         display_name=arc.Title or "",
         description=arc.Description,
     )
@@ -187,8 +203,11 @@ class FileSystemGitProvider(RemoteGitProvider):
         self.base_url = base_url.rstrip("/")
         self.group = group.strip("/")
 
-    def ensure_repo_exists(self, arc_id: str, _metadata: GitProjectMetadata) -> None:
-        """Create a bare repository on the local filesystem if it doesn't exist."""
+    def ensure_repo_exists(self, arc_id: str, metadata: GitProjectMetadata) -> None:  # noqa: ARG002
+        """Create a bare repository on the local filesystem if it doesn't exist.
+
+        ``metadata`` is accepted for a uniform ``RemoteGitProvider`` interface but not used.
+        """
         parsed_url = urlparse(self.base_url)
         if parsed_url.scheme.lower() != "file":
             return
@@ -203,7 +222,7 @@ class FileSystemGitProvider(RemoteGitProvider):
             remote_path.parent.mkdir(parents=True, exist_ok=True)
             Repo.init(remote_path, bare=True)
 
-    def get_repo_url(self, arc_id: str, _authenticated: bool = True) -> str:
+    def get_repo_url(self, arc_id: str, authenticated: bool = True) -> str:  # noqa: ARG002
         """Return the file:// URL for the repository."""
         return f"{self.base_url}/{self.group}/{arc_id}.git"
 
