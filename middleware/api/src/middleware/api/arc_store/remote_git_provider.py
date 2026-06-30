@@ -25,6 +25,7 @@ _GITLAB_TOPIC_RE = re.compile(r"[^a-z0-9-]+")
 GITLAB_PROJECT_NAME_MAX_LEN = 255
 _GITLAB_NAME_MAX_LEN = GITLAB_PROJECT_NAME_MAX_LEN
 _GITLAB_NAME_UNSAFE_RE = re.compile(r"[\r\n\t]+")
+_GITLAB_API_NAME_INVALID_RE = re.compile(r"[^a-zA-Z0-9_.+ \-]+", re.UNICODE)
 
 
 @dataclass(frozen=True)
@@ -43,18 +44,28 @@ def sanitize_gitlab_project_name(name: str) -> str:
     collapsed = _GITLAB_NAME_UNSAFE_RE.sub(" ", name.strip())
     collapsed = " ".join(collapsed.split())
     collapsed = collapsed.replace("/", "-").replace("\\", "-")
-    if not collapsed:
+    return sanitize_gitlab_api_project_name(collapsed)
+
+
+def sanitize_gitlab_api_project_name(name: str) -> str:
+    """Normalize a value for GitLab's project ``name`` field."""
+    collapsed = _GITLAB_NAME_UNSAFE_RE.sub(" ", name.strip())
+    cleaned = _GITLAB_API_NAME_INVALID_RE.sub(" ", collapsed)
+    cleaned = " ".join(cleaned.split())
+    if not cleaned:
         msg = "GitLab project name cannot be empty after sanitization"
         raise ValueError(msg)
-    if len(collapsed) > _GITLAB_NAME_MAX_LEN:
-        return collapsed[:_GITLAB_NAME_MAX_LEN].rstrip()
-    return collapsed
+    if not (cleaned[0].isalnum() or cleaned[0] == "_"):
+        cleaned = f"_{cleaned}"
+    if len(cleaned) > _GITLAB_NAME_MAX_LEN:
+        return cleaned[:_GITLAB_NAME_MAX_LEN].rstrip()
+    return cleaned
 
 
 def build_gitlab_project_name(sanitized_identifier: str, rdi: str) -> str:
     """Build a GitLab project title that is unique per RDI within a group namespace."""
     rdi_label = rdi.strip()
-    suffix = f" ({rdi_label})"
+    suffix = f" - {rdi_label}"
     max_base_len = _GITLAB_NAME_MAX_LEN - len(suffix)
     if max_base_len < 1:
         msg = "RDI is too long for GitLab project name"
@@ -62,7 +73,7 @@ def build_gitlab_project_name(sanitized_identifier: str, rdi: str) -> str:
     base = sanitized_identifier
     if len(base) > max_base_len:
         base = base[:max_base_len].rstrip()
-    return f"{base}{suffix}"
+    return sanitize_gitlab_api_project_name(f"{base}{suffix}")
 
 
 def git_project_metadata_from_arc(
@@ -123,8 +134,9 @@ def apply_gitlab_project_metadata(
 ) -> None:
     """Update GitLab project title, description, and RDI topic."""
     changed = False
-    if project.name != metadata.identifier:
-        project.name = metadata.identifier
+    project_name = sanitize_gitlab_api_project_name(metadata.identifier)
+    if project.name != project_name:
+        project.name = project_name
         changed = True
 
     description = build_gitlab_project_description(metadata)

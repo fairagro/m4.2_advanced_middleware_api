@@ -57,7 +57,7 @@ project fields so operators can browse ARC repositories without decoding hashes.
 `GitProjectMetadata` (`remote_git_provider.py`) carries the display fields.
 `GitRepo` builds it via ``git_project_metadata_from_arc(arc, rdi, arc_id=...)``
 before calling ``GitlabGitProvider.ensure_repo_exists``. The GitLab project title
-is ``{sanitized arc.Identifier} ({rdi})`` so the `name` stays unique within a
+is ``{sanitized arc.Identifier} - {rdi}`` so the `name` stays unique within a
 group when the same ARC identifier appears under different RDIs; the repository
 path remains ``arc_id``. Display fields ``Title`` (RO-Crate ``name``) and
 ``Description`` are read from the arctrl object. ``display_name`` is always a
@@ -67,7 +67,7 @@ Structural RO-Crate validation on ingest is specified in `arc-manager/`.
 | Field | Required | Source |
 | ----- | -------- | ------ |
 | `rdi` | yes | originating RDI name passed into the sync |
-| `identifier` | yes | ``{sanitized arc.Identifier} ({rdi})`` — GitLab project `name` |
+| `identifier` | yes | ``{sanitized arc.Identifier} - {rdi}`` — GitLab project `name` |
 | `display_name` | yes (`""` if absent) | ``arc.Title`` (RO-Crate ``name``) |
 | `description` | no | ``arc.Description`` |
 
@@ -76,7 +76,7 @@ Mapping to GitLab project attributes:
 | GitLab attribute | Where it appears | Value |
 | ---------------- | ---------------- | ----- |
 | `path` | clone URL / slug | `arc_id` (stable) |
-| `name` | project list title | `identifier` (`{sanitized arc.Identifier} ({rdi})`) |
+| `name` | project list title | `identifier` (`{sanitized arc.Identifier} - {rdi}`) |
 | `description` | truncated preview in list; full text on project home | RO-Crate `name`, then `description` (when present) |
 | `topics` | tag chips in list | `rdi` in GitLab-topic form (lowercased; see below) |
 

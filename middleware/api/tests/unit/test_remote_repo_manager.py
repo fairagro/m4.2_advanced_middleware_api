@@ -24,6 +24,7 @@ from middleware.api.arc_store.remote_git_provider import (
     build_gitlab_project_name,
     git_project_metadata_from_arc,
     normalize_gitlab_topic,
+    sanitize_gitlab_api_project_name,
     sanitize_gitlab_project_name,
 )
 
@@ -180,13 +181,13 @@ class TestGitlabGitProvider:
     def test_apply_gitlab_project_metadata_skips_save_when_gitlab_values_match() -> None:
         """GitLab API may return None for empty description/topics; treat as already in sync."""
         mock_project = MagicMock()
-        mock_project.name = "dataset-42 (rdi-1)"
+        mock_project.name = "dataset-42 - rdi-1"
         mock_project.description = None
         mock_project.topics = ["rdi-1"]
         metadata = GitProjectMetadata(
             rdi="rdi-1",
             arc_id="abc123hash",
-            identifier="dataset-42 (rdi-1)",
+            identifier="dataset-42 - rdi-1",
             display_name="",
             description="",
         )
@@ -299,14 +300,14 @@ def test_git_project_metadata_from_arc() -> None:
 
     assert metadata.rdi == "my-rdi"
     assert metadata.arc_id == "hash123"
-    assert metadata.identifier == "ARC-001 (my-rdi)"
+    assert metadata.identifier == "ARC-001 - my-rdi"
     assert metadata.display_name == "My Study"
     assert metadata.description == "A test"
 
 
 def test_build_gitlab_project_name_appends_rdi() -> None:
     """GitLab project titles include RDI so names stay unique within a group."""
-    assert build_gitlab_project_name("study-2024", "my-rdi") == "study-2024 (my-rdi)"
+    assert build_gitlab_project_name("study-2024", "my-rdi") == "study-2024 - my-rdi"
 
 
 def test_build_gitlab_project_name_truncates_long_identifier() -> None:
@@ -314,13 +315,23 @@ def test_build_gitlab_project_name_truncates_long_identifier() -> None:
     long_id = "x" * 300
     rdi = "rdi-1"
     result = build_gitlab_project_name(long_id, rdi)
-    assert result.endswith(f" ({rdi})")
+    assert result.endswith(f" - {rdi}")
     assert len(result) <= GITLAB_PROJECT_NAME_MAX_LEN
 
 
 def test_sanitize_gitlab_project_name_replaces_slashes() -> None:
     """Slashes in identifiers are replaced for GitLab project titles."""
     assert sanitize_gitlab_project_name("study/2024") == "study-2024"
+
+
+def test_sanitize_gitlab_api_project_name_rejects_parentheses() -> None:
+    """GitLab project names cannot contain parentheses."""
+    assert sanitize_gitlab_api_project_name("study (edal)") == "study edal"
+
+
+def test_sanitize_gitlab_api_project_name_prefixes_invalid_start() -> None:
+    """GitLab project names must start with a letter, digit, or underscore."""
+    assert sanitize_gitlab_api_project_name("-leading-dash") == "_-leading-dash"
 
 
 def test_sanitize_gitlab_project_name_rejects_empty() -> None:
