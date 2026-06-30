@@ -61,6 +61,30 @@ def test_rocrate_payload_description() -> None:
     assert RoCratePayload.model_validate(arc).description == "Cold stress experiment"
 
 
+@pytest.mark.parametrize(
+    ("field", "wire_value", "expected"),
+    [
+        ("identifier", {"@value": "dataset-jsonld"}, "dataset-jsonld"),
+        ("name", {"@value": "Study title"}, "Study title"),
+        ("description", {"@value": "Study summary"}, "Study summary"),
+    ],
+)
+def test_rocrate_payload_jsonld_value_objects(field: str, wire_value: object, expected: str) -> None:
+    """JSON-LD value objects for text fields are normalized to plain strings."""
+    root: dict[str, object] = {"@id": "./"}
+    if field == "identifier":
+        root["identifier"] = wire_value
+    else:
+        root["identifier"] = "dataset-1"
+        root[field] = wire_value
+    arc = {
+        "@context": "https://w3id.org/ro/crate/1.1/context",
+        "@graph": [root],
+    }
+    payload = RoCratePayload.model_validate(arc)
+    assert getattr(payload, field) == expected
+
+
 def test_rocrate_payload_preserves_extra_root_fields() -> None:
     """Root entity fields beyond the API contract remain in ``@graph`` unchanged."""
     arc = {

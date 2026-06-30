@@ -17,6 +17,8 @@ def _root_dataset_entity(graph: list[dict[str, Any]]) -> dict[str, Any] | None:
 def _normalize_text_field(value: object) -> str | None:
     if isinstance(value, list):
         value = value[0] if value else None
+    if isinstance(value, dict):
+        value = value.get("@value")
     if value is None:
         return None
     text = str(value).strip()

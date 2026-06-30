@@ -11,7 +11,9 @@ specified in `arc-store/`.
 The `RoCratePayload` model (`middleware/shared/api_models/common/rocrate.py`) is
 the single source of truth for structural ARC validation: `@context`, `@graph`, a
 root data entity with `@id: "./"`, and a non-empty `identifier` (leading and
-trailing whitespace trimmed). Optional root fields `name` and `description` are
+trailing whitespace trimmed). Text fields (`identifier`, `name`, `description`)
+may be plain JSON strings, a single-element string array, or JSON-LD value
+objects (`{"@value": "..."}`). Optional root fields `name` and `description` are
 exposed as read-only properties but remain in `@graph` unchanged. See
 `arc-manager/design.md` decision 4.
 
