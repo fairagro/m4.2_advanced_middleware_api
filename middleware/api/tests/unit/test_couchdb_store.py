@@ -134,6 +134,11 @@ async def test_couchdb_store_setup(store: CouchDB, mock_client_instance: MagicMo
     """Test setup calls client.create_index."""
     await store.setup()
     assert mock_client_instance.create_index.call_count == 2  # noqa: PLR2004
+    mock_client_instance.create_index.assert_any_call(["type", "rdi"], name="idx_type_rdi")
+    mock_client_instance.create_index.assert_any_call(
+        ["doc_type", "metadata.last_harvest_id"],
+        name="idx_doc_type_harvest",
+    )
 
 
 @pytest.mark.asyncio
@@ -425,6 +430,11 @@ async def test_get_harvest_statistics(  # noqa: PLR0913, PLR0917
     mock_client_instance.find_projected = AsyncMock(return_value=[{"metadata": meta_patch}])
 
     stats = await store.get_harvest_statistics(harvest_id)
+
+    mock_client_instance.find_projected.assert_awaited_once_with(
+        {"doc_type": "arc", "metadata.last_harvest_id": harvest_id},
+        fields=["metadata.first_harvest_id", "metadata.last_changed_harvest_id"],
+    )
 
     assert stats.arcs_submitted == 1
     assert stats.arcs_new == expected_new
