@@ -25,7 +25,7 @@ jobs:
       version: ${{ steps.calc-version.outputs.version }}
 
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0
 
@@ -76,13 +76,13 @@ jobs:
         id: timestamp
         run: echo "value=$(date +%Y%m%d%H%M%S)" >> $GITHUB_OUTPUT
 
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0
 
       - uses: azure/setup-helm@v5
         with:
-          version: '4.2.1'
+          version: '4.2.2'
 
       - name: Detect current Docker release version
         id: docker-version
