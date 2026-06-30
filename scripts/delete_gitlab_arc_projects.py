@@ -166,31 +166,115 @@ def _scan_group_projects(
     )
 
 
+def _candidate_full_paths(attributes: dict[str, object]) -> list[str]:
+    """Build ordered, unique full_path candidates for permanently_remove."""
+    candidates: list[str] = []
+
+    namespace = attributes.get("namespace")
+    project_path = attributes.get("path")
+    if isinstance(namespace, dict):
+        namespace_full_path = namespace.get("full_path")
+        if namespace_full_path and project_path:
+            candidates.append(f"{namespace_full_path}/{project_path}")
+
+    explicit = attributes.get("full_path")
+    if explicit:
+        candidates.append(str(explicit))
+
+    path_with_namespace = attributes.get("path_with_namespace")
+    if path_with_namespace:
+        candidates.append(str(path_with_namespace))
+
+    unique: list[str] = []
+    seen: set[str] = set()
+    for candidate in candidates:
+        if candidate not in seen:
+            seen.add(candidate)
+            unique.append(candidate)
+    return unique
+
+
+def _resolve_project_full_path(gl: gitlab.Gitlab, project_id: int) -> list[str]:
+    """Return GitLab full_path candidates for permanently_remove."""
+    project = gl.projects.get(project_id)
+    candidates = _candidate_full_paths(project.attributes)
+    if not candidates:
+        msg = f"Could not resolve full_path for project {project_id}"
+        raise ValueError(msg)
+    return candidates
+
+
+def _permanently_remove_project(
+    gl: gitlab.Gitlab,
+    project_id: int,
+    full_path_candidates: list[str],
+    log: logging.Logger,
+) -> bool:
+    last_error: GitlabError | None = None
+    for full_path in full_path_candidates:
+        try:
+            gl.http_delete(
+                f"/projects/{project_id}",
+                query_data={
+                    "permanently_remove": "true",
+                    "full_path": full_path,
+                },
+            )
+            if full_path != full_path_candidates[0]:
+                log.info(
+                    "Permanent delete succeeded for %s (%s) using alternate full_path",
+                    full_path,
+                    project_id,
+                )
+            return True
+        except GitlabError as exc:
+            if exc.response_code == HTTPStatus.BAD_REQUEST and "full_path" in str(exc):
+                last_error = exc
+                continue
+            raise
+
+    if last_error is not None:
+        log.warning(
+            "Permanent delete skipped for %s (%s); project is scheduled for deletion: %s",
+            full_path_candidates[0],
+            project_id,
+            last_error,
+        )
+        return True
+    return False
+
+
 def _delete_project(
     gitlab_url: str,
     token: str,
     project_id: int,
-    full_path: str,
+    listed_path: str,
     log: logging.Logger,
 ) -> bool:
     gl = gitlab.Gitlab(gitlab_url, private_token=token, per_page=100)
     try:
+        full_path_candidates = _resolve_project_full_path(gl, project_id)
+        primary_path = full_path_candidates[0]
+        if primary_path != listed_path:
+            log.debug(
+                "Resolved full_path candidates %s for project %s (listed as %s)",
+                full_path_candidates,
+                project_id,
+                listed_path,
+            )
         gl.http_delete(f"/projects/{project_id}")
-        gl.http_delete(
-            f"/projects/{project_id}",
-            query_data={
-                "permanently_remove": "true",
-                "full_path": full_path,
-            },
-        )
+        _permanently_remove_project(gl, project_id, full_path_candidates, log)
         return True
     except GitlabDeleteError as exc:
         if exc.response_code == HTTPStatus.NOT_FOUND:
             return True
-        log.error("DELETE failed %s (%s): %s", full_path, project_id, exc)
+        log.error("DELETE failed %s (%s): %s", listed_path, project_id, exc)
         return False
     except GitlabError as exc:
-        log.error("DELETE failed %s (%s): %s", full_path, project_id, exc)
+        log.error("DELETE failed %s (%s): %s", listed_path, project_id, exc)
+        return False
+    except ValueError as exc:
+        log.error("DELETE failed %s (%s): %s", listed_path, project_id, exc)
         return False
 
 
