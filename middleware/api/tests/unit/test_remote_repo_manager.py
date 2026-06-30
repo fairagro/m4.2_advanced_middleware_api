@@ -20,6 +20,7 @@ from middleware.api.arc_store.remote_git_provider import (
     GitlabGitProvider,
     GitProjectMetadata,
     RemoteGitProvider,
+    apply_gitlab_project_metadata,
     build_gitlab_project_name,
     git_project_metadata_from_arc,
     normalize_gitlab_topic,
@@ -174,6 +175,25 @@ class TestGitlabGitProvider:
         assert mock_project.description == "Readable title"
         assert mock_project.topics == ["existing", "rdi-2"]
         mock_project.save.assert_called_once()
+
+    @staticmethod
+    def test_apply_gitlab_project_metadata_skips_save_when_gitlab_values_match() -> None:
+        """GitLab API may return None for empty description/topics; treat as already in sync."""
+        mock_project = MagicMock()
+        mock_project.name = "dataset-42 (rdi-1)"
+        mock_project.description = None
+        mock_project.topics = ["rdi-1"]
+        metadata = GitProjectMetadata(
+            rdi="rdi-1",
+            arc_id="abc123hash",
+            identifier="dataset-42 (rdi-1)",
+            display_name="",
+            description="",
+        )
+
+        apply_gitlab_project_metadata(mock_project, "abc123hash", metadata)
+
+        mock_project.save.assert_not_called()
 
     @staticmethod
     @patch("middleware.api.arc_store.remote_git_provider.gitlab.Gitlab")

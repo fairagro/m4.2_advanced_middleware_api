@@ -128,12 +128,13 @@ def apply_gitlab_project_metadata(
         changed = True
 
     description = build_gitlab_project_description(metadata)
-    if project.description != description:
+    if (project.description or "") != description:
         project.description = description
         changed = True
 
+    current_topics = list(project.topics or [])
     topics = merge_rdi_gitlab_topic(project.topics, metadata.rdi)
-    if topics is not None:
+    if topics is not None and topics != current_topics:
         project.topics = topics
         changed = True
 
