@@ -1,6 +1,6 @@
 """Unit tests for API-layer RO-Crate parsing."""
 
-from unit.rocrate_fixtures import minimal_rocrate_dict
+from rocrate_fixtures import minimal_rocrate_dict
 
 from middleware.api.rocrate import parse_rocrate
 

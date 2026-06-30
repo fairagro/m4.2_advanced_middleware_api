@@ -123,7 +123,7 @@ disallow_untyped_defs = true
 disallow_incomplete_defs = true
 explicit_package_bases = true
 namespace_packages = true
-mypy_path = "middleware/api/src:middleware/api_client/src:middleware/shared/src:middleware/api/tests:middleware/api_client/tests:middleware/shared/tests"
+mypy_path = "middleware/api/src:middleware/api_client/src:middleware/shared/src:middleware/api/tests/unit:middleware/api_client/tests:middleware/shared/tests"
 
 # Exclude directories from type checking
 exclude = [
@@ -138,6 +138,15 @@ exclude = [
   ".ruff_cache",
   ".*/tests/conftest\\.py$",
   ".*/tests/.+/conftest\\.py$",
+]
+
+[tool.pyright]
+# IDE import resolution (Pylance / BasedPyright); mirrors mypy_path and pylint source-roots.
+extraPaths = [
+  "middleware/api/src",
+  "middleware/api/tests/unit",
+  "middleware/api_client/tests",
+  "middleware/shared/tests",
 ]
 
 # Docstring-Regeln aktivieren, damit es wie pylint C0114/15/16 meckert
@@ -231,6 +240,9 @@ ignore = [".venv", "venv", ".git", "__pycache__", "build", "dist"]
 ignore-patterns = ["^\\..*", ".*\\.egg-info"]
 # Fail if the score is below 8.0
 fail-under = 8.0
+
+[tool.pylint.main]
+source-roots = "middleware/api/src,middleware/api/tests/unit,middleware/api_client/tests,middleware/shared/tests"
 
 [tool.pylint.messages_control]
 # Disable checks that are already covered by ruff

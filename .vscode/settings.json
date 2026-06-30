@@ -10,9 +10,6 @@
   "python.testing.pytestPath": ".venv/bin/pytest",
   "python.testing.cwd": "${workspaceFolder}",
   "python.defaultInterpreterPath": ".venv/bin/python",
-  "python.analysis.autoSearchPaths": true,
-  "python.analysis.useLibraryCodeForTypes": true,
-  "python-envs.pythonProjects": [],
 
   // Treat Helm templates as templating files instead of plain YAML
   "files.associations": {
@@ -37,8 +34,9 @@
     }
   },
 
-  "sops-edit.onlyUseButtons": false,
-  "sops-edit.tempFilePreExtension": "decrypted",
+  // @signageos/vscode-sops — Open VSX; VS Code Marketplace + Cursor
+  "sops.enabled": true,
+  "sops.binPath": "sops",
 
   "mypy.configFile": "pyproject.toml",
 
@@ -52,8 +50,6 @@
     "--rcfile=pyproject.toml"
   ],
   "pylint.importStrategy": "fromEnvironment",
-
-  "python-envs.defaultEnvManager": "ms-python.python:venv",
 
   "remote.autoForwardPortsSource": "process",
 

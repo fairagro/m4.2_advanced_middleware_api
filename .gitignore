@@ -213,6 +213,7 @@ scratch/
 **/*.csv
 **/*.stats
 
+# Local decrypt artifacts (CLI or legacy editor temp files; do not commit)
 **/*.decrypted.*
 
 # Cryptographic keys and certificates for testing that are not meant to be committed

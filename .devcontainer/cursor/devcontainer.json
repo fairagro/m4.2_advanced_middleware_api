@@ -27,7 +27,7 @@
 				"jeff-hykin.better-dockerfile-syntax",
 				"ms-azuretools.vscode-docker",
 				"formulahendry.docker-explorer",
-				"shipitsmarter.sops-edit",
+				"signageos.signageos-vscode-sops",
 				"davidanson.vscode-markdownlint",
 				"samuelcolvin.jinjahtml",
 				"tamasfe.even-better-toml",
@@ -42,7 +42,6 @@
 				"donjayamanne.githistory",
 				"codezombiech.gitignore",
 				"github.copilot-chat",
-				"charliermarsh.ruff",
 				"tim-koehler.helm-intellisense",
 				"vadzimnestsiarenka.helm-template-preview-and-more",
 				"jebbs.plantuml"
@@ -55,6 +54,7 @@
 		"install dev hooks": "bash ${containerWorkspaceFolder}/scripts/install-dev-hooks.sh",
 		"setup container gpg": "bash ${containerWorkspaceFolder}/scripts/setup-container-gpg.sh",
 		"setup container docker": "bash ${containerWorkspaceFolder}/scripts/setup-container-docker.sh",
+		"install ruff extension (cursor)": "bash ${containerWorkspaceFolder}/scripts/install-cursor-ruff-extension.sh",
 		"setup bashrc": "grep -qF 'source \\${containerWorkspaceFolder}/scripts/load-env.sh' ~/.bashrc || echo 'source \\${containerWorkspaceFolder}/scripts/load-env.sh' >> ~/.bashrc"
 	},
 	"remoteUser": "vscode"

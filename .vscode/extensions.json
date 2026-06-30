@@ -3,7 +3,7 @@
     "jeff-hykin.better-dockerfile-syntax",
     "ms-azuretools.vscode-docker",
     "formulahendry.docker-explorer",
-    "shipitsmarter.sops-edit",
+    "signageos.signageos-vscode-sops",
     "davidanson.vscode-markdownlint",
     "samuelcolvin.jinjahtml",
     "tamasfe.even-better-toml",

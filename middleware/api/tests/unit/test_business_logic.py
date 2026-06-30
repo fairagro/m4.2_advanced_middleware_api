@@ -3,7 +3,7 @@
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
-from unit.rocrate_fixtures import minimal_rocrate_dict
+from rocrate_fixtures import minimal_rocrate_dict
 
 from middleware.api.business_logic import (
     BusinessLogic,
