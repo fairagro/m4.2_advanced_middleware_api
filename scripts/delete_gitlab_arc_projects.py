@@ -27,6 +27,9 @@ Examples:
 
     # Actually delete (stop middleware/Celery first)
     uv run python scripts/delete_gitlab_arc_projects.py --execute --workers 5
+
+    # Purge projects already marked for deletion (faster; skips re-marking)
+    uv run python scripts/delete_gitlab_arc_projects.py --execute --purge-only --workers 5
 """
 
 from __future__ import annotations
@@ -57,6 +60,17 @@ ARC_PATH_RE = re.compile(r"^[a-f0-9]{64}$")
 LOG_FILE = "gitlab-delete.log"
 DRY_RUN_PREVIEW_LIMIT = 20
 LIST_PROGRESS_INTERVAL = 1000
+
+
+@dataclass(frozen=True)
+class DeleteJob:
+    """Parameters for deleting a single GitLab project."""
+
+    gitlab_url: str
+    token: str
+    project_id: int
+    listed_path: str
+    purge_only: bool
 
 
 @dataclass(frozen=True)
@@ -167,8 +181,17 @@ def _scan_group_projects(
 
 
 def _candidate_full_paths(attributes: dict[str, object]) -> list[str]:
-    """Build ordered, unique full_path candidates for permanently_remove."""
+    """Build ordered, unique full_path candidates for permanently_remove.
+
+    After a project is marked for deletion GitLab renames its path, e.g.
+    ``{hash}-deletion_scheduled-{id}``. The permanently_remove call must use
+    that post-mark path, not the original listing path.
+    """
     candidates: list[str] = []
+
+    path_with_namespace = attributes.get("path_with_namespace")
+    if path_with_namespace:
+        candidates.append(str(path_with_namespace))
 
     namespace = attributes.get("namespace")
     project_path = attributes.get("path")
@@ -180,10 +203,6 @@ def _candidate_full_paths(attributes: dict[str, object]) -> list[str]:
     explicit = attributes.get("full_path")
     if explicit:
         candidates.append(str(explicit))
-
-    path_with_namespace = attributes.get("path_with_namespace")
-    if path_with_namespace:
-        candidates.append(str(path_with_namespace))
 
     unique: list[str] = []
     seen: set[str] = set()
@@ -234,47 +253,43 @@ def _permanently_remove_project(
             raise
 
     if last_error is not None:
-        log.warning(
-            "Permanent delete skipped for %s (%s); project is scheduled for deletion: %s",
+        log.error(
+            "Permanent delete failed for %s (%s): %s",
             full_path_candidates[0],
             project_id,
             last_error,
         )
-        return True
+        return False
     return False
 
 
-def _delete_project(
-    gitlab_url: str,
-    token: str,
-    project_id: int,
-    listed_path: str,
-    log: logging.Logger,
-) -> bool:
-    gl = gitlab.Gitlab(gitlab_url, private_token=token, per_page=100)
+def _delete_project(job: DeleteJob, log: logging.Logger) -> bool:
+    gl = gitlab.Gitlab(job.gitlab_url, private_token=job.token, per_page=100)
     try:
-        full_path_candidates = _resolve_project_full_path(gl, project_id)
+        if not job.purge_only:
+            gl.http_delete(f"/projects/{job.project_id}")
+
+        # GitLab renames the project path when marking for deletion; resolve afterwards.
+        full_path_candidates = _resolve_project_full_path(gl, job.project_id)
         primary_path = full_path_candidates[0]
-        if primary_path != listed_path:
+        if primary_path != job.listed_path:
             log.debug(
                 "Resolved full_path candidates %s for project %s (listed as %s)",
                 full_path_candidates,
-                project_id,
-                listed_path,
+                job.project_id,
+                job.listed_path,
             )
-        gl.http_delete(f"/projects/{project_id}")
-        _permanently_remove_project(gl, project_id, full_path_candidates, log)
-        return True
+        return _permanently_remove_project(gl, job.project_id, full_path_candidates, log)
     except GitlabDeleteError as exc:
         if exc.response_code == HTTPStatus.NOT_FOUND:
             return True
-        log.error("DELETE failed %s (%s): %s", listed_path, project_id, exc)
+        log.error("DELETE failed %s (%s): %s", job.listed_path, job.project_id, exc)
         return False
     except GitlabError as exc:
-        log.error("DELETE failed %s (%s): %s", listed_path, project_id, exc)
+        log.error("DELETE failed %s (%s): %s", job.listed_path, job.project_id, exc)
         return False
     except ValueError as exc:
-        log.error("DELETE failed %s (%s): %s", listed_path, project_id, exc)
+        log.error("DELETE failed %s (%s): %s", job.listed_path, job.project_id, exc)
         return False
 
 
@@ -285,7 +300,8 @@ def _parse_args(argv: list[str] | None) -> argparse.Namespace:
         epilog=(
             "Stop middleware API and Celery workers before running with --execute.\n"
             "Large groups (~30k projects) need several minutes to list; use --count-only\n"
-            "for a faster dry-run. See the script docstring for examples."
+            "for a faster dry-run. For projects already marked for deletion, use\n"
+            "--purge-only to skip re-marking. See the script docstring for examples."
         ),
     )
     parser.add_argument(
@@ -313,6 +329,11 @@ def _parse_args(argv: list[str] | None) -> argparse.Namespace:
         "--execute",
         action="store_true",
         help="Delete projects (default: dry-run only)",
+    )
+    parser.add_argument(
+        "--purge-only",
+        action="store_true",
+        help="With --execute: only permanently remove projects already marked for deletion",
     )
     parser.add_argument(
         "--count-only",
@@ -344,10 +365,13 @@ def _run_deletes(
         futures = {
             pool.submit(
                 _delete_project,
-                args.url,
-                args.token,
-                project_id,
-                path,
+                DeleteJob(
+                    gitlab_url=args.url,
+                    token=args.token,
+                    project_id=project_id,
+                    listed_path=path,
+                    purge_only=args.purge_only,
+                ),
                 log,
             ): path
             for project_id, path in targets
@@ -400,6 +424,9 @@ def main(argv: list[str] | None = None) -> int:
         return 1
     if args.count_only and args.execute:
         log.error("--count-only cannot be combined with --execute")
+        return 1
+    if args.purge_only and not args.execute:
+        log.error("--purge-only requires --execute")
         return 1
 
     gl = gitlab.Gitlab(args.url, private_token=args.token, per_page=100)
