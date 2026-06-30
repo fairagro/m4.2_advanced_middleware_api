@@ -86,15 +86,14 @@ class ArcManager:
         if not self._dispatcher:
             raise BusinessLogicError("create_or_update_arc can only be called in API mode")
 
-        rocrate = parse_rocrate(arc)
-        arc_content = rocrate.model_dump(by_alias=True)
-
         with self._tracer.start_as_current_span(
             "api.ArcManager.create_or_update_arc",
             attributes={"rdi": rdi, "client_id": client_id if client_id is not None else ""},
         ) as span:
             logger.info("[%s] Starting ARC creation/update: rdi=%s", client_id, rdi)
             try:
+                rocrate = parse_rocrate(arc)
+                arc_content = rocrate.model_dump(by_alias=True)
                 doc_result = await self._doc_store.store_arc(
                     rdi,
                     arc_content,
@@ -173,16 +172,18 @@ class ArcManager:
         if self._dispatcher:
             raise BusinessLogicError("sync_to_gitlab must not be called in API mode")
 
-        rocrate = parse_rocrate(arc)
-        arc_id = calculate_arc_id(rocrate.identifier, rdi)
-        arc_content = rocrate.model_dump(by_alias=True)
-
         with self._tracer.start_as_current_span(
             "api.ArcManager.sync_to_gitlab",
-            attributes={"rdi": rdi, "arc_id": arc_id},
+            attributes={"rdi": rdi},
         ) as span:
             logger.info("Starting GitLab sync for RDI: %s", rdi)
+            arc_id: str | None = None
             try:
+                rocrate = parse_rocrate(arc)
+                arc_id = calculate_arc_id(rocrate.identifier, rdi)
+                arc_content = rocrate.model_dump(by_alias=True)
+                span.set_attribute("arc_id", arc_id)
+
                 arc_json = json.dumps(arc_content)
                 arc_obj = ARC.from_rocrate_json_string(arc_json)
 
@@ -206,7 +207,7 @@ class ArcManager:
                 logger.info("Successfully synced ARC %s to GitLab", arc_id)
 
             except ArcStoreTransientError as e:
-                logger.info("Transient error during GitLab sync for ARC %s: %s", arc_id, e)
+                logger.info("Transient error during GitLab sync for ARC %s: %s", arc_id or "unknown", e)
                 span.record_exception(e)
                 raise TransientError(str(e)) from e
 
@@ -214,17 +215,18 @@ class ArcManager:
                 logger.error("Unexpected error while syncing ARC to GitLab: %s", e, exc_info=True)
                 span.record_exception(e)
 
-                try:
-                    await self._doc_store.add_event(
-                        arc_id,
-                        ArcEvent(
-                            timestamp=datetime.now(UTC),
-                            type=ArcEventType.GIT_PUSH_FAILED,
-                            message=f"GitLab sync failed: {str(e)}",
-                        ),
-                    )
-                except Exception as log_error:  # noqa: BLE001
-                    logger.warning("Could not log sync failure to CouchDB: %s", log_error)
+                if arc_id is not None:
+                    try:
+                        await self._doc_store.add_event(
+                            arc_id,
+                            ArcEvent(
+                                timestamp=datetime.now(UTC),
+                                type=ArcEventType.GIT_PUSH_FAILED,
+                                message=f"GitLab sync failed: {str(e)}",
+                            ),
+                        )
+                    except Exception as log_error:  # noqa: BLE001
+                        logger.warning("Could not log sync failure to CouchDB: %s", log_error)
 
                 if isinstance(e, InvalidJsonSemanticError):
                     raise
