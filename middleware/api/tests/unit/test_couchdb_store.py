@@ -11,6 +11,7 @@ from pydantic import SecretStr
 from middleware.api.document_store import DuplicateArcError
 from middleware.api.document_store.arc_document import ArcDocument, ArcEvent, ArcMetadata
 from middleware.api.document_store.config import CouchDBConfig
+from middleware.api.document_store.content_hash import RoCrateContent, calculate_arc_content_hash
 from middleware.api.document_store.couchdb import CouchDB
 from middleware.shared.api_models.common.models import ArcEventType, ArcLifecycleStatus
 
@@ -50,7 +51,7 @@ async def test_store_arc_new(store: CouchDB, mock_client_instance: MagicMock) ->
     """Test storing a new ARC."""
     # Setup
     rdi = "test_rdi"
-    arc_content = {
+    arc_content: RoCrateContent = {
         "@context": "https://w3id.org/ro/crate/1.1/context",
         "@graph": [{"@id": "./", "identifier": "arc_123"}],
     }
@@ -81,7 +82,7 @@ async def test_store_arc_new(store: CouchDB, mock_client_instance: MagicMock) ->
 @pytest.mark.asyncio
 async def test_get_arc_content(store: CouchDB, mock_client_instance: MagicMock) -> None:
     """Test get_arc_content returns content."""
-    arc_content = {"key": "value"}
+    arc_content: RoCrateContent = {"key": "value"}
     mock_client_instance.get_document.return_value = {"arc_content": arc_content}
 
     result = await store.get_arc_content("test_id")
@@ -146,7 +147,7 @@ async def test_store_arc_update_changed(store: CouchDB, mock_client_instance: Ma
     """Test updating an existing ARC with changes."""
     # Setup
     rdi = "test_rdi"
-    arc_content = {
+    arc_content: RoCrateContent = {
         "@context": "https://w3id.org/ro/crate/1.1/context",
         "@graph": [{"@id": "./", "identifier": "arc_123"}, {"@id": "dataset", "name": "Changed Name"}],
     }
@@ -191,14 +192,13 @@ async def test_store_arc_no_change(store: CouchDB, mock_client_instance: MagicMo
     """Test storing an unchanged ARC."""
     # Setup
     rdi = "test_rdi"
-    arc_content = {
+    arc_content: RoCrateContent = {
         "@context": "https://w3id.org/ro/crate/1.1/context",
         "@graph": [{"@id": "./", "identifier": "arc_123"}],
     }
 
-    # Calculate hash to match
-    json_str = json.dumps(arc_content, sort_keys=True)
-    content_hash = hashlib.sha256(json_str.encode("utf-8")).hexdigest()
+    # Calculate hash to match (normalized, volatile fields excluded)
+    content_hash = calculate_arc_content_hash(arc_content)
 
     # Existing document matches
     existing_doc = {
@@ -230,10 +230,9 @@ async def test_store_arc_no_change(store: CouchDB, mock_client_instance: MagicMo
     mock_client_instance.save_document.assert_called_once()
 
 
-def _make_existing_arc_doc(rdi: str, arc_content: dict, last_harvest_id: str | None = None) -> dict:
+def _make_existing_arc_doc(rdi: str, arc_content: RoCrateContent, last_harvest_id: str | None = None) -> dict:
     """Build a minimal existing ARC document dict for mocking."""
-    json_str = json.dumps(arc_content, sort_keys=True)
-    content_hash = hashlib.sha256(json_str.encode("utf-8")).hexdigest()
+    content_hash = calculate_arc_content_hash(arc_content)
     return {
         "_id": "arc_...",
         "_rev": "1-rev",
@@ -251,11 +250,67 @@ def _make_existing_arc_doc(rdi: str, arc_content: dict, last_harvest_id: str | N
 
 
 @pytest.mark.asyncio
+async def test_store_arc_timestamp_only_not_a_change(store: CouchDB, mock_client_instance: MagicMock) -> None:
+    """Re-serialized RO-Crate with fresh arctrl timestamps must not trigger a change."""
+    rdi = "test_rdi"
+    stored_content: RoCrateContent = {
+        "@context": "https://w3id.org/ro/crate/1.1/context",
+        "@graph": [
+            {
+                "@id": "./",
+                "identifier": "arc_123",
+                "datePublished": "2026-01-01T10:00:00.111",
+                "sdDatePublished": "2026-01-01T10:00:00.112",
+            },
+            {"@id": "#study", "dateModified": "2026-01-01T10:00:00.200", "name": "Study"},
+        ],
+    }
+    resubmitted_content: RoCrateContent = {
+        "@context": "https://w3id.org/ro/crate/1.1/context",
+        "@graph": [
+            {
+                "@id": "./",
+                "identifier": "arc_123",
+                "datePublished": "2026-07-01T11:19:33.494",
+                "sdDatePublished": "2026-07-01T11:19:33.557",
+            },
+            {"@id": "#study", "dateModified": "2026-07-01T11:19:33.522", "name": "Study"},
+        ],
+    }
+    legacy_hash = hashlib.sha256(json.dumps(stored_content, sort_keys=True).encode("utf-8")).hexdigest()
+    existing_doc = {
+        "_id": "arc_...",
+        "_rev": "1-rev",
+        "rdi": rdi,
+        "arc_content": stored_content,
+        "metadata": {
+            "arc_hash": legacy_hash,
+            "status": "ACTIVE",
+            "first_seen": "2023-01-01T00:00:00Z",
+            "last_seen": "2023-01-01T00:00:00Z",
+            "events": [],
+        },
+    }
+
+    mock_client_instance.get_document.return_value = existing_doc
+    mock_client_instance.save_document.return_value = {"ok": True}
+
+    result = await store.store_arc(rdi, resubmitted_content, "arc_123")
+
+    assert result.is_new is False
+    assert result.has_changes is False
+    mock_client_instance.save_document.assert_called_once()
+    _, doc_data = mock_client_instance.save_document.call_args[0]
+    assert doc_data["metadata"]["arc_hash"] == calculate_arc_content_hash(resubmitted_content)
+    assert doc_data["metadata"]["events"] == []
+
+
+@pytest.mark.asyncio
 async def test_store_arc_duplicate_in_same_harvest_raises(store: CouchDB, mock_client_instance: MagicMock) -> None:
     """store_arc raises DuplicateArcError when the same ARC is re-submitted in the same harvest."""
     rdi = "test_rdi"
     harvest_id = "harvest-abc"
-    arc_content = {
+    arc_content: RoCrateContent = {
         "@context": "https://w3id.org/ro/crate/1.1/context",
         "@graph": [{"@id": "./", "identifier": "arc_dup"}],
     }
@@ -284,7 +339,7 @@ async def test_store_arc_concurrent_duplicate_detected_via_validator(
     """
     rdi = "test_rdi"
     harvest_id = "harvest-concurrent"
-    arc_content = {
+    arc_content: RoCrateContent = {
         "@context": "https://w3id.org/ro/crate/1.1/context",
         "@graph": [{"@id": "./", "identifier": "arc_concurrent"}],
     }
@@ -314,7 +369,7 @@ async def test_store_arc_concurrent_duplicate_detected_via_validator(
 async def test_store_arc_same_arc_different_harvest_is_allowed(store: CouchDB, mock_client_instance: MagicMock) -> None:
     """store_arc allows re-submitting an ARC that was seen in a *different* harvest."""
     rdi = "test_rdi"
-    arc_content = {
+    arc_content: RoCrateContent = {
         "@context": "https://w3id.org/ro/crate/1.1/context",
         "@graph": [{"@id": "./", "identifier": "arc_dup"}],
     }
@@ -333,7 +388,7 @@ async def test_store_arc_same_arc_different_harvest_is_allowed(store: CouchDB, m
 async def test_store_arc_no_harvest_context_allows_resubmit(store: CouchDB, mock_client_instance: MagicMock) -> None:
     """store_arc never raises DuplicateArcError for stand-alone ARC submissions (no harvest_id)."""
     rdi = "test_rdi"
-    arc_content = {
+    arc_content: RoCrateContent = {
         "@context": "https://w3id.org/ro/crate/1.1/context",
         "@graph": [{"@id": "./", "identifier": "arc_dup"}],
     }

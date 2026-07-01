@@ -1,13 +1,12 @@
 """CouchDB implementation of DocumentStore."""
 
-import hashlib
-import json
 import logging
 import uuid
 from datetime import UTC, datetime
 from typing import Any
 
 from middleware.api.document_store.config import CouchDBConfig
+from middleware.api.document_store.content_hash import calculate_arc_content_hash
 from middleware.api.document_store.couchdb_client import CouchDBClient
 from middleware.api.utils import calculate_arc_id
 from middleware.shared.api_models.common.models import ArcEventType, ArcLifecycleStatus, HarvestStatus
@@ -40,17 +39,6 @@ class CouchDB(DocumentStore):
         self._db_name = config.db_name
         self._client = CouchDBClient.from_config(config)
 
-    @staticmethod
-    def _calculate_content_hash(arc_content: dict[str, Any]) -> str:
-        """Calculate SHA256 hash of ARC content.
-
-        Note: We use sort_keys=True to ensure consistent hashing even if
-        the JSON dictionary order or whitespace changes.
-        """
-        # orjson is faster if available, but standard json is fine for relatively small dicts
-        json_str = json.dumps(arc_content, sort_keys=True)
-        return hashlib.sha256(json_str.encode("utf-8")).hexdigest()
-
     async def store_arc(
         self,
         rdi: str,
@@ -65,7 +53,7 @@ class CouchDB(DocumentStore):
         arc_id = calculate_arc_id(identifier, rdi)
         doc_id = f"arc_{arc_id}"
 
-        content_hash = self._calculate_content_hash(arc_content)
+        content_hash = calculate_arc_content_hash(arc_content)
         now = datetime.now(UTC)
 
         # Check existing document
@@ -97,17 +85,20 @@ class CouchDB(DocumentStore):
             # Reject duplicate submissions within the same harvest run.
             if harvest_id and existing_doc.metadata.last_harvest_id == harvest_id:
                 raise DuplicateArcError(f"ARC '{identifier}' was already submitted in harvest '{harvest_id}'.")
-            # Check for changes
-            has_changes = existing_doc.metadata.arc_hash != content_hash
+            # Compare normalized content, not the stored hash field, so documents
+            # written before volatile-field stripping still compare correctly.
+            has_changes = calculate_arc_content_hash(existing_doc.arc_content) != content_hash
 
             # Start with existing metadata
             metadata = existing_doc.metadata
             metadata.last_seen = now
             metadata.last_harvest_id = harvest_id
 
+            old_hash = metadata.arc_hash
+            metadata.arc_hash = content_hash
+
             if has_changes:
-                logger.info("ARC %s changed (old: %s, new: %s)", arc_id, metadata.arc_hash[:8], content_hash[:8])
-                metadata.arc_hash = content_hash
+                logger.info("ARC %s changed (old: %s, new: %s)", arc_id, old_hash[:8], content_hash[:8])
                 metadata.last_changed = now
                 metadata.last_changed_harvest_id = harvest_id
                 metadata.status = ArcLifecycleStatus.ACTIVE  # Reset to active if it was missing/deleted
