@@ -45,8 +45,8 @@ class DocumentStore(ABC):
         self,
         rdi: str,
         arc_content: dict[str, Any],
+        identifier: str,
         harvest_id: str | None = None,
-        identifier: str | None = None,
     ) -> ArcStoreResult:
         """Store ARC with change detection.
 
@@ -54,8 +54,7 @@ class DocumentStore(ABC):
             rdi: Research Data Infrastructure identifier
             arc_content: RO-Crate JSON content
             harvest_id: Optional harvest run identifier
-            identifier: Pre-extracted RO-Crate identifier to avoid re-parsing.
-                        Extracted from arc_content when omitted.
+            identifier: Pre-extracted RO-Crate identifier (required).
 
         Returns:
             ArcStoreResult containing status and flags

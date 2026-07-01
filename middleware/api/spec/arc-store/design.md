@@ -18,10 +18,12 @@ JSON, selecting the configured backend, and recording CouchDB events. The store
 itself only handles Git.
 
 ```text
-ArcManager.sync_to_gitlab(rdi, arc_json_string)
-    ├─→ ARC.from_rocrate_json_string(arc_json_string)  ← arctrl parse
-    └─→ ArcStore.create_or_update(arc_id, arc_obj)
+ArcManager.sync_to_gitlab(rdi, arc)
+    ├─→ parse_rocrate(arc)
+    ├─→ ARC.from_rocrate_json_string(...)     ← arctrl parse (worker only)
+    └─→ ArcStore.create_or_update(arc_id, arc_obj, rdi=...)
             └─→ GitRepo  (or GitlabApi — deprecated)
+                    ├─→ RemoteGitProvider.ensure_repo_exists(arc_id, metadata)
                     ├─→ clone / pull
                     ├─→ write ISA files via arctrl WriteAsync
                     └─→ commit + push
@@ -46,6 +48,62 @@ Git errors are classified at push time:
 - `is_soft_git_error(exc)` → repo or branch not found; treated as permanent
 - All other `GitCommandError` → permanent
 
+## GitLab Project Metadata
+
+When `GitRepo` talks to GitLab via `GitlabGitProvider`, repository creation is
+not limited to the hashed `arc_id`. The provider also sets human-readable GitLab
+project fields so operators can browse ARC repositories without decoding hashes.
+
+`GitProjectMetadata` (`remote_git_provider.py`) carries the display fields.
+`GitRepo` builds it via ``git_project_metadata_from_arc(arc, rdi, arc_id=...)``
+before calling ``GitlabGitProvider.ensure_repo_exists``. The GitLab project title
+is ``{sanitized arc.Identifier} - {rdi}`` so the `name` stays unique within a
+group when the same ARC identifier appears under different RDIs; the repository
+path remains ``arc_id``. Display fields ``Title`` (RO-Crate ``name``) and
+``Description`` are read from the arctrl object. ``display_name`` is always a
+string; when ``Title`` is absent, the helper passes ``""``.
+Structural RO-Crate validation on ingest is specified in `arc-manager/`.
+
+| Field | Required | Source |
+| ----- | -------- | ------ |
+| `rdi` | yes | originating RDI name passed into the sync |
+| `identifier` | yes | ``{sanitized arc.Identifier} - {rdi}`` — GitLab project `name` |
+| `display_name` | yes (`""` if absent) | ``arc.Title`` (RO-Crate ``name``) |
+| `description` | no | ``arc.Description`` |
+
+Mapping to GitLab project attributes:
+
+| GitLab attribute | Where it appears | Value |
+| ---------------- | ---------------- | ----- |
+| `path` | clone URL / slug | `arc_id` (stable) |
+| `name` | project list title | `identifier` (`{sanitized arc.Identifier} - {rdi}`) |
+| `description` | truncated preview in list; full text on project home | RO-Crate `name`, then `description` (when present) |
+| `topics` | tag chips in list | `rdi` in GitLab-topic form (lowercased; see below) |
+
+GitLab has no separate subtitle field. The project `description` is the right
+place for the longer RO-Crate title and summary: operators see a one-line preview
+in the group project list, and the full text on the project overview page.
+
+### RDI names and GitLab topics
+
+By the time `GitlabGitProvider` runs, `rdi` has already passed API validation
+(see `arc-upload/` and `harvest-arc-upload/`). ``GitRepoConfig.rdi_gitlab_topics``
+maps middleware RDI names to instance topic labels when they differ (for example
+``edal`` → ``e!DAL``). Mapped values are sent to GitLab as-is. Unmapped RDIs use
+``normalize_gitlab_topic`` only when ``known_rdis`` is empty (tests); otherwise
+``Config`` and ``WorkerConfig`` require exactly one non-empty mapping entry per
+``known_rdis`` key at startup.
+
+Each sync sets the project ``topics`` list to exactly one resolved RDI topic,
+replacing any previous topics on that project.
+
+`ensure_repo_exists` applies metadata on project creation. For projects that
+already exist, `apply_gitlab_project_metadata` compares the current GitLab values
+and calls `project.save()` only when something changed.
+
+Non-GitLab providers (`FileSystemGitProvider`) accept the same ``GitProjectMetadata``
+parameter for a uniform interface but ignore it when creating bare repos.
+
 ## Key Decisions
 
 1. **`ArcStoreTransientError` vs permanent errors**
@@ -69,3 +127,12 @@ Git errors are classified at push time:
    — Credential injection is isolated in `RemoteGitProvider` so that `GitRepo`
    itself has no knowledge of authentication schemes. SSH and HTTPS credential
    formats differ; the provider abstracts that difference.
+
+5. **Hashed `path`, identifier as GitLab title**
+   — See the GitLab Project Metadata table above. `rdi` is a topic tag, not
+   duplicated in the project description.
+
+6. **GitLab metadata refreshed on every sync**
+   — Existing GitLab projects created before metadata support only stored the
+   hash as the project name. Re-syncing an ARC updates title, description, and
+   RDI topic when they differ, so operators do not need a one-off migration.

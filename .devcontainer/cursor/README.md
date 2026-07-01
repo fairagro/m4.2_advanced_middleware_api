@@ -45,6 +45,36 @@ These run once per devcontainer create (not on every shell):
 `scripts/load-env.sh` is sourced from `~/.bashrc` and only handles PATH, aliases, and
 environment variables (including SOPS decryption when needed).
 
+## SOPS in the editor
+
+Devcontainers install `signageos.signageos-vscode-sops` (`@signageos/vscode-sops`).
+It is published on Open VSX and works in both Cursor and VS Code. Encrypted files
+(see `.sops.yaml`) are edited in-place; the CLI `sops` binary is on `PATH` in the
+container image.
+
+## Ruff extension (Cursor)
+
+`charliermarsh.ruff` is **not** listed in `devcontainer.json` extensions because
+Cursor's marketplace UI can hang forever on "Installing" (dependency cycle between
+`ms-python.python`, Pylance, and `anysphere.cursorpyright`; see
+[astral-sh/ruff-vscode#943](https://github.com/astral-sh/ruff-vscode/issues/943)).
+
+`postCreateCommand` runs `scripts/install-cursor-ruff-extension.sh`, which installs
+Ruff via the Cursor remote CLI. If that fails, formatting and linting still work via:
+
+```bash
+uv run ruff check middleware/
+uv run ruff format middleware/
+# or
+./scripts/quality-fix.sh
+```
+
+Manual install (inside the container):
+
+```bash
+bash scripts/install-cursor-ruff-extension.sh
+```
+
 For a **local clone outside devcontainers**, run once after `uv sync`:
 
 ```bash

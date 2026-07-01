@@ -2,6 +2,7 @@
 
 import asyncio
 import http
+import json
 import ssl
 from collections.abc import AsyncGenerator
 from pathlib import Path
@@ -39,6 +40,15 @@ _ARC_RESPONSE = {
     },
     "events": [],
 }
+
+
+def _rocrate_dict(identifier: str = "mock-arc") -> dict[str, Any]:
+    """Minimal valid RO-Crate payload for client tests."""
+    return {
+        "@context": "https://w3id.org/ro/crate/1.1/context",
+        "@graph": [{"@id": "./", "identifier": identifier}],
+    }
+
 
 _HARVEST_RESPONSE: dict[str, str | None | dict] = {
     "client_id": "test-client",
@@ -229,7 +239,7 @@ async def test_create_or_update_arc_with_dict(client_config: Config) -> None:
         return_value=httpx.Response(http.HTTPStatus.OK, json=_ARC_RESPONSE)
     )
     async with ApiClient(client_config) as client:
-        response = await client.create_or_update_arc(rdi="test-rdi", arc={"id": "mock-arc"})
+        response = await client.create_or_update_arc(rdi="test-rdi", arc=_rocrate_dict())
     assert isinstance(response, ArcResult)
 
 
@@ -241,7 +251,7 @@ async def test_create_or_update_arc_with_json_string(client_config: Config) -> N
         return_value=httpx.Response(http.HTTPStatus.OK, json=_ARC_RESPONSE)
     )
     async with ApiClient(client_config) as client:
-        response = await client.create_or_update_arc(rdi="test-rdi", arc='{"id": "mock-arc"}')
+        response = await client.create_or_update_arc(rdi="test-rdi", arc=json.dumps(_rocrate_dict()))
     assert route.called
     assert isinstance(response, ArcResult)
     assert response.arc_id == "arc-123"
@@ -252,7 +262,7 @@ async def test_create_or_update_arc_with_invalid_json_string(client_config: Conf
     """Test create_or_update_arc with an invalid JSON string."""
     async with ApiClient(client_config) as client:
         with pytest.raises(ApiClientError, match="Invalid JSON string provided for ARC"):
-            await client.create_or_update_arc(rdi="test-rdi", arc='{"id": "mock-arc"')
+            await client.create_or_update_arc(rdi="test-rdi", arc='{"@context":')
 
 
 @pytest.mark.asyncio
@@ -290,6 +300,14 @@ async def test_create_or_update_arc_invalid_response(client_config: Config) -> N
     )
     async with ApiClient(client_config) as client:
         with pytest.raises(ApiClientError, match="Invalid ARC response"):
+            await client.create_or_update_arc(rdi="test-rdi", arc=_rocrate_dict("mock"))
+
+
+@pytest.mark.asyncio
+async def test_create_or_update_arc_invalid_rocrate(client_config: Config) -> None:
+    """Test create_or_update_arc rejects structurally invalid RO-Crate JSON."""
+    async with ApiClient(client_config) as client:
+        with pytest.raises(ApiClientError, match="Invalid RO-Crate JSON"):
             await client.create_or_update_arc(rdi="test-rdi", arc={"id": "mock"})
 
 
@@ -301,12 +319,46 @@ async def test_create_or_update_arc_sends_correct_headers(client_config: Config)
         return_value=httpx.Response(http.HTTPStatus.OK, json=_ARC_RESPONSE)
     )
     async with ApiClient(client_config) as client:
-        await client.create_or_update_arc(rdi="test", arc={"id": "mock-arc"})
+        await client.create_or_update_arc(rdi="test", arc=_rocrate_dict())
 
     assert route.called
     req = route.calls.last.request
     assert req.headers["accept"] == "application/json"
     assert req.headers["content-type"] == "application/json"
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_create_or_update_arc_serializes_rocrate_wire_aliases(client_config: Config) -> None:
+    """ARC upload JSON must use @context and @graph, not Python field names."""
+    route = respx.post(f"{client_config.api_url}v3/arcs").mock(
+        return_value=httpx.Response(http.HTTPStatus.OK, json=_ARC_RESPONSE)
+    )
+    async with ApiClient(client_config) as client:
+        await client.create_or_update_arc(rdi="test-rdi", arc=_rocrate_dict())
+
+    body = json.loads(route.calls.last.request.content.decode())
+    assert "@context" in body["arc"]
+    assert "@graph" in body["arc"]
+    assert "context" not in body["arc"]
+    assert "graph" not in body["arc"]
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_submit_arc_in_harvest_serializes_rocrate_wire_aliases(client_config: Config) -> None:
+    """Harvest ARC upload JSON must use @context and @graph wire aliases."""
+    route = respx.post(f"{client_config.api_url}v3/harvests/harvest-456/arcs").mock(
+        return_value=httpx.Response(http.HTTPStatus.OK, json=_ARC_RESPONSE)
+    )
+    async with ApiClient(client_config) as client:
+        await client.submit_arc_in_harvest("harvest-456", arc=_rocrate_dict())
+
+    body = json.loads(route.calls.last.request.content.decode())
+    assert "@context" in body["arc"]
+    assert "@graph" in body["arc"]
+    assert "context" not in body["arc"]
+    assert "graph" not in body["arc"]
 
 
 # ---------------------------------------------------------------------------
@@ -499,7 +551,7 @@ async def test_submit_arc_in_harvest(client_config: Config) -> None:
         return_value=httpx.Response(http.HTTPStatus.OK, json=_ARC_RESPONSE)
     )
     async with ApiClient(client_config) as client:
-        response = await client.submit_arc_in_harvest("harvest-456", arc={"id": "mock-arc"})
+        response = await client.submit_arc_in_harvest("harvest-456", arc=_rocrate_dict())
     assert isinstance(response, ArcResult)
     assert response.arc_id == "arc-123"
 
@@ -513,6 +565,14 @@ async def test_submit_arc_in_harvest_invalid_response(client_config: Config) -> 
     )
     async with ApiClient(client_config) as client:
         with pytest.raises(ApiClientError, match="Invalid ARC response"):
+            await client.submit_arc_in_harvest("harvest-456", arc=_rocrate_dict("mock"))
+
+
+@pytest.mark.asyncio
+async def test_submit_arc_in_harvest_invalid_rocrate(client_config: Config) -> None:
+    """Test submit_arc_in_harvest rejects structurally invalid RO-Crate JSON."""
+    async with ApiClient(client_config) as client:
+        with pytest.raises(ApiClientError, match="Invalid RO-Crate JSON"):
             await client.submit_arc_in_harvest("harvest-456", arc={"id": "mock"})
 
 
@@ -524,7 +584,7 @@ async def test_submit_arc_in_harvest_with_json_string(client_config: Config) -> 
         return_value=httpx.Response(http.HTTPStatus.OK, json=_ARC_RESPONSE)
     )
     async with ApiClient(client_config) as client:
-        response = await client.submit_arc_in_harvest("harvest-456", arc='{"id": "mock-arc"}')
+        response = await client.submit_arc_in_harvest("harvest-456", arc=json.dumps(_rocrate_dict()))
     assert route.called
     assert isinstance(response, ArcResult)
     assert response.arc_id == "arc-123"
@@ -535,7 +595,7 @@ async def test_submit_arc_in_harvest_with_invalid_json_string(client_config: Con
     """Test submit_arc_in_harvest with an invalid JSON string."""
     async with ApiClient(client_config) as client:
         with pytest.raises(ApiClientError, match="Invalid JSON string provided for ARC"):
-            await client.submit_arc_in_harvest("harvest-456", arc='{"id": "mock-arc"')
+            await client.submit_arc_in_harvest("harvest-456", arc='{"@context":')
 
 
 # ---------------------------------------------------------------------------
@@ -564,7 +624,7 @@ async def test_harvest_arcs_success(client_config: Config) -> None:
         return_value=httpx.Response(http.HTTPStatus.OK, json=completed_response)
     )
 
-    arcs = _arc_gen({"id": "arc-1"}, {"id": "arc-2"}, {"id": "arc-3"})
+    arcs = _arc_gen(_rocrate_dict("arc-1"), _rocrate_dict("arc-2"), _rocrate_dict("arc-3"))
     async with ApiClient(client_config) as client:
         result = await client.harvest_arcs("test-rdi", arcs, expected_datasets=3)
 
@@ -589,7 +649,7 @@ async def test_harvest_arcs_success_with_parallelism(client_config: Config) -> N
         return_value=httpx.Response(http.HTTPStatus.OK, json=completed_response)
     )
 
-    arcs = _arc_gen({"id": "arc-1"}, {"id": "arc-2"}, {"id": "arc-3"})
+    arcs = _arc_gen(_rocrate_dict("arc-1"), _rocrate_dict("arc-2"), _rocrate_dict("arc-3"))
     async with ApiClient(client_config) as client:
         result = await client.harvest_arcs("test-rdi", arcs)
 
@@ -614,7 +674,7 @@ async def test_harvest_arcs_uses_config_default_concurrency(client_config: Confi
         return_value=httpx.Response(http.HTTPStatus.OK, json=completed_response)
     )
 
-    arcs = _arc_gen({"id": "arc-1"}, {"id": "arc-2"}, {"id": "arc-3"})
+    arcs = _arc_gen(_rocrate_dict("arc-1"), _rocrate_dict("arc-2"), _rocrate_dict("arc-3"))
     async with ApiClient(client_config) as client:
         result = await client.harvest_arcs("test-rdi", arcs)
 
@@ -664,7 +724,8 @@ async def test_harvest_arcs_continues_on_item_error(client_config: Config) -> No
     )
 
     async with ApiClient(client_config) as client:
-        result = await client.harvest_arcs("test-rdi", _arc_gen({"id": "arc-1"}, {"id": "arc-2"}, {"id": "arc-3"}))
+        arcs = _arc_gen(_rocrate_dict("arc-1"), _rocrate_dict("arc-2"), _rocrate_dict("arc-3"))
+        result = await client.harvest_arcs("test-rdi", arcs)
 
     assert isinstance(result, HarvestResult)
     assert route_submit.call_count == EXPECTED_ARC_UPLOADS
@@ -672,7 +733,7 @@ async def test_harvest_arcs_continues_on_item_error(client_config: Config) -> No
     assert not cancel_route.called
     assert len(result.errors) == 1
     assert result.errors[0].error_type == HarvestErrorType.SUBMISSION_FAILED
-    assert result.errors[0].arc_id is None
+    assert result.errors[0].arc_id == "arc-1"
     assert "HTTP error 400" in result.errors[0].message
 
 
@@ -698,7 +759,7 @@ async def test_harvest_arcs_cancels_on_catastrophic_error(client_config: Config)
 
     async with ApiClient(client_config) as client:
         with pytest.raises(ApiClientError, match="HTTP error 409"):
-            await client.harvest_arcs("test-rdi", _arc_gen({"id": "arc-1"}))
+            await client.harvest_arcs("test-rdi", _arc_gen(_rocrate_dict("arc-1")))
 
     assert fail_route.called
 
@@ -760,8 +821,8 @@ async def test_harvest_arcs_with_json_string(client_config: Config) -> None:
     )
 
     arcs = _arc_gen(
-        '{"id": "arc-1-string"}',
-        {"id": "arc-2-dict"},
+        json.dumps(_rocrate_dict("arc-1-string")),
+        _rocrate_dict("arc-2-dict"),
         ARC.from_arc_investigation(ArcInvestigation.create(identifier="test", title="Test")),
     )
     async with ApiClient(client_config) as client:
@@ -807,7 +868,7 @@ async def test_harvest_arcs_cancel_failure_does_not_mask_original_error(client_c
 
     async with ApiClient(client_config) as client:
         with pytest.raises(ApiClientError, match="HTTP error 409"):
-            await client.harvest_arcs("test-rdi", _arc_gen({"id": "arc-1"}))
+            await client.harvest_arcs("test-rdi", _arc_gen(_rocrate_dict("arc-1")))
 
 
 @pytest.mark.asyncio
@@ -855,7 +916,7 @@ async def test_harvest_arcs_all_exceptions_retrieved_when_multiple_tasks_catastr
         with pytest.raises(ApiClientError, match="HTTP error 409"):
             await client.harvest_arcs(
                 "test-rdi",
-                _arc_gen({"id": "arc-1"}, {"id": "arc-2"}, {"id": "arc-3"}),
+                _arc_gen(_rocrate_dict("arc-1"), _rocrate_dict("arc-2"), _rocrate_dict("arc-3")),
             )
 
     assert fail_route.called
@@ -892,7 +953,7 @@ async def test_harvest_arcs_500_is_submission_failed(client_config: Config) -> N
     async with ApiClient(client_config) as client:
         result = await client.harvest_arcs(
             "test-rdi",
-            _arc_gen({"id": "arc-1"}, {"id": "arc-2"}, {"id": "arc-3"}),
+            _arc_gen(_rocrate_dict("arc-1"), _rocrate_dict("arc-2"), _rocrate_dict("arc-3")),
         )
 
     assert complete_route.called
@@ -929,7 +990,7 @@ async def test_harvest_arcs_502_is_submission_failed(client_config: Config) -> N
     )
 
     async with ApiClient(client_config) as client:
-        result = await client.harvest_arcs("test-rdi", _arc_gen({"id": "arc-1"}, {"id": "arc-2"}))
+        result = await client.harvest_arcs("test-rdi", _arc_gen(_rocrate_dict("arc-1"), _rocrate_dict("arc-2")))
 
     assert complete_route.called
     assert not fail_route.called

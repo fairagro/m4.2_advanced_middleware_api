@@ -6,13 +6,14 @@ from typing import Annotated
 from pydantic import BaseModel, Field
 
 from ..common.models import ApiResponse, ArcLifecycleStatus, ArcStatus, HarvestStatus
+from ..common.rocrate import RoCratePayload
 
 
 class CreateArcRequest(BaseModel):
     """Request model for creating or updating a single ARC."""
 
     rdi: Annotated[str, Field(description="Research Data Infrastructure identifier")]
-    arc: Annotated[dict, Field(description="ARC definition in RO-Crate JSON format")]
+    arc: Annotated[RoCratePayload, Field(description="ARC definition in RO-Crate JSON format")]
 
 
 class BaseStatusResponse(BaseModel):
@@ -49,7 +50,7 @@ class SubmitHarvestArcRequest(BaseModel):
     """
 
     arc: Annotated[
-        dict,
+        RoCratePayload,
         Field(
             description=(
                 "ARC definition in RO-Crate JSON format. "

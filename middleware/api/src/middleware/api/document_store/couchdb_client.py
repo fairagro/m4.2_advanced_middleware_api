@@ -399,15 +399,10 @@ class CouchDBClient:
     def _get_session(self) -> aiohttp.ClientSession:
         """Return the shared aiohttp session, creating it on first call."""
         if self._session is None:
-            auth = (
-                aiohttp.BasicAuth(self._user, self._password)
-                if self._user is not None and self._password is not None
-                else None
-            )
-            self._session = aiohttp.ClientSession(
-                auth=auth,
-                headers={"Content-Type": "application/json"},
-            )
+            headers: dict[str, str] = {"Content-Type": "application/json"}
+            if self._user is not None and self._password is not None:
+                headers["Authorization"] = aiohttp.encode_basic_auth(self._user, self._password)
+            self._session = aiohttp.ClientSession(headers=headers)
         return self._session
 
     async def create_index(self, fields: list[str], name: str | None = None) -> None:

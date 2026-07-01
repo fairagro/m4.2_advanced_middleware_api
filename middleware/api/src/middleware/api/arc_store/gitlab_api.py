@@ -312,7 +312,13 @@ class GitlabApi(ArcStore):
                     )
 
     # -------------------------- Create/Update --------------------------
-    async def _create_or_update(self, arc_id: str, arc: ARC) -> None:
+    async def _create_or_update(
+        self,
+        arc_id: str,
+        arc: ARC,
+        *,
+        rdi: str,  # noqa: ARG002
+    ) -> None:
         logger.debug("Creating/updating ARC %s in GitLab", arc_id)
 
         project = await self._run_in_executor(self._get_or_create_project, arc_id)

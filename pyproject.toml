@@ -27,6 +27,9 @@ dev = [
   "ggshield>=1.51.0",
   "respx>=0.23.1",
   "testcontainers>=4.14.2",
+  # Starlette TestClient (FastAPI API tests) uses httpx2 when installed; avoids
+  # StarletteDeprecationWarning. Production api_client still uses httpx + respx.
+  "httpx2>=2.4.0",
 ]
 
 [tool.uv.sources]
@@ -122,7 +125,7 @@ disallow_untyped_defs = true
 disallow_incomplete_defs = true
 explicit_package_bases = true
 namespace_packages = true
-mypy_path = "middleware/api/src:middleware/api_client/src:middleware/shared/src"
+mypy_path = "middleware/api/src:middleware/api_client/src:middleware/shared/src:middleware/api/tests/unit:middleware/api_client/tests:middleware/shared/tests"
 
 # Exclude directories from type checking
 exclude = [
@@ -135,6 +138,17 @@ exclude = [
   ".pytest_cache",
   ".mypy_cache",
   ".ruff_cache",
+  ".*/tests/conftest\\.py$",
+  ".*/tests/.+/conftest\\.py$",
+]
+
+[tool.pyright]
+# IDE import resolution (Pylance / BasedPyright); mirrors mypy_path and pylint source-roots.
+extraPaths = [
+  "middleware/api/src",
+  "middleware/api/tests/unit",
+  "middleware/api_client/tests",
+  "middleware/shared/tests",
 ]
 
 # Docstring-Regeln aktivieren, damit es wie pylint C0114/15/16 meckert
@@ -228,6 +242,9 @@ ignore = [".venv", "venv", ".git", "__pycache__", "build", "dist"]
 ignore-patterns = ["^\\..*", ".*\\.egg-info"]
 # Fail if the score is below 8.0
 fail-under = 8.0
+
+[tool.pylint.main]
+source-roots = "middleware/api/src,middleware/api/tests/unit,middleware/api_client/tests,middleware/shared/tests"
 
 [tool.pylint.messages_control]
 # Disable checks that are already covered by ruff

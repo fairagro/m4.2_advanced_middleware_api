@@ -60,7 +60,7 @@ async def test_create_or_update_no_changes(gitlab_api: Any) -> None:
     gitlab_api._get_or_create_project = lambda _arc_id: project  # noqa: SLF001
     gitlab_api._compute_arc_hash = lambda _path: "dummyhash"  # noqa: SLF001
 
-    await gitlab_api.create_or_update("arc1", arc)
+    await gitlab_api.create_or_update("arc1", arc, rdi="test-rdi")
     project.commits.create.assert_not_called()
 
 
@@ -80,7 +80,7 @@ async def test_create_or_update_with_changes(gitlab_api: Any) -> None:
     gitlab_api._get_or_create_project = lambda _arc_id: project  # noqa: SLF001
     gitlab_api._compute_arc_hash = lambda _path: "newhash"  # noqa: SLF001
 
-    await gitlab_api.create_or_update("arc1", arc)
+    await gitlab_api.create_or_update("arc1", arc, rdi="test-rdi")
     project.commits.create.assert_called_once()
     args, _kwargs = project.commits.create.call_args
     actions = args[0]["actions"]

@@ -14,6 +14,15 @@ from pydantic import SecretStr
 
 from middleware.api.arc_store.config import GitRepoConfig
 from middleware.api.arc_store.git_repo import GitContext, GitContextConfig, GitRepo, is_soft_git_error
+from middleware.api.arc_store.remote_git_provider import GitProjectMetadata
+
+_TEST_GIT_METADATA = GitProjectMetadata(
+    rdi="test-rdi",
+    arc_id="test_arc_id",
+    identifier="test_arc",
+    display_name="",
+)
+_TEST_RDI = "test-rdi"
 
 
 @pytest.fixture
@@ -196,7 +205,11 @@ async def test_create_or_update(git_repo: GitRepo, tmp_path: Path) -> None:
             # Ensure path property mocks correctly
             type(mock_ctx_instance).path = PropertyMock(return_value=str(fake_repo_path))
 
-            await git_repo._create_or_update(arc_id, arc)
+            with patch(
+                "middleware.api.arc_store.git_repo.git_project_metadata_from_arc",
+                return_value=_TEST_GIT_METADATA,
+            ):
+                await git_repo._create_or_update(arc_id, arc, rdi=_TEST_RDI)
 
             # Check cleanup
             assert not (fake_repo_path / "junk.txt").exists()

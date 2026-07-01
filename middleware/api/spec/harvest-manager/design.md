@@ -11,9 +11,8 @@ API endpoint
     └─→ HarvestManager
             ├─→ DocumentStore.create_harvest
             ├─→ DocumentStore.get_harvest
-            ├─→ DocumentStore.update_harvest          (transition_harvest)
-            ├─→ DocumentStore.increment_harvest_statistics
-            └─→ DocumentStore.finalize_harvest
+            ├─→ DocumentStore.get_harvest_statistics  (at terminal transition)
+            └─→ DocumentStore.update_harvest          (transition_harvest)
 ```
 
 ## Key Decisions

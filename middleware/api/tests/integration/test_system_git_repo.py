@@ -51,6 +51,7 @@ def git_repo_config(git_server_root: Path, git_repo_cache_dir: Path, oid: x509.O
             "group": "test-group",
             "branch": "main",
             "cache_dir": str(git_repo_cache_dir),
+            "rdi_gitlab_topics": {"rdi-1": "rdi-1"},
         },
         "celery": {
             "broker_url": "memory://",

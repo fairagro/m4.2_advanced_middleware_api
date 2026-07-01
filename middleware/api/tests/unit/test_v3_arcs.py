@@ -42,13 +42,7 @@ def test_create_or_update_arc_v3_success(client: TestClient, cert: str, middlewa
 
     rocrate = {
         "@context": "https://w3id.org/ro/crate/1.1/context",
-        "@graph": [
-            {
-                "@id": "./",
-                "@type": "Dataset",
-                "identifier": "ARC-001",
-            }
-        ],
+        "@graph": [{"@id": "./", "identifier": "ARC-001"}],
     }
 
     with (
@@ -103,7 +97,13 @@ def test_create_or_update_arc_v3_rdi_not_authorized(client: TestClient, cert: st
                 "content-type": "application/json",
                 "accept": "application/json",
             },
-            json={"rdi": "rdi-1", "arc": {"dummy": "crate"}},
+            json={
+                "rdi": "rdi-1",
+                "arc": {
+                    "@context": "https://w3id.org/ro/crate/1.1/context",
+                    "@graph": [{"@id": "./", "identifier": "ARC-001"}],
+                },
+            },
         )
         assert r.status_code == http.HTTPStatus.FORBIDDEN
 

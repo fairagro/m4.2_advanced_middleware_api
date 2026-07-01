@@ -18,6 +18,7 @@ from middleware.api.arc_store import ArcStore
 from middleware.api.document_store import DocumentStore
 from middleware.api.document_store.arc_document import ArcMetadata
 from middleware.shared.api_models.common.models import ArcOperationResult
+from middleware.shared.api_models.common.rocrate import RoCratePayload
 
 from .arc_manager import ArcManager
 from .config import BusinessLogicConfig
@@ -155,7 +156,7 @@ class BusinessLogic:
         await self.shutdown()
 
     async def create_or_update_arc(
-        self, rdi: str, arc: dict[str, Any], client_id: str | None, harvest_id: str | None = None
+        self, rdi: str, arc: RoCratePayload | dict[str, Any], client_id: str | None, harvest_id: str | None = None
     ) -> ArcOperationResult:
         """Create or update an ARC with fast CouchDB storage and async GitLab sync.
 
@@ -181,7 +182,7 @@ class BusinessLogic:
 
         return await self._arc_manager.create_or_update_arc(rdi, arc, client_id, harvest_id)
 
-    async def sync_to_gitlab(self, rdi: str, arc: dict[str, Any]) -> None:
+    async def sync_to_gitlab(self, rdi: str, arc: RoCratePayload | dict[str, Any]) -> None:
         """Synchronize ARC to GitLab storage.
 
         This method performs the slow GitLab sync operation. It must only be

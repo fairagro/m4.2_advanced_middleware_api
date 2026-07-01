@@ -7,24 +7,22 @@ Processing is delegated to `arc-manager/`.
 ## Requirements
 
 - [ ] Accept a JSON request body conforming to `CreateArcRequest` containing
-      `rdi` and `arc` (RO-Crate JSON).
-- [ ] Validate that `rdi` is in the list of authorized RDIs for this client;
-      return `403` if not authorized.
+      `rdi` and `arc` as a `RoCratePayload` (see `arc-manager/` RoCrate wire
+      contract).
+- [ ] Validate that `rdi` is known to the deployment and authorized for this
+      client; return `400` if the RDI is not recognized, `403` if not authorized.
 - [ ] Delegate to the ARC ingestion pipeline (see `arc-manager/`)
       without a harvest context.
 - [ ] On success, fetch the updated ARC metadata from the document store and
       return an `ArcResponse` containing `client_id`, `arc_id`, `status`,
       `metadata` (hash, timestamps), and the current event log.
-- [ ] Return `500` when metadata cannot be retrieved after a successful store.
-- [ ] Map `InvalidJsonSemanticError` to `422 Unprocessable Entity`.
-- [ ] Map `BusinessLogicError` to `500 Internal Server Error`.
+- [ ] Apply HTTP status mapping per `arc-manager/` HTTP caller contract.
 
 ## Edge Cases
 
-`rdi` not in authorized list → `403` before calling business logic.
+`rdi` not in deployment `known_rdis` → `400` before calling business logic.
 
-ARC stored successfully but metadata fetch returns `None` → `500`; this indicates
-an internal inconsistency.
+`rdi` known but not authorized for this client → `403` before calling business logic.
 
-Invalid RO-Crate JSON (missing `identifier`) → `422`, business logic raises
-`InvalidJsonSemanticError`.
+For RO-Crate validation failures, arctrl parse failures in the worker, and
+generic pipeline errors, see `arc-manager/` edge cases and HTTP caller contract.

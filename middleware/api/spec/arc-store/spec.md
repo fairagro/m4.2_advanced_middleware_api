@@ -18,6 +18,28 @@ recording CouchDB events, and handling retry logic.
       missing permissions, corrupt ARC data).
 - [ ] Support arbitrary Git servers — the backend must not be tied to GitLab
       specifically.
+- [ ] Keep the Git repository path (slug) equal to `arc_id` so clone URLs remain
+      stable regardless of display metadata.
+- [ ] When the remote backend is GitLab via `GitRepo`, set the project title to
+      ``{sanitized Identifier} - {rdi}`` so the GitLab `name` stays unique within
+      the group namespace when the same ARC identifier is used across RDIs. The
+      repository path remains ``arc_id`` (see above).
+- [ ] When the remote backend is GitLab via `GitRepo`, set the project description
+      from the RO-Crate root dataset `name` and `description` when present. Do
+      not repeat `identifier`, `rdi`, or `arc_id` in the description — those are
+      already visible as the project title, topic tag, and repository path
+      respectively.
+- [ ] When the remote backend is GitLab via `GitRepo`, set a project topic (tag)
+      to the originating `rdi` name so operators can filter repositories by RDI
+      (RDI allowlisting is enforced by the API; see `arc-upload/` and
+      `harvest-arc-upload/`). Use ``git_repo.rdi_gitlab_topics`` when the GitLab
+      instance topic catalog uses a different label (for example ``edal`` →
+      ``e!DAL``). When ``known_rdis`` is non-empty, the mapping must contain
+      exactly one non-empty entry per known RDI. Each sync replaces the project
+      topic list with that single RDI topic.
+- [ ] When a GitLab project already exists for an `arc_id` (via `GitRepo`), update
+      its title, description, and RDI topic on the next sync if they differ from
+      the values derived from the current ARC payload.
 
 ## Edge Cases
 
@@ -26,3 +48,10 @@ Transient network error → raise retryable error; caller decides whether to ret
 Permanent backend error (auth failure, forbidden) → raise permanent error; no retry.
 
 ARC identifier missing or malformed → raise permanent error before any Git operation.
+
+RO-Crate root dataset has no `name` → pass `display_name=""`; the GitLab project
+description omits the name line but may still include the RO-Crate `description`.
+
+Unknown or disallowed `rdi` → rejected by the API before Git sync (see
+`arc-upload/` and `harvest-arc-upload/`). The Git store only receives
+already-validated `rdi` values.

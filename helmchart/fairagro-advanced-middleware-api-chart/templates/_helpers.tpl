@@ -25,9 +25,22 @@ If release name contains chart name it will be used as a full name.
 
 {{/*
 Create chart name and version as used by the chart label.
+
+Kubernetes label values are limited to 63 characters and must start/end with
+an alphanumeric character. The chart name alone is 38 characters, so long
+pre-release versions (e.g. 2.8.1-rc.datahub-nicify.1) exceed the limit when
+combined. Use a shorter chart alias only when the full label would overflow;
+never blind-truncate the combined string (that drops the run suffix and can
+leave a trailing '.').
 */}}
 {{- define "fairagro-advanced-middleware-api-chart.chart" -}}
-{{- printf "%s-%s" .Chart.Name .Chart.Version | replace "+" "_" | trunc 63 | trimSuffix "-" }}
+{{- $version := .Chart.Version | replace "+" "_" -}}
+{{- $chartLabelName := .Chart.Name -}}
+{{- if gt (len (printf "%s-%s" $chartLabelName $version)) 63 -}}
+{{- $chartLabelName = "fairagro-amw-api-chart" -}}
+{{- end -}}
+{{- $label := printf "%s-%s" $chartLabelName $version -}}
+{{- $label | trunc 63 | trimSuffix "-" | trimSuffix "." | trimSuffix "_" | trimSuffix "-" | trimSuffix "." | trimSuffix "_" -}}
 {{- end }}
 
 {{/*

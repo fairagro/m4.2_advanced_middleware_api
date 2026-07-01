@@ -9,6 +9,13 @@ git_repo:
   url: https://datahub-dev.ipk-gatersleben.de
   group: FAIRagro-advanced-middleware-dev
   max_workers: 10
+  rdi_gitlab_topics:
+    bonares: bonares
+    edal: "e!DAL"
+    edaphobase: edaphobase
+    openagrar: openagrar
+    publisso: publisso
+    thunen_atlas: thunen_atlas
 known_rdis:
 - bonares
 - edal

@@ -59,7 +59,7 @@ class TestArcStoreWrapperMethods:
         with patch.object(store, "_create_or_update") as mock_impl:
             mock_impl.side_effect = ArcStoreError("Test error")
             with pytest.raises(ArcStoreError):
-                await store.create_or_update("test_id", MagicMock())
+                await store.create_or_update("test_id", MagicMock(), rdi="test-rdi")
 
     @pytest.mark.asyncio
     @staticmethod
