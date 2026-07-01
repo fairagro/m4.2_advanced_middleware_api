@@ -327,6 +327,40 @@ async def test_create_or_update_arc_sends_correct_headers(client_config: Config)
     assert req.headers["content-type"] == "application/json"
 
 
+@pytest.mark.asyncio
+@respx.mock
+async def test_create_or_update_arc_serializes_rocrate_wire_aliases(client_config: Config) -> None:
+    """ARC upload JSON must use @context and @graph, not Python field names."""
+    route = respx.post(f"{client_config.api_url}v3/arcs").mock(
+        return_value=httpx.Response(http.HTTPStatus.OK, json=_ARC_RESPONSE)
+    )
+    async with ApiClient(client_config) as client:
+        await client.create_or_update_arc(rdi="test-rdi", arc=_rocrate_dict())
+
+    body = json.loads(route.calls.last.request.content.decode())
+    assert "@context" in body["arc"]
+    assert "@graph" in body["arc"]
+    assert "context" not in body["arc"]
+    assert "graph" not in body["arc"]
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_submit_arc_in_harvest_serializes_rocrate_wire_aliases(client_config: Config) -> None:
+    """Harvest ARC upload JSON must use @context and @graph wire aliases."""
+    route = respx.post(f"{client_config.api_url}v3/harvests/harvest-456/arcs").mock(
+        return_value=httpx.Response(http.HTTPStatus.OK, json=_ARC_RESPONSE)
+    )
+    async with ApiClient(client_config) as client:
+        await client.submit_arc_in_harvest("harvest-456", arc=_rocrate_dict())
+
+    body = json.loads(route.calls.last.request.content.decode())
+    assert "@context" in body["arc"]
+    assert "@graph" in body["arc"]
+    assert "context" not in body["arc"]
+    assert "graph" not in body["arc"]
+
+
 # ---------------------------------------------------------------------------
 # Generic _get / error paths
 # ---------------------------------------------------------------------------

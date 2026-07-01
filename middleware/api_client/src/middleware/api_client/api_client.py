@@ -471,7 +471,7 @@ class ApiClient:
         return await self._request_with_retries(
             "POST",
             path,
-            content=body.model_dump_json(),
+            content=body.model_dump_json(by_alias=True),
             headers={"content-type": "application/json"},
         )
 
@@ -496,7 +496,7 @@ class ApiClient:
         return await self._request_with_retries(
             "PATCH",
             path,
-            content=body.model_dump_json(),
+            content=body.model_dump_json(by_alias=True),
             headers={"content-type": "application/json"},
         )
 
