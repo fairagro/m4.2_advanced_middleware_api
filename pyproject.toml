@@ -127,6 +127,9 @@ explicit_package_bases = true
 namespace_packages = true
 mypy_path = "middleware/api/src:middleware/api_client/src:middleware/shared/src:middleware/api/tests/unit:middleware/api_client/tests:middleware/shared/tests"
 
+# Run scope is always the full tree: `uv run mypy --config-file pyproject.toml middleware/`
+# (pre-commit, CI reusable-code-quality.yml, IDE mypy-type-checker.reportingScope=workspace).
+
 # Exclude directories from type checking
 exclude = [
   ".venv",

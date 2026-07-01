@@ -39,6 +39,11 @@
   "sops.binPath": "sops",
 
   "mypy.configFile": "pyproject.toml",
+  "mypy-type-checker.args": [
+    "--config-file",
+    "${workspaceFolder}/pyproject.toml"
+  ],
+  "mypy-type-checker.reportingScope": "workspace",
 
   // Ruff Extension Settings - use same execution mode as pre-commit and CI
   "ruff.path": ["uv", "run", "ruff"],
