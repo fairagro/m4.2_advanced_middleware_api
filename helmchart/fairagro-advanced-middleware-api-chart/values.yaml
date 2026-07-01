@@ -17,9 +17,9 @@ config:
       bonares: bonares
       edal: "e!DAL"
       edaphobase: edaphobase
-      openagrar: openagrar
-      publisso: publisso
-      thunen_atlas: thunen_atlas
+      openagrar: "OpenAgrar Repository"
+      publisso: Publisso
+      thunen_atlas: "Thunen Atlas"
   known_rdis:
     - bonares
     - edal
