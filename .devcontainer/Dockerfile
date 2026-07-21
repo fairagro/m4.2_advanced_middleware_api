@@ -3,7 +3,7 @@
 #
 # All tool versions are pinned for reproducibility.
 
-FROM mcr.microsoft.com/devcontainers/base:2.1.10-trixie
+FROM mcr.microsoft.com/devcontainers/base:2.1.11-trixie
 
 SHELL ["/bin/bash", "-o", "pipefail", "-c"]
 
