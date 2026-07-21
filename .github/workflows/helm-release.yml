@@ -180,7 +180,7 @@ jobs:
               ${{ env.CHART_NAME }}-${{ env.CHART_VERSION }}.tgz
             ```
 
-            *(The `appVersion` and container image tag are defined in the chart's `values.yaml`.)*
+            *(The container image tag is the chart's `appVersion`, set at package time from the corresponding Docker image release. Override with `--set api.image.tag=...` if needed.)*
           files: ${{ steps.package_chart.outputs.chart-package }}
           draft: true
           prerelease: false

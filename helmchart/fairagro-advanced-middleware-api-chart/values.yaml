@@ -73,7 +73,7 @@ api:
   image:
     repository: zalf/fairagro-advanced-middleware-api
     pullPolicy: IfNotPresent
-    tag: ""
+    # tag: omitted — defaults to Chart.AppVersion (set at package time via --app-version)
   service:
     type: ClusterIP
     port: 8000
@@ -137,7 +137,7 @@ celery:
   image:
     repository: zalf/fairagro-advanced-middleware-api
     pullPolicy: IfNotPresent
-    tag: ""
+    # tag: omitted — defaults to api.image.tag or Chart.AppVersion
   worker:
     enabled: true
     replicaCount: 1
