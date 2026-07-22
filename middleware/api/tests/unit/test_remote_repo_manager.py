@@ -15,12 +15,14 @@ from gitlab.exceptions import GitlabAuthenticationError, GitlabGetError
 
 from middleware.api.arc_store import ArcStoreError
 from middleware.api.arc_store.remote_git_provider import (
+    GITLAB_PROJECT_DESCRIPTION_MAX_LEN,
     GITLAB_PROJECT_NAME_MAX_LEN,
     FileSystemGitProvider,
     GitlabGitProvider,
     GitProjectMetadata,
     RemoteGitProvider,
     apply_gitlab_project_metadata,
+    build_gitlab_project_description,
     build_gitlab_project_name,
     git_project_metadata_from_arc,
     normalize_gitlab_topic,
@@ -342,6 +344,20 @@ def test_build_gitlab_project_name_truncates_long_identifier() -> None:
     result = build_gitlab_project_name(long_id, rdi)
     assert result.endswith(f" - {rdi}")
     assert len(result) <= GITLAB_PROJECT_NAME_MAX_LEN
+
+
+def test_build_gitlab_project_description_truncates_to_gitlab_limit() -> None:
+    """GitLab rejects descriptions over 2000 characters; truncate instead of failing sync."""
+    metadata = GitProjectMetadata(
+        rdi="edal",
+        arc_id="abc123hash",
+        identifier="study - edal",
+        display_name="Short title",
+        description="d" * 3000,
+    )
+    result = build_gitlab_project_description(metadata)
+    assert len(result) == GITLAB_PROJECT_DESCRIPTION_MAX_LEN
+    assert result.startswith("Short title\n")
 
 
 def test_sanitize_gitlab_project_name_replaces_slashes() -> None:

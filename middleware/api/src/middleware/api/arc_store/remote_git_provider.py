@@ -24,6 +24,7 @@ logger = logging.getLogger(__name__)
 
 _GITLAB_TOPIC_RE = re.compile(r"[^a-z0-9-]+")
 GITLAB_PROJECT_NAME_MAX_LEN = 255
+GITLAB_PROJECT_DESCRIPTION_MAX_LEN = 2000
 _GITLAB_NAME_MAX_LEN = GITLAB_PROJECT_NAME_MAX_LEN
 _GITLAB_NAME_UNSAFE_RE = re.compile(r"[\r\n\t]+")
 _GITLAB_API_NAME_INVALID_RE = re.compile(r"[^a-zA-Z0-9_.+ \-]+", re.UNICODE)
@@ -138,13 +139,20 @@ def desired_gitlab_topics(metadata: GitProjectMetadata) -> list[str] | None:
 
 
 def build_gitlab_project_description(metadata: GitProjectMetadata) -> str:
-    """Build the GitLab project description shown in list preview and on the project home page."""
+    """Build the GitLab project description shown in list preview and on the project home page.
+
+    GitLab rejects project descriptions longer than 2000 characters; truncate to
+    stay within that API limit (same pattern as project name length handling).
+    """
     lines: list[str] = []
     if metadata.display_name:
         lines.append(metadata.display_name)
     if metadata.description:
         lines.append(metadata.description)
-    return "\n".join(lines)
+    description = "\n".join(lines)
+    if len(description) > GITLAB_PROJECT_DESCRIPTION_MAX_LEN:
+        return description[:GITLAB_PROJECT_DESCRIPTION_MAX_LEN]
+    return description
 
 
 def apply_gitlab_project_metadata(

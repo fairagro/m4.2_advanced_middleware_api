@@ -52,6 +52,10 @@ ARC identifier missing or malformed → raise permanent error before any Git ope
 RO-Crate root dataset has no `name` → pass `display_name=""`; the GitLab project
 description omits the name line but may still include the RO-Crate `description`.
 
+RO-Crate `name` + `description` exceed GitLab's 2000-character project
+description limit → truncate the combined description to 2000 characters before
+create/update. Do not fail the sync solely because the ARC summary is long.
+
 Unknown or disallowed `rdi` → rejected by the API before Git sync (see
 `arc-upload/` and `harvest-arc-upload/`). The Git store only receives
 already-validated `rdi` values.

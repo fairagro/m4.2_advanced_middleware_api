@@ -77,7 +77,7 @@ Mapping to GitLab project attributes:
 | ---------------- | ---------------- | ----- |
 | `path` | clone URL / slug | `arc_id` (stable) |
 | `name` | project list title | `identifier` (`{sanitized arc.Identifier} - {rdi}`) |
-| `description` | truncated preview in list; full text on project home | RO-Crate `name`, then `description` (when present) |
+| `description` | truncated preview in list; full text on project home | RO-Crate `name`, then `description` (when present), truncated to GitLab's 2000-character limit |
 | `topics` | tag chips in list | `rdi` in GitLab-topic form (lowercased; see below) |
 
 GitLab has no separate subtitle field. The project `description` is the right
