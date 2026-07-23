@@ -240,6 +240,7 @@ Before generating or modifying code, read the relevant spec folders:
 - **[`middleware/api/spec/arc-store/`](middleware/api/spec/arc-store/)** — `ArcStore` Git-backend interface: `GitRepo` (primary) and `GitlabApi` (deprecated), error classification, and credential injection.
 - **[`middleware/api/spec/document-store/`](middleware/api/spec/document-store/)** — CouchDB persistence layer, race-condition-safe initialization, and content-hash idempotency.
 - **[`middleware/api/spec/harvest-manager/`](middleware/api/spec/harvest-manager/)** — Harvest run lifecycle, ownership validation, and progress tracking.
+- **[`middleware/api/spec/admission-control/`](middleware/api/spec/admission-control/)** — Process-local concurrent request admission: at capacity → `503` + `Retry-After` (probes exempt).
 
 **API Client component** (`middleware/api_client/spec/`) — client internals:
 
@@ -260,6 +261,7 @@ The `spec-to-code` agent uses this table in Step 3 to locate affected code.
 | `middleware/api/spec/harvest-manager/` | `middleware/api/src/middleware/api/business_logic/harvest_manager.py` |
 | `middleware/api/spec/arc-upload/` | `middleware/api/src/middleware/api/api/v3/arcs.py` |
 | `middleware/api/spec/harvest-arc-upload/` | `middleware/api/src/middleware/api/api/v3/harvests.py` |
+| `middleware/api/spec/admission-control/` | `middleware/api/src/middleware/api/api/admission_control.py` (planned), `fastapi_app.py` |
 | `middleware/api_client/spec/harvest-client/` | `middleware/api_client/src/middleware/api_client/api_client.py`, `models.py` |
 | `spec/` (project-level) | Follow links in **Architecture & Design** above to the affected component. |
 
