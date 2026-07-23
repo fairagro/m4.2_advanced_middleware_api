@@ -14,7 +14,8 @@ signal (and the API emits logs) instead of a transport-level `ConnectError`.
 - [ ] When the limit is already reached, respond with `503 Service Unavailable`
       without running the route handler.
 - [ ] Include a `Retry-After` response header on every admission-rejected
-      `503`, with a positive delay in seconds.
+      `503`, with a positive delay in seconds chosen uniformly at random from
+      `1` through a configured inclusive upper bound (to spread client retries).
 - [ ] Log every admission rejection at warning level, including the configured
       limit and the current in-flight count.
 - [ ] Exempt liveness, readiness, and health probe paths from the limit so

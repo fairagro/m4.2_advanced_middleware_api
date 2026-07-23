@@ -214,7 +214,7 @@ class Api:
                 retry_after_seconds=self._config.retry_after_seconds,
             )
             logger.info(
-                "Admission control enabled: max_concurrent_requests=%d retry_after_seconds=%d",
+                "Admission control enabled: max_concurrent_requests=%d retry_after_seconds=1..%d (jittered)",
                 max_concurrent,
                 self._config.retry_after_seconds,
             )

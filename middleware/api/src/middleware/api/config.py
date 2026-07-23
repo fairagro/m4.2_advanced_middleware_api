@@ -70,7 +70,11 @@ class Config(ConfigBase):
     retry_after_seconds: Annotated[
         int,
         Field(
-            description="Retry-After header value (seconds) on admission-control 503 responses",
+            description=(
+                "Upper bound (seconds, inclusive) for the Retry-After header on "
+                "admission-control 503 responses. The actual delay is chosen uniformly "
+                "at random from 1..retry_after_seconds to spread client retries."
+            ),
             ge=1,
         ),
     ] = 5

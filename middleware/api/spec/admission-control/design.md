@@ -34,11 +34,12 @@ wired from `fastapi_app.py`. Config fields live on the API `Config` model
    logged, retryable HTTP outcome that the api-client already treats as
    transient for ARC POSTs (`502`/`503`/`504`).
 
-3. **Fixed `Retry-After` from config (seconds)**
-   — A configured positive integer is simple, deterministic for tests, and
-   enough for clients that honour the header later. Dynamic estimates of drain
-   time are deferred; the client already applies exponential backoff when it
-   retries without reading the header.
+3. **Jittered `Retry-After` within a configured upper bound**
+   — A fixed identical delay would synchronize clients that honour
+   `Retry-After` and recreate a thundering herd. Each rejection picks an
+   integer delay uniformly from `1..retry_after_seconds` (inclusive). The
+   config value is therefore a maximum, not a constant. Clients that ignore
+   the header still rely on their own backoff.
 
 4. **Probe paths are exempt and do not take slots**
    — Kubernetes liveness/readiness must remain answerable under admission
@@ -53,7 +54,7 @@ wired from `fastapi_app.py`. Config fields live on the API `Config` model
 
 6. **Opt-in via config (disabled when unset / ≤ 0)**
    — Existing deployments must not change behaviour until operators set
-   `max_concurrent_requests` (name finalized in config). `retry_after_seconds`
+   `max_concurrent_requests`. `retry_after_seconds` (jitter upper bound)
    applies only when limiting is enabled.
 
 ## Relationship to other specs

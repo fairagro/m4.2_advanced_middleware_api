@@ -10,7 +10,11 @@ import pytest
 from fastapi import FastAPI
 from httpx import ASGITransport
 
-from middleware.api.api.admission_control import AdmissionControlMiddleware, is_admission_exempt_path
+from middleware.api.api.admission_control import (
+    AdmissionControlMiddleware,
+    choose_retry_after_seconds,
+    is_admission_exempt_path,
+)
 from middleware.api.api.fastapi_app import Api
 from middleware.api.business_logic import BusinessLogic
 from middleware.api.config import Config
@@ -104,8 +108,12 @@ async def test_under_limit_succeeds() -> None:
 
 
 @pytest.mark.asyncio
-async def test_at_capacity_returns_503_with_retry_after() -> None:
-    """Surplus requests receive 503 and Retry-After without running the handler."""
+async def test_at_capacity_returns_503_with_retry_after(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Surplus requests receive 503 and a jittered Retry-After without running the handler."""
+    monkeypatch.setattr(
+        "middleware.api.api.admission_control.choose_retry_after_seconds",
+        lambda _max: 9,
+    )
     app = _app_with_admission(max_concurrent=1, retry_after=9)
     transport = ASGITransport(app=app, raise_app_exceptions=False)
 
@@ -119,6 +127,14 @@ async def test_at_capacity_returns_503_with_retry_after() -> None:
     assert second.status_code == HTTPStatus.SERVICE_UNAVAILABLE
     assert second.headers["retry-after"] == "9"
     assert second.json()["detail"] == "Service temporarily unavailable"
+
+
+def test_choose_retry_after_seconds_stays_within_bounds() -> None:
+    """Jittered Retry-After values are in the inclusive range 1..max."""
+    samples = {choose_retry_after_seconds(5) for _ in range(40)}
+    assert samples <= {1, 2, 3, 4, 5}
+    assert min(samples) >= 1
+    assert max(samples) <= 5  # noqa: PLR2004
 
 
 @pytest.mark.asyncio

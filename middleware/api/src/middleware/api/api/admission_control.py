@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import secrets
 from http import HTTPStatus
 from typing import Final
 
@@ -28,6 +29,14 @@ def is_admission_exempt_path(path: str) -> bool:
     return normalized in _EXEMPT_PATHS
 
 
+def choose_retry_after_seconds(max_seconds: int) -> int:
+    """Pick a positive Retry-After delay uniformly from ``1..max_seconds``."""
+    if max_seconds <= 0:
+        msg = "max_seconds must be positive"
+        raise ValueError(msg)
+    return secrets.randbelow(max_seconds) + 1
+
+
 class AdmissionControlMiddleware:
     """Reject surplus requests with ``503`` + ``Retry-After`` when at capacity.
 
@@ -47,7 +56,7 @@ class AdmissionControlMiddleware:
         Args:
             app: Downstream ASGI application.
             max_concurrent_requests: Positive max in-flight non-exempt requests.
-            retry_after_seconds: Positive ``Retry-After`` value for rejections.
+            retry_after_seconds: Inclusive upper bound for jittered ``Retry-After``.
         """
         if max_concurrent_requests <= 0:
             msg = "max_concurrent_requests must be positive when admission control is enabled"
@@ -75,17 +84,19 @@ class AdmissionControlMiddleware:
 
         async with self._lock:
             if self._in_flight >= self._max_concurrent_requests:
+                retry_after = choose_retry_after_seconds(self._retry_after_seconds)
                 logger.warning(
-                    "Admission rejected: at capacity (in_flight=%d, limit=%d) path=%s method=%s",
+                    "Admission rejected: at capacity (in_flight=%d, limit=%d) path=%s method=%s retry_after=%d",
                     self._in_flight,
                     self._max_concurrent_requests,
                     path,
                     scope.get("method", "?"),
+                    retry_after,
                 )
                 response = JSONResponse(
                     status_code=HTTPStatus.SERVICE_UNAVAILABLE,
                     content={"detail": "Service temporarily unavailable"},
-                    headers={"Retry-After": str(self._retry_after_seconds)},
+                    headers={"Retry-After": str(retry_after)},
                 )
                 await response(scope, receive, send)
                 return
