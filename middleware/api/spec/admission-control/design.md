@@ -3,8 +3,8 @@
 ## Module Overview
 
 A process-wide ASGI/Starlette middleware sits in front of FastAPI routing. It
-tracks in-flight non-exempt requests with an asyncio semaphore sized from API
-config. Rejected requests never reach routers or business logic.
+tracks in-flight non-exempt requests using an in-memory counter guarded by an
+``asyncio.Lock``. Rejected requests never reach routers or business logic.
 
 ```text
 Client
