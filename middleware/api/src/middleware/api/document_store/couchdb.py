@@ -2,11 +2,12 @@
 
 import logging
 import uuid
+from collections.abc import Callable
 from datetime import UTC, datetime
-from typing import Any
+from typing import Any, cast
 
 from middleware.api.document_store.config import CouchDBConfig
-from middleware.api.document_store.content_hash import calculate_arc_content_hash
+from middleware.api.document_store.content_hash import RoCrateContent, calculate_arc_content_hash
 from middleware.api.document_store.couchdb_client import CouchDBClient
 from middleware.api.utils import calculate_arc_id
 from middleware.shared.api_models.common.models import ArcEventType, ArcLifecycleStatus, HarvestStatus
@@ -39,6 +40,118 @@ class CouchDB(DocumentStore):
         self._db_name = config.db_name
         self._client = CouchDBClient.from_config(config)
 
+    @staticmethod
+    def _new_arc_metadata(content_hash: str, now: datetime, harvest_id: str | None) -> ArcMetadata:
+        """Build metadata for a first-seen ARC document."""
+        return ArcMetadata(
+            arc_hash=content_hash,
+            status=ArcLifecycleStatus.ACTIVE,
+            first_seen=now,
+            last_seen=now,
+            last_changed=now,
+            first_harvest_id=harvest_id,
+            last_harvest_id=harvest_id,
+            last_changed_harvest_id=harvest_id,
+            events=[
+                ArcEvent(timestamp=now, type=ArcEventType.ARC_CREATED, message="ARC first seen", harvest_id=harvest_id)
+            ],
+        )
+
+    @staticmethod
+    def _reject_conflicting_harvest_resubmit(
+        *,
+        identifier: str,
+        harvest_id: str | None,
+        last_harvest_id: str | None,
+        has_changes: bool,
+    ) -> None:
+        """Raise when the same ARC id was already stored in this harvest with different content."""
+        if harvest_id and last_harvest_id == harvest_id and has_changes:
+            raise DuplicateArcError(
+                f"ARC '{identifier}' was already submitted in harvest '{harvest_id}' with different content."
+            )
+
+    def _merge_existing_arc_metadata(
+        self,
+        existing_doc: ArcDocument,
+        *,
+        identifier: str,
+        content_hash: str,
+        now: datetime,
+        harvest_id: str | None,
+    ) -> tuple[ArcMetadata, bool]:
+        """Update metadata for an existing ARC; enforce harvest-local identity."""
+        # Compare normalized content, not the stored hash field, so documents
+        # written before volatile-field stripping still compare correctly.
+        has_changes = calculate_arc_content_hash(existing_doc.arc_content) != content_hash
+        self._reject_conflicting_harvest_resubmit(
+            identifier=identifier,
+            harvest_id=harvest_id,
+            last_harvest_id=existing_doc.metadata.last_harvest_id,
+            has_changes=has_changes,
+        )
+
+        metadata = existing_doc.metadata
+        metadata.last_seen = now
+        metadata.last_harvest_id = harvest_id
+
+        old_hash = metadata.arc_hash
+        metadata.arc_hash = content_hash
+
+        if has_changes:
+            logger.info("ARC %s changed (old: %s, new: %s)", identifier, old_hash[:8], content_hash[:8])
+            metadata.last_changed = now
+            metadata.last_changed_harvest_id = harvest_id
+            metadata.status = ArcLifecycleStatus.ACTIVE
+            metadata.missing_since = None
+            metadata.events.append(
+                ArcEvent(
+                    timestamp=now,
+                    type=ArcEventType.ARC_UPDATED,
+                    message="ARC content updated",
+                    harvest_id=harvest_id,
+                )
+            )
+            return metadata, True
+
+        logger.debug("ARC content unchanged")
+        if metadata.status in {ArcLifecycleStatus.MISSING, ArcLifecycleStatus.DELETED}:
+            metadata.status = ArcLifecycleStatus.ACTIVE
+            metadata.missing_since = None
+            metadata.events.append(
+                ArcEvent(
+                    timestamp=now,
+                    type=ArcEventType.ARC_RESTORED,
+                    message="ARC reappeared after being missing/deleted",
+                    harvest_id=harvest_id,
+                )
+            )
+        return metadata, False
+
+    @staticmethod
+    def _harvest_identity_validator(
+        *,
+        harvest_id: str,
+        identifier: str,
+        content_hash: str,
+    ) -> Callable[[dict[str, Any]], None]:
+        """Return a save-time validator for harvest-local ARC identity (TOCTOU-safe)."""
+
+        def _check_duplicate_on_retry(fresh_doc: dict[str, Any]) -> None:
+            fresh_metadata = fresh_doc.get("metadata") or {}
+            if fresh_metadata.get("last_harvest_id") != harvest_id:
+                return
+            fresh_content = fresh_doc.get("arc_content")
+            if isinstance(fresh_content, dict):
+                fresh_hash = calculate_arc_content_hash(cast(RoCrateContent, fresh_content))
+                if fresh_hash == content_hash:
+                    return
+            raise DuplicateArcError(
+                f"ARC '{identifier}' was already submitted in harvest '{harvest_id}' with different content."
+            )
+
+        return _check_duplicate_on_retry
+
     async def store_arc(
         self,
         rdi: str,
@@ -52,91 +165,30 @@ class CouchDB(DocumentStore):
 
         arc_id = calculate_arc_id(identifier, rdi)
         doc_id = f"arc_{arc_id}"
-
         content_hash = calculate_arc_content_hash(arc_content)
         now = datetime.now(UTC)
 
-        # Check existing document
         existing_doc_dict = await self._client.get_document(doc_id)
         existing_doc = ArcDocument.model_validate(existing_doc_dict) if existing_doc_dict else None
 
-        has_changes = True  # Default to true for new
-
         if existing_doc is None:
             is_new = True
+            has_changes = True
             logger.info("ARC %s is new (hash: %s)", arc_id, content_hash[:8])
-            metadata = ArcMetadata(
-                arc_hash=content_hash,
-                status=ArcLifecycleStatus.ACTIVE,
-                first_seen=now,
-                last_seen=now,
-                last_changed=now,
-                first_harvest_id=harvest_id,
-                last_harvest_id=harvest_id,
-                last_changed_harvest_id=harvest_id,
-                events=[
-                    ArcEvent(
-                        timestamp=now, type=ArcEventType.ARC_CREATED, message="ARC first seen", harvest_id=harvest_id
-                    )
-                ],
-            )
+            metadata = self._new_arc_metadata(content_hash, now, harvest_id)
         else:
             is_new = False
-            # Reject duplicate submissions within the same harvest run.
-            if harvest_id and existing_doc.metadata.last_harvest_id == harvest_id:
-                raise DuplicateArcError(f"ARC '{identifier}' was already submitted in harvest '{harvest_id}'.")
-            # Compare normalized content, not the stored hash field, so documents
-            # written before volatile-field stripping still compare correctly.
-            has_changes = calculate_arc_content_hash(existing_doc.arc_content) != content_hash
+            metadata, has_changes = self._merge_existing_arc_metadata(
+                existing_doc,
+                identifier=identifier,
+                content_hash=content_hash,
+                now=now,
+                harvest_id=harvest_id,
+            )
 
-            # Start with existing metadata
-            metadata = existing_doc.metadata
-            metadata.last_seen = now
-            metadata.last_harvest_id = harvest_id
-
-            old_hash = metadata.arc_hash
-            metadata.arc_hash = content_hash
-
-            if has_changes:
-                logger.info("ARC %s changed (old: %s, new: %s)", arc_id, old_hash[:8], content_hash[:8])
-                metadata.last_changed = now
-                metadata.last_changed_harvest_id = harvest_id
-                metadata.status = ArcLifecycleStatus.ACTIVE  # Reset to active if it was missing/deleted
-                metadata.missing_since = None
-
-                # Append update event
-                metadata.events.append(
-                    ArcEvent(
-                        timestamp=now,
-                        type=ArcEventType.ARC_UPDATED,
-                        message="ARC content updated",
-                        harvest_id=harvest_id,
-                    )
-                )
-            else:
-                logger.debug("ARC %s unchanged", arc_id)
-                # Optionally log "not changed" event, or just update timestamps?
-                # For now, we don't log every "seen but unchanged" to avoid spam,
-                # but we DO update last_seen (already done above).
-
-                # If it was marked MISSING/DELETED but is now back (restored), we should note that
-                if metadata.status in {ArcLifecycleStatus.MISSING, ArcLifecycleStatus.DELETED}:
-                    metadata.status = ArcLifecycleStatus.ACTIVE
-                    metadata.missing_since = None
-                    metadata.events.append(
-                        ArcEvent(
-                            timestamp=now,
-                            type=ArcEventType.ARC_RESTORED,
-                            message="ARC reappeared after being missing/deleted",
-                            harvest_id=harvest_id,
-                        )
-                    )
-
-        # Trim events (keep last max_event_log_size)
         if len(metadata.events) > self._config.max_event_log_size:
             metadata.events = metadata.events[-self._config.max_event_log_size :]
 
-        # Create/Update document
         doc = ArcDocument(
             doc_id=doc_id,
             doc_rev=existing_doc.doc_rev if existing_doc else None,
@@ -144,28 +196,18 @@ class CouchDB(DocumentStore):
             arc_content=arc_content,
             metadata=metadata,
         )
-        # Serialize to a plain dict for CouchDB:
-        # - by_alias=True: maps doc_id→"_id" and doc_rev→"_rev" (CouchDB field names)
-        # - exclude_none=True: omits "_rev" when None (required for new documents; CouchDB
-        #   rejects a PUT with "_rev": null)
-        # - mode="json": converts datetime/enum values to JSON-safe primitives
         doc_data = doc.model_dump(mode="json", by_alias=True, exclude_none=True)
 
-        # Build a validator closure that re-checks the duplicate invariant on the
-        # freshly fetched document inside save_document's retry loop.  This closes
-        # the TOCTOU window between the initial get_document call above and the
-        # actual CouchDB write: if a concurrent request landed between those two
-        # points, the retry re-fetches the doc and the validator sees the updated
-        # last_harvest_id before writing.
-        def _check_duplicate_on_retry(fresh_doc: dict[str, Any]) -> None:
-            if harvest_id and fresh_doc.get("metadata", {}).get("last_harvest_id") == harvest_id:
-                raise DuplicateArcError(f"ARC '{identifier}' was already submitted in harvest '{harvest_id}'.")
-
-        await self._client.save_document(
-            doc_id,
-            doc_data,
-            pre_save_validator=_check_duplicate_on_retry if harvest_id else None,
+        pre_save_validator = (
+            self._harvest_identity_validator(
+                harvest_id=harvest_id,
+                identifier=identifier,
+                content_hash=content_hash,
+            )
+            if harvest_id
+            else None
         )
+        await self._client.save_document(doc_id, doc_data, pre_save_validator=pre_save_validator)
 
         return ArcStoreResult(arc_id=arc_id, is_new=is_new, has_changes=has_changes)
 

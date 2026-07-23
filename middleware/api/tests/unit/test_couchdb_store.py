@@ -306,8 +306,10 @@ async def test_store_arc_timestamp_only_not_a_change(store: CouchDB, mock_client
 
 
 @pytest.mark.asyncio
-async def test_store_arc_duplicate_in_same_harvest_raises(store: CouchDB, mock_client_instance: MagicMock) -> None:
-    """store_arc raises DuplicateArcError when the same ARC is re-submitted in the same harvest."""
+async def test_store_arc_identical_resubmit_same_harvest_is_idempotent(
+    store: CouchDB, mock_client_instance: MagicMock
+) -> None:
+    """Identical ARC re-submit in the same harvest succeeds without DuplicateArcError."""
     rdi = "test_rdi"
     harvest_id = "harvest-abc"
     arc_content: RoCrateContent = {
@@ -317,33 +319,58 @@ async def test_store_arc_duplicate_in_same_harvest_raises(store: CouchDB, mock_c
     mock_client_instance.get_document.return_value = _make_existing_arc_doc(
         rdi, arc_content, last_harvest_id=harvest_id
     )
+    mock_client_instance.save_document.return_value = {"ok": True}
 
-    with pytest.raises(DuplicateArcError, match="arc_dup"):
-        await store.store_arc(rdi, arc_content, "arc_dup", harvest_id=harvest_id)
+    result = await store.store_arc(rdi, arc_content, "arc_dup", harvest_id=harvest_id)
+
+    assert result.is_new is False
+    assert result.has_changes is False
+    mock_client_instance.save_document.assert_called_once()
+
+
+@pytest.mark.asyncio
+async def test_store_arc_different_content_same_harvest_raises(store: CouchDB, mock_client_instance: MagicMock) -> None:
+    """store_arc raises DuplicateArcError when the same ARC id has different content in one harvest."""
+    rdi = "test_rdi"
+    harvest_id = "harvest-abc"
+    existing_content: RoCrateContent = {
+        "@context": "https://w3id.org/ro/crate/1.1/context",
+        "@graph": [{"@id": "./", "identifier": "arc_dup", "name": "original"}],
+    }
+    new_content: RoCrateContent = {
+        "@context": "https://w3id.org/ro/crate/1.1/context",
+        "@graph": [{"@id": "./", "identifier": "arc_dup", "name": "changed"}],
+    }
+    mock_client_instance.get_document.return_value = _make_existing_arc_doc(
+        rdi, existing_content, last_harvest_id=harvest_id
+    )
+
+    with pytest.raises(DuplicateArcError, match="different content"):
+        await store.store_arc(rdi, new_content, "arc_dup", harvest_id=harvest_id)
 
     mock_client_instance.save_document.assert_not_called()
 
 
 @pytest.mark.asyncio
-async def test_store_arc_concurrent_duplicate_detected_via_validator(
+async def test_store_arc_concurrent_conflicting_duplicate_detected_via_validator(
     store: CouchDB, mock_client_instance: MagicMock
 ) -> None:
-    """Validator passed to save_document raises DuplicateArcError for same harvest.
+    """Validator raises DuplicateArcError when a concurrent write has different content.
 
-    This test verifies the TOCTOU fix: even when the initial get_document returns a
-    doc from a *different* harvest (so the early check passes), the validator closure
-    that store_arc registers is still wired correctly and will fire with the right
-    harvest_id if called with a freshly-fetched doc that already carries the same
-    harvest_id.  We simulate this by capturing the validator from the save_document
-    call and invoking it manually with a document whose last_harvest_id matches.
+    The initial get_document returns a doc from a *previous* harvest (early check
+    passes). On retry, the validator sees the same harvest_id with conflicting
+    content and must abort.
     """
     rdi = "test_rdi"
     harvest_id = "harvest-concurrent"
     arc_content: RoCrateContent = {
         "@context": "https://w3id.org/ro/crate/1.1/context",
-        "@graph": [{"@id": "./", "identifier": "arc_concurrent"}],
+        "@graph": [{"@id": "./", "identifier": "arc_concurrent", "name": "ours"}],
     }
-    # Initial fetch returns a doc from a *previous* harvest → early check passes
+    conflicting_content: RoCrateContent = {
+        "@context": "https://w3id.org/ro/crate/1.1/context",
+        "@graph": [{"@id": "./", "identifier": "arc_concurrent", "name": "theirs"}],
+    }
     mock_client_instance.get_document.return_value = _make_existing_arc_doc(
         rdi, arc_content, last_harvest_id="harvest-previous"
     )
@@ -351,18 +378,45 @@ async def test_store_arc_concurrent_duplicate_detected_via_validator(
 
     await store.store_arc(rdi, arc_content, "arc_concurrent", harvest_id=harvest_id)
 
-    # Extract the validator that was passed to save_document
     _, kwargs = mock_client_instance.save_document.call_args
     validator = kwargs.get("pre_save_validator")
     assert validator is not None, "store_arc must pass pre_save_validator when harvest_id is set"
 
-    # Simulate: on the retry, the freshly fetched doc now carries the *same* harvest_id
-    # (because a concurrent request already wrote it).  The validator must raise.
     fresh_doc_with_concurrent_write = {
+        "arc_content": conflicting_content,
         "metadata": {"last_harvest_id": harvest_id},
     }
-    with pytest.raises(DuplicateArcError, match="arc_concurrent"):
+    with pytest.raises(DuplicateArcError, match="different content"):
         validator(fresh_doc_with_concurrent_write)
+
+
+@pytest.mark.asyncio
+async def test_store_arc_concurrent_identical_resubmit_allowed_via_validator(
+    store: CouchDB, mock_client_instance: MagicMock
+) -> None:
+    """Validator allows concurrent write when the fresh document has identical content."""
+    rdi = "test_rdi"
+    harvest_id = "harvest-concurrent"
+    arc_content: RoCrateContent = {
+        "@context": "https://w3id.org/ro/crate/1.1/context",
+        "@graph": [{"@id": "./", "identifier": "arc_concurrent"}],
+    }
+    mock_client_instance.get_document.return_value = _make_existing_arc_doc(
+        rdi, arc_content, last_harvest_id="harvest-previous"
+    )
+    mock_client_instance.save_document.return_value = {"ok": True}
+
+    await store.store_arc(rdi, arc_content, "arc_concurrent", harvest_id=harvest_id)
+
+    _, kwargs = mock_client_instance.save_document.call_args
+    validator = kwargs.get("pre_save_validator")
+    assert validator is not None
+
+    fresh_doc_identical = {
+        "arc_content": arc_content,
+        "metadata": {"last_harvest_id": harvest_id},
+    }
+    validator(fresh_doc_identical)  # must not raise
 
 
 @pytest.mark.asyncio
