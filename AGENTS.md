@@ -261,7 +261,7 @@ The `spec-to-code` agent uses this table in Step 3 to locate affected code.
 | `middleware/api/spec/harvest-manager/` | `middleware/api/src/middleware/api/business_logic/harvest_manager.py` |
 | `middleware/api/spec/arc-upload/` | `middleware/api/src/middleware/api/api/v3/arcs.py` |
 | `middleware/api/spec/harvest-arc-upload/` | `middleware/api/src/middleware/api/api/v3/harvests.py` |
-| `middleware/api/spec/admission-control/` | `middleware/api/src/middleware/api/api/admission_control.py` (planned), `fastapi_app.py` |
+| `middleware/api/spec/admission-control/` | `middleware/api/src/middleware/api/api/admission_control.py`, `fastapi_app.py` |
 | `middleware/api_client/spec/harvest-client/` | `middleware/api_client/src/middleware/api_client/api_client.py`, `models.py` |
 | `spec/` (project-level) | Follow links in **Architecture & Design** above to the affected component. |
 

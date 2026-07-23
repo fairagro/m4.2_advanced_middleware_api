@@ -11,6 +11,7 @@ import sys
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 from http import HTTPStatus
+from importlib.metadata import PackageNotFoundError, version
 from pathlib import Path
 
 from fastapi import FastAPI, Request
@@ -34,6 +35,7 @@ from ..celery_integration import (
 )
 from ..config import Config
 from ..health_service import ApiHealthService
+from .admission_control import AdmissionControlMiddleware
 from .common.dependencies import CommonApiDependencies
 from .legacy.task_status_store import LegacyTaskStatusStore
 from .tracing import setup_api_tracing
@@ -42,10 +44,8 @@ from .v2 import arcs as arcs_v2, system as system_v2, tasks as tasks_v2
 from .v3 import arcs as arcs_v3, harvests as harvests_v3, system as system_v3
 
 try:
-    from importlib.metadata import PackageNotFoundError, version
-
     __version__ = version("api")
-except (PackageNotFoundError, ImportError):
+except PackageNotFoundError:
     # Try to read from pyproject.toml as fallback (e.g. in development if not installed)
     try:
         import tomllib
@@ -205,6 +205,19 @@ class Api:
             version=__version__,
             lifespan=lifespan,
         )
+
+        max_concurrent = self._config.max_concurrent_requests
+        if max_concurrent is not None and max_concurrent > 0:
+            self._app.add_middleware(
+                AdmissionControlMiddleware,
+                max_concurrent_requests=max_concurrent,
+                retry_after_seconds=self._config.retry_after_seconds,
+            )
+            logger.info(
+                "Admission control enabled: max_concurrent_requests=%d retry_after_seconds=%d",
+                max_concurrent,
+                self._config.retry_after_seconds,
+            )
 
         # Initialize OpenTelemetry tracing and logging
         _tracing = setup_api_tracing(self._app, self._config)

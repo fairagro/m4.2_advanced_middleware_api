@@ -16,7 +16,7 @@ Client
               └─→ at capacity → 503 + Retry-After + warning log
 ```
 
-Primary module (planned): `middleware/api/src/middleware/api/api/admission_control.py`,
+Primary module: `middleware/api/src/middleware/api/api/admission_control.py`,
 wired from `fastapi_app.py`. Config fields live on the API `Config` model
 (see Key Decisions).
 
