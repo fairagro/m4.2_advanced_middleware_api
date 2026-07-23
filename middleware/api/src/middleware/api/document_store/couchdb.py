@@ -99,7 +99,7 @@ class CouchDB(DocumentStore):
         metadata.arc_hash = content_hash
 
         if has_changes:
-            logger.info("ARC changed (old: %s, new: %s)", old_hash[:8], content_hash[:8])
+            logger.info("ARC %s changed (old: %s, new: %s)", identifier, old_hash[:8], content_hash[:8])
             metadata.last_changed = now
             metadata.last_changed_harvest_id = harvest_id
             metadata.status = ArcLifecycleStatus.ACTIVE
