@@ -48,11 +48,13 @@ harvester
    appended rather than overwriting.
 
 5. **Duplicate detection is performed client-side before the HTTP request**
-   — Submitting both duplicates would cause the server to process two ARCs
-   with the same identifier in the same harvest run, resulting in an opaque
-   conflict. Client-side detection gives an explicit `DUPLICATE` error,
-   prevents the wasted round-trip, and avoids requiring the server to handle
-   intra-harvest identity conflicts.
+   — Within one harvest batch, two different ARC payloads that share an
+   identifier are a harvester bug. Detecting them client-side yields an
+   explicit `DUPLICATE` error and avoids the round-trip. The server still
+   enforces harvest-local identity: identical re-submits (e.g. transport
+   retries) return `200`; conflicting content for the same identifier returns
+   `409` (see `harvest-arc-upload/`). Client-side detection therefore covers
+   *intra-batch* duplicates; server idempotency covers *retry* duplicates.
 
 6. **Item-level failures are non-fatal; harvest-level failures are fatal**
    — A submission failure for one ARC (e.g. server 422 on bad content) must
@@ -60,3 +62,10 @@ harvester
    catastrophic failure (e.g. 401 Unauthorized, harvest already closed) means
    no further submissions will succeed, so the harvest is aborted, marked
    `FAILED`, and the exception propagates to the caller.
+
+7. **POST ARC endpoints are retryable only after server harvest idempotency**
+   — Once `POST …/arcs` treats identical harvest re-submits as `200`, the
+   client may retry `ConnectError` (and optionally timeouts) on those POSTs
+   without risking a second object or a spurious catastrophic `409`. Conflicting
+   `409` (same identifier, different content) remains a real conflict and must
+   not be retried as success.

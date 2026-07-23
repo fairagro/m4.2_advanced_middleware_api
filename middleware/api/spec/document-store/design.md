@@ -26,13 +26,16 @@ DocumentStore
    standard CouchDB pattern for idempotent database creation; it is simpler
    and more reliable than a `HEAD`-then-`PUT` check-and-create pattern.
 
-3. **Content hash for idempotency**
+3. **Content hash for idempotency (including harvest-local identity)**
    — Comparing a SHA-256 hash of the serialized ARC JSON avoids unnecessary
    CouchDB writes and downstream Celery tasks when a client re-submits an
    unchanged ARC. The hash is stored as a field on the document. Document keys
    use `arc_id`, derived by `calculate_arc_id(identifier, rdi)` with leading and
    trailing whitespace stripped from both inputs (same normalization as
-   `arc-store/`).
+   `arc-store/`). When `harvest_id` is set and `last_harvest_id` already equals
+   that harvest, a matching hash is the idempotent success path; a differing
+   hash raises `DuplicateArcError` so a harvest cannot silently replace an ARC
+   body for the same identifier.
 
 4. **Concrete types for `_client` and `_db`**
    — Annotating `_client: CouchDB | None` and `_db: Database | None` (instead

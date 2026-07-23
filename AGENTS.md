@@ -234,9 +234,9 @@ Before generating or modifying code, read the relevant spec folders:
 
 **API component** (`middleware/api/spec/`) — api internals:
 
-- **[`middleware/api/spec/arc-upload/`](middleware/api/spec/arc-upload/)** — HTTP contract for `POST /v3/arcs`: standalone ARC submission (rdi from request body).
-- **[`middleware/api/spec/harvest-arc-upload/`](middleware/api/spec/harvest-arc-upload/)** — HTTP contract for `POST /v3/harvests/{harvest_id}/arcs`: ARC submission within a harvest run (rdi resolved from harvest).
-- **[`middleware/api/spec/arc-manager/`](middleware/api/spec/arc-manager/)** — `ArcManager.create_or_update_arc` business logic: CouchDB storage, idempotency, Celery dispatch, harvest statistics. Shared by both upload endpoints and accessible from the worker context.
+- **[`middleware/api/spec/arc-upload/`](middleware/api/spec/arc-upload/)** — HTTP contract for `POST /v3/arcs`: standalone ARC submission (rdi from request body); content-hash idempotent, retry-safe.
+- **[`middleware/api/spec/harvest-arc-upload/`](middleware/api/spec/harvest-arc-upload/)** — HTTP contract for `POST /v3/harvests/{harvest_id}/arcs`: harvest-scoped submission; identical re-submit → `200`, conflicting content → `409`.
+- **[`middleware/api/spec/arc-manager/`](middleware/api/spec/arc-manager/)** — `ArcManager.create_or_update_arc` business logic: CouchDB storage, content-hash + harvest-scoped idempotency, Celery dispatch. Shared by both upload endpoints and accessible from the worker context.
 - **[`middleware/api/spec/arc-store/`](middleware/api/spec/arc-store/)** — `ArcStore` Git-backend interface: `GitRepo` (primary) and `GitlabApi` (deprecated), error classification, and credential injection.
 - **[`middleware/api/spec/document-store/`](middleware/api/spec/document-store/)** — CouchDB persistence layer, race-condition-safe initialization, and content-hash idempotency.
 - **[`middleware/api/spec/harvest-manager/`](middleware/api/spec/harvest-manager/)** — Harvest run lifecycle, ownership validation, and progress tracking.
@@ -256,7 +256,7 @@ The `spec-to-code` agent uses this table in Step 3 to locate affected code.
 | ----------- | ---------------------- |
 | `middleware/api/spec/arc-manager/` | `middleware/api/src/middleware/api/business_logic/arc_manager.py` |
 | `middleware/api/spec/arc-store/` | `middleware/api/src/middleware/api/arc_store/git_repo.py`, `gitlab_api.py` (deprecated) |
-| `middleware/api/spec/document-store/` | `middleware/api/src/middleware/api/document_store/couchdb_client.py` |
+| `middleware/api/spec/document-store/` | `middleware/api/src/middleware/api/document_store/couchdb_client.py`, `couchdb.py` |
 | `middleware/api/spec/harvest-manager/` | `middleware/api/src/middleware/api/business_logic/harvest_manager.py` |
 | `middleware/api/spec/arc-upload/` | `middleware/api/src/middleware/api/api/v3/arcs.py` |
 | `middleware/api/spec/harvest-arc-upload/` | `middleware/api/src/middleware/api/api/v3/harvests.py` |

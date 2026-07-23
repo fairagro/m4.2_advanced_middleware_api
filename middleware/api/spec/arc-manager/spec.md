@@ -43,6 +43,26 @@ exposed as read-only properties but remain in `@graph` unchanged. See
       `harvest-arc-upload/`) decides which of these fields to expose in the
       HTTP response.
 
+## Harvest-scoped identity rules
+
+When a harvest context is provided, ARC identity within that harvest is
+stable for the duration of the run:
+
+- [ ] Re-submitting an ARC whose identifier was already recorded for this
+      harvest **with identical content** (same content hash) reports
+      `UPDATED` without writing a second document and without scheduling a
+      second background sync — the call is idempotent and safe for transport
+      retries.
+- [ ] Re-submitting an ARC whose identifier was already recorded for this
+      harvest **with different content** raises `DuplicateArcError` (mapped
+      to `DuplicateArcInHarvestError` / HTTP `409` by harvest callers). The
+      existing document must remain unchanged.
+- [ ] Never create a second ARC document for the same `(identifier, rdi)`
+      key; both success and conflict paths leave at most one object.
+
+Standalone ingest (no harvest context) continues to allow content updates
+across calls; see requirements above for `CREATED` / `UPDATED`.
+
 ## HTTP caller contract
 
 Both `arc-upload/` and `harvest-arc-upload/` map outcomes as follows (unless an
@@ -50,7 +70,9 @@ endpoint-specific rule overrides):
 
 | Condition | HTTP status |
 | --------- | ----------- |
+| Success (`CREATED` or `UPDATED`, including identical harvest re-submit) | `200 OK` |
 | Invalid RO-Crate structure (`RoCratePayload` / `InvalidJsonSemanticError`) | `422 Unprocessable Entity` |
+| Same identifier, different content in one harvest (`DuplicateArcInHarvestError`) | `409 Conflict` (harvest-arc-upload only) |
 | Unexpected pipeline error (`BusinessLogicError`) | `500 Internal Server Error` |
 | ARC stored but metadata fetch returns `None` | `500 Internal Server Error` |
 
@@ -67,10 +89,18 @@ tasks / `GIT_PUSH_FAILED` events, not as HTTP `422` to the original caller.
 RO-Crate JSON that passes API validation but cannot be parsed by arctrl →
 accepted and stored in CouchDB; Git sync fails permanently in the worker.
 
-Unchanged ARC re-submitted → no background sync scheduled; `store_arc` still
-updates `last_seen` / `last_harvest_id` on the ARC document. Re-submitting the
-same ARC twice within one harvest raises `DuplicateArcError` (HTTP `409` in
-`harvest-arc-upload/`).
+Unchanged ARC re-submitted outside a harvest → no background sync scheduled;
+`store_arc` still updates `last_seen` on the ARC document.
+
+Unchanged ARC re-submitted inside the same harvest → idempotent `UPDATED`;
+`last_seen` / `last_harvest_id` may be refreshed; no second sync; HTTP `200`.
+
+Same identifier with different content inside the same harvest →
+`DuplicateArcError` / HTTP `409`; document body and hash unchanged.
+
+Two concurrent identical submissions for the same identifier in one harvest →
+at most one document; both callers observe success (`CREATED` or `UPDATED`);
+no `DuplicateArcError`.
 
 Harvest counter increment fails → error propagates to the caller; the ARC is already
 persisted at this point.
