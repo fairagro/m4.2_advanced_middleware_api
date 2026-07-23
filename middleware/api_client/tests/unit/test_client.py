@@ -371,6 +371,26 @@ async def test_get_timeout_not_retried(client_config: Config) -> None:
     assert route.call_count == 1
 
 
+def test_format_request_error_falls_back_when_message_empty() -> None:
+    """Empty ConnectError messages fall back to the exception type name."""
+    empty = httpx.ConnectError("")
+    assert str(empty) == ""
+    formatted = ApiClient._format_request_error(empty)  # noqa: SLF001
+    assert "ConnectError" in formatted
+    assert formatted.strip() != ""
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_empty_connect_error_message_is_not_blank(client_config: Config) -> None:
+    """ApiClientError for empty ConnectError still carries a useful message."""
+    respx.post(f"{client_config.api_url}v3/harvests").mock(side_effect=httpx.ConnectError(""))
+    async with ApiClient(client_config) as client:
+        with pytest.raises(ApiClientError, match="Request failed: ConnectError") as exc_info:
+            await client.create_harvest(rdi="test-rdi")
+    assert str(exc_info.value).strip() != "Request failed:"
+
+
 @pytest.mark.asyncio
 @respx.mock
 async def test_global_max_concurrency_limits_parallel_requests(client_config: Config) -> None:

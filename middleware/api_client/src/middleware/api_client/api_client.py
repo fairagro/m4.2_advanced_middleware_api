@@ -161,6 +161,23 @@ class ApiClient:
         return False
 
     @classmethod
+    def _format_request_error(cls, error: BaseException) -> str:
+        """Return a non-empty description for a transport/request error.
+
+        ``httpx.ConnectError`` (and similar) often stringify to ``""``, which
+        produces useless log lines like ``Request error: ``. Fall back to the
+        exception type name, then ``repr``.
+        """
+        message = str(error).strip()
+        if message:
+            return message
+        type_name = type(error).__name__
+        representation = repr(error).strip()
+        if representation and representation != type_name:
+            return f"{type_name}: {representation}"
+        return type_name
+
+    @classmethod
     def _build_failure_error_message(
         cls,
         failure: httpx.HTTPStatusError | httpx.RequestError,
@@ -175,9 +192,10 @@ class ApiClient:
                 return f"Request failed after {max_retries} retries: HTTP {status_code}", status_code
             return cls._format_http_error_message(status_code, failure.response.text), status_code
 
+        detail = cls._format_request_error(failure)
         if retryable:
-            return f"Request failed after {max_retries} retries: {failure}", None
-        return f"Request failed: {failure}", None
+            return f"Request failed after {max_retries} retries: {detail}", None
+        return f"Request failed: {detail}", None
 
     @classmethod
     def _should_retry_or_raise_failure(
@@ -204,7 +222,7 @@ class ApiClient:
             if isinstance(failure, httpx.HTTPStatusError):
                 logger.warning("Transient HTTP error %d from server, will retry", failure.response.status_code)
             else:
-                logger.warning("Request error: %s. Retrying...", failure)
+                logger.warning("Request error: %s. Retrying...", cls._format_request_error(failure))
             return True
 
         msg, normalized_status_code = cls._build_failure_error_message(
