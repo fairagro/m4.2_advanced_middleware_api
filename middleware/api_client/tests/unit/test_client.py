@@ -280,14 +280,32 @@ async def test_create_or_update_arc_http_error(client_config: Config) -> None:
 
 @pytest.mark.asyncio
 @respx.mock
-async def test_create_or_update_arc_network_error(client_config: Config) -> None:
-    """Test create_or_update_arc with a network error (no retry for POST)."""
+async def test_create_or_update_arc_retries_on_connect_error(client_config: Config) -> None:
+    """ARC POST is server-idempotent: ConnectError is retried then succeeds."""
     client_config.retry_backoff_factor = 0.01
-    route = respx.post(f"{client_config.api_url}v3/arcs").mock(side_effect=httpx.ConnectError("Connection refused"))
+    client_config.max_retries = 2
+    route = respx.post(f"{client_config.api_url}v3/arcs").mock(
+        side_effect=[
+            httpx.ConnectError("Connection refused"),
+            httpx.Response(http.HTTPStatus.OK, json=_ARC_RESPONSE),
+        ]
+    )
     arc = ARC.from_arc_investigation(ArcInvestigation.create(identifier="test", title="Test"))
     async with ApiClient(client_config) as client:
+        result = await client.create_or_update_arc(rdi="test-rdi", arc=arc)
+    assert result.arc_id == _ARC_RESPONSE["arc_id"]
+    assert route.call_count == 2  # noqa: PLR2004
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_create_harvest_network_error_not_retried(client_config: Config) -> None:
+    """Non-ARC POSTs (create harvest) must not retry ConnectError."""
+    client_config.retry_backoff_factor = 0.01
+    route = respx.post(f"{client_config.api_url}v3/harvests").mock(side_effect=httpx.ConnectError("Connection refused"))
+    async with ApiClient(client_config) as client:
         with pytest.raises(ApiClientError, match="Request failed: Connection refused"):
-            await client.create_or_update_arc(rdi="test-rdi", arc=arc)
+            await client.create_harvest(rdi="test-rdi")
     assert route.call_count == 1
 
 
@@ -541,6 +559,24 @@ async def test_fail_harvest(client_config: Config) -> None:
     assert route.called
     assert isinstance(result, HarvestResult)
     assert result.status == "FAILED"
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_submit_arc_in_harvest_retries_on_connect_error(client_config: Config) -> None:
+    """Harvest ARC POST is server-idempotent: ConnectError is retried then succeeds."""
+    client_config.retry_backoff_factor = 0.01
+    client_config.max_retries = 2
+    route = respx.post(f"{client_config.api_url}v3/harvests/harvest-456/arcs").mock(
+        side_effect=[
+            httpx.ConnectError("Connection refused"),
+            httpx.Response(http.HTTPStatus.OK, json=_ARC_RESPONSE),
+        ]
+    )
+    async with ApiClient(client_config) as client:
+        result = await client.submit_arc_in_harvest("harvest-456", arc=_rocrate_dict())
+    assert result.arc_id == _ARC_RESPONSE["arc_id"]
+    assert route.call_count == 2  # noqa: PLR2004
 
 
 @pytest.mark.asyncio
@@ -965,20 +1001,24 @@ async def test_harvest_arcs_500_is_submission_failed(client_config: Config) -> N
 @pytest.mark.asyncio
 @respx.mock
 async def test_harvest_arcs_502_is_submission_failed(client_config: Config) -> None:
-    """HTTP 502/503/504 from ARC submission yields SUBMISSION_FAILED; harvest continues.
+    """Exhausted 502 retries on one ARC yield SUBMISSION_FAILED; harvest continues.
 
-    A gateway or service-unavailable error on one ARC does not mean the next
-    ARC will also fail — the API may recover mid-harvest.  The harvest continues
-    and the failed ARC is recorded as SUBMISSION_FAILED rather than aborting.
+    ARC POSTs are retried on transient gateway errors. After retries are
+    exhausted the failed ARC is recorded as SUBMISSION_FAILED rather than
+    aborting; a later ARC may still succeed.
     """
+    client_config.retry_backoff_factor = 0.01
+    client_config.max_retries = 2
+    client_config.max_concurrency = 1  # sequential so side_effect order is deterministic
     completed_response = {**_HARVEST_RESPONSE, "status": "COMPLETED", "completed_at": "2024-01-01T01:00:00Z"}
     respx.post(f"{client_config.api_url}v3/harvests").mock(
         return_value=httpx.Response(http.HTTPStatus.OK, json=_HARVEST_RESPONSE)
     )
-    # arc-1: 502, arc-2: success → 1 SUBMISSION_FAILED, harvest completes
+    # arc-1: exhaust retries on 502, arc-2: success
+    exhausted_attempts = client_config.max_retries + 1
     respx.post(f"{client_config.api_url}v3/harvests/harvest-456/arcs").mock(
         side_effect=[
-            httpx.Response(http.HTTPStatus.BAD_GATEWAY, text="gateway error"),
+            *[httpx.Response(http.HTTPStatus.BAD_GATEWAY, text="gateway error") for _ in range(exhausted_attempts)],
             httpx.Response(http.HTTPStatus.OK, json=_ARC_RESPONSE),
         ]
     )

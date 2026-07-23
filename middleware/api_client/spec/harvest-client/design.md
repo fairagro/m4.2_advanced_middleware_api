@@ -63,9 +63,10 @@ harvester
    no further submissions will succeed, so the harvest is aborted, marked
    `FAILED`, and the exception propagates to the caller.
 
-7. **POST ARC endpoints are retryable only after server harvest idempotency**
-   — Once `POST …/arcs` treats identical harvest re-submits as `200`, the
-   client may retry `ConnectError` (and optionally timeouts) on those POSTs
-   without risking a second object or a spurious catastrophic `409`. Conflicting
-   `409` (same identifier, different content) remains a real conflict and must
-   not be retried as success.
+7. **POST ARC endpoints retry transport failures**
+   — `POST /v3/arcs` and `POST /v3/harvests/{id}/arcs` are server-idempotent for
+   identical bodies, so the client retries `ConnectError` and transient gateway
+   statuses (`502`/`503`/`504`) on those paths without risking a second object.
+   Other POSTs (create/complete harvest) are not retried. Conflicting `409`
+   (same identifier, different content in one harvest) remains a real conflict
+   and is not treated as success.
