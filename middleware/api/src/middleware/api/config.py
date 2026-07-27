@@ -59,6 +59,26 @@ class Config(ConfigBase):
         Field(description="Health check feature-toggle configuration"),
     ] = HealthCheckConfig()
 
+    max_concurrent_requests: Annotated[
+        int | None,
+        Field(
+            description=(
+                "Maximum concurrent in-flight HTTP requests per API process. Unset or <= 0 disables admission control."
+            ),
+        ),
+    ] = None
+    retry_after_seconds: Annotated[
+        int,
+        Field(
+            description=(
+                "Upper bound (seconds, inclusive) for the Retry-After header on "
+                "admission-control 503 responses. The actual delay is chosen uniformly "
+                "at random from 1..retry_after_seconds to spread client retries."
+            ),
+            ge=1,
+        ),
+    ] = 5
+
     require_client_cert: Annotated[
         bool, Field(description="Require client certificate for API access (set to false for development)")
     ] = True

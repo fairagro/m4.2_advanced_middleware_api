@@ -127,8 +127,10 @@ def test_submit_arc_in_harvest_success(client: TestClient, cert: str, middleware
 
 
 @pytest.mark.unit
-def test_submit_arc_in_harvest_duplicate_returns_conflict(client: TestClient, cert: str, middleware_api: Api) -> None:
-    """submit_arc_in_harvest returns 409 when the ARC was already submitted in this harvest."""
+def test_submit_arc_in_harvest_conflicting_content_returns_conflict(
+    client: TestClient, cert: str, middleware_api: Api
+) -> None:
+    """submit_arc_in_harvest returns 409 when the same ARC id has different content in this harvest."""
     harvest_id = "harvest-123"
     mock_harvest = HarvestDocument(
         doc_id=harvest_id,
@@ -153,7 +155,7 @@ def test_submit_arc_in_harvest_duplicate_returns_conflict(client: TestClient, ce
         mock_get_harvest.return_value = mock_harvest
         mock_auth.return_value = ["rdi-1"]
         mock_create_arc.side_effect = DuplicateArcInHarvestError(
-            f"ARC 'ARC-dup' was already submitted in harvest '{harvest_id}'."
+            f"ARC 'ARC-dup' was already submitted in harvest '{harvest_id}' with different content."
         )
 
         r = client.post(

@@ -178,9 +178,9 @@ class CouchDBClient:
         *pre_save_validator* is called with the **freshly fetched** document dict
         on every attempt (including retries).  Raising from the validator aborts
         the write immediately without retrying — use this to enforce invariants
-        that must be checked against the current CouchDB state (e.g. detecting
-        duplicate submissions in the same harvest run after a concurrent write
-        has landed).
+        that must be checked against the current CouchDB state (e.g. detecting a
+        conflicting re-submission of the same ARC in one harvest after a
+        concurrent write has landed).
 
         Args:
             doc_id: Document ID

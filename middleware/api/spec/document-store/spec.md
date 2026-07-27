@@ -26,6 +26,11 @@ prefix, not by separate databases.
       `identifier` and `rdi` via `calculate_arc_id`; see `document-store/design.md`);
       return flags indicating whether the document was newly created and whether
       its content changed, based on content hash comparison.
+- [ ] When a `harvest_id` is provided and an ARC with the same `arc_id` was
+      already recorded for that harvest (`last_harvest_id` matches): if the
+      content hash is identical, treat the write as unchanged (no second
+      document, content-changed flag `false`); if the content hash differs,
+      raise `DuplicateArcError` and leave the existing document unchanged.
 - [ ] Support harvest run lifecycle operations: create, retrieve, compute statistics
       (`get_harvest_statistics`), and update harvest documents (including terminal
       status transitions).
@@ -40,10 +45,19 @@ database creation; `412 Precondition Failed` is treated as success, not an error
 ARC document already exists with identical content → the content-changed flag is
 `false`; no CouchDB write performed for the body; only timestamp fields may be updated.
 
+Same `arc_id` re-submitted in the same harvest with identical content → unchanged
+path (content-changed flag `false`); no `DuplicateArcError`.
+
+Same `arc_id` re-submitted in the same harvest with different content →
+`DuplicateArcError`; existing document body and hash remain as stored.
+
 Concurrent writes to the same ARC document (e.g. two harvest workers submitting the
 same ARC simultaneously) → the store strips the stale `_rev` from the payload,
 re-fetches the current revision on each attempt, and retries up to a configurable
 maximum (default 3) on `ConflictError` before raising `DocumentConflictError`.
+On retry, the harvest duplicate check uses the same identical-vs-conflicting
+content-hash rule as the initial path (identical → proceed as unchanged;
+conflicting → `DuplicateArcError`).
 
 Fetching a harvest by an unknown ID → the store returns nothing; callers raise
 `ResourceNotFoundError`.

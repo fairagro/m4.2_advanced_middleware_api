@@ -1,74 +1,27 @@
 """Unit tests for the ApiClient class (v3 API)."""
 
+from __future__ import annotations
+
 import asyncio
 import http
 import json
 import ssl
-from collections.abc import AsyncGenerator
 from pathlib import Path
-from typing import Any
 from unittest.mock import AsyncMock, patch
 
 import httpx
 import pytest
 import respx
 from arctrl import ARC, ArcInvestigation  # type: ignore[import-untyped]
+from client_test_support import ARC_RESPONSE, HARVEST_RESPONSE, rocrate_dict
 
 from middleware.api_client import (
     ApiClient,
     ApiClientError,
     ArcResult,
     Config,
-    HarvestErrorType,
     HarvestResult,
 )
-
-# ---------------------------------------------------------------------------
-# Helpers
-# ---------------------------------------------------------------------------
-
-_ARC_RESPONSE = {
-    "client_id": "test-client",
-    "message": "ARC processed successfully",
-    "arc_id": "arc-123",
-    "status": "created",
-    "metadata": {
-        "arc_hash": "abc123",
-        "status": "ACTIVE",
-        "first_seen": "2024-01-01T00:00:00Z",
-        "last_seen": "2024-01-01T00:00:00Z",
-    },
-    "events": [],
-}
-
-
-def _rocrate_dict(identifier: str = "mock-arc") -> dict[str, Any]:
-    """Minimal valid RO-Crate payload for client tests."""
-    return {
-        "@context": "https://w3id.org/ro/crate/1.1/context",
-        "@graph": [{"@id": "./", "identifier": identifier}],
-    }
-
-
-_HARVEST_RESPONSE: dict[str, str | None | dict] = {
-    "client_id": "test-client",
-    "message": "Harvest created",
-    "harvest_id": "harvest-456",
-    "rdi": "test-rdi",
-    "status": "RUNNING",
-    "started_at": "2024-01-01T00:00:00Z",
-    "completed_at": None,
-    "statistics": {},
-}
-
-EXPECTED_ARC_UPLOADS = 3
-
-
-@pytest.fixture
-def client_config(test_config_dict: dict) -> Config:
-    """Create a Config instance for testing."""
-    return Config.from_data(test_config_dict)
-
 
 # ---------------------------------------------------------------------------
 # Initialization
@@ -218,7 +171,7 @@ async def test_manual_close(client_config: Config) -> None:
 async def test_create_or_update_arc_success(client_config: Config) -> None:
     """Test successful create_or_update_arc with v3 endpoint."""
     route = respx.post(f"{client_config.api_url}v3/arcs").mock(
-        return_value=httpx.Response(http.HTTPStatus.OK, json=_ARC_RESPONSE)
+        return_value=httpx.Response(http.HTTPStatus.OK, json=ARC_RESPONSE)
     )
 
     arc = ARC.from_arc_investigation(ArcInvestigation.create(identifier="test-arc", title="Test ARC"))
@@ -236,10 +189,10 @@ async def test_create_or_update_arc_success(client_config: Config) -> None:
 async def test_create_or_update_arc_with_dict(client_config: Config) -> None:
     """Test create_or_update_arc with a pre-serialised dict."""
     respx.post(f"{client_config.api_url}v3/arcs").mock(
-        return_value=httpx.Response(http.HTTPStatus.OK, json=_ARC_RESPONSE)
+        return_value=httpx.Response(http.HTTPStatus.OK, json=ARC_RESPONSE)
     )
     async with ApiClient(client_config) as client:
-        response = await client.create_or_update_arc(rdi="test-rdi", arc=_rocrate_dict())
+        response = await client.create_or_update_arc(rdi="test-rdi", arc=rocrate_dict())
     assert isinstance(response, ArcResult)
 
 
@@ -248,10 +201,10 @@ async def test_create_or_update_arc_with_dict(client_config: Config) -> None:
 async def test_create_or_update_arc_with_json_string(client_config: Config) -> None:
     """Test create_or_update_arc with a JSON string."""
     route = respx.post(f"{client_config.api_url}v3/arcs").mock(
-        return_value=httpx.Response(http.HTTPStatus.OK, json=_ARC_RESPONSE)
+        return_value=httpx.Response(http.HTTPStatus.OK, json=ARC_RESPONSE)
     )
     async with ApiClient(client_config) as client:
-        response = await client.create_or_update_arc(rdi="test-rdi", arc=json.dumps(_rocrate_dict()))
+        response = await client.create_or_update_arc(rdi="test-rdi", arc=json.dumps(rocrate_dict()))
     assert route.called
     assert isinstance(response, ArcResult)
     assert response.arc_id == "arc-123"
@@ -280,14 +233,32 @@ async def test_create_or_update_arc_http_error(client_config: Config) -> None:
 
 @pytest.mark.asyncio
 @respx.mock
-async def test_create_or_update_arc_network_error(client_config: Config) -> None:
-    """Test create_or_update_arc with a network error (no retry for POST)."""
+async def test_create_or_update_arc_retries_on_connect_error(client_config: Config) -> None:
+    """ARC POST is server-idempotent: ConnectError is retried then succeeds."""
     client_config.retry_backoff_factor = 0.01
-    route = respx.post(f"{client_config.api_url}v3/arcs").mock(side_effect=httpx.ConnectError("Connection refused"))
+    client_config.max_retries = 2
+    route = respx.post(f"{client_config.api_url}v3/arcs").mock(
+        side_effect=[
+            httpx.ConnectError("Connection refused"),
+            httpx.Response(http.HTTPStatus.OK, json=ARC_RESPONSE),
+        ]
+    )
     arc = ARC.from_arc_investigation(ArcInvestigation.create(identifier="test", title="Test"))
     async with ApiClient(client_config) as client:
+        result = await client.create_or_update_arc(rdi="test-rdi", arc=arc)
+    assert result.arc_id == ARC_RESPONSE["arc_id"]
+    assert route.call_count == 2  # noqa: PLR2004
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_create_harvest_network_error_not_retried(client_config: Config) -> None:
+    """Non-ARC POSTs (create harvest) must not retry ConnectError."""
+    client_config.retry_backoff_factor = 0.01
+    route = respx.post(f"{client_config.api_url}v3/harvests").mock(side_effect=httpx.ConnectError("Connection refused"))
+    async with ApiClient(client_config) as client:
         with pytest.raises(ApiClientError, match="Request failed: Connection refused"):
-            await client.create_or_update_arc(rdi="test-rdi", arc=arc)
+            await client.create_harvest(rdi="test-rdi")
     assert route.call_count == 1
 
 
@@ -300,7 +271,7 @@ async def test_create_or_update_arc_invalid_response(client_config: Config) -> N
     )
     async with ApiClient(client_config) as client:
         with pytest.raises(ApiClientError, match="Invalid ARC response"):
-            await client.create_or_update_arc(rdi="test-rdi", arc=_rocrate_dict("mock"))
+            await client.create_or_update_arc(rdi="test-rdi", arc=rocrate_dict("mock"))
 
 
 @pytest.mark.asyncio
@@ -316,10 +287,10 @@ async def test_create_or_update_arc_invalid_rocrate(client_config: Config) -> No
 async def test_create_or_update_arc_sends_correct_headers(client_config: Config) -> None:
     """Test that the correct Content-Type and Accept headers are sent."""
     route = respx.post(f"{client_config.api_url}v3/arcs").mock(
-        return_value=httpx.Response(http.HTTPStatus.OK, json=_ARC_RESPONSE)
+        return_value=httpx.Response(http.HTTPStatus.OK, json=ARC_RESPONSE)
     )
     async with ApiClient(client_config) as client:
-        await client.create_or_update_arc(rdi="test", arc=_rocrate_dict())
+        await client.create_or_update_arc(rdi="test", arc=rocrate_dict())
 
     assert route.called
     req = route.calls.last.request
@@ -332,10 +303,10 @@ async def test_create_or_update_arc_sends_correct_headers(client_config: Config)
 async def test_create_or_update_arc_serializes_rocrate_wire_aliases(client_config: Config) -> None:
     """ARC upload JSON must use @context and @graph, not Python field names."""
     route = respx.post(f"{client_config.api_url}v3/arcs").mock(
-        return_value=httpx.Response(http.HTTPStatus.OK, json=_ARC_RESPONSE)
+        return_value=httpx.Response(http.HTTPStatus.OK, json=ARC_RESPONSE)
     )
     async with ApiClient(client_config) as client:
-        await client.create_or_update_arc(rdi="test-rdi", arc=_rocrate_dict())
+        await client.create_or_update_arc(rdi="test-rdi", arc=rocrate_dict())
 
     body = json.loads(route.calls.last.request.content.decode())
     assert "@context" in body["arc"]
@@ -349,10 +320,10 @@ async def test_create_or_update_arc_serializes_rocrate_wire_aliases(client_confi
 async def test_submit_arc_in_harvest_serializes_rocrate_wire_aliases(client_config: Config) -> None:
     """Harvest ARC upload JSON must use @context and @graph wire aliases."""
     route = respx.post(f"{client_config.api_url}v3/harvests/harvest-456/arcs").mock(
-        return_value=httpx.Response(http.HTTPStatus.OK, json=_ARC_RESPONSE)
+        return_value=httpx.Response(http.HTTPStatus.OK, json=ARC_RESPONSE)
     )
     async with ApiClient(client_config) as client:
-        await client.submit_arc_in_harvest("harvest-456", arc=_rocrate_dict())
+        await client.submit_arc_in_harvest("harvest-456", arc=rocrate_dict())
 
     body = json.loads(route.calls.last.request.content.decode())
     assert "@context" in body["arc"]
@@ -400,6 +371,26 @@ async def test_get_timeout_not_retried(client_config: Config) -> None:
     assert route.call_count == 1
 
 
+def test_format_request_error_falls_back_when_message_empty() -> None:
+    """Empty ConnectError messages fall back to the exception type name."""
+    empty = httpx.ConnectError("")
+    assert str(empty) == ""
+    formatted = ApiClient._format_request_error(empty)  # noqa: SLF001
+    assert "ConnectError" in formatted
+    assert formatted.strip() != ""
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_empty_connect_error_message_is_not_blank(client_config: Config) -> None:
+    """ApiClientError for empty ConnectError still carries a useful message."""
+    respx.post(f"{client_config.api_url}v3/harvests").mock(side_effect=httpx.ConnectError(""))
+    async with ApiClient(client_config) as client:
+        with pytest.raises(ApiClientError, match="Request failed: ConnectError") as exc_info:
+            await client.create_harvest(rdi="test-rdi")
+    assert str(exc_info.value).strip() != "Request failed:"
+
+
 @pytest.mark.asyncio
 @respx.mock
 async def test_global_max_concurrency_limits_parallel_requests(client_config: Config) -> None:
@@ -418,7 +409,7 @@ async def test_global_max_concurrency_limits_parallel_requests(client_config: Co
         await asyncio.sleep(0.02)
         async with counter_lock:
             in_flight -= 1
-        return httpx.Response(http.HTTPStatus.OK, json=_HARVEST_RESPONSE)
+        return httpx.Response(http.HTTPStatus.OK, json=HARVEST_RESPONSE)
 
     route = respx.get(f"{client_config.api_url}v3/harvests/harvest-456").mock(side_effect=slow_response)
 
@@ -451,7 +442,7 @@ async def test_get_invalid_json_wrapped(client_config: Config) -> None:
 async def test_create_harvest_success(client_config: Config) -> None:
     """Test successful harvest creation."""
     respx.post(f"{client_config.api_url}v3/harvests").mock(
-        return_value=httpx.Response(http.HTTPStatus.OK, json=_HARVEST_RESPONSE)
+        return_value=httpx.Response(http.HTTPStatus.OK, json=HARVEST_RESPONSE)
     )
     async with ApiClient(client_config) as client:
         harvest = await client.create_harvest(rdi="test-rdi", expected_datasets=10)
@@ -465,7 +456,7 @@ async def test_create_harvest_success(client_config: Config) -> None:
 async def test_create_harvest_without_expected_datasets(client_config: Config) -> None:
     """Test harvest creation without expected_datasets."""
     respx.post(f"{client_config.api_url}v3/harvests").mock(
-        return_value=httpx.Response(http.HTTPStatus.OK, json=_HARVEST_RESPONSE)
+        return_value=httpx.Response(http.HTTPStatus.OK, json=HARVEST_RESPONSE)
     )
     async with ApiClient(client_config) as client:
         harvest = await client.create_harvest(rdi="test-rdi")
@@ -490,7 +481,7 @@ async def test_create_harvest_503_not_retried(client_config: Config) -> None:
 async def test_get_harvest(client_config: Config) -> None:
     """Test getting a single harvest run."""
     respx.get(f"{client_config.api_url}v3/harvests/harvest-456").mock(
-        return_value=httpx.Response(http.HTTPStatus.OK, json=_HARVEST_RESPONSE)
+        return_value=httpx.Response(http.HTTPStatus.OK, json=HARVEST_RESPONSE)
     )
     async with ApiClient(client_config) as client:
         harvest = await client.get_harvest("harvest-456")
@@ -502,7 +493,7 @@ async def test_get_harvest(client_config: Config) -> None:
 @respx.mock
 async def test_complete_harvest(client_config: Config) -> None:
     """Test completing a harvest run."""
-    completed_response = {**_HARVEST_RESPONSE, "status": "COMPLETED", "completed_at": "2024-01-01T01:00:00Z"}
+    completed_response = {**HARVEST_RESPONSE, "status": "COMPLETED", "completed_at": "2024-01-01T01:00:00Z"}
     respx.post(f"{client_config.api_url}v3/harvests/harvest-456/complete").mock(
         return_value=httpx.Response(http.HTTPStatus.OK, json=completed_response)
     )
@@ -517,7 +508,7 @@ async def test_complete_harvest(client_config: Config) -> None:
 @respx.mock
 async def test_cancel_harvest(client_config: Config) -> None:
     """Test cancelling a harvest run via PATCH."""
-    cancelled_response = {**_HARVEST_RESPONSE, "status": "CANCELLED"}
+    cancelled_response = {**HARVEST_RESPONSE, "status": "CANCELLED"}
     route = respx.patch(f"{client_config.api_url}v3/harvests/harvest-456").mock(
         return_value=httpx.Response(http.HTTPStatus.OK, json=cancelled_response)
     )
@@ -532,7 +523,7 @@ async def test_cancel_harvest(client_config: Config) -> None:
 @respx.mock
 async def test_fail_harvest(client_config: Config) -> None:
     """Test marking a harvest run as failed via PATCH."""
-    failed_response = {**_HARVEST_RESPONSE, "status": "FAILED"}
+    failed_response = {**HARVEST_RESPONSE, "status": "FAILED"}
     route = respx.patch(f"{client_config.api_url}v3/harvests/harvest-456").mock(
         return_value=httpx.Response(http.HTTPStatus.OK, json=failed_response)
     )
@@ -545,13 +536,31 @@ async def test_fail_harvest(client_config: Config) -> None:
 
 @pytest.mark.asyncio
 @respx.mock
+async def test_submit_arc_in_harvest_retries_on_connect_error(client_config: Config) -> None:
+    """Harvest ARC POST is server-idempotent: ConnectError is retried then succeeds."""
+    client_config.retry_backoff_factor = 0.01
+    client_config.max_retries = 2
+    route = respx.post(f"{client_config.api_url}v3/harvests/harvest-456/arcs").mock(
+        side_effect=[
+            httpx.ConnectError("Connection refused"),
+            httpx.Response(http.HTTPStatus.OK, json=ARC_RESPONSE),
+        ]
+    )
+    async with ApiClient(client_config) as client:
+        result = await client.submit_arc_in_harvest("harvest-456", arc=rocrate_dict())
+    assert result.arc_id == ARC_RESPONSE["arc_id"]
+    assert route.call_count == 2  # noqa: PLR2004
+
+
+@pytest.mark.asyncio
+@respx.mock
 async def test_submit_arc_in_harvest(client_config: Config) -> None:
     """Test submitting an ARC within a harvest run."""
     respx.post(f"{client_config.api_url}v3/harvests/harvest-456/arcs").mock(
-        return_value=httpx.Response(http.HTTPStatus.OK, json=_ARC_RESPONSE)
+        return_value=httpx.Response(http.HTTPStatus.OK, json=ARC_RESPONSE)
     )
     async with ApiClient(client_config) as client:
-        response = await client.submit_arc_in_harvest("harvest-456", arc=_rocrate_dict())
+        response = await client.submit_arc_in_harvest("harvest-456", arc=rocrate_dict())
     assert isinstance(response, ArcResult)
     assert response.arc_id == "arc-123"
 
@@ -565,7 +574,7 @@ async def test_submit_arc_in_harvest_invalid_response(client_config: Config) -> 
     )
     async with ApiClient(client_config) as client:
         with pytest.raises(ApiClientError, match="Invalid ARC response"):
-            await client.submit_arc_in_harvest("harvest-456", arc=_rocrate_dict("mock"))
+            await client.submit_arc_in_harvest("harvest-456", arc=rocrate_dict("mock"))
 
 
 @pytest.mark.asyncio
@@ -581,10 +590,10 @@ async def test_submit_arc_in_harvest_invalid_rocrate(client_config: Config) -> N
 async def test_submit_arc_in_harvest_with_json_string(client_config: Config) -> None:
     """Test submit_arc_in_harvest with a JSON string."""
     route = respx.post(f"{client_config.api_url}v3/harvests/harvest-456/arcs").mock(
-        return_value=httpx.Response(http.HTTPStatus.OK, json=_ARC_RESPONSE)
+        return_value=httpx.Response(http.HTTPStatus.OK, json=ARC_RESPONSE)
     )
     async with ApiClient(client_config) as client:
-        response = await client.submit_arc_in_harvest("harvest-456", arc=json.dumps(_rocrate_dict()))
+        response = await client.submit_arc_in_harvest("harvest-456", arc=json.dumps(rocrate_dict()))
     assert route.called
     assert isinstance(response, ArcResult)
     assert response.arc_id == "arc-123"
@@ -596,404 +605,3 @@ async def test_submit_arc_in_harvest_with_invalid_json_string(client_config: Con
     async with ApiClient(client_config) as client:
         with pytest.raises(ApiClientError, match="Invalid JSON string provided for ARC"):
             await client.submit_arc_in_harvest("harvest-456", arc='{"@context":')
-
-
-# ---------------------------------------------------------------------------
-# harvest_arcs
-# ---------------------------------------------------------------------------
-
-
-async def _arc_gen(*arcs: "dict[str, Any] | str | ARC") -> AsyncGenerator["dict[str, Any] | str | ARC", None]:
-    """Yield the provided arc dicts, JSON strings, or ARC objects as an async generator."""
-    for arc in arcs:
-        yield arc
-
-
-@pytest.mark.asyncio
-@respx.mock
-async def test_harvest_arcs_success(client_config: Config) -> None:
-    """harvest_arcs creates a harvest, submits all ARCs, then completes it."""
-    completed_response = {**_HARVEST_RESPONSE, "status": "COMPLETED", "completed_at": "2024-01-01T01:00:00Z"}
-    respx.post(f"{client_config.api_url}v3/harvests").mock(
-        return_value=httpx.Response(http.HTTPStatus.OK, json=_HARVEST_RESPONSE)
-    )
-    respx.post(f"{client_config.api_url}v3/harvests/harvest-456/arcs").mock(
-        return_value=httpx.Response(http.HTTPStatus.OK, json=_ARC_RESPONSE)
-    )
-    respx.post(f"{client_config.api_url}v3/harvests/harvest-456/complete").mock(
-        return_value=httpx.Response(http.HTTPStatus.OK, json=completed_response)
-    )
-
-    arcs = _arc_gen(_rocrate_dict("arc-1"), _rocrate_dict("arc-2"), _rocrate_dict("arc-3"))
-    async with ApiClient(client_config) as client:
-        result = await client.harvest_arcs("test-rdi", arcs, expected_datasets=3)
-
-    assert isinstance(result, HarvestResult)
-    assert result.status == "COMPLETED"
-
-
-@pytest.mark.asyncio
-@respx.mock
-async def test_harvest_arcs_success_with_parallelism(client_config: Config) -> None:
-    """harvest_arcs supports bounded parallel uploads via config.max_concurrency."""
-    client_config.max_concurrency = 2
-
-    completed_response = {**_HARVEST_RESPONSE, "status": "COMPLETED", "completed_at": "2024-01-01T01:00:00Z"}
-    respx.post(f"{client_config.api_url}v3/harvests").mock(
-        return_value=httpx.Response(http.HTTPStatus.OK, json=_HARVEST_RESPONSE)
-    )
-    route_submit = respx.post(f"{client_config.api_url}v3/harvests/harvest-456/arcs").mock(
-        return_value=httpx.Response(http.HTTPStatus.OK, json=_ARC_RESPONSE)
-    )
-    respx.post(f"{client_config.api_url}v3/harvests/harvest-456/complete").mock(
-        return_value=httpx.Response(http.HTTPStatus.OK, json=completed_response)
-    )
-
-    arcs = _arc_gen(_rocrate_dict("arc-1"), _rocrate_dict("arc-2"), _rocrate_dict("arc-3"))
-    async with ApiClient(client_config) as client:
-        result = await client.harvest_arcs("test-rdi", arcs)
-
-    assert isinstance(result, HarvestResult)
-    assert route_submit.call_count == EXPECTED_ARC_UPLOADS
-
-
-@pytest.mark.asyncio
-@respx.mock
-async def test_harvest_arcs_uses_config_default_concurrency(client_config: Config) -> None:
-    """harvest_arcs uses config.max_concurrency when no override is passed."""
-    client_config.max_concurrency = 2
-
-    completed_response = {**_HARVEST_RESPONSE, "status": "COMPLETED", "completed_at": "2024-01-01T01:00:00Z"}
-    respx.post(f"{client_config.api_url}v3/harvests").mock(
-        return_value=httpx.Response(http.HTTPStatus.OK, json=_HARVEST_RESPONSE)
-    )
-    route_submit = respx.post(f"{client_config.api_url}v3/harvests/harvest-456/arcs").mock(
-        return_value=httpx.Response(http.HTTPStatus.OK, json=_ARC_RESPONSE)
-    )
-    respx.post(f"{client_config.api_url}v3/harvests/harvest-456/complete").mock(
-        return_value=httpx.Response(http.HTTPStatus.OK, json=completed_response)
-    )
-
-    arcs = _arc_gen(_rocrate_dict("arc-1"), _rocrate_dict("arc-2"), _rocrate_dict("arc-3"))
-    async with ApiClient(client_config) as client:
-        result = await client.harvest_arcs("test-rdi", arcs)
-
-    assert isinstance(result, HarvestResult)
-    assert route_submit.call_count == EXPECTED_ARC_UPLOADS
-
-
-@pytest.mark.asyncio
-@respx.mock
-async def test_harvest_arcs_empty_generator(client_config: Config) -> None:
-    """harvest_arcs with an empty generator creates and immediately completes the harvest."""
-    completed_response = {**_HARVEST_RESPONSE, "status": "COMPLETED", "completed_at": "2024-01-01T01:00:00Z"}
-    respx.post(f"{client_config.api_url}v3/harvests").mock(
-        return_value=httpx.Response(http.HTTPStatus.OK, json=_HARVEST_RESPONSE)
-    )
-    respx.post(f"{client_config.api_url}v3/harvests/harvest-456/complete").mock(
-        return_value=httpx.Response(http.HTTPStatus.OK, json=completed_response)
-    )
-
-    async with ApiClient(client_config) as client:
-        result = await client.harvest_arcs("test-rdi", _arc_gen())
-
-    assert isinstance(result, HarvestResult)
-    assert result.status == "COMPLETED"
-
-
-@pytest.mark.asyncio
-@respx.mock
-async def test_harvest_arcs_continues_on_item_error(client_config: Config) -> None:
-    """harvest_arcs skips item-level errors and completes harvest."""
-    respx.post(f"{client_config.api_url}v3/harvests").mock(
-        return_value=httpx.Response(http.HTTPStatus.OK, json=_HARVEST_RESPONSE)
-    )
-    route_submit = respx.post(f"{client_config.api_url}v3/harvests/harvest-456/arcs").mock(
-        side_effect=[
-            httpx.Response(http.HTTPStatus.BAD_REQUEST, text="invalid arc"),
-            httpx.Response(http.HTTPStatus.OK, json=_ARC_RESPONSE),
-            httpx.Response(http.HTTPStatus.OK, json=_ARC_RESPONSE),
-        ]
-    )
-    cancel_route = respx.delete(f"{client_config.api_url}v3/harvests/harvest-456").mock(
-        return_value=httpx.Response(http.HTTPStatus.NO_CONTENT)
-    )
-    completed_response = {**_HARVEST_RESPONSE, "status": "COMPLETED", "completed_at": "2024-01-01T01:00:00Z"}
-    complete_route = respx.post(f"{client_config.api_url}v3/harvests/harvest-456/complete").mock(
-        return_value=httpx.Response(http.HTTPStatus.OK, json=completed_response)
-    )
-
-    async with ApiClient(client_config) as client:
-        arcs = _arc_gen(_rocrate_dict("arc-1"), _rocrate_dict("arc-2"), _rocrate_dict("arc-3"))
-        result = await client.harvest_arcs("test-rdi", arcs)
-
-    assert isinstance(result, HarvestResult)
-    assert route_submit.call_count == EXPECTED_ARC_UPLOADS
-    assert complete_route.called
-    assert not cancel_route.called
-    assert len(result.errors) == 1
-    assert result.errors[0].error_type == HarvestErrorType.SUBMISSION_FAILED
-    assert result.errors[0].arc_id == "arc-1"
-    assert "HTTP error 400" in result.errors[0].message
-
-
-@pytest.mark.asyncio
-@respx.mock
-async def test_harvest_arcs_cancels_on_catastrophic_error(client_config: Config) -> None:
-    """harvest_arcs marks the harvest as failed on catastrophic submission errors.
-
-    409 Conflict (harvest in wrong state) is catastrophic → the harvest is
-    immediately aborted and marked as failed.  HTTP 500 is *not* catastrophic;
-    see test_harvest_arcs_500_is_submission_failed for that behaviour.
-    """
-    failed_response = {**_HARVEST_RESPONSE, "status": "FAILED"}
-    respx.post(f"{client_config.api_url}v3/harvests").mock(
-        return_value=httpx.Response(http.HTTPStatus.OK, json=_HARVEST_RESPONSE)
-    )
-    respx.post(f"{client_config.api_url}v3/harvests/harvest-456/arcs").mock(
-        return_value=httpx.Response(http.HTTPStatus.CONFLICT, text="harvest already closed")
-    )
-    fail_route = respx.patch(f"{client_config.api_url}v3/harvests/harvest-456").mock(
-        return_value=httpx.Response(http.HTTPStatus.OK, json=failed_response)
-    )
-
-    async with ApiClient(client_config) as client:
-        with pytest.raises(ApiClientError, match="HTTP error 409"):
-            await client.harvest_arcs("test-rdi", _arc_gen(_rocrate_dict("arc-1")))
-
-    assert fail_route.called
-
-
-@pytest.mark.asyncio
-@respx.mock
-async def test_harvest_arcs_skips_duplicate_identifier(client_config: Config) -> None:
-    """harvest_arcs skips a duplicate ARC and completes the harvest successfully.
-
-    When the same RO-Crate identifier appears twice in the input, the second
-    occurrence is counted as a failed submission and the harvest continues.
-    This prevents a single client-side data error from aborting the whole harvest.
-    """
-    arc_a = {
-        "@context": "https://w3id.org/ro/crate/1.1/context",
-        "@graph": [{"@id": "./", "@type": "Dataset", "identifier": "duplicate-arc", "name": "ARC A"}],
-    }
-    arc_b = {
-        "@context": "https://w3id.org/ro/crate/1.1/context",
-        "@graph": [{"@id": "./", "@type": "Dataset", "identifier": "duplicate-arc", "name": "ARC B"}],
-    }
-    completed_response = {**_HARVEST_RESPONSE, "status": "COMPLETED", "completed_at": "2024-01-01T01:00:00Z"}
-    respx.post(f"{client_config.api_url}v3/harvests").mock(
-        return_value=httpx.Response(http.HTTPStatus.OK, json=_HARVEST_RESPONSE)
-    )
-    # Only the first ARC is submitted; the duplicate is skipped client-side.
-    arc_route = respx.post(f"{client_config.api_url}v3/harvests/harvest-456/arcs").mock(
-        return_value=httpx.Response(http.HTTPStatus.OK, json=_ARC_RESPONSE)
-    )
-    complete_route = respx.post(f"{client_config.api_url}v3/harvests/harvest-456/complete").mock(
-        return_value=httpx.Response(http.HTTPStatus.OK, json=completed_response)
-    )
-
-    async with ApiClient(client_config) as client:
-        result = await client.harvest_arcs("test-rdi", _arc_gen(arc_a, arc_b))
-
-    assert result.status == "COMPLETED"
-    assert arc_route.call_count == 1  # duplicate was skipped, not submitted
-    assert complete_route.called
-    assert len(result.errors) == 1
-    assert result.errors[0].error_type == HarvestErrorType.DUPLICATE
-    assert result.errors[0].arc_id == "duplicate-arc"
-    assert "duplicate-arc" in result.errors[0].message
-
-
-@pytest.mark.asyncio
-@respx.mock
-async def test_harvest_arcs_with_json_string(client_config: Config) -> None:
-    """harvest_arcs supports JSON strings in async generator."""
-    completed_response = {**_HARVEST_RESPONSE, "status": "COMPLETED", "completed_at": "2024-01-01T01:00:00Z"}
-    respx.post(f"{client_config.api_url}v3/harvests").mock(
-        return_value=httpx.Response(http.HTTPStatus.OK, json=_HARVEST_RESPONSE)
-    )
-    respx.post(f"{client_config.api_url}v3/harvests/harvest-456/arcs").mock(
-        return_value=httpx.Response(http.HTTPStatus.OK, json=_ARC_RESPONSE)
-    )
-    respx.post(f"{client_config.api_url}v3/harvests/harvest-456/complete").mock(
-        return_value=httpx.Response(http.HTTPStatus.OK, json=completed_response)
-    )
-
-    arcs = _arc_gen(
-        json.dumps(_rocrate_dict("arc-1-string")),
-        _rocrate_dict("arc-2-dict"),
-        ARC.from_arc_investigation(ArcInvestigation.create(identifier="test", title="Test")),
-    )
-    async with ApiClient(client_config) as client:
-        result = await client.harvest_arcs("test-rdi", arcs, expected_datasets=3)
-
-    assert isinstance(result, HarvestResult)
-    assert result.status == "COMPLETED"
-
-
-@pytest.mark.asyncio
-@respx.mock
-async def test_harvest_arcs_with_invalid_json_string(client_config: Config) -> None:
-    """harvest_arcs raises ApiClientError when JSON string is invalid."""
-    failed_response = {**_HARVEST_RESPONSE, "status": "FAILED"}
-    respx.post(f"{client_config.api_url}v3/harvests").mock(
-        return_value=httpx.Response(http.HTTPStatus.OK, json=_HARVEST_RESPONSE)
-    )
-    respx.patch(f"{client_config.api_url}v3/harvests/harvest-456").mock(
-        return_value=httpx.Response(http.HTTPStatus.OK, json=failed_response)
-    )
-
-    async with ApiClient(client_config) as client:
-        arcs = _arc_gen('{"id": "arc-1"')  # Single invalid JSON string
-        with pytest.raises(ApiClientError, match="Invalid JSON string provided for ARC"):
-            await client.harvest_arcs("test-rdi", arcs)
-
-
-@pytest.mark.asyncio
-@respx.mock
-async def test_harvest_arcs_cancel_failure_does_not_mask_original_error(client_config: Config) -> None:
-    """If fail_harvest itself raises, the original submission error is still propagated."""
-    respx.post(f"{client_config.api_url}v3/harvests").mock(
-        return_value=httpx.Response(http.HTTPStatus.OK, json=_HARVEST_RESPONSE)
-    )
-    # 409 is catastrophic → triggers fail_harvest; 500 is NOT (see dedicated test).
-    respx.post(f"{client_config.api_url}v3/harvests/harvest-456/arcs").mock(
-        return_value=httpx.Response(http.HTTPStatus.CONFLICT, text="harvest already closed")
-    )
-    # Also make the fail call fail
-    respx.patch(f"{client_config.api_url}v3/harvests/harvest-456").mock(
-        return_value=httpx.Response(http.HTTPStatus.INTERNAL_SERVER_ERROR, text="fail error")
-    )
-
-    async with ApiClient(client_config) as client:
-        with pytest.raises(ApiClientError, match="HTTP error 409"):
-            await client.harvest_arcs("test-rdi", _arc_gen(_rocrate_dict("arc-1")))
-
-
-@pytest.mark.asyncio
-@respx.mock
-async def test_harvest_arcs_all_exceptions_retrieved_when_multiple_tasks_catastrophic(
-    client_config: Config,
-) -> None:
-    """All task exceptions are retrieved when multiple tasks fail catastrophically.
-
-    Regression test for the "Task exception was never retrieved" asyncio warning
-    (confirmed in production: Task-1149, HTTP 500 for harvest arc submission).
-
-    Root cause: the old `_process_completed_arc_tasks` returned early after the
-    first catastrophic error, leaving the remaining done tasks' exceptions
-    unretrieved. asyncio then emitted a RuntimeWarning.
-
-    With max_concurrency=10 and 3 ARCs, all three tasks land in the same done
-    batch during the final drain (asyncio.wait). The early-return bug would leave
-    the 2nd and 3rd exceptions unretrieved. This test is run with
-    -W error::RuntimeWarning (see pyproject.toml) so any unretrieved exception
-    would immediately fail the test.
-
-    Note: 409 Conflict is used here because it is catastrophic (abort harvest).
-    HTTP 500 is *not* catastrophic since this fix — see
-    test_harvest_arcs_500_is_submission_failed for the non-catastrophic path.
-    The asyncio-warning fix (no early return in _process_completed_arc_tasks)
-    applies to both paths.
-    """
-    respx.post(f"{client_config.api_url}v3/harvests").mock(
-        return_value=httpx.Response(http.HTTPStatus.OK, json=_HARVEST_RESPONSE)
-    )
-    respx.post(f"{client_config.api_url}v3/harvests/harvest-456/arcs").mock(
-        return_value=httpx.Response(http.HTTPStatus.CONFLICT, text="harvest already closed")
-    )
-    fail_route = respx.patch(f"{client_config.api_url}v3/harvests/harvest-456").mock(
-        return_value=httpx.Response(http.HTTPStatus.OK, json={**_HARVEST_RESPONSE, "status": "FAILED"})
-    )
-
-    # 3 ARCs all returning 409 (catastrophic). With max_concurrency=10, no
-    # intermediate wait fires — all three tasks accumulate in pending_tasks and
-    # are drained together. If _process_completed_arc_tasks returned early after
-    # the first catastrophic error, the remaining two exceptions would be
-    # unretrieved → RuntimeWarning (promoted to error by -W error).
-    async with ApiClient(client_config) as client:
-        with pytest.raises(ApiClientError, match="HTTP error 409"):
-            await client.harvest_arcs(
-                "test-rdi",
-                _arc_gen(_rocrate_dict("arc-1"), _rocrate_dict("arc-2"), _rocrate_dict("arc-3")),
-            )
-
-    assert fail_route.called
-
-
-@pytest.mark.asyncio
-@respx.mock
-async def test_harvest_arcs_500_is_submission_failed(client_config: Config) -> None:
-    """HTTP 5xx from ARC submission yields SUBMISSION_FAILED; the harvest continues.
-
-    All 5xx responses are treated as transient: a server error on one ARC does
-    not mean the next ARC will fail too.  Only auth/state errors (401, 403, 404,
-    409) are truly catastrophic and abort the harvest.
-    """
-    completed_response = {**_HARVEST_RESPONSE, "status": "COMPLETED", "completed_at": "2024-01-01T01:00:00Z"}
-    respx.post(f"{client_config.api_url}v3/harvests").mock(
-        return_value=httpx.Response(http.HTTPStatus.OK, json=_HARVEST_RESPONSE)
-    )
-    # arc-1: 500, arc-2: success, arc-3: 500 → 2 SUBMISSION_FAILED errors
-    respx.post(f"{client_config.api_url}v3/harvests/harvest-456/arcs").mock(
-        side_effect=[
-            httpx.Response(http.HTTPStatus.INTERNAL_SERVER_ERROR, text="processing error"),
-            httpx.Response(http.HTTPStatus.OK, json=_ARC_RESPONSE),
-            httpx.Response(http.HTTPStatus.INTERNAL_SERVER_ERROR, text="processing error"),
-        ]
-    )
-    fail_route = respx.patch(f"{client_config.api_url}v3/harvests/harvest-456").mock(
-        return_value=httpx.Response(http.HTTPStatus.OK, json={**_HARVEST_RESPONSE, "status": "FAILED"})
-    )
-    complete_route = respx.post(f"{client_config.api_url}v3/harvests/harvest-456/complete").mock(
-        return_value=httpx.Response(http.HTTPStatus.OK, json=completed_response)
-    )
-
-    async with ApiClient(client_config) as client:
-        result = await client.harvest_arcs(
-            "test-rdi",
-            _arc_gen(_rocrate_dict("arc-1"), _rocrate_dict("arc-2"), _rocrate_dict("arc-3")),
-        )
-
-    assert complete_route.called
-    assert not fail_route.called
-    assert len(result.errors) == 2  # noqa: PLR2004
-    assert all(e.error_type == HarvestErrorType.SUBMISSION_FAILED for e in result.errors)
-
-
-@pytest.mark.asyncio
-@respx.mock
-async def test_harvest_arcs_502_is_submission_failed(client_config: Config) -> None:
-    """HTTP 502/503/504 from ARC submission yields SUBMISSION_FAILED; harvest continues.
-
-    A gateway or service-unavailable error on one ARC does not mean the next
-    ARC will also fail — the API may recover mid-harvest.  The harvest continues
-    and the failed ARC is recorded as SUBMISSION_FAILED rather than aborting.
-    """
-    completed_response = {**_HARVEST_RESPONSE, "status": "COMPLETED", "completed_at": "2024-01-01T01:00:00Z"}
-    respx.post(f"{client_config.api_url}v3/harvests").mock(
-        return_value=httpx.Response(http.HTTPStatus.OK, json=_HARVEST_RESPONSE)
-    )
-    # arc-1: 502, arc-2: success → 1 SUBMISSION_FAILED, harvest completes
-    respx.post(f"{client_config.api_url}v3/harvests/harvest-456/arcs").mock(
-        side_effect=[
-            httpx.Response(http.HTTPStatus.BAD_GATEWAY, text="gateway error"),
-            httpx.Response(http.HTTPStatus.OK, json=_ARC_RESPONSE),
-        ]
-    )
-    fail_route = respx.patch(f"{client_config.api_url}v3/harvests/harvest-456").mock(
-        return_value=httpx.Response(http.HTTPStatus.OK, json={**_HARVEST_RESPONSE, "status": "FAILED"})
-    )
-    complete_route = respx.post(f"{client_config.api_url}v3/harvests/harvest-456/complete").mock(
-        return_value=httpx.Response(http.HTTPStatus.OK, json=completed_response)
-    )
-
-    async with ApiClient(client_config) as client:
-        result = await client.harvest_arcs("test-rdi", _arc_gen(_rocrate_dict("arc-1"), _rocrate_dict("arc-2")))
-
-    assert complete_route.called
-    assert not fail_route.called
-    assert len(result.errors) == 1
-    assert result.errors[0].error_type == HarvestErrorType.SUBMISSION_FAILED
-    assert "502" in result.errors[0].message

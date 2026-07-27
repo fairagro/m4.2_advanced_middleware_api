@@ -52,11 +52,16 @@ ArcManager also owns the worker-side counterpart (separate spec: `arc-store/`):
    `description` from that root node; other root properties remain in `@graph`
    unchanged. The RoCrate wire contract is documented in `arc-manager/spec.md`.
 
-5. **Idempotency via content hash**
+5. **Idempotency via content hash (including harvest re-submit)**
    — `DocumentStore.store_arc` computes a hash of the serialized ARC and sets
    `has_changes = False` when the hash matches the stored document. This
    prevents redundant Celery tasks and GitLab commits on re-submission of
-   unchanged ARCs, making the pipeline safe to call repeatedly.
+   unchanged ARCs. Inside a harvest, an identical re-submit (same identifier
+   and same hash already recorded for `last_harvest_id`) is treated as this
+   unchanged path and returns `UPDATED`, so lost-response retries are safe.
+   A same-identifier submit with a **different** hash in the same harvest
+   raises `DuplicateArcError` instead of overwriting — harvest-local identity
+   stays immutable while still allowing transport-level retries.
 
 6. **Harvest statistics derived at finalize, not incremented per ARC**
    — `store_arc` stamps harvest context on each ARC document (`last_harvest_id`,

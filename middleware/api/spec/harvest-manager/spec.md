@@ -35,4 +35,9 @@ Finalize called before all ARCs arrive → harvest is marked complete with whate
 
 Transition called on a non-`RUNNING` harvest → raise `ConflictError` with the current status in the message.
 
-Same ARC submitted twice within one harvest → rejected at ingest with `DuplicateArcError` (see `arc-manager/` and `harvest-arc-upload/`).
+Same ARC identifier submitted twice within one harvest with identical content →
+idempotent success at ingest (see `arc-manager/` and `harvest-arc-upload/`).
+
+Same ARC identifier submitted twice within one harvest with different content →
+rejected at ingest with `DuplicateArcError` (see `arc-manager/` and
+`harvest-arc-upload/`).
