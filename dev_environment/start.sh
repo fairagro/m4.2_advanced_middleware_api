@@ -34,10 +34,6 @@ echo "==> Starting services with sops exec-env..."
 echo "    Environment variable 'data' will contain decrypted client.key"
 echo ""
 
-# DevPod credsStore is host-only; DinD needs a container-local Docker config.
-# shellcheck source=/dev/null
-source "${script_dir}/../scripts/setup-container-docker.sh"
-
 # Use sops exec-env to decrypt and run docker compose
 # We need to preserve TERM and PATH for proper terminal support
 # Use exec-env without --pristine but ensure minimal env pollution

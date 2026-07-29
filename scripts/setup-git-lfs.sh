@@ -36,7 +36,7 @@ if [ ! -d "$REPO_ROOT/.git" ]; then
     exit 1
 fi
 
-# Repo-local only: devcontainer bind-mounts host ~/.gitconfig read-only.
+# Repo-local only: avoid writing Git LFS filters into the user's global ~/.gitconfig.
 # --force: overwrite default hooks; project hooks below replace pre-push again.
 echo "🚀 Initializing Git LFS (local config)..."
 (cd "$REPO_ROOT" && git lfs install --local --skip-smudge --force)

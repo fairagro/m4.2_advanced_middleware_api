@@ -19,10 +19,6 @@ if [ -d "${repo_root}/.venv/bin" ]; then
     esac
 fi
 
-# DevPod credsStore is host-only; DinD needs a container-local Docker config.
-# shellcheck source=/dev/null
-source "${mydir}/setup-container-docker.sh"
-
 # Setup aliases (completions: static files in image + bash-completion lazy-load)
 alias k=kubectl
 alias d=docker
@@ -42,7 +38,7 @@ if command -v ggshield &> /dev/null; then
         echo "✅ ggshield: authenticated (~/.config/ggshield/auth_config.yaml)"
     else
         echo "🔐 ggshield not authenticated — run: ggshield auth login --method token"
-        echo "   Or set GITGUARDIAN_API_KEY (non-interactive / DevPod-friendly)"
+        echo "   Or set GITGUARDIAN_API_KEY (non-interactive)"
     fi
 else
     echo "⚠️ ggshield not available - run: uv sync --dev --all-packages"

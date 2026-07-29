@@ -1,8 +1,8 @@
 {
-	"name": "Debian (VS Code - DinD)",
+	"name": "Debian (DinD)",
 	"build": {
-		"dockerfile": "../Dockerfile",
-		"context": ".."
+		"dockerfile": "Dockerfile",
+		"context": "."
 	},
 	"features": {
 		"ghcr.io/devcontainers/features/docker-in-docker:4": {
@@ -11,12 +11,12 @@
 			"version": "28.5.1"
 		}
 	},
-	"containerEnv": {
-		"UV_LINK_MODE": "copy"
-	},
 	"mounts": [
 		"source=middleware-api-bashhistory,target=/commandhistory,type=volume"
 	],
+	"containerEnv": {
+		"UV_LINK_MODE": "copy"
+	},
 	"customizations": {
 		"vscode": {
 			"extensions": [
@@ -38,21 +38,18 @@
 				"donjayamanne.githistory",
 				"codezombiech.gitignore",
 				"github.copilot-chat",
-				"charliermarsh.ruff",
 				"tim-koehler.helm-intellisense",
 				"vadzimnestsiarenka.helm-template-preview-and-more",
 				"jebbs.plantuml"
 			]
 		}
 	},
-	"postCreateCommand": [
-		"sudo chown -R vscode:vscode /commandhistory",
-		"bash ${containerWorkspaceFolder}/scripts/uv-sync-dev.sh",
-		"bash ${containerWorkspaceFolder}/scripts/install-dev-hooks.sh",
-		"bash ${containerWorkspaceFolder}/scripts/setup-container-gpg.sh",
-		"bash ${containerWorkspaceFolder}/scripts/setup-container-docker.sh"
-	],
-	"postStartCommand": {
+	"postCreateCommand": {
+		"fix commandhistory permissions": "sudo chown -R vscode:vscode /commandhistory",
+		"install dependencies": "bash ${containerWorkspaceFolder}/scripts/uv-sync-dev.sh",
+		"install dev hooks": "bash ${containerWorkspaceFolder}/scripts/install-dev-hooks.sh",
+		"import public gpg keys": "bash ${containerWorkspaceFolder}/scripts/import-public-gpg-keys.sh",
+		"install ruff extension": "bash ${containerWorkspaceFolder}/scripts/install-ruff-extension.sh",
 		"setup bashrc": "grep -qF 'source \\${containerWorkspaceFolder}/scripts/load-env.sh' ~/.bashrc || echo 'source \\${containerWorkspaceFolder}/scripts/load-env.sh' >> ~/.bashrc"
 	},
 	"remoteUser": "vscode"
