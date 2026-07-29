@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from datetime import datetime
 
 
@@ -37,7 +37,7 @@ class HarvestReport:
 
     start_time: datetime
     end_time: datetime
-    repository_reports: list[RepositoryReport] = field(default_factory=list)
+    repository_reports: tuple[RepositoryReport, ...] = ()
     name: str = "FAIRagro Harvest Run"
 
     @property

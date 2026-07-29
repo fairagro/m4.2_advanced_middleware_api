@@ -46,13 +46,13 @@ def _sample_repo(**overrides: Any) -> RepositoryReport:
 
 
 def _sample_report(
-    repositories: list[RepositoryReport] | None = None,
+    repositories: tuple[RepositoryReport, ...] | None = None,
 ) -> HarvestReport:
     """Build a harvest run report spanning a fixed UTC window."""
     return HarvestReport(
         start_time=_START,
         end_time=_END,
-        repository_reports=([_sample_repo()] if repositories is None else repositories),
+        repository_reports=((_sample_repo(),) if repositories is None else repositories),
     )
 
 
@@ -82,7 +82,7 @@ def test_harvest_report_with_one_repository() -> None:
 
 def test_harvest_report_with_no_repositories() -> None:
     """An empty repository list is preserved."""
-    report = _sample_report(repositories=[])
+    report = _sample_report(repositories=())
     assert not report.repository_reports
     assert report.duration_seconds == (_END - _START).total_seconds()
 
@@ -134,7 +134,7 @@ def test_jsonld_timestamps_and_durations() -> None:
 def test_jsonld_metrics_and_failed_records() -> None:
     """Fairagro metrics and nested failed records are emitted."""
     repo = _sample_repo()
-    entry = json.loads(JsonLdReportSerializer().render(_sample_report(repositories=[repo])))["schema:result"][0]
+    entry = json.loads(JsonLdReportSerializer().render(_sample_report(repositories=(repo,))))["schema:result"][0]
     assert entry["fairagro:harvestId"] == repo.harvest_id
     assert entry["fairagro:expectedDatasets"] == repo.expected_datasets
     assert entry["fairagro:harvestedDatasets"] == repo.harvested_datasets
@@ -154,7 +154,7 @@ def test_jsonld_optional_study_and_assay_totals() -> None:
     """Optional study and assay totals appear as fairagro properties."""
     total_studies = 3
     total_assays = 7
-    report = _sample_report(repositories=[_sample_repo(total_studies=total_studies, total_assays=total_assays)])
+    report = _sample_report(repositories=(_sample_repo(total_studies=total_studies, total_assays=total_assays),))
     entry = json.loads(JsonLdReportSerializer().render(report))["schema:result"][0]
     assert entry["fairagro:totalStudies"] == total_studies
     assert entry["fairagro:totalAssays"] == total_assays
@@ -163,15 +163,15 @@ def test_jsonld_optional_study_and_assay_totals() -> None:
 def test_jsonld_omits_unset_expected_datasets() -> None:
     """Unset optional counts are omitted rather than null."""
     report = _sample_report(
-        repositories=[
+        repositories=(
             _sample_repo(
                 expected_datasets=None,
                 harvested_datasets=None,
                 failed_datasets=None,
                 total_studies=None,
                 total_assays=None,
-            )
-        ]
+            ),
+        )
     )
     entry = json.loads(JsonLdReportSerializer().render(report))["schema:result"][0]
     assert "fairagro:expectedDatasets" not in entry
@@ -184,14 +184,14 @@ def test_jsonld_omits_unset_expected_datasets() -> None:
 
 def test_jsonld_omits_empty_failed_records() -> None:
     """Empty failed-record lists are omitted from JSON-LD."""
-    report = _sample_report(repositories=[_sample_repo(failed_records=())])
+    report = _sample_report(repositories=(_sample_repo(failed_records=()),))
     entry = json.loads(JsonLdReportSerializer().render(report))["schema:result"][0]
     assert "fairagro:failedRecords" not in entry
 
 
 def test_jsonld_empty_result_array() -> None:
     """A run with no repositories emits an empty result array."""
-    document = json.loads(JsonLdReportSerializer().render(_sample_report(repositories=[])))
+    document = json.loads(JsonLdReportSerializer().render(_sample_report(repositories=())))
     assert document["schema:result"] == []
 
 
