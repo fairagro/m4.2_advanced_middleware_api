@@ -12,7 +12,7 @@ context: |
   Client certificates are optional; SSL verification on by default.
   Modules: middleware/api (primary), middleware/shared, middleware/api_client
   (api→shared/api_client OK; shared must not depend on api/api_client;
-  api_client must not depend on api/shared).
+  api_client→shared OK; api_client must not depend on api).
 
 rules:
   proposal:

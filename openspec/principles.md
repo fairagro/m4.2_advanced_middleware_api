@@ -40,7 +40,7 @@ middleware/api_client/   ← optional client library for API consumers
 
 - `api` may depend on `shared` and `api_client`.
 - `shared` must not depend on `api` or `api_client`.
-- `api_client` must not depend on `api` or `shared`.
+- `api_client` may depend on `shared`; it must not depend on `api`.
 
 ---
 
