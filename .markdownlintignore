@@ -1,0 +1,5 @@
+# OpenSpec regenerates these on `openspec update` — do not hand-lint/edit.
+.cursor/skills/**
+.cursor/commands/**
+.github/skills/**
+.github/prompts/**

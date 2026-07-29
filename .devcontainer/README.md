@@ -9,7 +9,24 @@ Open the repo and use **Reopen in Container** / **Dev Containers: Reopen in Cont
 | Path | Purpose |
 | ---- | ------- |
 | `devcontainer.json` | Shared container config (DinD, mounts, extensions, postCreate) |
-| `Dockerfile` | Pinned tooling image (Python via uv, sops, kubectl, …) |
+| `Dockerfile` | Pinned tooling image (Python via uv, Node.js, OpenSpec, sops, kubectl, …) |
+
+## Node.js and OpenSpec
+
+The image pins **Node.js 20.x** (official binary under `/usr/local`) and installs
+the [`@fission-ai/openspec`](https://www.npmjs.com/package/@fission-ai/openspec)
+CLI globally into `/usr/local` (`openspec` on `PATH`).
+
+After changing `NODE_VERSION` or `OPENSPEC_VERSION` in the Dockerfile, rebuild
+the Dev Container (**Dev Containers: Rebuild Container**).
+
+Project setup (once per clone, after rebuild):
+
+```bash
+openspec --version
+# If openspec/ is already in the repo:
+openspec update
+```
 
 ## Host bind mounts
 

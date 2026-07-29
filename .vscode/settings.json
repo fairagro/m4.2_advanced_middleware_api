@@ -38,7 +38,6 @@
   "sops.enabled": true,
   "sops.binPath": "sops",
 
-  "mypy.configFile": "pyproject.toml",
   "mypy-type-checker.args": [
     "--config-file",
     "${workspaceFolder}/pyproject.toml"
@@ -63,5 +62,8 @@
       "fileMatch": ["renovate.json"],
       "url": "https://docs.renovatebot.com/renovate-schema.json"
     }
-  ]
+  ],
+
+  // markdownlint: ignores live in .markdownlintignore (no markdownlint.ignore setting)
+  "markdownlint.configFile": ".markdownlint.json"
 }
