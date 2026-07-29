@@ -282,6 +282,13 @@ Before generating or modifying code, read the relevant specs:
   (`HarvestError`, `HarvestErrorType`), typed statistics (`HarvestStatistics`),
   and compatibility shim for issue #240.
 
+**Shared capabilities:**
+
+- **[`openspec/specs/harvest-report/`](openspec/specs/harvest-report/)** —
+  Format-neutral harvest run report model and serializers (JSON-LD first) for
+  compatible operator-facing stdout summaries (`HarvestReport`,
+  `RepositoryReport`, `FailedRecord`).
+
 For the AI agent workflow documentation, see [`docs/ai_workflow.md`](docs/ai_workflow.md).
 
 ### Spec-to-Code Mapping
@@ -299,6 +306,7 @@ Agents (`/opsx-apply` and default Agent mode) use it to locate affected code.
 | `openspec/specs/harvest-arc-upload/` | `middleware/api/src/middleware/api/api/v3/harvests.py` |
 | `openspec/specs/admission-control/` | `middleware/api/src/middleware/api/api/admission_control.py`, `fastapi_app.py` |
 | `openspec/specs/harvest-client/` | `middleware/api_client/src/middleware/api_client/api_client.py`, `models.py` |
+| `openspec/specs/harvest-report/` | `middleware/shared/src/middleware/shared/report/`, `ns/harvest-report/` |
 | `openspec/specs/ci-cd/` | `.github/workflows/` (see domain design for workflow files) |
 
 ---

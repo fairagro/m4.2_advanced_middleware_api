@@ -1,0 +1,50 @@
+# Publish vocabulary namespace (ns/) to GitHub Pages
+
+# Deploys only the `ns/` tree. Triggered by vocabulary tags such as
+# `ns/harvest-report/v1.0.0`. Does not publish `docs/` or application sources.
+#
+# Prerequisite (once per repo): Settings → Pages → Source = GitHub Actions.
+
+name: Publish ns Pages
+
+on:
+  push:
+    tags:
+      - "ns/harvest-report/v*"
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: publish-ns-pages
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: Deploy ns/ to GitHub Pages
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Stage site with /ns path prefix
+        run: |
+          mkdir -p _site
+          cp -a ns _site/ns
+
+      - name: Configure Pages
+        uses: actions/configure-pages@v5
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v4
+        with:
+          path: _site
+
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
