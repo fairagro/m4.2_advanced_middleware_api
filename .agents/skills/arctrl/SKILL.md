@@ -280,7 +280,7 @@ await start_as_task(arc.WriteAsync("/path/to/output/dir"))
 **`start_as_task` is untyped** — always add `# type: ignore[import-untyped]`
 on the import.
 
-**`CompositeHeader.performer` and `.date` are properties, not constructors**
+<!-- `CompositeHeader.performer` and `.date` are properties, not constructors -->
 — call them without `()`:
 
 ```python

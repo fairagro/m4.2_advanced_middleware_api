@@ -68,7 +68,6 @@ from typing import Annotated
 from pydantic import Field, SecretStr
 from middleware.shared.config.config_base import ConfigBase  # optional
 
-
 class Config(ConfigBase):  # or BaseModel if ConfigBase fields aren't needed
     # Required field (no default)
     connection_string: Annotated[SecretStr, Field(description="DB connection URI")]
@@ -116,6 +115,7 @@ otel: OtelConfig  # OpenTelemetry settings
 - `SecretStr` fields: access the value as `.get_secret_value()` only at the
   point of use (e.g., when creating a DB engine). Never pass them to `str()`
   or log them directly.
+
 - Docker secrets: mount files to `/run/secrets/`; the wrapper resolves them
   automatically using the full key name (lowercase).
 
@@ -140,7 +140,7 @@ config: Annotated[InspireToArcConfig, Field(description="Inspire plugin configur
 
 ## Defaults Rule
 
-**All defaults belong in the `Config` class — never in application code.**
+<!-- All defaults belong in the `Config` class — never in application code. -->
 
 If application code needs a fallback value (e.g. `sys.maxsize`, a hardcoded
 constant, or a magic number), that value belongs as a Pydantic field default

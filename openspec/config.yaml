@@ -1,0 +1,44 @@
+schema: spec-driven
+
+context: |
+  FAIRagro Advanced Middleware API — Python 3.12, FastAPI, Celery, CouchDB, RabbitMQ.
+  Package manager: always `uv` (never pip/poetry directly).
+  Config: ConfigWrapper only — no `os.environ` in application code.
+  Specs live under `openspec/specs/<domain>/` (kebab-case domains).
+  Foundation contract: `openspec/principles.md` (read before proposing changes).
+  Spec-to-code mapping is maintained in `AGENTS.md`.
+  Quality gates: `uv run ruff format/check middleware/`, mypy, pylint, bandit, pytest.
+  Scale: one worker process per container; horizontal via Kubernetes replicas.
+  Client certificates are optional; SSL verification on by default.
+  Modules: middleware/api (primary), middleware/shared, middleware/api_client
+  (api→shared/api_client OK; shared must not depend on api/api_client;
+  api_client→shared OK; api_client must not depend on api).
+
+rules:
+  proposal:
+    - State intent, scope, and non-goals in plain language.
+    - Reference affected openspec/specs/<domain>/ folders explicitly.
+  specs:
+    - Use RFC 2119 SHALL/MUST (default), SHOULD only when justified, MAY when optional.
+    - Every requirement needs at least one GIVEN/WHEN/THEN scenario.
+    - One behaviour per requirement — split "and also" clauses.
+    - Keep implementation details (function names, modules) out of requirements
+      unless they are exception classes, wire-protocol literals, or domain IDs.
+    - Do not restate constraints already in openspec/principles.md.
+  design:
+    - Decisions describe the current state, not change history.
+    - Every decision has a stated reason.
+  tasks:
+    - Order by dependency; keep entries flat and checkable.
+
+operations:
+  apply:
+    guidance:
+      - Run focused tests with `uv run pytest` on affected packages before the full suite.
+      - Run `uv run ruff format middleware/` and `uv run ruff check middleware/` on touched code.
+      - >-
+        Prefer real fixes over "# noqa" / "# type: ignore" / "# pylint: disable".
+  archive:
+    guidance:
+      - Keep the completion summary concise.
+      - Confirm Spec-to-Code Mapping in AGENTS.md still matches after domain adds/renames.
