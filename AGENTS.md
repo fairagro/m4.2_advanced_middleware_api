@@ -51,10 +51,11 @@ middleware/
 │   └── config.py          # Optional certificate support (26 tests)
 
 scripts/
-├── load-env.sh           # Environment setup (MAIN ENTRY POINT for hooks)
-├── setup-git-lfs.sh      # Git LFS installation
-└── git-hooks/            # Version-controlled hooks
-    ├── pre-push          # Combined: Git LFS + pre-commit
+├── load-env.sh                    # Environment setup (sourced from ~/.bashrc)
+├── setup-git-lfs.sh               # Git LFS hooks (standalone / re-runnable)
+├── devcontainer-post-create.sh    # Dev Container + local one-time setup
+└── git-hooks/                     # Version-controlled hooks
+    ├── pre-push                   # Combined: Git LFS + pre-commit
     ├── post-checkout
     ├── post-commit
     └── post-merge
@@ -140,10 +141,11 @@ config2 = Config(
 
 **Setup Process**:
 
-1. `scripts/load-env.sh` is sourced during development
-2. This script calls `scripts/setup-git-lfs.sh`
-3. Git LFS hooks are installed from `scripts/git-hooks/`
-4. Hooks are version-controlled, not just in `.git/hooks/`
+1. `scripts/devcontainer-post-create.sh` (or Dev Container postCreate) installs
+   pre-commit and calls `scripts/setup-git-lfs.sh`
+2. Git LFS hooks are installed from `scripts/git-hooks/`
+3. Hooks are version-controlled, not just in `.git/hooks/`
+4. Re-run LFS hooks alone with `scripts/setup-git-lfs.sh` when needed
 
 **Files Tracked by LFS**: `*.sql` (configured in `.gitattributes`)
 
