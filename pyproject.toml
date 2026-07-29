@@ -149,6 +149,8 @@ exclude = [
 # IDE import resolution (Pylance / BasedPyright); mirrors mypy_path and pylint source-roots.
 extraPaths = [
   "middleware/api/src",
+  "middleware/api_client/src",
+  "middleware/shared/src",
   "middleware/api/tests/unit",
   "middleware/api_client/tests",
   "middleware/shared/tests",

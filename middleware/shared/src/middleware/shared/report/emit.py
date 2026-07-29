@@ -22,5 +22,5 @@ def print_report(
     active_serializer: ReportSerializer = serializer or JsonLdReportSerializer()
     try:
         print(active_serializer.render(report))
-    except (OSError, OverflowError, TypeError, ValueError) as exc:
+    except Exception as exc:  # noqa: BLE001 — MUST NOT fail the process (harvest-report)
         logger.warning("Failed to serialise harvest report: %s", exc)

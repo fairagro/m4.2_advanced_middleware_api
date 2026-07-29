@@ -215,7 +215,7 @@ def test_print_report_does_not_raise_on_serialization_failure(
 
         def render(self, report: HarvestReport) -> str:
             if self._fail:
-                raise ValueError(f"cannot serialise {type(report).__name__}")
+                raise RuntimeError(f"cannot serialise {type(report).__name__}")
             return "{}"
 
     with caplog.at_level(logging.WARNING):
