@@ -131,6 +131,16 @@ def test_jsonld_timestamps_and_durations() -> None:
     assert document["schema:result"][0]["schema:duration"].startswith("PT")
 
 
+def test_jsonld_rejects_naive_timestamps() -> None:
+    """Naive start/end times must not be silently treated as local time."""
+    report = HarvestReport(
+        start_time=datetime(2026, 5, 6, 14, 0, 0),
+        end_time=datetime(2026, 5, 6, 14, 3, 45),
+    )
+    with pytest.raises(ValueError, match="timezone-aware"):
+        JsonLdReportSerializer().render(report)
+
+
 def test_jsonld_metrics_and_failed_records() -> None:
     """Fairagro metrics and nested failed records are emitted."""
     repo = _sample_repo()

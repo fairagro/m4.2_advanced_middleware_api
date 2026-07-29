@@ -26,7 +26,15 @@ def _format_iso_duration(seconds: float) -> str:
 
 
 def _format_iso_timestamp(value: datetime) -> str:
-    """Format a UTC datetime value as an ISO 8601 timestamp ending in Z."""
+    """Format a timezone-aware datetime as an ISO 8601 UTC timestamp ending in Z.
+
+    Raises:
+        ValueError: If ``value`` is naive (no ``tzinfo``). Callers must supply
+            timezone-aware UTC times; treating naive values as local time would
+            silently shift the wall clock on non-UTC hosts.
+    """
+    if value.tzinfo is None:
+        raise ValueError("HarvestReport timestamps must be timezone-aware UTC")
     return value.astimezone(UTC).isoformat().replace("+00:00", "Z")
 
 
