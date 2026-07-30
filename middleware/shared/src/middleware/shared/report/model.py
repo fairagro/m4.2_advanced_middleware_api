@@ -76,7 +76,7 @@ class RepositoryScope:
 
     @property
     def rdi(self) -> str:
-        """Return the RDI identifier for this scope."""
+        """RDI identifier for this scope."""
         return self._rdi
 
     def close(self, *, closed_at: datetime | None = None) -> None:
@@ -183,12 +183,12 @@ class HarvestReport:
 
     @property
     def start_time(self) -> datetime:
-        """Return the run start timestamp."""
+        """Run start timestamp."""
         return self._start_time
 
     @property
     def end_time(self) -> datetime:
-        """Return the run end timestamp.
+        """Run end timestamp.
 
         Raises:
             ValueError: If :meth:`finish` has not been called yet.
@@ -199,12 +199,12 @@ class HarvestReport:
 
     @property
     def duration_seconds(self) -> float:
-        """Return the total harvest run duration in seconds."""
+        """Total harvest run duration in seconds."""
         return (self.end_time - self.start_time).total_seconds()
 
     @property
     def repository_reports(self) -> tuple[RepositoryReport, ...]:
-        """Return immutable snapshots of all repository scopes in open order."""
+        """Immutable snapshots of all repository scopes in open order."""
         with self._scopes_lock:
             scopes = list(self._scopes)
         return tuple(scope.snapshot() for scope in scopes)

@@ -235,11 +235,7 @@ class Api:
 
     @property
     def app(self) -> FastAPI:
-        """Get the FastAPI application instance.
-
-        Returns:
-            FastAPI: The configured FastAPI application.
-        """
+        """Configured FastAPI application instance."""
         return self._app
 
     def _setup_exception_handlers(self) -> None:

@@ -51,7 +51,7 @@ class ArcManager:
 
     @property
     def store(self) -> ArcStore:
-        """Return the underlying ArcStore (used by health checks and shutdown delegation)."""
+        """Underlying ArcStore (used by health checks and shutdown delegation)."""
         return self._store
 
     async def shutdown(self) -> None:
