@@ -15,7 +15,7 @@ COPY pyproject.toml uv.lock ./
 COPY middleware ./middleware
 
 # Upgrade pip and install uv
-RUN pip install --no-cache-dir --upgrade pip==26.1.2 uv==0.11.30
+RUN pip install --no-cache-dir --upgrade pip==26.2 uv==0.12.0
 
 # Build wheels
 RUN uv build --package fairagro-middleware-shared --wheel && \
@@ -36,7 +36,7 @@ RUN apk add --no-cache \
 WORKDIR /build
 
 # Install uv and PyInstaller
-RUN pip install --no-cache-dir --upgrade pip==26.1.2 uv==0.11.30
+RUN pip install --no-cache-dir --upgrade pip==26.2 uv==0.12.0
 
 # Copy built wheel from package-builder stage
 COPY --from=package-builder /build/dist/*.whl /tmp/wheels/
