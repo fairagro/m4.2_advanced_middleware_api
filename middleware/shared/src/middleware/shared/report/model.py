@@ -7,6 +7,13 @@ from dataclasses import dataclass, field
 from datetime import UTC, datetime
 
 
+def _require_aware_utc(value: datetime, *, what: str) -> datetime:
+    """Reject naive datetimes; callers must pass timezone-aware UTC timestamps."""
+    if value.tzinfo is None:
+        raise ValueError(f"{what} must be timezone-aware UTC")
+    return value
+
+
 @dataclass(frozen=True)
 class FailedRecord:
     """A single dataset that failed during harvesting."""
@@ -58,7 +65,10 @@ class RepositoryScope:
     def __init__(self, rdi: str, *, opened_at: datetime | None = None) -> None:
         """Open a repository scope for ``rdi``; timing starts immediately."""
         self._rdi = rdi
-        self._opened_at = opened_at or datetime.now(UTC)
+        if opened_at is None:
+            self._opened_at = datetime.now(UTC)
+        else:
+            self._opened_at = _require_aware_utc(opened_at, what="RepositoryScope opened_at")
         self._closed_at: datetime | None = None
         self._lock = threading.Lock()
         self._datasets = _DatasetCounts()
@@ -71,6 +81,8 @@ class RepositoryScope:
 
     def close(self, *, closed_at: datetime | None = None) -> None:
         """Close the scope and record end time for duration."""
+        if closed_at is not None:
+            closed_at = _require_aware_utc(closed_at, what="RepositoryScope closed_at")
         with self._lock:
             if self._closed_at is None:
                 self._closed_at = closed_at or datetime.now(UTC)
@@ -161,9 +173,10 @@ class HarvestReport:
     ) -> None:
         """Create a run report and record the authoritative start time."""
         self.name = name
-        self._start_time = start_time or datetime.now(UTC)
-        if self._start_time.tzinfo is None:
-            raise ValueError("HarvestReport timestamps must be timezone-aware UTC")
+        if start_time is None:
+            self._start_time = datetime.now(UTC)
+        else:
+            self._start_time = _require_aware_utc(start_time, what="HarvestReport start_time")
         self._end_time: datetime | None = None
         self._scopes: list[RepositoryScope] = []
         self._scopes_lock = threading.Lock()
@@ -204,8 +217,13 @@ class HarvestReport:
         return scope
 
     def finish(self, *, end_time: datetime | None = None) -> None:
-        """Finish the harvest run and record the end timestamp."""
-        finished_at = end_time or datetime.now(UTC)
-        if finished_at.tzinfo is None:
-            raise ValueError("HarvestReport timestamps must be timezone-aware UTC")
+        """Finish the harvest run, close open scopes, and record the end timestamp."""
+        if end_time is None:
+            finished_at = datetime.now(UTC)
+        else:
+            finished_at = _require_aware_utc(end_time, what="HarvestReport end_time")
+        with self._scopes_lock:
+            scopes = list(self._scopes)
+        for scope in scopes:
+            scope.close(closed_at=finished_at)
         self._end_time = finished_at

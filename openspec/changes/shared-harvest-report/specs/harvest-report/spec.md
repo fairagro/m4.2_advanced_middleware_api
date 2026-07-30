@@ -283,7 +283,7 @@ and `fairagro:failedRecords` as an array of failed-record objects.
 ### Requirement: Versioned vocabulary IRI
 
 The JSON-LD `@context` entry for `fairagro` SHALL use
-`https://fairagro.github.io/m4.2_advanced_middleware_api/ns/harvest-report/v1/`
-(trailing slash). Bumps that break term compatibility use a new version
-segment; documentation lives under `ns/harvest-report/v1/` and is published
-via GitHub Pages from tags without publishing unrelated `docs/` trees.
+`https://fairagro.github.io/m4.2_advanced_middleware_api/ns/harvest-report/v1/#`
+(hash fragment on the versioned path). Bumps that break term compatibility use
+a new version segment; documentation lives under `ns/harvest-report/v1/` and is
+published via GitHub Pages from tags without publishing unrelated `docs/` trees.

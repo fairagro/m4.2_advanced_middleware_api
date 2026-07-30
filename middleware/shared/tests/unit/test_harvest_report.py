@@ -16,6 +16,7 @@ from middleware.shared.report import (
     FailedRecord,
     HarvestReport,
     JsonLdReportSerializer,
+    RepositoryScope,
 )
 
 _START = datetime(2026, 5, 6, 14, 0, 0, tzinfo=UTC)
@@ -180,6 +181,33 @@ def test_naive_start_time_rejected() -> None:
     """Naive start times must not be silently treated as local time."""
     with pytest.raises(ValueError, match="timezone-aware"):
         HarvestReport(start_time=datetime(2026, 5, 6, 14, 0, 0))
+
+
+def test_naive_opened_at_rejected() -> None:
+    """Naive opened_at on a repository scope is rejected."""
+    with pytest.raises(ValueError, match="timezone-aware"):
+        RepositoryScope("bonares", opened_at=datetime(2026, 5, 6, 14, 0, 0))
+
+
+def test_naive_closed_at_rejected() -> None:
+    """Naive closed_at on a repository scope is rejected."""
+    scope = RepositoryScope("bonares", opened_at=_START)
+    with pytest.raises(ValueError, match="timezone-aware"):
+        scope.close(closed_at=datetime(2026, 5, 6, 14, 1, 0))
+
+
+def test_finish_closes_open_scopes_deterministically() -> None:
+    """finish() closes still-open scopes at the run end time."""
+    opened = datetime(2026, 5, 6, 14, 0, 0, tzinfo=UTC)
+    report = HarvestReport(start_time=opened)
+    scope = report.open_repository("bonares", opened_at=opened)
+    report.finish(end_time=_END)
+    assert scope.snapshot().duration_seconds == (_END - opened).total_seconds()
+    # Second finish must not change an already-closed scope.
+    later = _END + timedelta(seconds=30)
+    report.finish(end_time=later)
+    assert scope.snapshot().duration_seconds == (_END - opened).total_seconds()
+    assert report.end_time == later
 
 
 def test_jsonld_context_and_types() -> None:
