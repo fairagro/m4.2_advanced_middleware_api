@@ -8,10 +8,10 @@ from datetime import UTC, datetime
 
 
 def _require_aware_utc(value: datetime, *, what: str) -> datetime:
-    """Reject naive datetimes; callers must pass timezone-aware UTC timestamps."""
+    """Reject naive datetimes and normalize timezone-aware values to UTC."""
     if value.tzinfo is None:
         raise ValueError(f"{what} must be timezone-aware UTC")
-    return value
+    return value.astimezone(UTC)
 
 
 @dataclass(frozen=True)
@@ -217,7 +217,13 @@ class HarvestReport:
         return scope
 
     def finish(self, *, end_time: datetime | None = None) -> None:
-        """Finish the harvest run, close open scopes, and record the end timestamp."""
+        """Finish the harvest run, close open scopes, and record the end timestamp.
+
+        Raises:
+            ValueError: If :meth:`finish` has already been called.
+        """
+        if self._end_time is not None:
+            raise ValueError("HarvestReport.finish() has already been called")
         if end_time is None:
             finished_at = datetime.now(UTC)
         else:

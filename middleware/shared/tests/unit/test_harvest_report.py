@@ -8,6 +8,7 @@ import threading
 from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor
 from datetime import UTC, datetime, timedelta
+from zoneinfo import ZoneInfo
 
 import pytest
 
@@ -203,11 +204,26 @@ def test_finish_closes_open_scopes_deterministically() -> None:
     scope = report.open_repository("bonares", opened_at=opened)
     report.finish(end_time=_END)
     assert scope.snapshot().duration_seconds == (_END - opened).total_seconds()
-    # Second finish must not change an already-closed scope.
-    later = _END + timedelta(seconds=30)
-    report.finish(end_time=later)
-    assert scope.snapshot().duration_seconds == (_END - opened).total_seconds()
-    assert report.end_time == later
+    assert report.end_time == _END
+
+
+def test_finish_is_single_shot() -> None:
+    """Calling finish() twice raises so run and scope durations stay aligned."""
+    report = HarvestReport(start_time=_START)
+    report.open_repository("bonares", opened_at=_START)
+    report.finish(end_time=_END)
+    with pytest.raises(ValueError, match="already been called"):
+        report.finish(end_time=_END + timedelta(seconds=30))
+    assert report.end_time == _END
+
+
+def test_require_aware_utc_normalizes_non_utc() -> None:
+    """Timezone-aware non-UTC timestamps are stored as UTC equivalents."""
+    berlin = ZoneInfo("Europe/Berlin")
+    local_start = datetime(2026, 5, 6, 16, 0, 0, tzinfo=berlin)  # UTC+2 in May
+    report = HarvestReport(start_time=local_start)
+    assert report.start_time == datetime(2026, 5, 6, 14, 0, 0, tzinfo=UTC)
+    assert report.start_time.tzinfo == UTC
 
 
 def test_jsonld_context_and_types() -> None:
