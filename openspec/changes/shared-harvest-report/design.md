@@ -2,149 +2,152 @@
 
 ## Context
 
-See `proposal.md` for motivation. Today `fairagro-middleware-shared` exposes
-config, tracing, and API models; it has no harvest-run report types. External
-clients duplicate incompatible JSON-LD emitters. This design ports the
-harvester report shape into shared as a reusable library with pluggable
-formats. Consumers outside this repo adopt it in separate work.
+See `proposal.md` for motivation. Client tools
+([m4.2_middleware_harvester](https://github.com/fairagro/m4.2_middleware_harvester),
+[m4.2_sql_to_arc](https://github.com/fairagro/m4.2_sql_to_arc)) already accumulate
+statistics during the run (`_ArcStreamState`, `ProcessingStats`) and only then
+build a report snapshot. The shared library owns that accumulation: callers
+create a report at harvest start, invoke counting methods on events, finish the
+run, and serialize. Wire shape remains the harvester JSON-LD baseline.
 
 ## Goals / Non-Goals
 
 **Goals:**
 
-- Format-neutral domain model matching the harvester report baseline
-- JSON-LD serializer as the first format, operator-readable (`indent=2`)
-- Extension point for future formats without changing the model
-- Optional study/assay fields on repository entries (omit when unset)
-- Unit-tested public API under `middleware/shared`
+- Mutable harvest-run report with counting methods as the sole owner of
+  harvested / failed / skipped / expected / study / assay statistics
+- API surface covering both consumers’ event kinds (including study/assay
+  totals for SQL-to-ARC)
+- Safe concurrent updates from asyncio tasks sharing one repository scope
+- Format-neutral readable statistics for serializers; JSON-LD first
 - Versioned in-repo vocabulary under `ns/`, published independently of `docs/`
 
 **Non-Goals:**
 
 - Migrating harvester or sql_to_arc code in this change
 - Extra formats beyond JSON-LD
+- A shared stdout / emit helper (callers print or log the serializer string)
 - Parse / round-trip / schema-version APIs for machines
 - Porting sql_to_arc-only PROV / instrument / actionStatus terms
 - API or api_client behavioral changes
-- Custom apex-domain hosting for the vocabulary (e.g. `fairagro.net`)
-- Compact unprefixed body keys (sql_to_arc style); keep prefixed wire keys
-- Publishing the entire `docs/` tree (or repo root) via GitHub Pages
+- Custom apex-domain hosting for the vocabulary
+- Publishing the entire `docs/` tree via GitHub Pages
+- Making callers pass pre-aggregated integer totals into a frozen-only constructor
+  as the primary API
 
 ## Decisions
 
 1. **Package placement: `middleware.shared.report` inside shared**
-   - Reason: both client repos already (or will) depend on
-     `fairagro-middleware-shared`; a nested module avoids a new PyPI artifact
-     until extraction is justified.
-   - Alternatives considered: separate workspace package now — deferred;
-     living under `api_client` — rejected because shared must not reverse-depend
-     and reports are not HTTP-client concerns.
+   — Both client repos depend (or will depend) on `fairagro-middleware-shared`;
+   a nested module avoids a new PyPI artifact until extraction is justified.
+   Living under `api_client` is rejected: reports are not HTTP-client concerns
+   and shared must not reverse-depend on api.
 
-2. **Domain names: `HarvestReport`, `RepositoryReport`, `FailedRecord`**
-   - Reason: both tools call the harvest API; harvester naming is the preferred
-     baseline and is already familiar to operators.
-   - Alternatives considered: `RunReport` / generic naming — rejected after
-     product preference for harvest terminology.
+2. **Primary API: mutable accumulator, not end-of-run snapshot construction**
+   — Harvester and SQL-to-ARC already treat stats as event-driven counters.
+   Owning increments in the report removes duplicated counter state and keeps
+   omit/null rules consistent. A frozen snapshot MAY exist for serializers after
+   finish, but callers MUST NOT be required to assemble counts themselves.
 
-3. **Dataclasses for the model; Protocol/ABC for serializers**
-   - Reason: harvester already uses dataclasses successfully; serializers are
-     a small Strategy surface (`render(report) -> str`). Avoid coupling the
-     model to JSON-LD methods as the only path (keep `to_jsonld` optional
-     convenience if useful, but format selection goes through the serializer
-     API).
-   - Alternatives considered: Pydantic-only like sql_to_arc `ProcessingStats` —
-     unnecessary for an in-memory builder used at process end.
+3. **Lifecycle: start run → open scope handle(s) → count on handles → close →
+   finish run → serialize**
+   — Matches “initialise at harvest start” and multi-RDI harvester tasks.
+   Opening a scope returns an explicit handle; counting methods live on that
+   handle. Multiple handles MAY be open concurrently so parallel RDI tasks do
+   not share a single implicit “current” scope. Single-RDI tools open one
+   handle for the whole run. Duration is derived from open/close (per
+   repository) and start/finish (overall Action times).
 
-4. **JSON-LD wire shape = harvester baseline**
-   - Reason: newer, multi-RDI, richer failures, `https://schema.org/`, documented
-     omit semantics. sql_to_arc maps later to one `EntryPoint` in `result[]`.
-   - Alternatives considered: unify on sql_to_arc flat `prov:Activity` —
-     rejected (weaker failure detail, broken study/assay mapping to
-     `schema:result`, wrong schema.org scheme).
+4. **Counting method surface (domain events on a scope handle)**
+   — Methods cover the union of consumer needs observed in the two repos:
+   - set expected dataset count (optional; harvester pre-fetch)
+   - set harvest id (nullable until assigned)
+   - record harvested dataset (definitive success / sql_to_arc found)
+   - record failed dataset (message; optional record id; optional URL)
+   - record skipped dataset (harvester `SkippedRecord`; always-on wire field)
+   - add studies / add assays (sql_to_arc batch totals)
+   Callers signal these events on the correct handle; the run aggregates
+   scopes for serialization. No “reclassify harvested → failed” API: consumers
+   MUST count harvested only after definitive success (e.g. after
+   `harvest_arcs` / upload result), so duplicate or submission failures are
+   recorded as failures only, never as a correction of a prior success count.
 
-5. **Optional `total_studies` / `total_assays` → `fairagro:totalStudies` /
-   `fairagro:totalAssays`**
-   - Reason: cheap optional ints preserve sql_to_arc value without overloading
-     `schema:result`. Omit when unset.
-   - Alternatives considered: drop entirely — acceptable fallback if unexpected
-     complexity appears; keep in model because cost is low.
+5. **Names: `HarvestReport` (run), repository scope / handle, `FailedRecord`**
+   — Align with harvester/operator vocabulary. Exact type and method names live
+   in code; requirements speak in domain events. A thin frozen view for
+   serializers is an implementation detail as long as counting remains the
+   public write path.
 
-6. **Stdout emit helper with silent failure**
-   - Reason: matches harvester contract; report must not change process exit
-     behavior for operators.
-   - Alternatives considered: raise to caller — rejected for this audience.
+6. **Concurrency: same-handle asyncio safety; multi-handle isolation**
+   — SQL-to-ARC mutates one stats object from concurrent tasks. Counting on
+   one handle MUST preserve totals under interleaved calls. Different open
+   handles on the same run MUST not cross-count (harvester parallel RDIs).
+   Multi-process merge remains out of scope unless a later need appears.
 
-7. **No dependency on api / api_client**
-   - Reason: shared module boundary in `openspec/principles.md` /
-     `openspec/config.yaml`.
+7. **Pluggable serializers behind a common contract; JSON-LD shipped first**
+   — Counting stays format-neutral. Rendering goes through a shared serializer
+   interface (Strategy) that returns a document string. JSON-LD is the only
+   format required in this change. Further formats are additive
+   implementations, not changes to the accumulator API. Writing the string
+   (stdout, files, logs) stays in the calling tool.
 
-8. **Versioned namespace IRI; vocab under `ns/` (not `docs/`)**
-   - Canonical namespace IRI (vocabulary major `v1`):
-     `https://fairagro.github.io/m4.2_advanced_middleware_api/ns/harvest-report/v1/#`
-   - Source of truth in git:
-     `ns/harvest-report/v1/context.jsonld`,
-     `ns/harvest-report/v1/README.md`,
-     optional `ns/harvest-report/v1/index.html` for browser resolution of the
-     hash-namespace base URL.
-   - Serializer embeds compact `@context` with `fairagro` pointing at that
-     versioned IRI; body keys stay prefixed.
-   - Reason: unversioned IRIs cannot safely evolve; `docs/` must not be
-     wholesale-published just to host a vocab; namespace releases must be
-     controllable via tags independent of documentation.
-   - Alternatives considered:
-     - Unversioned `…/harvest-report#` — rejected (no safe evolution).
-     - Pages from branch `/docs` — rejected (exposes all docs; not tag-gated).
-     - `raw.githubusercontent.com/.../main/...` — rejected (branch-volatile).
-     - Dead `fairagro.net/ns/` — rejected (404).
-     - sql_to_arc compact keys / overloaded `schema:` — rejected.
+8. **JSON-LD wire shape = harvester baseline**
+   — Newer multi-RDI shape, richer failures, `https://schema.org/`, documented
+   omit semantics. SQL-to-ARC maps to one `EntryPoint` in `result[]`. Compact
+   unprefixed keys and PROV-only terms are rejected for the shared wire format.
 
-9. **Publish only `ns/` via GitHub Actions on vocabulary tags**
-   - Tag pattern: `ns/harvest-report/v<major>.<minor>.<patch>` (e.g.
-     `ns/harvest-report/v1.0.0`).
-   - Workflow uploads **only** the `ns/` tree (or the tagged vocab folder) to
-     GitHub Pages—never `docs/` or application sources.
-   - Incompatible vocabulary changes MUST add a new major path
-     (`ns/harvest-report/v2/`) and a new serializer IRI; published `v1`
-     semantics MUST stay backward-compatible (additive terms only).
-   - Reason: GitHub’s branch Pages sources (`/` or `/docs`) cannot publish a
-     subdirectory alone; Actions artifact deploy can.
-   - Alternatives considered: separate vocab mini-repo — deferred until
-     multiple products share the namespace.
+9. **Optional study/assay totals on repository entries**
+   — Preserves SQL-to-ARC operator value without overloading `schema:result`.
+   Omit both when zero; when either is non-zero, emit both.
 
-10. **Hash fragment on the versioned path (`…/v1#term`)**
-    - Reason: one context document covers all terms under that major version.
-    - Alternatives considered: slash per-term paths — unnecessary at this size.
+10. **No dependency on api / api_client**
+    — Shared module boundary in `openspec/principles.md` /
+    `openspec/config.yaml`.
+
+11. **Versioned namespace IRI; vocab under `ns/` (not `docs/`)**
+    — Canonical IRI:
+      `https://fairagro.github.io/m4.2_advanced_middleware_api/ns/harvest-report/v1/#`
+    — Source: `ns/harvest-report/v1/{context.jsonld,README.md,index.html}`.
+    — Serializer embeds compact `@context` with that IRI; body keys stay
+      prefixed. Unversioned or `docs/`-hosted IRIs are rejected.
+
+12. **Publish only `ns/` via GitHub Actions on vocabulary tags**
+    — Tag pattern `ns/harvest-report/v*`; incompatible breaks use `v2/` path.
+    — Branch Pages sources cannot publish a subdirectory alone; Actions can.
+
+13. **Hash fragment on the versioned path (`…/v1#term`)**
+    — One context document covers all terms under that major version.
 
 ## Risks / Trade-offs
 
 - **[Risk] Consumer drift until harvester/sql_to_arc migrate** → Mitigation:
-  document the wire contract in `openspec/specs/harvest-report/`; publish via
-  existing shared release; migrations are out of scope here.
+  document the contract in the delta (then main) harvest-report spec; migrations
+  stay out of scope here.
+- **[Risk] Existing snapshot-oriented shared code must be reshaped** → Mitigation:
+  treat tasks section 5 as the redesign implementation; keep wire tests green.
 - **[Risk] Operators comparing old sql_to_arc logs to new shape** → Mitigation:
-  accept a one-time break on consumer migration; new shape is intentional.
-- **[Trade-off] Optional study/assay in core model** → Slightly broader API than
-  harvester today; keeps one shared type instead of extension hooks.
-- **[Risk] Pages / Actions misconfigured → dead IRI** → Mitigation: document
-  tag + workflow; keep embedded `@context` so offline logs still expand terms
-  by IRI string even if HTTP fetch fails.
-- **[Risk] Repo rename breaks github.io URLs** → Mitigation: treat published
-  IRIs as permanent; redirects or a later successor IRI if the org/repo moves.
+  accept a one-time break on consumer migration.
+- **[Trade-off] Broader counting API than either consumer alone** → One library
+  for both is preferable to two partial APIs.
+- **[Risk] Lock contention under heavy asyncio fan-out** → Mitigation: short
+  critical sections around integer/list updates only; revisit if profiling shows
+  hotspots.
+- **[Risk] Pages / Actions misconfigured → dead IRI** → Mitigation: tag +
+  workflow docs; embedded `@context` still expands by IRI string offline.
 - **[Trade-off] Major version in path vs full semver in path** → Major (`v1`)
-  keeps the serializer IRI stable across compatible patches; patch tags redeploy
-  the same `v1/` tree with additive fixes only.
+  keeps the serializer IRI stable across compatible patches.
 
 ## Migration Plan
 
-1. Land library + tests + Spec-to-Code mapping in this repo.
-2. Add `ns/harvest-report/v1/` vocab files; point serializer at the versioned
-   IRI.
-3. Add GitHub Actions workflow to publish only `ns/` on
-   `ns/harvest-report/v*` tags; enable Pages via Actions (not branch `/docs`).
-4. Cut first vocab tag (e.g. `ns/harvest-report/v1.0.0`) when ready to resolve
-   the HTTP namespace.
-5. Publish shared package via normal release process.
-6. Separate consumer-repo migrations (out of scope).
+1. Align OpenSpec artifacts with the accumulator/counting design (this update).
+2. Reshape `middleware.shared.report` to the counting API; keep JSON-LD wire
+   tests and vocab/Pages artifacts.
+3. Publish shared package via normal release process when ready.
+4. Separate consumer-repo migrations (out of scope): replace `_ArcStreamState` /
+   `ProcessingStats` report fields with shared counting methods.
 
 ## Open Questions
 
-- None that block implementation. First vocab tag timing is operational.
+- None that block redesign of the shared library. Exact public method names are
+  an implementation choice within the domain events above.
+  Multi-process merge is deferred until a consumer needs it.

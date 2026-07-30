@@ -2,234 +2,288 @@
 
 ## Purpose
 
-Provides a shared, format-neutral harvest-run report model and serializers so
-middleware clients can emit compatible operator-facing summaries (JSON-LD first)
-after talking to the harvest API.
+Provide a shared, format-neutral harvest-run report that client tools initialise
+at the start of a harvest, update through counting methods on repository scope
+handles while the run progresses, and render via a pluggable serializer
+(JSON-LD shipped first) to a document string. Counting is owned by the report;
+callers signal events and MUST NOT maintain parallel counters for the same
+statistics. Multiple repository scopes MAY be open concurrently; each has its
+own handle and counters. How callers write or log that string (e.g. stdout) is
+outside this library.
+
+The wire shape follows the Middleware Harvester baseline (`schema:Action` with
+`schema:result` of repository `EntryPoint`s). The vocabulary IRI is versioned
+under the repository namespace tree.
 
 ## ADDED Requirements
 
-### Requirement: Capture harvest-run timing and per-repository results
+### Requirement: Mutable run initialisation
 
-A harvest run report MUST record overall start and end times (UTC) and an
-ordered list of per-repository result entries. Each repository entry MUST
-include the RDI identifier, optional harvest id, wall-clock duration in
-seconds, optional expected / harvested / failed dataset counts, a skipped
-dataset count, and an ordered list of failed-record entries.
+The shared library SHALL provide a mutable harvest-run report that is created
+at the start of a harvest run and records an authoritative start time at
+creation (or an explicit start operation that MUST be invoked before counting).
 
-#### Scenario: Build a run report with one repository
+#### Scenario: Report exists before first count
 
-- **GIVEN** a harvest run with known start and end times and one repository
-  result
-- **WHEN** a harvest run report is built from those inputs
-- **THEN** the report exposes the run timing and exactly one repository entry
-  with the supplied RDI, counts, and failure list
+- **GIVEN** a harvest run is about to begin
+- **WHEN** the caller creates (or starts) the harvest-run report
+- **THEN** a mutable report instance is available for counting methods
+- **AND** a start timestamp is recorded for later duration and wire emission
 
-#### Scenario: Build a run report with no repositories
+### Requirement: Finish run
 
-- **GIVEN** a harvest run with start and end times and an empty repository list
-- **WHEN** a harvest run report is built
-- **THEN** the report exposes the run timing and an empty repository list
+The report SHALL support finishing the harvest run, recording an end time used
+for overall duration on the wire (`schema:endTime` / duration derived from
+start and end).
 
-### Requirement: Capture failed-record detail
+#### Scenario: Finish after counting
 
-Each failed-record entry MUST include a human-readable message and MAY include
-an optional record id and optional URL.
+- **GIVEN** a started harvest-run report with zero or more counted events
+- **WHEN** the caller finishes the run
+- **THEN** an end timestamp is recorded
+- **AND** serializers MAY read a stable snapshot of all counted statistics
 
-#### Scenario: Failed record with optional identifiers
+### Requirement: Repository scope
 
-- **GIVEN** a failure message, a record id, and a URL
-- **WHEN** a failed-record entry is created
-- **THEN** the entry exposes the message, record id, and URL
+The report SHALL support opening a repository scope identified by an RDI
+string and closing that scope so per-repository duration can be recorded.
+Opening a scope SHALL yield a distinct scope handle. A run MAY contain one
+or more repository scopes. Multiple scopes MAY be open at the same time
+(e.g. parallel RDI harvest tasks). Repository-specific counting methods
+SHALL apply to an explicit scope handle — there is no single implicit
+“current” open scope on the run.
 
-#### Scenario: Failed record with message only
+#### Scenario: Open and close a repository
 
-- **GIVEN** only a failure message
-- **WHEN** a failed-record entry is created
-- **THEN** the entry exposes the message and omits record id and URL as unset
+- **GIVEN** a started harvest-run report
+- **WHEN** the caller opens a repository scope with an RDI identifier and later
+  closes that scope handle
+- **THEN** that RDI appears as a repository entry in the report
+- **AND** that entry has a recorded duration for the open interval
 
-### Requirement: Optional study and assay counts on repository entries
+#### Scenario: Concurrent scopes for parallel RDIs
 
-A repository entry MAY include optional total study and total assay counts.
-Unset optional counts MUST NOT be treated as zero.
+- **GIVEN** a started harvest-run report
+- **WHEN** the caller opens two repository scopes for different RDIs without
+  closing either
+- **THEN** both scopes remain independently countable
+- **AND** counting on one handle MUST NOT change the other handle’s totals
 
-#### Scenario: Repository entry with study and assay counts
+#### Scenario: Single-RDI tools use one scope
 
-- **GIVEN** a repository entry that includes study and assay totals
-- **WHEN** the entry is inspected
-- **THEN** those totals are available to serializers
+- **GIVEN** a tool that harvests exactly one RDI (e.g. SQL-to-ARC)
+- **WHEN** it opens one repository scope for that RDI for the whole run
+- **THEN** the emitted report contains exactly one repository entry for that RDI
 
-#### Scenario: Repository entry without study and assay counts
+### Requirement: Set expected dataset count
 
-- **GIVEN** a repository entry without study or assay totals
-- **WHEN** the entry is inspected
-- **THEN** those totals are unset rather than zero
+The report SHALL allow setting an expected dataset count on a given open
+repository scope handle. Expected count MAY remain unset when the source
+cannot provide a total. When unset, JSON-LD MUST omit
+`fairagro:expectedDatasets`.
 
-### Requirement: Serialize reports through a pluggable format
+#### Scenario: Expected count known
 
-The library MUST separate the format-neutral report model from serialization.
-Callers MUST be able to render a report using a selected format. The library
-MUST provide a JSON-LD format. Additional formats MAY be added later without
-changing the report model contract.
+- **GIVEN** an open repository scope handle
+- **WHEN** the caller sets an expected dataset count of N on that handle
+- **THEN** serializers that emit `fairagro:expectedDatasets` include N for that
+  repository
 
-#### Scenario: Render with the JSON-LD format
+#### Scenario: Expected count unknown
 
-- **GIVEN** a populated harvest run report
-- **WHEN** the report is rendered with the JSON-LD format
-- **THEN** the library returns a JSON-LD document string for that report
+- **GIVEN** an open repository scope handle where expected count was never set
+- **WHEN** JSON-LD is produced
+- **THEN** `fairagro:expectedDatasets` is omitted for that repository
 
-#### Scenario: Model remains format-neutral
+### Requirement: Set harvest identifier
 
-- **GIVEN** a harvest run report built without choosing a format
-- **WHEN** the report is inspected
-- **THEN** the report holds domain fields only and does not embed a serialized
-  document
+The report SHALL allow setting a harvest identifier on a given open
+repository scope handle. The identifier MAY be unset; when unset, JSON-LD
+uses JSON `null` for `fairagro:harvestId`.
 
-### Requirement: JSON-LD vocabulary and document types
+#### Scenario: Harvest id assigned mid-run
 
-The JSON-LD format MUST use `https://schema.org/` as the primary vocabulary and
-MUST declare the `fairagro:` prefix as the versioned harvest-report namespace
-IRI
-`https://fairagro.github.io/m4.2_advanced_middleware_api/ns/harvest-report/v1/#`.
-The top-level document MUST be typed as `schema:Action`. Each repository result
-MUST be typed as `schema:EntryPoint` and appear under `schema:result`.
+- **GIVEN** an open repository scope handle
+- **WHEN** the caller sets a harvest identifier string on that handle
+- **THEN** JSON-LD includes that string as `fairagro:harvestId` for the entry
 
-#### Scenario: Top-level Action with EntryPoint results
+### Requirement: Record harvested dataset
 
-- **GIVEN** a harvest run report with one or more repository entries
-- **WHEN** the report is rendered as JSON-LD
-- **THEN** the document uses the required `@context`, `@type` `schema:Action`,
-  and a `schema:result` array of `schema:EntryPoint` objects
+The report SHALL provide a counting method on a repository scope handle that
+records one successfully harvested (or equivalently found-and-accepted)
+dataset, incrementing that scope’s harvested count by one. Callers MUST use
+this method instead of maintaining their own harvested counter for the report.
 
-#### Scenario: fairagro prefix expands to the versioned GitHub Pages namespace
+#### Scenario: Successful ARC accepted
 
-- **GIVEN** a harvest run report rendered as JSON-LD
-- **WHEN** the document `@context` is inspected
-- **THEN** the `fairagro` prefix equals
-  `https://fairagro.github.io/m4.2_advanced_middleware_api/ns/harvest-report/v1/#`
+- **GIVEN** an open repository scope handle with harvested count H
+- **WHEN** the caller records a harvested dataset on that handle
+- **THEN** the harvested count becomes H + 1
 
-### Requirement: Own a versioned harvest-report vocabulary in this repository
+### Requirement: Record failed dataset
 
-This repository MUST be the source of truth for harvest-report `fairagro:`
-terms. Vocabulary major version `v1` MUST live under `ns/harvest-report/v1/`
-(not under `docs/`) and MUST include a machine-readable JSON-LD context
-document and a short human-readable description of each term. The context
-document MUST define `@id` (and `@type` where applicable) for every `fairagro:`
-property emitted by the JSON-LD serializer. Incompatible vocabulary changes
-MUST introduce a new major path (for example `ns/harvest-report/v2/`) rather
-than silently changing published `v1` term semantics.
+The report SHALL provide a counting method on a repository scope handle that
+records one failed dataset: increment that scope’s failed count by one and
+append a failed record carrying a human-readable message and optional record
+identifier and optional URL. Callers MUST use this method instead of
+maintaining parallel failure counters or failure lists for the report.
 
-#### Scenario: Context document defines emitted fairagro terms
+#### Scenario: Failure with record id and URL
 
-- **GIVEN** the vocabulary files under `ns/harvest-report/v1/`
-- **WHEN** the JSON-LD context document is read
-- **THEN** it maps each emitted fairagro term
-  (`harvestDurationSeconds`, `harvestId`, `expectedDatasets`,
-  `harvestedDatasets`, `failedDatasets`, `skippedDatasets`, `failedRecords`,
-  `message`, `recordId`, `url`, `totalStudies`, `totalAssays`) to an `@id`
-  under the versioned harvest-report namespace IRI
+- **GIVEN** an open repository scope handle
+- **WHEN** the caller records a failure with message M, record id R, and URL U
+- **THEN** the failed count increases by one
+- **AND** the failure list includes an entry with M, R, and U
 
-#### Scenario: Human-readable term list exists
+#### Scenario: Failure with message only
 
-- **GIVEN** the vocabulary files under `ns/harvest-report/v1/`
-- **WHEN** an operator opens the vocabulary README
-- **THEN** each fairagro term used by the report has a brief plain-language
-  description
+- **GIVEN** an open repository scope handle
+- **WHEN** the caller records a failure with only a message
+- **THEN** the failed count increases by one
+- **AND** the failure entry omits unset optional fields on the wire as
+  specified for failed records
 
-### Requirement: Publish only the namespace tree via tag-gated Pages
+### Requirement: Record skipped dataset
 
-Vocabulary publication MUST use GitHub Actions to deploy GitHub Pages content
-drawn only from `ns/` (or the tagged vocabulary subtree). Publication MUST be
-triggered by vocabulary tags matching `ns/harvest-report/v*`. The publication
-process MUST NOT publish the general `docs/` tree as the Pages site root or
-sole source.
+The report SHALL provide a counting method on a repository scope handle that
+records one intentionally skipped dataset, incrementing that scope’s skipped
+count by one. Skipped count defaults to zero and is always present on the wire
+(`fairagro:skippedDatasets`), including when zero.
 
-#### Scenario: Vocabulary tag publishes ns content only
+#### Scenario: Intentional skip
 
-- **GIVEN** a git tag `ns/harvest-report/v1.0.0` and vocabulary files under
-  `ns/harvest-report/v1/`
-- **WHEN** the vocabulary publish workflow runs successfully
-- **THEN** GitHub Pages serves the `v1` vocabulary artifacts under
-  `/ns/harvest-report/v1/` and does not require publishing `docs/` for that
-  purpose
+- **GIVEN** an open repository scope handle with skipped count S
+- **WHEN** the caller records a skipped dataset on that handle
+- **THEN** the skipped count becomes S + 1
 
-### Requirement: JSON-LD timing and duration fields
+#### Scenario: No skips during run
 
-The JSON-LD format MUST emit `schema:startTime` and `schema:endTime` on the
-top-level action as ISO 8601 UTC timestamps ending in `Z`. It MUST emit
-`fairagro:harvestDurationSeconds` as the overall duration in seconds. Each
-repository entry MUST emit `schema:duration` as an ISO 8601 duration string
-derived from that entry's duration in seconds.
+- **GIVEN** an open repository scope handle where skip was never recorded
+- **WHEN** JSON-LD is produced
+- **THEN** `fairagro:skippedDatasets` is present with value 0
 
-#### Scenario: Emit ISO timestamps and durations
+### Requirement: Record studies and assays
 
-- **GIVEN** a harvest run report with known start time, end time, and repository
-  durations
-- **WHEN** the report is rendered as JSON-LD
-- **THEN** start and end times end with `Z`, overall duration seconds are
-  present, and each repository entry includes an ISO 8601 `schema:duration`
+The report SHALL provide counting methods on a repository scope handle that
+add a non-negative number of studies and of assays (default addend one when
+the caller records a single unit). These totals are optional on the wire:
+when both remain zero, `fairagro:totalStudies` and `fairagro:totalAssays` MAY
+be omitted; when either is non-zero, both SHOULD be emitted.
 
-### Requirement: JSON-LD fairagro metrics and failed records
+#### Scenario: SQL batch contributes studies and assays
 
-For each repository entry, the JSON-LD format MUST emit `fairagro:harvestId`
-(including when null), `fairagro:skippedDatasets`, and when set
-`fairagro:expectedDatasets`, `fairagro:harvestedDatasets`, and
-`fairagro:failedDatasets`. When failed records exist, it MUST emit
-`fairagro:failedRecords` as objects with `fairagro:message` and optional
-`fairagro:recordId` / `fairagro:url`. When study or assay totals are set, it
-MUST emit `fairagro:totalStudies` and/or `fairagro:totalAssays`.
+- **GIVEN** an open repository scope handle
+- **WHEN** the caller adds S studies and A assays on that handle
+- **THEN** the repository study total increases by S and assay total by A
 
-#### Scenario: Emit metrics and failed records
+### Requirement: Callers do not own parallel counters
 
-- **GIVEN** a repository entry with harvest id, counts, and failed records that
-  include message, record id, and URL
-- **WHEN** the report is rendered as JSON-LD
-- **THEN** the EntryPoint includes the fairagro metric properties and a
-  `fairagro:failedRecords` array with the nested message, recordId, and url
-  fields
+Client code that uses the shared report for operator statistics SHALL treat
+the report (via its scope handles) as the sole owner of harvested, failed,
+skipped, expected (when set), study, and assay counts for that run. Parallel
+counters for those same fields are out of scope for correct use of the
+library.
 
-#### Scenario: Emit optional study and assay totals
+#### Scenario: Event-driven updates only
 
-- **GIVEN** a repository entry with study and assay totals set
-- **WHEN** the report is rendered as JSON-LD
-- **THEN** the EntryPoint includes `fairagro:totalStudies` and
-  `fairagro:totalAssays`
+- **GIVEN** a started harvest-run report with an open repository scope handle
+- **WHEN** a harvest event occurs (success, failure, or skip)
+- **THEN** the caller invokes the corresponding counting method on that handle
+- **AND** does not independently increment a separate variable that is later
+  copied into the report for that same statistic
 
-### Requirement: Omit unset optional JSON-LD keys
+### Requirement: Concurrent updates within a process
 
-The JSON-LD format MUST omit keys for unset optional counts
-(`fairagro:expectedDatasets`, `fairagro:harvestedDatasets`,
-`fairagro:failedDatasets`, `fairagro:totalStudies`, `fairagro:totalAssays`)
-rather than emitting JSON `null`. It MUST omit `fairagro:failedRecords` when
-the failure list is empty. Nested failed-record objects MUST omit unset
-`fairagro:recordId` and `fairagro:url`.
+When multiple concurrent tasks in the same process update the same open
+repository scope handle, counting methods SHALL preserve correct totals (no
+lost updates under concurrent asyncio tasks sharing one handle). Updates to
+different open handles on the same run MUST remain isolated from each other.
 
-#### Scenario: Omit unavailable expected datasets
+#### Scenario: Parallel workers record successes and failures
 
-- **GIVEN** a repository entry whose expected dataset count is unset
-- **WHEN** the report is rendered as JSON-LD
-- **THEN** the EntryPoint does not include the `fairagro:expectedDatasets` key
+- **GIVEN** one open repository scope handle shared by concurrent tasks
+- **WHEN** those tasks interleave harvested and failed recordings
+- **THEN** final harvested and failed totals equal the number of respective
+  recording calls
 
-#### Scenario: Omit empty failed records
+#### Scenario: Parallel RDIs do not cross-count
 
-- **GIVEN** a repository entry with an empty failed-record list
-- **WHEN** the report is rendered as JSON-LD
-- **THEN** the EntryPoint does not include the `fairagro:failedRecords` key
+- **GIVEN** two open repository scope handles on the same run
+- **WHEN** concurrent tasks record harvested datasets only on the first handle
+- **THEN** the second handle’s harvested count remains unchanged
 
-### Requirement: Print the report to stdout without failing the process
+### Requirement: Format-neutral readable statistics
 
-The library MUST provide a way to serialize a report and print it to stdout
-(not stderr and not only the logging subsystem). Serialization or print
-failures MUST be caught: the library MUST log a warning and MUST NOT raise to
-the caller.
+After or during a run, serializers SHALL be able to read repository
+statistics without depending on a particular wire format: RDI, harvest id
+(nullable), duration, expected (optional), harvested, failed, skipped, optional
+study/assay totals, and the list of failed records (message; optional id and
+URL).
 
-#### Scenario: Successful stdout print
+#### Scenario: Serializer reads counted state
 
-- **GIVEN** a valid harvest run report
-- **WHEN** the report is printed
-- **THEN** a JSON-LD document is written to stdout
+- **GIVEN** a repository scope with counted events
+- **WHEN** a serializer reads that scope
+- **THEN** it obtains those statistics without importing format-specific types
+  from the counting API
 
-#### Scenario: Serialization failure does not raise
+### Requirement: Pluggable serializers
 
-- **GIVEN** a report that cannot be serialized
-- **WHEN** print is attempted
-- **THEN** a warning is logged and no exception propagates to the caller
+The shared library SHALL expose a common serializer contract that turns a
+finished harvest-run report (or equivalent readable statistics) into one
+document string. Multiple serializer implementations MAY exist behind that
+contract. Callers select which serializer to use when rendering. This change
+SHALL ship a JSON-LD implementation of that contract. Additional formats are
+optional and out of scope unless separately specified. Emitting the string
+(stdout, files, logs) is the caller’s responsibility — the library SHALL NOT
+require a shared stdout emit helper.
+
+#### Scenario: JSON-LD is one serializer among a common contract
+
+- **GIVEN** a finished harvest-run report
+- **WHEN** the caller renders it with the JSON-LD serializer
+- **THEN** the result is a document string conforming to the JSON-LD
+  requirements below
+- **AND** the counting API does not hard-wire rendering to JSON-LD alone
+
+### Requirement: JSON-LD harvest Action shape
+
+JSON-LD serialization SHALL emit a `schema:Action` whose `schema:result` is an
+array of `schema:EntryPoint` objects (one per repository), using a `@context`
+that maps `schema` to `https://schema.org/` and `fairagro` to the versioned
+harvest-report vocabulary IRI.
+
+#### Scenario: Multi-repository Action
+
+- **GIVEN** a finished run with two repository scopes
+- **WHEN** JSON-LD is produced
+- **THEN** `@type` is `schema:Action`
+- **AND** `schema:result` is a JSON array of length 2
+- **AND** each element has `@type` `schema:EntryPoint`
+
+### Requirement: EntryPoint property mapping
+
+Each `schema:EntryPoint` in JSON-LD SHALL include: `@id` equal to the RDI
+identifier; `schema:duration` as ISO 8601 duration for that scope;
+`fairagro:harvestId` as string or JSON `null`; `fairagro:harvestedDatasets` and
+`fairagro:failedDatasets` as integers; `fairagro:skippedDatasets` as integer
+(including 0); `fairagro:expectedDatasets` only when set; optional
+`fairagro:totalStudies` / `fairagro:totalAssays` per the studies/assays rule;
+and `fairagro:failedRecords` as an array of failed-record objects.
+
+#### Scenario: Complete entry with expected and failures
+
+- **GIVEN** a repository scope with expected set, non-zero harvested/failed,
+  skipped zero, and at least one failed record with message and record id
+- **WHEN** JSON-LD is produced for that entry
+- **THEN** the mapped properties above are present with those values
+- **AND** `fairagro:expectedDatasets` is present
+- **AND** `fairagro:skippedDatasets` is 0
+
+### Requirement: Versioned vocabulary IRI
+
+The JSON-LD `@context` entry for `fairagro` SHALL use
+`https://fairagro.github.io/m4.2_advanced_middleware_api/ns/harvest-report/v1/`
+(trailing slash). Bumps that break term compatibility use a new version
+segment; documentation lives under `ns/harvest-report/v1/` and is published
+via GitHub Pages from tags without publishing unrelated `docs/` trees.
