@@ -2,6 +2,11 @@
   // GitHub Copilot Configuration
   // For AI assistant instructions, see: copilot-instructions.md
   // For detailed project context, see: AGENTS.md
+  //
+  // Code-quality parity: editor Ruff/Pylint/Mypy must use the same project
+  // config and the same venv binaries as pre-commit and CI
+  // (`uv run ruff|pylint|mypy` → `.venv/bin/...`). Scope for Ruff CLI in
+  // hooks/CI is `middleware/` with root `pyproject.toml`.
 
   "python.testing.pytestArgs": [],
   "python.testing.unittestEnabled": false,
@@ -24,13 +29,14 @@
     "helmchart/fairagro-advanced-middleware-api-chart/templates/*.tpl": "jinja-yaml"
   },
 
-  // Code formatting - use ruff for both linting and formatting
+  // Code formatting - Ruff only (do not use autopep8 / black)
   "[python]": {
     "editor.defaultFormatter": "charliermarsh.ruff",
     "editor.formatOnSave": true,
+    "editor.formatOnSaveMode": "file",
     "editor.codeActionsOnSave": {
-      "source.organizeImports": "explicit",
-      "source.fixAll.ruff": "explicit"
+      "source.fixAll.ruff": "explicit",
+      "source.organizeImports.ruff": "explicit"
     }
   },
 
@@ -43,15 +49,28 @@
     "${workspaceFolder}/pyproject.toml"
   ],
   "mypy-type-checker.reportingScope": "workspace",
+  "mypy-type-checker.interpreter": [
+    "${workspaceFolder}/.venv/bin/python"
+  ],
+  "mypy-type-checker.importStrategy": "fromEnvironment",
 
-  // Ruff Extension Settings - use same execution mode as pre-commit and CI
-  "ruff.path": ["uv", "run", "ruff"],
+  // Ruff: same binary + config as `uv run ruff` / pre-commit / CI.
+  // IMPORTANT: ruff.path must be the ruff executable, NOT `uv run ruff`
+  // (path entries are treated as binaries; `uv` would be invoked as ruff).
+  "ruff.enable": true,
+  "ruff.nativeServer": "on",
+  "ruff.path": ["${workspaceFolder}/.venv/bin/ruff"],
+  "ruff.interpreter": ["${workspaceFolder}/.venv/bin/python"],
   "ruff.configuration": "${workspaceFolder}/pyproject.toml",
+  "ruff.configurationPreference": "filesystemFirst",
   "ruff.importStrategy": "fromEnvironment",
 
-  // Pylint Extension Settings
+  // Pylint: same rcfile + venv as pre-commit / `uv run pylint`
   "pylint.args": [
-    "--rcfile=pyproject.toml"
+    "--rcfile=${workspaceFolder}/pyproject.toml"
+  ],
+  "pylint.interpreter": [
+    "${workspaceFolder}/.venv/bin/python"
   ],
   "pylint.importStrategy": "fromEnvironment",
 

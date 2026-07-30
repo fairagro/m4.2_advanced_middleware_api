@@ -1,4 +1,4 @@
-"""JSON-LD harvest report serializer."""
+"""JSON-LD serializer for HarvestReport (harvester-compatible wire shape)."""
 
 from __future__ import annotations
 
@@ -10,7 +10,7 @@ from middleware.shared.report.model import FailedRecord, HarvestReport, Reposito
 
 FAIRAGRO_HARVEST_REPORT_NS = "https://fairagro.github.io/m4.2_advanced_middleware_api/ns/harvest-report/v1/#"
 
-_JSON_LD_CONTEXT = {
+_JSON_LD_CONTEXT: dict[str, Any] = {
     "@vocab": "https://schema.org/",
     "schema": "https://schema.org/",
     "fairagro": FAIRAGRO_HARVEST_REPORT_NS,
@@ -26,69 +26,65 @@ def _format_iso_duration(seconds: float) -> str:
 
 
 def _format_iso_timestamp(value: datetime) -> str:
-    """Format a timezone-aware datetime as an ISO 8601 UTC timestamp ending in Z.
-
-    Raises:
-        ValueError: If ``value`` is naive (no ``tzinfo``). Callers must supply
-            timezone-aware UTC times; treating naive values as local time would
-            silently shift the wall clock on non-UTC hosts.
-    """
+    """Format a UTC datetime value as an ISO 8601 timestamp ending in Z."""
     if value.tzinfo is None:
         raise ValueError("HarvestReport timestamps must be timezone-aware UTC")
     return value.astimezone(UTC).isoformat().replace("+00:00", "Z")
 
 
-def _failed_record_to_jsonld(record: FailedRecord) -> dict[str, Any]:
-    """Convert a failed record to its JSON-LD object, omitting unset fields."""
-    result: dict[str, Any] = {"fairagro:message": record.message}
-    if record.record_id:
-        result["fairagro:recordId"] = record.record_id
-    if record.url:
-        result["fairagro:url"] = record.url
-    return result
+def _failed_record_node(record: FailedRecord) -> dict[str, Any]:
+    node: dict[str, Any] = {"fairagro:message": record.message}
+    if record.record_id is not None:
+        node["fairagro:recordId"] = record.record_id
+    if record.url is not None:
+        node["fairagro:url"] = record.url
+    return node
 
 
-def _repository_to_jsonld(report: RepositoryReport) -> dict[str, Any]:
-    """Convert a repository report to a schema.org EntryPoint JSON-LD object."""
-    result: dict[str, Any] = {
+def _entry_point(repo: RepositoryReport) -> dict[str, Any]:
+    entry: dict[str, Any] = {
         "@type": "schema:EntryPoint",
-        "name": report.rdi,
-        "identifier": report.rdi,
-        "schema:duration": _format_iso_duration(report.duration_seconds),
-        "fairagro:harvestId": report.harvest_id,
-        "fairagro:skippedDatasets": report.skipped_datasets,
+        "@id": repo.rdi,
+        "name": repo.rdi,
+        "identifier": repo.rdi,
+        "schema:duration": _format_iso_duration(repo.duration_seconds),
+        "fairagro:harvestId": repo.harvest_id,
+        "fairagro:harvestedDatasets": repo.harvested_datasets,
+        "fairagro:failedDatasets": repo.failed_datasets,
+        "fairagro:skippedDatasets": repo.skipped_datasets,
     }
-    if report.harvested_datasets is not None:
-        result["fairagro:harvestedDatasets"] = report.harvested_datasets
-    if report.expected_datasets is not None:
-        result["fairagro:expectedDatasets"] = report.expected_datasets
-    if report.failed_datasets is not None:
-        result["fairagro:failedDatasets"] = report.failed_datasets
-    if report.total_studies is not None:
-        result["fairagro:totalStudies"] = report.total_studies
-    if report.total_assays is not None:
-        result["fairagro:totalAssays"] = report.total_assays
-    if report.failed_records:
-        result["fairagro:failedRecords"] = [_failed_record_to_jsonld(record) for record in report.failed_records]
-    return result
+    if repo.expected_datasets is not None:
+        entry["fairagro:expectedDatasets"] = repo.expected_datasets
+    if repo.total_studies is not None:
+        entry["fairagro:totalStudies"] = repo.total_studies
+    if repo.total_assays is not None:
+        entry["fairagro:totalAssays"] = repo.total_assays
+    if repo.failed_records:
+        entry["fairagro:failedRecords"] = [_failed_record_node(r) for r in repo.failed_records]
+    return entry
 
 
 class JsonLdReportSerializer:
-    """Render a harvest report as an operator-readable JSON-LD document."""
+    """Serialize a finished :class:`HarvestReport` to a JSON-LD document string."""
 
-    def __init__(self, *, indent: int = 2) -> None:
-        """Configure JSON indentation for operator-readable output."""
-        self._indent = indent
+    context: dict[str, Any] = _JSON_LD_CONTEXT
 
     def render(self, report: HarvestReport) -> str:
-        """Return the report as indented JSON-LD text."""
+        """Return a JSON-LD document encoding the finished harvest run.
+
+        Raises:
+            ValueError: If :meth:`HarvestReport.finish` has not been called, or
+                timestamps are naive.
+        """
+        start = _format_iso_timestamp(report.start_time)
+        end = _format_iso_timestamp(report.end_time)
         document: dict[str, Any] = {
-            "@context": _JSON_LD_CONTEXT,
+            "@context": self.context,
             "@type": "schema:Action",
             "name": report.name,
-            "schema:startTime": _format_iso_timestamp(report.start_time),
-            "schema:endTime": _format_iso_timestamp(report.end_time),
+            "schema:startTime": start,
+            "schema:endTime": end,
             "fairagro:harvestDurationSeconds": report.duration_seconds,
-            "schema:result": [_repository_to_jsonld(entry) for entry in report.repository_reports],
+            "schema:result": [_entry_point(repo) for repo in report.repository_reports],
         }
-        return json.dumps(document, ensure_ascii=False, indent=self._indent)
+        return json.dumps(document, indent=2, ensure_ascii=False) + "\n"

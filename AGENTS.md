@@ -215,9 +215,21 @@ by the project's configured tools: **Ruff, Pylance, MyPy, Pylint, and Bandit**.
 
 ### Ruff Execution Consistency
 
-- Keep Ruff behavior identical in VS Code, pre-commit, and GitHub Actions by
-  using the same scope (`middleware/`) and the same root config
-  (`pyproject.toml`).
+- Keep Ruff behavior identical in Cursor/VS Code, pre-commit, and GitHub Actions
+  by using the same scope (`middleware/`), the same root config
+  (`pyproject.toml`), and the same binary (`.venv/bin/ruff` via `uv run ruff`).
+- Editor: `.vscode/settings.json` must set `ruff.path` to
+  `${workspaceFolder}/.venv/bin/ruff`. Do **not** set it to `["uv", "run",
+  "ruff"]` — `ruff.path` entries are treated as executables, so `uv` would be
+  launched as Ruff and the Problems tab stays empty.
+- Lint diagnostics appear in Problems; **format** drift does not (Ruff applies
+  format via Format on Save / `ruff format`). Before commit, run the same
+  checks as CI: `uv run ruff format --check --diff middleware/` and
+  `uv run ruff check middleware/` (or `./scripts/quality-fix.sh` then
+  pre-commit).
+- Avoid partially staging a Python file (`MM` in `git status`): pre-commit may
+  auto-format the index, then roll back when the stash conflicts with unstaged
+  edits — leaving format failures invisible in the editor.
 - If `uv run ruff ...` fails before Ruff starts and shows
   `packaging.version.InvalidVersion` from `hatch-vcs`, the failure is in
   package version resolution, not Ruff itself.
@@ -287,9 +299,9 @@ Before generating or modifying code, read the relevant specs:
 **Shared capabilities:**
 
 - **[`openspec/specs/harvest-report/`](openspec/specs/harvest-report/)** —
-  Format-neutral harvest run report model and serializers (JSON-LD first) for
-  compatible operator-facing stdout summaries (`HarvestReport`,
-  `RepositoryReport`, `FailedRecord`).
+  Format-neutral harvest-run accumulator with repository scope counting and
+  pluggable serializers (JSON-LD first): `HarvestReport`, `RepositoryScope`,
+  `RepositoryReport`, `FailedRecord`.
 
 For the AI agent workflow documentation, see [`docs/ai_workflow.md`](docs/ai_workflow.md).
 

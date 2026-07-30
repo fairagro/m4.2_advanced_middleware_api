@@ -2,8 +2,9 @@
 # See https://pre-commit.com for more information
 # See https://pre-commit.com/hooks.html for more hooks
 #
-# Ruff hooks use the project venv binary with --config pyproject.toml
-# so editor, pre-commit, and CI all use the same root configuration.
+# Ruff hooks: `uv run ruff` from the project venv + root pyproject.toml,
+# scoped to middleware/ — same as CI and the Cursor Ruff extension
+# (which must use .venv/bin/ruff, not `uv` as ruff.path).
 
 repos:
   # Built-in hooks (no dependencies needed)

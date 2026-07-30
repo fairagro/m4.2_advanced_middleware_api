@@ -85,15 +85,19 @@ marketplace UI can hang on install (dependency cycle with Python/Pylance; see
 [astral-sh/ruff-vscode#943](https://github.com/astral-sh/ruff-vscode/issues/943)).
 
 postCreate installs Ruff via the Cursor or VS Code remote CLI (see
-`scripts/devcontainer-post-create.sh`). Fallback:
+`scripts/devcontainer-post-create.sh`). Workspace settings point
+`ruff.path` at `.venv/bin/ruff` (same binary as `uv run ruff` / pre-commit / CI).
+
+Fallback / parity check:
 
 ```bash
 uv run ruff check middleware/
-uv run ruff format middleware/
-# or
+uv run ruff format --check --diff middleware/
+# or fix + re-check
 ./scripts/quality-fix.sh
 ```
 
+Do not recommend or enable `ms-python.autopep8` — it fights Ruff as the Python formatter.
 ## Local clone (no Dev Container)
 
 ```bash

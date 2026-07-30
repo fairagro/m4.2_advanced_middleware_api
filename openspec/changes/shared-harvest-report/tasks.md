@@ -47,16 +47,16 @@
 
 ## 5. Accumulator redesign (counting API)
 
-- [ ] 5.1 Reshape public write API: start run; open repository scope → handle;
+- [x] 5.1 Reshape public write API: start run; open repository scope → handle;
       close handle; finish run; counting methods on the handle for expected,
       harvest id, harvested, failed (message + optional id/URL), skipped, add
       studies, add assays; allow multiple handles open concurrently (no
       reclassify harvested→failed)
-- [ ] 5.2 Ensure concurrent asyncio updates to one handle do not lose counts;
+- [x] 5.2 Ensure concurrent asyncio updates to one handle do not lose counts;
       updates on different handles stay isolated
-- [ ] 5.3 Keep JSON-LD serializer reading format-neutral statistics (wire shape
+- [x] 5.3 Keep JSON-LD serializer reading format-neutral statistics (wire shape
       unchanged); adjust exports/`__init__.py`; remove any stdout emit helper
-- [ ] 5.4 Replace/extend unit tests: counting increments, omit/null rules via
+- [x] 5.4 Replace/extend unit tests: counting increments, omit/null rules via
       counting path, concurrent updates, serializer returns a string
-- [ ] 5.5 Run `uv run pytest middleware/shared/tests/` and
+- [x] 5.5 Run `uv run pytest middleware/shared/tests/` and
       `uv run ruff format/check` on touched code
