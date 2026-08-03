@@ -14,7 +14,13 @@ logger = logging.getLogger(__name__)
 def build_api_celery_app(config: Config) -> Celery:
     """Build a Celery client for API-side broker/task-status interactions."""
     broker_url = config.celery.broker_url.get_secret_value()
-    return Celery("middleware_api", broker=broker_url)
+    app = Celery("middleware_api", broker=broker_url)
+    # RabbitMQ 4.3+ rejects transient non-exclusive queues by default (pidbox/events).
+    app.conf.update(
+        control_queue_exclusive=True,
+        event_queue_exclusive=True,
+    )
+    return app
 
 
 class CeleryTaskDispatcher:
