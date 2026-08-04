@@ -201,7 +201,7 @@ class GitContext:
 
     @property
     def path(self) -> str:
-        """Return the path to the repository directory."""
+        """Path to the repository directory."""
         return str(self.config.local_path)
 
     def commit_and_push(self, message: str) -> None:

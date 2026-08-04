@@ -81,22 +81,22 @@ class BusinessLogic:
 
     @property
     def harvest_manager(self) -> HarvestManager:
-        """Get the harvest manager service."""
+        """Harvest manager service."""
         return self._harvest_manager
 
     @property
     def config(self) -> BusinessLogicConfig:
-        """Get the configuration."""
+        """Business-logic configuration."""
         return self._config
 
     @property
     def document_store(self) -> DocumentStore:
-        """Get the underlying document store instance."""
+        """Underlying document store instance."""
         return self._doc_store
 
     @property
     def arc_store(self) -> ArcStore:
-        """Get the underlying arc store instance (used by health checks)."""
+        """Underlying arc store instance (used by health checks)."""
         return self._arc_manager.store
 
     async def get_metadata(self, arc_id: str) -> ArcMetadata | None:

@@ -30,7 +30,6 @@
 				"ms-python.python",
 				"ms-python.vscode-pylance",
 				"ms-python.debugpy",
-				"ms-python.autopep8",
 				"ms-python.vscode-python-envs",
 				"ms-python.pylint",
 				"ms-python.mypy-type-checker",
@@ -44,13 +43,6 @@
 			]
 		}
 	},
-	"postCreateCommand": {
-		"fix commandhistory permissions": "sudo chown -R vscode:vscode /commandhistory",
-		"install dependencies": "bash ${containerWorkspaceFolder}/scripts/uv-sync-dev.sh",
-		"install dev hooks": "bash ${containerWorkspaceFolder}/scripts/install-dev-hooks.sh",
-		"import public gpg keys": "bash ${containerWorkspaceFolder}/scripts/import-public-gpg-keys.sh",
-		"install ruff extension": "bash ${containerWorkspaceFolder}/scripts/install-ruff-extension.sh",
-		"setup bashrc": "grep -qF 'source \\${containerWorkspaceFolder}/scripts/load-env.sh' ~/.bashrc || echo 'source \\${containerWorkspaceFolder}/scripts/load-env.sh' >> ~/.bashrc"
-	},
+	"postCreateCommand": ["bash", "scripts/devcontainer-post-create.sh"],
 	"remoteUser": "vscode"
 }

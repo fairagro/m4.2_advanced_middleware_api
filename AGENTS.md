@@ -51,10 +51,11 @@ middleware/
 │   └── config.py          # Optional certificate support (26 tests)
 
 scripts/
-├── load-env.sh           # Environment setup (MAIN ENTRY POINT for hooks)
-├── setup-git-lfs.sh      # Git LFS installation
-└── git-hooks/            # Version-controlled hooks
-    ├── pre-push          # Combined: Git LFS + pre-commit
+├── load-env.sh                    # Environment setup (sourced from ~/.bashrc)
+├── setup-git-lfs.sh               # Git LFS hooks (standalone / re-runnable)
+├── devcontainer-post-create.sh    # Dev Container + local one-time setup
+└── git-hooks/                     # Version-controlled hooks
+    ├── pre-push                   # Combined: Git LFS + pre-commit
     ├── post-checkout
     ├── post-commit
     └── post-merge
@@ -140,10 +141,11 @@ config2 = Config(
 
 **Setup Process**:
 
-1. `scripts/load-env.sh` is sourced during development
-2. This script calls `scripts/setup-git-lfs.sh`
-3. Git LFS hooks are installed from `scripts/git-hooks/`
-4. Hooks are version-controlled, not just in `.git/hooks/`
+1. `scripts/devcontainer-post-create.sh` (or Dev Container postCreate) installs
+   pre-commit and calls `scripts/setup-git-lfs.sh`
+2. Git LFS hooks are installed from `scripts/git-hooks/`
+3. Hooks are version-controlled, not just in `.git/hooks/`
+4. Re-run LFS hooks alone with `scripts/setup-git-lfs.sh` when needed
 
 **Files Tracked by LFS**: `*.sql` (configured in `.gitattributes`)
 
@@ -213,9 +215,21 @@ by the project's configured tools: **Ruff, Pylance, MyPy, Pylint, and Bandit**.
 
 ### Ruff Execution Consistency
 
-- Keep Ruff behavior identical in VS Code, pre-commit, and GitHub Actions by
-  using the same scope (`middleware/`) and the same root config
-  (`pyproject.toml`).
+- Keep Ruff behavior identical in Cursor/VS Code, pre-commit, and GitHub Actions
+  by using the same scope (`middleware/`), the same root config
+  (`pyproject.toml`), and the same binary (`.venv/bin/ruff` via `uv run ruff`).
+- Editor: `.vscode/settings.json` must set `ruff.path` to
+  `${workspaceFolder}/.venv/bin/ruff`. Do **not** set it to `["uv", "run",
+  "ruff"]` — `ruff.path` entries are treated as executables, so `uv` would be
+  launched as Ruff and the Problems tab stays empty.
+- Lint diagnostics appear in Problems; **format** drift does not (Ruff applies
+  format via Format on Save / `ruff format`). Before commit, run the same
+  checks as CI: `uv run ruff format --check --diff middleware/` and
+  `uv run ruff check middleware/` (or `./scripts/quality-fix.sh` then
+  pre-commit).
+- Avoid partially staging a Python file (`MM` in `git status`): pre-commit may
+  auto-format the index, then roll back when the stash conflicts with unstaged
+  edits — leaving format failures invisible in the editor.
 - If `uv run ruff ...` fails before Ruff starts and shows
   `packaging.version.InvalidVersion` from `hatch-vcs`, the failure is in
   package version resolution, not Ruff itself.
@@ -282,6 +296,13 @@ Before generating or modifying code, read the relevant specs:
   (`HarvestError`, `HarvestErrorType`), typed statistics (`HarvestStatistics`),
   and compatibility shim for issue #240.
 
+**Shared capabilities:**
+
+- **[`openspec/specs/harvest-report/`](openspec/specs/harvest-report/)** —
+  Format-neutral harvest-run accumulator with repository scope counting and
+  pluggable serializers (JSON-LD first): `HarvestReport`, `RepositoryScope`,
+  `RepositoryReport`, `FailedRecord`.
+
 For the AI agent workflow documentation, see [`docs/ai_workflow.md`](docs/ai_workflow.md).
 
 ### Spec-to-Code Mapping
@@ -299,6 +320,7 @@ Agents (`/opsx-apply` and default Agent mode) use it to locate affected code.
 | `openspec/specs/harvest-arc-upload/` | `middleware/api/src/middleware/api/api/v3/harvests.py` |
 | `openspec/specs/admission-control/` | `middleware/api/src/middleware/api/api/admission_control.py`, `fastapi_app.py` |
 | `openspec/specs/harvest-client/` | `middleware/api_client/src/middleware/api_client/api_client.py`, `models.py` |
+| `openspec/specs/harvest-report/` | `middleware/shared/src/middleware/shared/report/`, `ns/harvest-report/` |
 | `openspec/specs/ci-cd/` | `.github/workflows/` (see domain design for workflow files) |
 
 ---
