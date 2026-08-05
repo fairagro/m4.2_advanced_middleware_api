@@ -14,8 +14,9 @@ import pytest
 
 from middleware.shared.report import (
     FAIRAGRO_HARVEST_REPORT_NS,
-    FailedRecord,
+    HarvestIssue,
     HarvestReport,
+    IssueKind,
     JsonLdReportSerializer,
     RepositoryScope,
 )
@@ -73,19 +74,48 @@ def _open_sample_scope(report: HarvestReport) -> None:
     scope.close(closed_at=_SCOPE_CLOSE)
 
 
-def test_failed_record_with_optional_identifiers() -> None:
-    """Failed records expose message, record id, and URL when provided."""
-    record = FailedRecord(message="boom", record_id="id-1", url="https://x.test")
-    assert record.message == "boom"
-    assert record.record_id == "id-1"
-    assert record.url == "https://x.test"
+def test_harvest_issue_with_optional_identifiers() -> None:
+    """Harvest issues expose message, kind, record id, and URL when provided."""
+    issue = HarvestIssue(
+        message="boom",
+        kind=IssueKind.DATASET,
+        record_id="id-1",
+        url="https://x.test",
+    )
+    assert issue.message == "boom"
+    assert issue.kind is IssueKind.DATASET
+    assert issue.record_id == "id-1"
+    assert issue.url == "https://x.test"
 
 
-def test_failed_record_message_only() -> None:
-    """Optional identifiers are unset when omitted."""
-    record = FailedRecord(message="boom")
-    assert record.record_id is None
-    assert record.url is None
+def test_harvest_issue_message_only() -> None:
+    """Optional identifiers default to unset; kind defaults to dataset."""
+    issue = HarvestIssue(message="boom")
+    assert issue.kind is IssueKind.DATASET
+    assert issue.record_id is None
+    assert issue.url is None
+
+
+def test_harvest_issue_coerces_kind_string() -> None:
+    """String kind values are normalized to IssueKind."""
+    issue = HarvestIssue(message="boom", kind="repository")  # type: ignore[arg-type]
+    assert issue.kind is IssueKind.REPOSITORY
+
+
+def test_harvest_issue_rejects_invalid_kind() -> None:
+    """Unknown kind values raise ValueError."""
+    with pytest.raises(ValueError, match="invalid issue kind"):
+        HarvestIssue(message="boom", kind="nope")  # type: ignore[arg-type]
+
+
+def test_harvest_issue_rejects_record_id_for_repository() -> None:
+    """Repository issues must not carry a dataset record id."""
+    with pytest.raises(ValueError, match="record_id"):
+        HarvestIssue(
+            message="sitemap failed",
+            kind=IssueKind.REPOSITORY,
+            record_id="should-not-exist",
+        )
 
 
 def test_mutable_run_records_start_time() -> None:
@@ -159,7 +189,33 @@ def test_counting_increments() -> None:
     assert snap.skipped_datasets == 1
     assert snap.total_studies == _STUDIES
     assert snap.total_assays == _ASSAYS
-    assert snap.failed_records == (FailedRecord(message="bad", record_id="r1", url="https://x.test/r1"),)
+    assert snap.failures == (
+        HarvestIssue(
+            message="bad",
+            kind=IssueKind.DATASET,
+            record_id="r1",
+            url="https://x.test/r1",
+        ),
+    )
+
+
+def test_repository_issue_does_not_increment_failed_datasets() -> None:
+    """Repository-level issues append to failures without counting datasets."""
+    report = HarvestReport(start_time=_START)
+    scope = report.open_repository("publisso")
+    scope.record_repository_issue(
+        "Sitemap discovery failed for https://frl.publisso.de/find",
+        url="https://frl.publisso.de/find",
+    )
+    snap = scope.snapshot()
+    assert snap.failed_datasets == 0
+    assert snap.failures == (
+        HarvestIssue(
+            message="Sitemap discovery failed for https://frl.publisso.de/find",
+            kind=IssueKind.REPOSITORY,
+            url="https://frl.publisso.de/find",
+        ),
+    )
 
 
 def test_study_assay_omit_when_both_zero() -> None:
@@ -233,7 +289,7 @@ def test_jsonld_context_and_types() -> None:
     assert document["@context"]["@vocab"] == "https://schema.org/"
     assert document["@context"]["schema"] == "https://schema.org/"
     assert document["@context"]["fairagro"] == FAIRAGRO_HARVEST_REPORT_NS
-    assert document["@context"]["fairagro"].endswith("/ns/harvest-report/v1/#")
+    assert document["@context"]["fairagro"].endswith("/ns/harvest-report/v2/#")
     assert document["@type"] == "schema:Action"
     assert document["schema:result"][0]["@type"] == "schema:EntryPoint"
 
@@ -248,8 +304,8 @@ def test_jsonld_timestamps_and_durations() -> None:
     assert document["schema:result"][0]["schema:duration"].startswith("PT")
 
 
-def test_jsonld_metrics_and_failed_records() -> None:
-    """Fairagro metrics and nested failed records are emitted."""
+def test_jsonld_metrics_and_failures() -> None:
+    """Fairagro metrics and nested failure issues are emitted."""
     report = _finished_report(populate=_open_sample_scope)
     entry = json.loads(JsonLdReportSerializer().render(report))["schema:result"][0]
     assert entry["@id"] == "bonares"
@@ -258,11 +314,35 @@ def test_jsonld_metrics_and_failed_records() -> None:
     assert entry["fairagro:harvestedDatasets"] == _SAMPLE_HARVESTED
     assert entry["fairagro:failedDatasets"] == _SAMPLE_FAILED
     assert entry["fairagro:skippedDatasets"] == _SAMPLE_SKIPPED
-    assert entry["fairagro:failedRecords"][0] == {
+    assert entry["fairagro:failures"][0] == {
         "fairagro:message": "map failed",
+        "fairagro:kind": "dataset",
         "fairagro:recordId": "frl:123",
         "fairagro:url": "https://example.test/frl:123",
     }
+
+
+def test_jsonld_repository_issue_without_failed_datasets() -> None:
+    """Repository issues appear under failures while failedDatasets stays 0."""
+
+    def populate(report: HarvestReport) -> None:
+        scope = report.open_repository("publisso")
+        scope.record_repository_issue(
+            "Sitemap discovery failed",
+            url="https://frl.publisso.de/find",
+        )
+        scope.close(closed_at=_SCOPE_CLOSE)
+
+    report = _finished_report(populate=populate)
+    entry = json.loads(JsonLdReportSerializer().render(report))["schema:result"][0]
+    assert entry["fairagro:failedDatasets"] == 0
+    assert entry["fairagro:failures"] == [
+        {
+            "fairagro:message": "Sitemap discovery failed",
+            "fairagro:kind": "repository",
+            "fairagro:url": "https://frl.publisso.de/find",
+        }
+    ]
 
 
 def test_jsonld_optional_study_and_assay_totals() -> None:
@@ -312,8 +392,8 @@ def test_jsonld_harvest_id_null_when_unset() -> None:
     assert entry["fairagro:harvestId"] is None
 
 
-def test_jsonld_omits_empty_failed_records() -> None:
-    """Empty failed-record lists are omitted from JSON-LD."""
+def test_jsonld_omits_empty_failures() -> None:
+    """Empty failure lists are omitted from JSON-LD."""
 
     def populate(report: HarvestReport) -> None:
         scope = report.open_repository("bonares")
@@ -321,7 +401,7 @@ def test_jsonld_omits_empty_failed_records() -> None:
 
     report = _finished_report(populate=populate)
     entry = json.loads(JsonLdReportSerializer().render(report))["schema:result"][0]
-    assert "fairagro:failedRecords" not in entry
+    assert "fairagro:failures" not in entry
 
 
 def test_jsonld_empty_result_array() -> None:

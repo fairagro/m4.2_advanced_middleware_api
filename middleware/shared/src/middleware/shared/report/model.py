@@ -5,6 +5,7 @@ from __future__ import annotations
 import threading
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
+from enum import StrEnum
 
 
 def _require_aware_utc(value: datetime, *, what: str) -> datetime:
@@ -14,13 +15,31 @@ def _require_aware_utc(value: datetime, *, what: str) -> datetime:
     return value.astimezone(UTC)
 
 
+class IssueKind(StrEnum):
+    """Classification of a harvest issue for operator reports."""
+
+    DATASET = "dataset"
+    REPOSITORY = "repository"
+
+
 @dataclass(frozen=True)
-class FailedRecord:
-    """A single dataset that failed during harvesting."""
+class HarvestIssue:
+    """One harvest issue (dataset failure or repository-level problem)."""
 
     message: str
+    kind: IssueKind = IssueKind.DATASET
     record_id: str | None = None
     url: str | None = None
+
+    def __post_init__(self) -> None:
+        """Normalize ``kind`` and reject ``record_id`` on repository issues."""
+        try:
+            kind = self.kind if isinstance(self.kind, IssueKind) else IssueKind(self.kind)
+        except ValueError as exc:
+            raise ValueError(f"invalid issue kind: {self.kind!r}") from exc
+        object.__setattr__(self, "kind", kind)
+        if kind is IssueKind.REPOSITORY and self.record_id is not None:
+            raise ValueError("record_id is only valid for dataset-scoped issues")
 
 
 @dataclass(frozen=True)
@@ -34,7 +53,7 @@ class RepositoryReport:  # pylint: disable=too-many-instance-attributes
     harvested_datasets: int = 0
     failed_datasets: int = 0
     skipped_datasets: int = 0
-    failed_records: tuple[FailedRecord, ...] = ()
+    failures: tuple[HarvestIssue, ...] = ()
     total_studies: int | None = None
     total_assays: int | None = None
 
@@ -48,7 +67,7 @@ class _DatasetCounts:
     harvested_datasets: int = 0
     failed_datasets: int = 0
     skipped_datasets: int = 0
-    failed_records: list[FailedRecord] = field(default_factory=list)
+    failures: list[HarvestIssue] = field(default_factory=list)
 
 
 @dataclass
@@ -111,10 +130,28 @@ class RepositoryScope:
         record_id: str | None = None,
         url: str | None = None,
     ) -> None:
-        """Record one failed dataset and append a failed-record detail."""
+        """Record one failed dataset and append a dataset-scoped issue."""
         with self._lock:
             self._datasets.failed_datasets += 1
-            self._datasets.failed_records.append(FailedRecord(message=message, record_id=record_id, url=url))
+            self._datasets.failures.append(
+                HarvestIssue(
+                    message=message,
+                    kind=IssueKind.DATASET,
+                    record_id=record_id,
+                    url=url,
+                )
+            )
+
+    def record_repository_issue(self, message: str, *, url: str | None = None) -> None:
+        """Append a repository-level issue without incrementing failed datasets."""
+        with self._lock:
+            self._datasets.failures.append(
+                HarvestIssue(
+                    message=message,
+                    kind=IssueKind.REPOSITORY,
+                    url=url,
+                )
+            )
 
     def record_skipped(self) -> None:
         """Record one intentionally skipped dataset."""
@@ -156,7 +193,7 @@ class RepositoryScope:
                 harvested_datasets=datasets.harvested_datasets,
                 failed_datasets=datasets.failed_datasets,
                 skipped_datasets=datasets.skipped_datasets,
-                failed_records=tuple(datasets.failed_records),
+                failures=tuple(datasets.failures),
                 total_studies=total_studies,
                 total_assays=total_assays,
             )

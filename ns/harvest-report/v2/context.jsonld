@@ -1,0 +1,60 @@
+{
+  "@context": {
+    "@vocab": "https://schema.org/",
+    "schema": "https://schema.org/",
+    "xsd": "http://www.w3.org/2001/XMLSchema#",
+    "fairagro": "https://fairagro.github.io/m4.2_advanced_middleware_api/ns/harvest-report/v2/#",
+    "harvestDurationSeconds": {
+      "@id": "fairagro:harvestDurationSeconds",
+      "@type": "xsd:double"
+    },
+    "harvestId": {
+      "@id": "fairagro:harvestId",
+      "@type": "xsd:string"
+    },
+    "expectedDatasets": {
+      "@id": "fairagro:expectedDatasets",
+      "@type": "xsd:integer"
+    },
+    "harvestedDatasets": {
+      "@id": "fairagro:harvestedDatasets",
+      "@type": "xsd:integer"
+    },
+    "failedDatasets": {
+      "@id": "fairagro:failedDatasets",
+      "@type": "xsd:integer"
+    },
+    "skippedDatasets": {
+      "@id": "fairagro:skippedDatasets",
+      "@type": "xsd:integer"
+    },
+    "failures": {
+      "@id": "fairagro:failures",
+      "@container": "@list"
+    },
+    "kind": {
+      "@id": "fairagro:kind",
+      "@type": "xsd:string"
+    },
+    "message": {
+      "@id": "fairagro:message",
+      "@type": "xsd:string"
+    },
+    "recordId": {
+      "@id": "fairagro:recordId",
+      "@type": "xsd:string"
+    },
+    "url": {
+      "@id": "fairagro:url",
+      "@type": "@id"
+    },
+    "totalStudies": {
+      "@id": "fairagro:totalStudies",
+      "@type": "xsd:integer"
+    },
+    "totalAssays": {
+      "@id": "fairagro:totalAssays",
+      "@type": "xsd:integer"
+    }
+  }
+}

@@ -40,10 +40,14 @@
       IRI, tag/publish notes) and optional `index.html` for browser resolution
 - [x] 4.3 Point `JsonLdReportSerializer` `fairagro` prefix at
       `https://fairagro.github.io/m4.2_advanced_middleware_api/ns/harvest-report/v1/#`
+      _(Superseded by 4.7 — serializer now uses v2.)_
 - [x] 4.4 Add GitHub Actions workflow: on tags `ns/harvest-report/v*`, publish
       only `ns/` to GitHub Pages (Actions source—not branch `/docs`)
 - [x] 4.5 Update unit tests for the versioned namespace IRI
 - [x] 4.6 Run `uv run pytest middleware/shared/tests/` and ruff on touched code
+- [x] 4.7 Bump vocabulary to `ns/harvest-report/v2/` for `failures`/`kind`
+      (incompatible with v1 `failedRecords`); freeze v1; point serializer and
+      tests at the v2 IRI
 
 ## 5. Accumulator redesign (counting API)
 

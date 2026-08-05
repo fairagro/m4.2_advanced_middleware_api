@@ -301,7 +301,7 @@ Before generating or modifying code, read the relevant specs:
 - **[`openspec/specs/harvest-report/`](openspec/specs/harvest-report/)** —
   Format-neutral harvest-run accumulator with repository scope counting and
   pluggable serializers (JSON-LD first): `HarvestReport`, `RepositoryScope`,
-  `RepositoryReport`, `FailedRecord`.
+  `RepositoryReport`, `HarvestIssue`.
 
 For the AI agent workflow documentation, see [`docs/ai_workflow.md`](docs/ai_workflow.md).
 
