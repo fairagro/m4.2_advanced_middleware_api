@@ -160,6 +160,19 @@ single dataset.
 - **THEN** the failed dataset count remains F
 - **AND** the failure list includes an entry with kind `repository`, M, and U
 
+### Requirement: Harvest issue construction constraints
+
+Constructing a harvest issue SHALL normalize `kind` to `dataset` or
+`repository` and SHALL reject a `record_id` when `kind` is `repository`
+(record identifiers apply only to dataset-scoped issues).
+
+#### Scenario: Repository issue with record id rejected
+
+- **GIVEN** a caller constructs a harvest issue with kind `repository` and a
+  non-null record id
+- **WHEN** construction is attempted
+- **THEN** construction fails with an error
+
 ### Requirement: Record skipped dataset
 
 The report SHALL provide a counting method on a repository scope handle that

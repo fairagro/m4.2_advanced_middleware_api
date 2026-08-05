@@ -1,4 +1,4 @@
-"""JSON-LD serializer for HarvestReport (harvester-compatible wire shape)."""
+"""JSON-LD serializer for HarvestReport (vocabulary v2 wire shape)."""
 
 from __future__ import annotations
 

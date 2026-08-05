@@ -96,10 +96,13 @@ run, and serialize. Wire shape remains the harvester JSON-LD baseline.
    implementations, not changes to the accumulator API. Writing the string
    (stdout, files, logs) stays in the calling tool.
 
-8. **JSON-LD wire shape = harvester baseline**
+8. **JSON-LD wire shape = harvester baseline (vocab v2)**
    — Newer multi-RDI shape, richer failures, `https://schema.org/`, documented
    omit semantics. SQL-to-ARC maps to one `EntryPoint` in `result[]`. Compact
    unprefixed keys and PROV-only terms are rejected for the shared wire format.
+   Emitting `fairagro:failures` under the v2 IRI is an **intentional breaking**
+   change vs v1 `failedRecords`; there is no legacy dual-field / v1 serializer
+   mode. Consumers MUST target v2 (or keep an older shared package for v1).
 
 9. **Optional study/assay totals on repository entries**
    — Preserves SQL-to-ARC operator value without overloading `schema:result`.

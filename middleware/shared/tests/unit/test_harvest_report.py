@@ -96,6 +96,28 @@ def test_harvest_issue_message_only() -> None:
     assert issue.url is None
 
 
+def test_harvest_issue_coerces_kind_string() -> None:
+    """String kind values are normalized to IssueKind."""
+    issue = HarvestIssue(message="boom", kind="repository")  # type: ignore[arg-type]
+    assert issue.kind is IssueKind.REPOSITORY
+
+
+def test_harvest_issue_rejects_invalid_kind() -> None:
+    """Unknown kind values raise ValueError."""
+    with pytest.raises(ValueError, match="invalid issue kind"):
+        HarvestIssue(message="boom", kind="nope")  # type: ignore[arg-type]
+
+
+def test_harvest_issue_rejects_record_id_for_repository() -> None:
+    """Repository issues must not carry a dataset record id."""
+    with pytest.raises(ValueError, match="record_id"):
+        HarvestIssue(
+            message="sitemap failed",
+            kind=IssueKind.REPOSITORY,
+            record_id="should-not-exist",
+        )
+
+
 def test_mutable_run_records_start_time() -> None:
     """Creating a report records an authoritative start timestamp."""
     report = HarvestReport(start_time=_START)

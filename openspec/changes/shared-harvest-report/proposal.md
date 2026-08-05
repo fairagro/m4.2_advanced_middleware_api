@@ -56,7 +56,9 @@ Work remains scoped to this repository; consumer migrations happen separately.
 - **Code:** `middleware/shared/.../report/` becomes a start/count/finish API
   plus serializers (existing snapshot-only API is superseded in this change).
 - **Vocab / Pages:** current serializer uses `ns/harvest-report/v2/` (v1 frozen
-  with `failedRecords`); tag-gated publish of `ns/` only.
+  with `failedRecords`); tag-gated publish of `ns/` only. The v2 wire
+  (`fairagro:failures`) is intentionally not backward-compatible with v1
+  `failedRecords`; no dual-emit / legacy serializer mode.
 - **Package:** `fairagro-middleware-shared` public report API.
 - **Specs:** delta under `openspec/changes/shared-harvest-report/`; main
   `openspec/specs/harvest-report/` after archive.

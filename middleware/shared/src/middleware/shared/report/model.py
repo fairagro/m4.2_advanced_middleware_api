@@ -31,6 +31,16 @@ class HarvestIssue:
     record_id: str | None = None
     url: str | None = None
 
+    def __post_init__(self) -> None:
+        """Normalize ``kind`` and reject ``record_id`` on repository issues."""
+        try:
+            kind = self.kind if isinstance(self.kind, IssueKind) else IssueKind(self.kind)
+        except ValueError as exc:
+            raise ValueError(f"invalid issue kind: {self.kind!r}") from exc
+        object.__setattr__(self, "kind", kind)
+        if kind is IssueKind.REPOSITORY and self.record_id is not None:
+            raise ValueError("record_id is only valid for dataset-scoped issues")
+
 
 @dataclass(frozen=True)
 class RepositoryReport:  # pylint: disable=too-many-instance-attributes
