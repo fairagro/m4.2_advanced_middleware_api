@@ -3,7 +3,7 @@
     "@vocab": "https://schema.org/",
     "schema": "https://schema.org/",
     "xsd": "http://www.w3.org/2001/XMLSchema#",
-    "fairagro": "https://fairagro.github.io/m4.2_advanced_middleware_api/ns/harvest-report/v1/#",
+    "fairagro": "https://fairagro.github.io/m4.2_advanced_middleware_api/ns/harvest-report/v2/#",
     "harvestDurationSeconds": {
       "@id": "fairagro:harvestDurationSeconds",
       "@type": "xsd:double"
@@ -28,9 +28,13 @@
       "@id": "fairagro:skippedDatasets",
       "@type": "xsd:integer"
     },
-    "failedRecords": {
-      "@id": "fairagro:failedRecords",
+    "failures": {
+      "@id": "fairagro:failures",
       "@container": "@list"
+    },
+    "kind": {
+      "@id": "fairagro:kind",
+      "@type": "xsd:string"
     },
     "message": {
       "@id": "fairagro:message",

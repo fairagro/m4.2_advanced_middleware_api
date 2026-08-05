@@ -1,7 +1,7 @@
 # Publish vocabulary namespace (ns/) to GitHub Pages
 
 # Deploys only the `ns/` tree. Triggered by vocabulary tags such as
-# `ns/harvest-report/v1.0.0`. Does not publish `docs/` or application sources.
+# `ns/harvest-report/v1.0.0` or `ns/harvest-report/v2.0.0`. Does not publish `docs/` or application sources.
 #
 # Prerequisite (once per repo): Settings → Pages → Source = GitHub Actions.
 

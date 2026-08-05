@@ -8,7 +8,7 @@ from typing import Any
 
 from middleware.shared.report.model import HarvestIssue, HarvestReport, RepositoryReport
 
-FAIRAGRO_HARVEST_REPORT_NS = "https://fairagro.github.io/m4.2_advanced_middleware_api/ns/harvest-report/v1/#"
+FAIRAGRO_HARVEST_REPORT_NS = "https://fairagro.github.io/m4.2_advanced_middleware_api/ns/harvest-report/v2/#"
 
 _JSON_LD_CONTEXT: dict[str, Any] = {
     "@vocab": "https://schema.org/",

@@ -1,8 +1,8 @@
-# Harvest report vocabulary (v1)
+# Harvest report vocabulary (v2)
 
 Canonical namespace IRI:
 
-`https://fairagro.github.io/m4.2_advanced_middleware_api/ns/harvest-report/v1/#`
+`https://fairagro.github.io/m4.2_advanced_middleware_api/ns/harvest-report/v2/#`
 
 Machine-readable JSON-LD context: [context.jsonld](./context.jsonld)
 
@@ -10,8 +10,9 @@ This vocabulary defines FAIRagro-specific terms used in the shared harvest-run
 report (`middleware.shared.report`). Schema.org terms (`Action`, `EntryPoint`,
 `startTime`, …) are not redefined here.
 
-**Frozen major:** v1 keeps `failedRecords`. The current serializer and successor
-terms (`failures`, `kind`) live under [v2](../v2/).
+**Breaking vs [v1](../v1/):** `failedRecords` is replaced by `failures` (dataset
+or repository issues) plus `kind` (`dataset` | `repository`).
+`failedDatasets` still counts only dataset failures.
 
 ## Terms
 
@@ -23,18 +24,19 @@ terms (`failures`, `kind`) live under [v2](../v2/).
 | `harvestedDatasets` | Datasets successfully harvested and forwarded to the API |
 | `failedDatasets` | Datasets that failed during harvest or upload |
 | `skippedDatasets` | Datasets intentionally skipped |
-| `failedRecords` | Ordered list of per-record failure objects |
-| `message` | Human-readable failure message on a failed record |
-| `recordId` | Optional source record identifier |
-| `url` | Optional URL related to the failed record |
+| `failures` | Ordered list of harvest issues (dataset or repository) |
+| `kind` | Issue kind: `dataset` or `repository` |
+| `message` | Human-readable failure message on an issue |
+| `recordId` | Optional source record identifier (dataset issues) |
+| `url` | Optional URL related to the issue |
 | `totalStudies` | Optional count of studies produced for a repository |
 | `totalAssays` | Optional count of assays produced for a repository |
 
 ## Versioning
 
-- Path `v1` is a frozen vocabulary **major** version.
-- Incompatible changes require a new major path (`v2/`) and a new IRI.
-- Compatible additions may update files under `v1/` and be published with a new
+- Path `v2` is the vocabulary **major** version used by the current serializer.
+- Incompatible changes require a new major path (`v3/`) and a new IRI.
+- Compatible additions may update files under `v2/` and be published with a new
   patch/minor tag.
 
 ## Publishing
@@ -43,7 +45,7 @@ Do **not** enable GitHub Pages from branch `/docs`. Vocabulary publication is
 tag-gated:
 
 1. Tag: `ns/harvest-report/v<major>.<minor>.<patch>` (example:
-   `ns/harvest-report/v1.0.0`)
+   `ns/harvest-report/v2.0.0`)
 2. Workflow [publish-ns-pages.yml](../../../.github/workflows/publish-ns-pages.yml)
    deploys **only** the `ns/` tree to GitHub Pages (Actions source).
 3. Repo setting: Pages → Source = **GitHub Actions** (once).

@@ -78,10 +78,10 @@ run, and serialize. Wire shape remains the harvester JSON-LD baseline.
 5. **Names: `HarvestReport` (run), repository scope / handle, `HarvestIssue`**
    — Align with harvester/operator vocabulary. One failure list covers both
    dataset and repository-level problems (`IssueKind`); `failedDatasets` counts
-   only dataset failures. Wire term is `fairagro:failures` (not
-   `failedRecords`). Exact type and method names live in code; requirements
-   speak in domain events. A thin frozen view for serializers is an
-   implementation detail as long as counting remains the public write path.
+   only dataset failures. Wire term is `fairagro:failures` under vocabulary
+   **v2** (v1 used `failedRecords`). Exact type and method names live in code;
+   requirements speak in domain events. A thin frozen view for serializers is
+   an implementation detail as long as counting remains the public write path.
 
 6. **Concurrency: same-handle asyncio safety; multi-handle isolation**
    — SQL-to-ARC mutates one stats object from concurrent tasks. Counting on
@@ -110,10 +110,11 @@ run, and serialize. Wire shape remains the harvester JSON-LD baseline.
     `openspec/config.yaml`.
 
 11. **Versioned namespace IRI; vocab under `ns/` (not `docs/`)**
-    — Canonical IRI:
-      `https://fairagro.github.io/m4.2_advanced_middleware_api/ns/harvest-report/v1/#`
-    — Source: `ns/harvest-report/v1/{context.jsonld,README.md,index.html}`.
-    — Serializer embeds compact `@context` with that IRI; body keys stay
+    — Canonical IRI (current serializer):
+      `https://fairagro.github.io/m4.2_advanced_middleware_api/ns/harvest-report/v2/#`
+    — Source: `ns/harvest-report/v2/{context.jsonld,README.md,index.html}`.
+    — v1 remains frozen under `ns/harvest-report/v1/` with `failedRecords`.
+    — Serializer embeds compact `@context` with the v2 IRI; body keys stay
       prefixed. Unversioned or `docs/`-hosted IRIs are rejected.
 
 12. **Publish only `ns/` via GitHub Actions on vocabulary tags**

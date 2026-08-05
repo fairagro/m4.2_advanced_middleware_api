@@ -267,7 +267,7 @@ def test_jsonld_context_and_types() -> None:
     assert document["@context"]["@vocab"] == "https://schema.org/"
     assert document["@context"]["schema"] == "https://schema.org/"
     assert document["@context"]["fairagro"] == FAIRAGRO_HARVEST_REPORT_NS
-    assert document["@context"]["fairagro"].endswith("/ns/harvest-report/v1/#")
+    assert document["@context"]["fairagro"].endswith("/ns/harvest-report/v2/#")
     assert document["@type"] == "schema:Action"
     assert document["schema:result"][0]["@type"] == "schema:EntryPoint"
 

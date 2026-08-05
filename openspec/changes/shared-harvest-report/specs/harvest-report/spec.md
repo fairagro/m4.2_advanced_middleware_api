@@ -311,7 +311,9 @@ and `fairagro:failures` as an array of issue objects (each with
 ### Requirement: Versioned vocabulary IRI
 
 The JSON-LD `@context` entry for `fairagro` SHALL use
-`https://fairagro.github.io/m4.2_advanced_middleware_api/ns/harvest-report/v1/#`
+`https://fairagro.github.io/m4.2_advanced_middleware_api/ns/harvest-report/v2/#`
 (hash fragment on the versioned path). Bumps that break term compatibility use
-a new version segment; documentation lives under `ns/harvest-report/v1/` and is
+a new version segment; documentation lives under `ns/harvest-report/v2/` and is
 published via GitHub Pages from tags without publishing unrelated `docs/` trees.
+The v1 vocabulary under `ns/harvest-report/v1/` remains frozen (`failedRecords`)
+and MUST NOT be altered by this rename.
