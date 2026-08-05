@@ -63,7 +63,10 @@ run, and serialize. Wire shape remains the harvester JSON-LD baseline.
    - set expected dataset count (optional; harvester pre-fetch)
    - set harvest id (nullable until assigned)
    - record harvested dataset (definitive success / sql_to_arc found)
-   - record failed dataset (message; optional record id; optional URL)
+   - record failed dataset (message; optional record id; optional URL; bumps
+     failedDatasets and appends a `dataset` issue)
+   - record repository-level issue (message; optional URL; appends a
+     `repository` issue without bumping failedDatasets)
    - record skipped dataset (harvester `SkippedRecord`; always-on wire field)
    - add studies / add assays (sql_to_arc batch totals)
    Callers signal these events on the correct handle; the run aggregates
@@ -72,11 +75,13 @@ run, and serialize. Wire shape remains the harvester JSON-LD baseline.
    `harvest_arcs` / upload result), so duplicate or submission failures are
    recorded as failures only, never as a correction of a prior success count.
 
-5. **Names: `HarvestReport` (run), repository scope / handle, `FailedRecord`**
-   — Align with harvester/operator vocabulary. Exact type and method names live
-   in code; requirements speak in domain events. A thin frozen view for
-   serializers is an implementation detail as long as counting remains the
-   public write path.
+5. **Names: `HarvestReport` (run), repository scope / handle, `HarvestIssue`**
+   — Align with harvester/operator vocabulary. One failure list covers both
+   dataset and repository-level problems (`IssueKind`); `failedDatasets` counts
+   only dataset failures. Wire term is `fairagro:failures` (not
+   `failedRecords`). Exact type and method names live in code; requirements
+   speak in domain events. A thin frozen view for serializers is an
+   implementation detail as long as counting remains the public write path.
 
 6. **Concurrency: same-handle asyncio safety; multi-handle isolation**
    — SQL-to-ARC mutates one stats object from concurrent tasks. Counting on

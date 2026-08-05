@@ -20,10 +20,11 @@ report (`middleware.shared.report`). Schema.org terms (`Action`, `EntryPoint`,
 | `harvestedDatasets` | Datasets successfully harvested and forwarded to the API |
 | `failedDatasets` | Datasets that failed during harvest or upload |
 | `skippedDatasets` | Datasets intentionally skipped |
-| `failedRecords` | Ordered list of per-record failure objects |
-| `message` | Human-readable failure message on a failed record |
-| `recordId` | Optional source record identifier |
-| `url` | Optional URL related to the failed record |
+| `failures` | Ordered list of harvest issues (dataset or repository) |
+| `kind` | Issue kind: `dataset` or `repository` |
+| `message` | Human-readable failure message on an issue |
+| `recordId` | Optional source record identifier (dataset issues) |
+| `url` | Optional URL related to the issue |
 | `totalStudies` | Optional count of studies produced for a repository |
 | `totalAssays` | Optional count of assays produced for a repository |
 

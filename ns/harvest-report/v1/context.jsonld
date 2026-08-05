@@ -28,9 +28,13 @@
       "@id": "fairagro:skippedDatasets",
       "@type": "xsd:integer"
     },
-    "failedRecords": {
-      "@id": "fairagro:failedRecords",
+    "failures": {
+      "@id": "fairagro:failures",
       "@container": "@list"
+    },
+    "kind": {
+      "@id": "fairagro:kind",
+      "@type": "xsd:string"
     },
     "message": {
       "@id": "fairagro:message",

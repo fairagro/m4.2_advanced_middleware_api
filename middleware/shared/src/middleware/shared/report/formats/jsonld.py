@@ -6,7 +6,7 @@ import json
 from datetime import UTC, datetime
 from typing import Any
 
-from middleware.shared.report.model import FailedRecord, HarvestReport, RepositoryReport
+from middleware.shared.report.model import HarvestIssue, HarvestReport, RepositoryReport
 
 FAIRAGRO_HARVEST_REPORT_NS = "https://fairagro.github.io/m4.2_advanced_middleware_api/ns/harvest-report/v1/#"
 
@@ -32,12 +32,15 @@ def _format_iso_timestamp(value: datetime) -> str:
     return value.astimezone(UTC).isoformat().replace("+00:00", "Z")
 
 
-def _failed_record_node(record: FailedRecord) -> dict[str, Any]:
-    node: dict[str, Any] = {"fairagro:message": record.message}
-    if record.record_id is not None:
-        node["fairagro:recordId"] = record.record_id
-    if record.url is not None:
-        node["fairagro:url"] = record.url
+def _failure_node(issue: HarvestIssue) -> dict[str, Any]:
+    node: dict[str, Any] = {
+        "fairagro:message": issue.message,
+        "fairagro:kind": issue.kind.value,
+    }
+    if issue.record_id is not None:
+        node["fairagro:recordId"] = issue.record_id
+    if issue.url is not None:
+        node["fairagro:url"] = issue.url
     return node
 
 
@@ -59,8 +62,8 @@ def _entry_point(repo: RepositoryReport) -> dict[str, Any]:
         entry["fairagro:totalStudies"] = repo.total_studies
     if repo.total_assays is not None:
         entry["fairagro:totalAssays"] = repo.total_assays
-    if repo.failed_records:
-        entry["fairagro:failedRecords"] = [_failed_record_node(r) for r in repo.failed_records]
+    if repo.failures:
+        entry["fairagro:failures"] = [_failure_node(issue) for issue in repo.failures]
     return entry
 
 
