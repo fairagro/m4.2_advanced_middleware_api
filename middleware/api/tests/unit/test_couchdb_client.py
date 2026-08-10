@@ -1,14 +1,20 @@
 """Unit tests for CouchDB client."""
 
+import warnings
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from aiocouch import CouchDB
 from aiocouch.exception import NotFoundError, PreconditionFailedError
+from aiocouch.remote import RemoteServer
 from pydantic import SecretStr
 
 from middleware.api.document_store.config import CouchDBConfig
-from middleware.api.document_store.couchdb_client import CouchDBClient, DocumentConflictError
+from middleware.api.document_store.couchdb_client import (
+    CouchDBClient,
+    DocumentConflictError,
+    _patch_aiocouch_aiohttp_auth,
+)
 
 
 @pytest.fixture
@@ -38,6 +44,25 @@ def couchdb_client(couchdb_config: CouchDBConfig) -> CouchDBClient:
         An instance of CouchDBClient initialized with the provided configuration.
     """
     return CouchDBClient.from_config(couchdb_config)
+
+
+@pytest.mark.asyncio
+async def test_aiocouch_remote_server_avoids_basicauth_deprecation() -> None:
+    """Patched aiocouch must not trigger aiohttp BasicAuth / auth= deprecations."""
+    _patch_aiocouch_aiohttp_auth()
+
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("always", DeprecationWarning)
+        server = RemoteServer("http://localhost:5984", user="admin", password="secret")
+        await server.close()
+
+    auth_warnings = [
+        w
+        for w in caught
+        if issubclass(w.category, DeprecationWarning)
+        and ("BasicAuth" in str(w.message) or "auth' parameter is deprecated" in str(w.message))
+    ]
+    assert auth_warnings == []
 
 
 @pytest.mark.asyncio

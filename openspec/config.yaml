@@ -7,7 +7,7 @@ context: |
   Specs live under `openspec/specs/<domain>/` (kebab-case domains).
   Foundation contract: `openspec/principles.md` (read before proposing changes).
   Spec-to-code mapping is maintained in `AGENTS.md`.
-  Quality gates: `uv run ruff format/check middleware/`, mypy, pylint, bandit, pytest.
+  Quality gates: `uv run ruff format/check --config pyproject.toml middleware/`, mypy, pylint, bandit, pytest.
   Scale: one worker process per container; horizontal via Kubernetes replicas.
   Client certificates are optional; SSL verification on by default.
   Modules: middleware/api (primary), middleware/shared, middleware/api_client
@@ -35,7 +35,7 @@ operations:
   apply:
     guidance:
       - Run focused tests with `uv run pytest` on affected packages before the full suite.
-      - Run `uv run ruff format middleware/` and `uv run ruff check middleware/` on touched code.
+      - Run `uv run ruff format --config pyproject.toml middleware/` and `uv run ruff check --config pyproject.toml middleware/` on touched code.
       - >-
         Prefer real fixes over "# noqa" / "# type: ignore" / "# pylint: disable".
   archive:

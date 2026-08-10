@@ -53,13 +53,20 @@ uv run uvicorn middleware.api.main:app --reload
 
 ## Deployment
 
-The API is containerized using Docker and is built as a standalone binary with PyInstaller within an Alpine Linux container to provide a minimal, secure runtime environment.
+The API is containerized using Docker and is built as a standalone binary with
+PyInstaller within an Alpine Linux container to provide a minimal, secure
+runtime environment.
 
 ### Scaling & Performance
 
-**Scaling must be done via horizontal replicas (multiple pods/containers) and NOT via internal worker processes.**
+**Scaling must be done via horizontal replicas (multiple pods/containers) and
+NOT via internal worker processes.**
 
-The application is bundled using PyInstaller on Python 3.12. Due to known issues with `importlib.metadata` and Pydantic v2's plugin system in "frozen" (PyInstaller) environments, using multiple Uvicorn workers (`--workers > 1`) can lead to startup crashes (e.g., `TypeError: stat: path should be string, bytes, os.PathLike or integer, not NoneType`).
+The application is bundled using PyInstaller on Python 3.12. Due to known issues
+with `importlib.metadata` and Pydantic v2's plugin system in "frozen"
+(PyInstaller) environments, using multiple Uvicorn workers (`--workers > 1`)
+can lead to startup crashes (e.g.,
+`TypeError: stat: path should be string, bytes, os.PathLike or integer, not NoneType`).
 
 To scale the API:
 
@@ -68,4 +75,7 @@ To scale the API:
 
 ### Build Configuration
 
-See `docker/Dockerfile.api` for the PyInstaller build configuration. Note that specific package metadata is explicitly included in the build (using `--copy-metadata`) to ensure compatibility with Pydantic and other metadata-sensitive libraries.
+See `docker/Dockerfile.api` for the PyInstaller build configuration. Note that
+specific package metadata is explicitly included in the build (using
+`--copy-metadata`) to ensure compatibility with Pydantic and other
+metadata-sensitive libraries.

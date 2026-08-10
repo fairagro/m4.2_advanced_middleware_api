@@ -25,7 +25,6 @@ pytestmark = [
 
 @pytest.mark.asyncio
 @pytest.mark.system_external
-@pytest.mark.usefixtures("worker_process")
 @pytest.mark.parametrize(
     "json_info",
     [
@@ -39,6 +38,7 @@ async def test_create_arcs(
     json_info: dict[str, Any],
     gitlab_api: Gitlab,
     config: dict[str, Any],
+    worker_process: Path,
 ) -> None:
     """Test creating ARCs via the /v1/arcs endpoint."""
     cert_with_linebreaks = cert.replace("\\n", "\n")
@@ -59,7 +59,7 @@ async def test_create_arcs(
     assert "task_id" in body  # nosec
     assert body["status"] == "processing"  # nosec
 
-    _wait_for_gitlab_project(gitlab_api, config, json_info)
+    _wait_for_gitlab_project(gitlab_api, config, json_info, worker_log_path=worker_process)
 
 
 def _verify_gitlab_project(gitlab_api: Gitlab, config: dict[str, Any], json_info: dict[str, Any]) -> bool:
@@ -84,6 +84,7 @@ def _wait_for_gitlab_project(
     json_info: dict[str, Any],
     timeout_seconds: int = 180,
     poll_interval_seconds: int = 2,
+    worker_log_path: Path | None = None,
 ) -> None:
     """Poll GitLab until the ARC project and expected file are present."""
     timeout_seconds = int(os.getenv("SYSTEM_EXTERNAL_GITLAB_TIMEOUT", str(timeout_seconds)))
@@ -93,11 +94,15 @@ def _wait_for_gitlab_project(
             return
         time.sleep(poll_interval_seconds)
 
-    pytest.fail(
+    details = (
         "GitLab side effect not observed within timeout: expected project and "
         "isa.investigation.xlsx file were not found. "
         "Ensure the sync worker path is active for system_external tests."
     )
+    if worker_log_path is not None and worker_log_path.exists():
+        log_tail = worker_log_path.read_text(encoding="utf-8", errors="replace")[-4000:]
+        details = f"{details}\n\nCelery worker log (tail):\n{log_tail}"
+    pytest.fail(details)
 
 
 # ---------------------------------------------------------------------------

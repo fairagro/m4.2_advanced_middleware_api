@@ -70,10 +70,10 @@ middleware/api_client/   ← optional client library for API consumers
 
 All code must pass:
 
-- `uv run ruff format --check middleware/` — formatting
-- `uv run ruff check middleware/` — linting
-- `uv run mypy middleware/` — static type checking
-- `uv run pylint middleware/` — style and code smells
+- `uv run ruff format --check --config pyproject.toml middleware/` — formatting
+- `uv run ruff check --config pyproject.toml middleware/` — linting
+- `uv run mypy --config-file pyproject.toml middleware/` — static type checking
+- `uv run pylint --rcfile pyproject.toml middleware/` — style and code smells
 - `uv run bandit -r middleware/ -c .bandit` — security (low findings logged, medium/high fail)
 
 **Suppression comments** (`# noqa`, `# type: ignore`, `# pylint: disable`) are

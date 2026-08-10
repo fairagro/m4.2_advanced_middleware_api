@@ -11,11 +11,12 @@ through CouchDBClient, exactly as the production path looks.
 
 import uuid
 from collections.abc import AsyncGenerator, Generator
+from datetime import timedelta
 
 import pytest
 from pydantic import SecretStr
 from testcontainers.core.container import DockerContainer  # type: ignore[import-untyped]
-from testcontainers.core.wait_strategies import LogMessageWaitStrategy  # type: ignore[import-untyped]
+from testcontainers.core.wait_strategies import HttpWaitStrategy  # type: ignore[import-untyped]
 
 from middleware.api.document_store.config import CouchDBConfig
 from middleware.api.document_store.couchdb_client import CouchDBClient
@@ -40,9 +41,12 @@ def couchdb_container() -> Generator[DockerContainer, None, None]:
         .with_env("COUCHDB_USER", _COUCHDB_USER)
         .with_env("COUCHDB_PASSWORD", _COUCHDB_PASSWORD)
         .with_exposed_ports(_COUCHDB_PORT)
-        # Wait strategy must be set before __enter__ so the container
-        # blocks until CouchDB is fully initialised.
-        .waiting_for(LogMessageWaitStrategy("Apache CouchDB has started"))
+        # Wait for HTTP readiness, not the startup log line: with COUCHDB_USER set,
+        # CouchDB may log "Apache CouchDB has started" before the listener accepts
+        # connections (common flake on slower CI runners).
+        .waiting_for(
+            HttpWaitStrategy(_COUCHDB_PORT, "/_up").for_status_code(200).with_startup_timeout(timedelta(seconds=60))
+        )
     )
     with container:
         yield container

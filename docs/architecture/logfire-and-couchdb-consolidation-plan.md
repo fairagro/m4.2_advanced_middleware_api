@@ -1,12 +1,17 @@
 # Consolidating CouchDB Client and Tracing Refinement
 
-This plan addresses the redundancy in the `CouchDBClient` implementation and identifies the next steps for modernizing the observability stack using Pydantic Logfire.
+This plan addresses the redundancy in the `CouchDBClient` implementation and
+identifies the next steps for modernizing the observability stack using
+Pydantic Logfire.
 
 ## User Review Required
 
 > [!IMPORTANT]
-> I am proposing to replace the current OpenTelemetry (OTLP) tracing/logging boilerplate in `middleware/shared/src/middleware/shared/tracing.py` with **Pydantic Logfire**.
-> Logfire is built on OpenTelemetry but offers much deeper integration with Pydantic models, which are used extensively throughout this project.
+> I am proposing to replace the current OpenTelemetry (OTLP) tracing/logging
+> boilerplate in `middleware/shared/src/middleware/shared/tracing.py` with
+> **Pydantic Logfire**.
+> Logfire is built on OpenTelemetry but offers much deeper integration with
+> Pydantic models, which are used extensively throughout this project.
 >
 > **Benefits:**
 >
@@ -19,7 +24,8 @@ This plan addresses the redundancy in the `CouchDBClient` implementation and ide
 
 ### [Component] Shared Configuration & Client
 
-Move CouchDB related configuration and the "fixed" client implementation to the `shared` package to ensure consistency across the API and Workers.
+Move CouchDB related configuration and the "fixed" client implementation to the
+`shared` package to ensure consistency across the API and Workers.
 
 #### [MODIFY] [config_base.py](file:///workspaces/m4.2_advanced_middleware_api-antigravity/middleware/shared/src/middleware/shared/config/config_base.py)
 

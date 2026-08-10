@@ -7,7 +7,7 @@ requires-python = ">=3.12"
 dependencies = [
   "fairagro-middleware-shared",
   "aiocouch>=4.0.1",
-  "arctrl>=3.0.0b15",
+  "arctrl>=3.1.1",
   "asn1crypto>=1.5.1",
   "celery>=5.3.6",
   "cryptography>=45.0.6",
@@ -28,9 +28,6 @@ middleware-couchdb-setup = "middleware.api.cli:main"
 
 [tool.uv.sources]
 fairagro-middleware-shared = { workspace = true }
-
-[tool.ruff]
-extend = "../../pyproject.toml"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/middleware"]
