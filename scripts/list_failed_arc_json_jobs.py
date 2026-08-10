@@ -60,8 +60,9 @@ if TYPE_CHECKING:
 DEFAULT_GITLAB_URL = "https://datahub.ipk-gatersleben.de"
 DEFAULT_GROUP = "fairagro-advanced-middleware"
 DEFAULT_STAGE = "arc_json"
-DEFAULT_FAILED_JOB_LIMIT = 5
+DEFAULT_FAILED_JOB_LIMIT = 50
 DEFAULT_WORKERS = 20
+JOB_LIST_PAGE_SIZE = 100
 DEFAULT_PROJECT_CACHE = "gitlab-failed-arc-json-projects.cache.json"
 DEFAULT_REPORT_FILE = "gitlab-failed-arc-json-report.md"
 DEFAULT_REPORT_JSON = "gitlab-failed-arc-json-report.json"
@@ -538,18 +539,36 @@ def _job_trace(project: Project, job: Any) -> str:
         return _decode_trace(project.jobs.get(job.id, lazy=True).trace())
 
 
+def _pipeline_fields(job: Any) -> tuple[int | None, str | None]:
+    pipeline_id = getattr(job, "pipeline", None)
+    if isinstance(pipeline_id, dict):
+        raw_id = pipeline_id.get("id")
+        pipeline_id_value = int(raw_id) if raw_id is not None else None
+        return pipeline_id_value, pipeline_id.get("web_url")
+    if pipeline_id is None:
+        return None, None
+    return int(pipeline_id), None
+
+
 def _find_failed_job(project: Project, filters: JobMatchFilter) -> FailedJobMatch | None:
-    """Return the newest failed job matching stage/name filters."""
-    # Prefer the jobs API with scope=failed. Stage is typically ``arc_json``;
-    # the job *name* is often ``ARC RO-Crate`` (not ``arc_json``).
+    """Return the newest failed job matching stage/name filters.
+
+    Scans newest-first through failed jobs (paginated). Newer failures in other
+    stages do not hide an older matching ``arc_json`` failure within the scan
+    budget (``failed_job_limit``).
+    """
     failed_jobs = project.jobs.list(
-        get_all=False,
-        per_page=filters.failed_job_limit,
+        iterator=True,
+        per_page=min(JOB_LIST_PAGE_SIZE, filters.failed_job_limit),
         scope=["failed"],
         order_by="id",
         sort="desc",
     )
-    for job in failed_jobs[: filters.failed_job_limit]:
+    inspected = 0
+    for job in failed_jobs:
+        inspected += 1
+        if inspected > filters.failed_job_limit:
+            break
         if not _job_matches(
             job,
             stage=filters.stage,
@@ -559,17 +578,7 @@ def _find_failed_job(project: Project, filters: JobMatchFilter) -> FailedJobMatc
             continue
         trace = _job_trace(project, job)
         extracted = _extract_error_cause(trace)
-        pipeline_id = getattr(job, "pipeline", None)
-        pipeline_id_value: int | None
-        pipeline_url: str | None = None
-        if isinstance(pipeline_id, dict):
-            raw_id = pipeline_id.get("id")
-            pipeline_id_value = int(raw_id) if raw_id is not None else None
-            pipeline_url = pipeline_id.get("web_url")
-        elif pipeline_id is None:
-            pipeline_id_value = None
-        else:
-            pipeline_id_value = int(pipeline_id)
+        pipeline_id_value, pipeline_url = _pipeline_fields(job)
         return FailedJobMatch(
             project_id=filters.project_id,
             path_with_namespace=filters.path_with_namespace,
@@ -947,7 +956,11 @@ def _parse_args(argv: list[str] | None) -> argparse.Namespace:
         "--failed-job-limit",
         type=int,
         default=DEFAULT_FAILED_JOB_LIMIT,
-        help=(f"How many newest failed jobs per project to inspect (default: {DEFAULT_FAILED_JOB_LIMIT})"),
+        help=(
+            "Max newest failed jobs to scan per project when looking for a "
+            f"stage/name match (default: {DEFAULT_FAILED_JOB_LIMIT}; "
+            "avoids missing arc_json behind newer non-matching failures)"
+        ),
     )
     parser.add_argument(
         "--workers",
