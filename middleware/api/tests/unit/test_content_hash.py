@@ -97,9 +97,7 @@ def test_calculate_arc_content_hash_ignores_graph_order() -> None:
     }
 
     assert calculate_arc_content_hash(first) == calculate_arc_content_hash(reordered)
-    assert calculate_arc_content_hash(first) == calculate_arc_content_hash(
-        canonicalize_rocrate_for_hash(reordered)
-    )
+    assert calculate_arc_content_hash(first) == calculate_arc_content_hash(canonicalize_rocrate_for_hash(reordered))
 
 
 def test_calculate_arc_content_hash_detects_real_content_changes() -> None:
