@@ -66,6 +66,20 @@ async def test_aiocouch_remote_server_avoids_basicauth_deprecation() -> None:
 
 
 @pytest.mark.asyncio
+async def test_aiocouch_remote_server_encodes_empty_string_credentials() -> None:
+    """Empty-string user/password are set values and must still yield Basic auth."""
+    _patch_aiocouch_aiohttp_auth()
+
+    server = RemoteServer("http://localhost:5984", user="", password="")
+    try:
+        auth = server._http_session._default_headers.get("Authorization")  # noqa: SLF001
+        assert auth is not None
+        assert str(auth).startswith("Basic ")
+    finally:
+        await server.close()
+
+
+@pytest.mark.asyncio
 async def test_couchdb_client_connect_success(couchdb_client: CouchDBClient) -> None:
     """Test successful connection to CouchDB.
 

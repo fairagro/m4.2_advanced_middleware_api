@@ -45,7 +45,7 @@ def _patch_aiocouch_aiohttp_auth() -> None:
         headers: dict[str, str] = dict(kwargs.pop("headers", None) or {})
         if cookie:
             headers["Cookie"] = "AuthSession=" + cookie
-        if user and password:
+        if user is not None and password is not None:
             headers["Authorization"] = aiohttp.encode_basic_auth(user, password)
         self._http_session = aiohttp.ClientSession(
             headers=headers if headers else None,
