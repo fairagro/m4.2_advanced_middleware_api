@@ -5,8 +5,9 @@
   //
   // Code-quality parity: editor Ruff/Pylint/Mypy must use the same project
   // config and the same venv binaries as pre-commit and CI
-  // (`uv run ruff|pylint|mypy` → `.venv/bin/...`). Scope for Ruff CLI in
-  // hooks/CI is `middleware/` with root `pyproject.toml`.
+  // (`uv run ruff|pylint|mypy` → `.venv/bin/...`).
+  // Single source of truth for Ruff/Pylint/Mypy: workspace-root pyproject.toml
+  // (not middleware/*/pyproject.toml). Hooks/CI scope: `middleware/`.
 
   "python.testing.pytestArgs": [],
   "python.testing.unittestEnabled": false,
@@ -54,18 +55,20 @@
   ],
   "mypy-type-checker.importStrategy": "fromEnvironment",
 
-  // Ruff: same binary + config as `uv run ruff` / pre-commit / CI.
-  // IMPORTANT: ruff.path must be the ruff executable, NOT `uv run ruff`
-  // (path entries are treated as binaries; `uv` would be invoked as ruff).
+  // Ruff: same binary + root pyproject.toml as `uv run ruff --config pyproject.toml`
+  // / pre-commit / CI. editorOnly avoids per-package pyproject discovery (which
+  // previously used `[tool.ruff] extend = ...` and left the native server with
+  // empty rule sets → no Problems diagnostics).
   "ruff.enable": true,
   "ruff.nativeServer": "on",
   "ruff.path": ["${workspaceFolder}/.venv/bin/ruff"],
   "ruff.interpreter": ["${workspaceFolder}/.venv/bin/python"],
   "ruff.configuration": "${workspaceFolder}/pyproject.toml",
-  "ruff.configurationPreference": "filesystemFirst",
+  "ruff.configurationPreference": "editorOnly",
   "ruff.importStrategy": "fromEnvironment",
+  "ruff.lint.enable": true,
 
-  // Pylint: same rcfile + venv as pre-commit / `uv run pylint`
+  // Pylint: same rcfile + venv as pre-commit / `uv run pylint --rcfile pyproject.toml`
   "pylint.args": [
     "--rcfile=${workspaceFolder}/pyproject.toml"
   ],

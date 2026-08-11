@@ -14,13 +14,13 @@ YELLOW='\033[1;33m'
 NC='\033[0m'
 
 echo -e "${YELLOW}🔧 1. Running Ruff (Auto-fixing linting issues)...${NC}"
-uv run ruff check --fix middleware/ || true
+uv run ruff check --config pyproject.toml --fix middleware/ || true
 echo -e "${GREEN}✅ Ruff auto-fixes applied${NC}"
 
 echo -e "${YELLOW}🔧 2. Running Ruff (Auto-formatting)...${NC}"
-uv run ruff format middleware/
+uv run ruff format --config pyproject.toml middleware/
 echo -e "${GREEN}✅ Ruff formatting applied${NC}"
 
 echo -e "${GREEN}🎉 Auto-fixes completed!${NC}"
-echo "Now run the quality checks to see remaining issues:"
+echo "Now run the CI-parity quality checks:"
 echo "./scripts/quality-check.sh"

@@ -31,7 +31,7 @@ Work remains scoped to this repository; consumer migrations happen separately.
   ApiClient result), not optimistically before upload outcomes.
 - Keep pluggable serialization (JSON-LD first) that returns a document string;
   wire shape stays the harvester baseline (`schema:Action` + `schema:result` of
-  `EntryPoint`s, versioned `fairagro:` vocabulary under `ns/harvest-report/v1/`).
+  `EntryPoint`s, versioned `fairagro:` vocabulary under `ns/harvest-report/v2/`).
   Callers own stdout/logging of that string.
 - Update Spec-to-Code mapping in `AGENTS.md` for the domain.
 - **Non-goals:** changing `middleware/api` or `api_client` behavior; migrating
@@ -55,8 +55,10 @@ Work remains scoped to this repository; consumer migrations happen separately.
 
 - **Code:** `middleware/shared/.../report/` becomes a start/count/finish API
   plus serializers (existing snapshot-only API is superseded in this change).
-- **Vocab / Pages:** unchanged intent (`ns/harvest-report/v1/`, tag-gated
-  publish of `ns/` only).
+- **Vocab / Pages:** current serializer uses `ns/harvest-report/v2/` (v1 frozen
+  with `failedRecords`); tag-gated publish of `ns/` only. The v2 wire
+  (`fairagro:failures`) is intentionally not backward-compatible with v1
+  `failedRecords`; no dual-emit / legacy serializer mode.
 - **Package:** `fairagro-middleware-shared` public report API.
 - **Specs:** delta under `openspec/changes/shared-harvest-report/`; main
   `openspec/specs/harvest-report/` after archive.

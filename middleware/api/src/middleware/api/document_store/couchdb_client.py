@@ -12,10 +12,48 @@ from urllib.parse import quote
 import aiohttp
 from aiocouch import CouchDB, Database
 from aiocouch.exception import ConflictError, NotFoundError, PreconditionFailedError
+from aiocouch.remote import RemoteServer
 
 from middleware.api.document_store.config import CouchDBConfig
 
 logger = logging.getLogger(__name__)
+
+_PATCH_MARKER = "_fairagro_encode_basic_auth"
+
+
+def _patch_aiocouch_aiohttp_auth() -> None:
+    """Make aiocouch use ``encode_basic_auth`` instead of deprecated ``BasicAuth``.
+
+    aiocouch 4.0.1 still builds ``aiohttp.BasicAuth`` and passes ``auth=`` into
+    ``ClientSession``. Both are deprecated in aiohttp 3.14+ (removed in 4.0) and
+    spam pytest with DeprecationWarnings on every connect. Patch once per process
+    until upstream adopts the new API.
+    """
+    if getattr(RemoteServer.__init__, _PATCH_MARKER, False):
+        return
+
+    def patched_init(
+        self: RemoteServer,
+        server: str,
+        *,
+        user: str | None = None,
+        password: str | None = None,
+        cookie: str | None = None,
+        **kwargs: Any,
+    ) -> None:
+        self._server = server
+        headers: dict[str, str] = dict(kwargs.pop("headers", None) or {})
+        if cookie:
+            headers["Cookie"] = "AuthSession=" + cookie
+        if user is not None and password is not None:
+            headers["Authorization"] = aiohttp.encode_basic_auth(user, password)
+        self._http_session = aiohttp.ClientSession(
+            headers=headers if headers else None,
+            **kwargs,
+        )
+
+    setattr(patched_init, _PATCH_MARKER, True)
+    RemoteServer.__init__ = patched_init  # type: ignore[method-assign]
 
 
 class DocumentConflictError(RuntimeError):
@@ -61,6 +99,7 @@ class CouchDBClient:
             return
 
         try:
+            _patch_aiocouch_aiohttp_auth()
             self._client = CouchDB(
                 self._url,
                 user=self._user,

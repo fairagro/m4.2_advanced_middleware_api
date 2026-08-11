@@ -76,12 +76,15 @@ uv run pytest middleware/shared/tests/unit/ -v
 uv run pytest middleware/api_client/tests/unit/ -v
 
 # Quality checks
-uv run ruff check .
-uv run mypy middleware/
+uv run ruff check --config pyproject.toml middleware/
+uv run mypy --config-file pyproject.toml middleware/
 
 # Ruff parity checks (local + pre-commit + CI)
-uv run ruff format --check --diff middleware/
-uv run ruff check middleware/
+uv run ruff format --check --diff --config pyproject.toml middleware/
+uv run ruff check --config pyproject.toml middleware/
+
+# Full CI-parity quality gate (ruff + pylint + mypy + bandit; no pytest)
+./scripts/quality-check.sh
 
 # Install all dependecies
 uv sync --dev --all-packages
@@ -216,17 +219,25 @@ by the project's configured tools: **Ruff, Pylance, MyPy, Pylint, and Bandit**.
 ### Ruff Execution Consistency
 
 - Keep Ruff behavior identical in Cursor/VS Code, pre-commit, and GitHub Actions
-  by using the same scope (`middleware/`), the same root config
-  (`pyproject.toml`), and the same binary (`.venv/bin/ruff` via `uv run ruff`).
+  by using the same scope (`middleware/`), the same **workspace-root** config
+  (`pyproject.toml` — not `middleware/*/pyproject.toml`), and the same binary
+  (`.venv/bin/ruff` via `uv run ruff --config pyproject.toml`).
 - Editor: `.vscode/settings.json` must set `ruff.path` to
-  `${workspaceFolder}/.venv/bin/ruff`. Do **not** set it to `["uv", "run",
-  "ruff"]` — `ruff.path` entries are treated as executables, so `uv` would be
-  launched as Ruff and the Problems tab stays empty.
+  `${workspaceFolder}/.venv/bin/ruff`, `ruff.configuration` to the root
+  `pyproject.toml`, and `ruff.configurationPreference` to `editorOnly`. Do
+  **not** set `ruff.path` to `["uv", "run", "ruff"]` — those entries are treated
+  as executables, so `uv` would be launched as Ruff and Problems stays empty.
+- Do not put `[tool.ruff]` (including `extend = ...`) in package pyprojects;
+  discovery would stop there and the Ruff native server often fails to apply
+  extended rules → empty Problems tab while CLI still looks fine.
 - Lint diagnostics appear in Problems; **format** drift does not (Ruff applies
   format via Format on Save / `ruff format`). Before commit, run the same
-  checks as CI: `uv run ruff format --check --diff middleware/` and
-  `uv run ruff check middleware/` (or `./scripts/quality-fix.sh` then
-  pre-commit).
+  checks as CI via `./scripts/quality-check.sh` (ruff/pylint/mypy/bandit), or
+  the individual `uv run ruff format --check --diff --config pyproject.toml middleware/`
+  / `uv run ruff check --config pyproject.toml middleware/` commands (or
+  `./scripts/quality-fix.sh` then pre-commit / terminal `git commit`).
+  Note: Cursor Source Control Commit may skip git hooks (Cursor ≥3.15.6 bug);
+  prefer terminal commits until that is fixed.
 - Avoid partially staging a Python file (`MM` in `git status`): pre-commit may
   auto-format the index, then roll back when the stash conflicts with unstaged
   edits — leaving format failures invisible in the editor.
@@ -301,7 +312,7 @@ Before generating or modifying code, read the relevant specs:
 - **[`openspec/specs/harvest-report/`](openspec/specs/harvest-report/)** —
   Format-neutral harvest-run accumulator with repository scope counting and
   pluggable serializers (JSON-LD first): `HarvestReport`, `RepositoryScope`,
-  `RepositoryReport`, `FailedRecord`.
+  `RepositoryReport`, `HarvestIssue`.
 
 For the AI agent workflow documentation, see [`docs/ai_workflow.md`](docs/ai_workflow.md).
 

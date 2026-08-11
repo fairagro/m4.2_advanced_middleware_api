@@ -124,24 +124,54 @@ this method instead of maintaining their own harvested counter for the report.
 
 The report SHALL provide a counting method on a repository scope handle that
 records one failed dataset: increment that scope’s failed count by one and
-append a failed record carrying a human-readable message and optional record
-identifier and optional URL. Callers MUST use this method instead of
-maintaining parallel failure counters or failure lists for the report.
+append a harvest issue of kind `dataset` carrying a human-readable message and
+optional record identifier and optional URL. Callers MUST use this method
+instead of maintaining parallel failure counters or failure lists for the
+report.
 
 #### Scenario: Failure with record id and URL
 
 - **GIVEN** an open repository scope handle
-- **WHEN** the caller records a failure with message M, record id R, and URL U
+- **WHEN** the caller records a dataset failure with message M, record id R,
+  and URL U
 - **THEN** the failed count increases by one
-- **AND** the failure list includes an entry with M, R, and U
+- **AND** the failure list includes an entry with kind `dataset`, M, R, and U
 
 #### Scenario: Failure with message only
 
 - **GIVEN** an open repository scope handle
-- **WHEN** the caller records a failure with only a message
+- **WHEN** the caller records a dataset failure with only a message
 - **THEN** the failed count increases by one
-- **AND** the failure entry omits unset optional fields on the wire as
-  specified for failed records
+- **AND** the failure entry has kind `dataset` and omits unset optional fields
+  on the wire as specified for failures
+
+### Requirement: Record repository-level issue
+
+The report SHALL provide a method on a repository scope handle that appends a
+harvest issue of kind `repository` with a human-readable message and optional
+URL, without incrementing the failed dataset count. Callers MUST use this
+method for RDI-global or discovery failures that are not attributable to a
+single dataset.
+
+#### Scenario: Sitemap discovery failure
+
+- **GIVEN** an open repository scope handle with failed dataset count F
+- **WHEN** the caller records a repository-level issue with message M and URL U
+- **THEN** the failed dataset count remains F
+- **AND** the failure list includes an entry with kind `repository`, M, and U
+
+### Requirement: Harvest issue construction constraints
+
+Constructing a harvest issue SHALL normalize `kind` to `dataset` or
+`repository` and SHALL reject a `record_id` when `kind` is `repository`
+(record identifiers apply only to dataset-scoped issues).
+
+#### Scenario: Repository issue with record id rejected
+
+- **GIVEN** a caller constructs a harvest issue with kind `repository` and a
+  non-null record id
+- **WHEN** construction is attempted
+- **THEN** construction fails with an error
 
 ### Requirement: Record skipped dataset
 
@@ -217,8 +247,8 @@ different open handles on the same run MUST remain isolated from each other.
 After or during a run, serializers SHALL be able to read repository
 statistics without depending on a particular wire format: RDI, harvest id
 (nullable), duration, expected (optional), harvested, failed, skipped, optional
-study/assay totals, and the list of failed records (message; optional id and
-URL).
+study/assay totals, and the list of harvest issues (kind; message; optional id
+and URL).
 
 #### Scenario: Serializer reads counted state
 
@@ -269,21 +299,34 @@ identifier; `schema:duration` as ISO 8601 duration for that scope;
 `fairagro:failedDatasets` as integers; `fairagro:skippedDatasets` as integer
 (including 0); `fairagro:expectedDatasets` only when set; optional
 `fairagro:totalStudies` / `fairagro:totalAssays` per the studies/assays rule;
-and `fairagro:failedRecords` as an array of failed-record objects.
+and `fairagro:failures` as an array of issue objects (each with
+`fairagro:kind` of `dataset` or `repository`, `fairagro:message`, and optional
+`fairagro:recordId` / `fairagro:url`).
 
 #### Scenario: Complete entry with expected and failures
 
 - **GIVEN** a repository scope with expected set, non-zero harvested/failed,
-  skipped zero, and at least one failed record with message and record id
+  skipped zero, and at least one dataset failure with message and record id
 - **WHEN** JSON-LD is produced for that entry
 - **THEN** the mapped properties above are present with those values
 - **AND** `fairagro:expectedDatasets` is present
 - **AND** `fairagro:skippedDatasets` is 0
+- **AND** `fairagro:failures` entries include `fairagro:kind`
+
+#### Scenario: Repository issue does not inflate failedDatasets
+
+- **GIVEN** a repository scope with only a repository-level issue recorded
+- **WHEN** JSON-LD is produced for that entry
+- **THEN** `fairagro:failedDatasets` is 0
+- **AND** `fairagro:failures` contains one entry with `fairagro:kind`
+  `repository`
 
 ### Requirement: Versioned vocabulary IRI
 
 The JSON-LD `@context` entry for `fairagro` SHALL use
-`https://fairagro.github.io/m4.2_advanced_middleware_api/ns/harvest-report/v1/#`
+`https://fairagro.github.io/m4.2_advanced_middleware_api/ns/harvest-report/v2/#`
 (hash fragment on the versioned path). Bumps that break term compatibility use
-a new version segment; documentation lives under `ns/harvest-report/v1/` and is
+a new version segment; documentation lives under `ns/harvest-report/v2/` and is
 published via GitHub Pages from tags without publishing unrelated `docs/` trees.
+The v1 vocabulary under `ns/harvest-report/v1/` remains frozen (`failedRecords`)
+and MUST NOT be altered by this rename.

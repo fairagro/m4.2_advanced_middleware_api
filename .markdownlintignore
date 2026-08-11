@@ -3,3 +3,7 @@
 .cursor/commands/**
 .github/skills/**
 .github/prompts/**
+
+# Third-party / local environments
+.venv/**
+node_modules/**

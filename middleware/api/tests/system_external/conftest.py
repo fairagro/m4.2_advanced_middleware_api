@@ -6,6 +6,7 @@ import subprocess
 import tempfile
 import time
 from collections.abc import Generator
+from datetime import timedelta
 from pathlib import Path
 from typing import Any
 
@@ -16,7 +17,10 @@ from dotenv import load_dotenv
 from fastapi.testclient import TestClient
 from gitlab import Gitlab, GitlabError
 from testcontainers.core.container import DockerContainer  # type: ignore[import-untyped]
-from testcontainers.core.wait_strategies import LogMessageWaitStrategy  # type: ignore[import-untyped]
+from testcontainers.core.wait_strategies import (  # type: ignore[import-untyped]
+    HttpWaitStrategy,
+    LogMessageWaitStrategy,
+)
 
 from middleware.api.api.fastapi_app import Api
 from middleware.api.config import Config
@@ -47,7 +51,10 @@ def external_services() -> Generator[dict[str, str], None, None]:
         .with_env("COUCHDB_USER", _COUCHDB_USER)
         .with_env("COUCHDB_PASSWORD", couchdb_password)
         .with_exposed_ports(_COUCHDB_PORT)
-        .waiting_for(LogMessageWaitStrategy("Apache CouchDB has started"))
+        # Prefer /_up over the startup log: log can appear before HTTP is ready.
+        .waiting_for(
+            HttpWaitStrategy(_COUCHDB_PORT, "/_up").for_status_code(200).with_startup_timeout(timedelta(seconds=60))
+        )
     )
     rabbitmq_container = (
         DockerContainer(_RABBITMQ_IMAGE)
@@ -180,12 +187,14 @@ def cleanup_gitlab_group(gitlab_group: Any, gitlab_api: Gitlab) -> None:  # pyli
 def worker_process(
     external_services: dict[str, str],
     config: dict[str, Any],
-) -> Generator[None, None, None]:
+) -> Generator[Path, None, None]:
     """Spawn a real Celery worker that consumes from the testcontainer RabbitMQ.
 
     The worker is started as a subprocess (no pytest in its sys.modules), so
     celery_app.py loads a proper WorkerConfig from a temporary YAML file
     pointing at the same CouchDB and RabbitMQ testcontainers used by the API.
+
+    Yields the worker log path so failing tests can include recent worker output.
     """
     gitlab_token = os.getenv("GITLAB_API_TOKEN", "")
     worker_cfg: dict[str, Any] = {
@@ -268,7 +277,7 @@ def worker_process(
         )
 
     try:
-        yield
+        yield log_path
     finally:
         proc.terminate()
         try:

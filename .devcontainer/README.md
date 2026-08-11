@@ -91,13 +91,17 @@ postCreate installs Ruff via the Cursor or VS Code remote CLI (see
 Fallback / parity check:
 
 ```bash
-uv run ruff check middleware/
-uv run ruff format --check --diff middleware/
+./scripts/quality-check.sh
+# or individually:
+uv run ruff check --config pyproject.toml middleware/
+uv run ruff format --check --diff --config pyproject.toml middleware/
 # or fix + re-check
 ./scripts/quality-fix.sh
+./scripts/quality-check.sh
 ```
 
 Do not recommend or enable `ms-python.autopep8` — it fights Ruff as the Python formatter.
+
 ## Local clone (no Dev Container)
 
 ```bash

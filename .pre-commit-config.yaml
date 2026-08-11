@@ -2,9 +2,9 @@
 # See https://pre-commit.com for more information
 # See https://pre-commit.com/hooks.html for more hooks
 #
-# Ruff hooks: `uv run ruff` from the project venv + root pyproject.toml,
-# scoped to middleware/ — same as CI and the Cursor Ruff extension
-# (which must use .venv/bin/ruff, not `uv` as ruff.path).
+# Ruff hooks: `uv run ruff --config pyproject.toml` from the project venv,
+# scoped to middleware/ — same root config as CI and the Cursor Ruff extension
+# (ruff.configuration = workspace pyproject.toml, configurationPreference = editorOnly).
 
 repos:
   # Built-in hooks (no dependencies needed)
@@ -33,7 +33,7 @@ repos:
       # Ruff - Linting
       - id: ruff
         name: ruff lint
-        entry: uv run ruff check middleware/
+        entry: uv run ruff check --config pyproject.toml middleware/
         language: system
         files: ^middleware/
         pass_filenames: false
@@ -42,7 +42,7 @@ repos:
       # Ruff - Formatting
       - id: ruff-format
         name: ruff format
-        entry: uv run ruff format middleware/
+        entry: uv run ruff format --config pyproject.toml middleware/
         language: system
         files: ^middleware/
         pass_filenames: false
@@ -68,7 +68,7 @@ repos:
       # pylint - Code quality
       - id: pylint
         name: pylint
-        entry: uv run pylint
+        entry: uv run pylint --rcfile pyproject.toml
         language: system
         types: [python]
         files: ^middleware/

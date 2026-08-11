@@ -56,9 +56,9 @@ jobs:
       - name: Code formatting and linting
         if: ${{ !inputs.skip }}
         run: |
-          uv run ruff format --check --diff middleware/
-          uv run ruff check middleware/
-          uv run pylint middleware/
+          uv run ruff format --check --diff --config pyproject.toml middleware/
+          uv run ruff check --config pyproject.toml middleware/
+          uv run pylint --rcfile pyproject.toml middleware/
           uv run mypy --config-file pyproject.toml middleware/
 
       - name: Security check with bandit
