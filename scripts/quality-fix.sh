@@ -22,5 +22,5 @@ uv run ruff format --config pyproject.toml middleware/
 echo -e "${GREEN}✅ Ruff formatting applied${NC}"
 
 echo -e "${GREEN}🎉 Auto-fixes completed!${NC}"
-echo "Now run the quality checks to see remaining issues:"
+echo "Now run the CI-parity quality checks:"
 echo "./scripts/quality-check.sh"

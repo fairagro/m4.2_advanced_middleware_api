@@ -83,6 +83,9 @@ uv run mypy --config-file pyproject.toml middleware/
 uv run ruff format --check --diff --config pyproject.toml middleware/
 uv run ruff check --config pyproject.toml middleware/
 
+# Full CI-parity quality gate (ruff + pylint + mypy + bandit; no pytest)
+./scripts/quality-check.sh
+
 # Install all dependecies
 uv sync --dev --all-packages
 ```
@@ -229,9 +232,12 @@ by the project's configured tools: **Ruff, Pylance, MyPy, Pylint, and Bandit**.
   extended rules → empty Problems tab while CLI still looks fine.
 - Lint diagnostics appear in Problems; **format** drift does not (Ruff applies
   format via Format on Save / `ruff format`). Before commit, run the same
-  checks as CI: `uv run ruff format --check --diff --config pyproject.toml middleware/`
-  and `uv run ruff check --config pyproject.toml middleware/` (or
-  `./scripts/quality-fix.sh` then pre-commit).
+  checks as CI via `./scripts/quality-check.sh` (ruff/pylint/mypy/bandit), or
+  the individual `uv run ruff format --check --diff --config pyproject.toml middleware/`
+  / `uv run ruff check --config pyproject.toml middleware/` commands (or
+  `./scripts/quality-fix.sh` then pre-commit / terminal `git commit`).
+  Note: Cursor Source Control Commit may skip git hooks (Cursor ≥3.15.6 bug);
+  prefer terminal commits until that is fixed.
 - Avoid partially staging a Python file (`MM` in `git status`): pre-commit may
   auto-format the index, then roll back when the stash conflicts with unstaged
   edits — leaving format failures invisible in the editor.
