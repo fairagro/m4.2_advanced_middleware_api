@@ -6,6 +6,7 @@ import json
 from middleware.api.document_store.content_hash import (
     RoCrateContent,
     calculate_arc_content_hash,
+    canonicalize_rocrate_for_hash,
     strip_volatile_rocrate_fields,
 )
 
@@ -18,6 +19,7 @@ def test_strip_volatile_rocrate_fields_removes_timestamps_recursively() -> None:
             {
                 "@id": "./",
                 "identifier": "arc-1",
+                "dateCreated": "2026-01-01",
                 "datePublished": "2026-01-01T00:00:00.000",
                 "sdDatePublished": "2026-01-01T00:00:00.001",
             },
@@ -38,6 +40,7 @@ def test_strip_volatile_rocrate_fields_removes_timestamps_recursively() -> None:
     assert isinstance(root, dict)
     assert isinstance(study, dict)
 
+    assert "dateCreated" not in root
     assert "datePublished" not in root
     assert "sdDatePublished" not in root
     assert "dateModified" not in study
@@ -52,6 +55,7 @@ def test_calculate_arc_content_hash_ignores_timestamp_only_differences() -> None
             {
                 "@id": "./",
                 "identifier": "arc-1",
+                "dateCreated": "2024-01-15",
                 "datePublished": "2026-01-01T10:00:00.111",
                 "sdDatePublished": "2026-01-01T10:00:00.112",
             },
@@ -64,6 +68,7 @@ def test_calculate_arc_content_hash_ignores_timestamp_only_differences() -> None
             {
                 "@id": "./",
                 "identifier": "arc-1",
+                "dateCreated": "2026-08-11",
                 "datePublished": "2026-07-01T11:19:33.494",
                 "sdDatePublished": "2026-07-01T11:19:33.557",
             },
@@ -72,6 +77,29 @@ def test_calculate_arc_content_hash_ignores_timestamp_only_differences() -> None
     }
 
     assert calculate_arc_content_hash(base) == calculate_arc_content_hash(refreshed)
+
+
+def test_calculate_arc_content_hash_ignores_graph_order() -> None:
+    """``@graph`` node order must not affect the content hash."""
+    first: RoCrateContent = {
+        "@context": "https://w3id.org/ro/crate/1.1/context",
+        "@graph": [
+            {"@id": "./", "identifier": "arc-1"},
+            {"@id": "#study", "name": "Study"},
+        ],
+    }
+    reordered: RoCrateContent = {
+        "@context": "https://w3id.org/ro/crate/1.1/context",
+        "@graph": [
+            {"@id": "#study", "name": "Study"},
+            {"@id": "./", "identifier": "arc-1"},
+        ],
+    }
+
+    assert calculate_arc_content_hash(first) == calculate_arc_content_hash(reordered)
+    assert calculate_arc_content_hash(first) == calculate_arc_content_hash(
+        canonicalize_rocrate_for_hash(reordered)
+    )
 
 
 def test_calculate_arc_content_hash_detects_real_content_changes() -> None:

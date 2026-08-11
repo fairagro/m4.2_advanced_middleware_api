@@ -12,9 +12,15 @@ type JsonValue = JsonPrimitive | list[JsonValue] | dict[str, JsonValue]
 # Top-level RO-Crate document stored in CouchDB (``@context``, ``@graph``, …).
 type RoCrateContent = dict[str, JsonValue]
 
-# arctrl ToROCrateJsonString() refreshes these on every serialization even when
-# semantic ARC content is unchanged (see arctrl round-trip behaviour).
-_VOLATILE_ROCRATE_FIELDS = frozenset({"datePublished", "sdDatePublished", "dateModified"})
+# Serialization / harvest timestamps that change without semantic ARC edits.
+# ISA RO-Crate profile: Submission Date → dateCreated, Public Release Date → datePublished.
+# arctrl ToROCrateJsonString() may also refresh datePublished / sdDatePublished / dateModified.
+_VOLATILE_ROCRATE_FIELDS = frozenset({
+    "dateCreated",
+    "datePublished",
+    "sdDatePublished",
+    "dateModified",
+})
 
 
 def strip_volatile_rocrate_fields(value: RoCrateContent) -> RoCrateContent:
@@ -34,8 +40,26 @@ def strip_volatile_rocrate_fields(value: RoCrateContent) -> RoCrateContent:
     return stripped
 
 
+def _graph_sort_key(node: JsonValue) -> tuple[str, str]:
+    """Stable sort key for ``@graph`` nodes (order must not affect the content hash)."""
+    if isinstance(node, dict):
+        node_id = node.get("@id")
+        id_part = node_id if isinstance(node_id, str) else ""
+        return (id_part, json.dumps(node, sort_keys=True))
+    return ("", json.dumps(node, sort_keys=True))
+
+
+def canonicalize_rocrate_for_hash(value: RoCrateContent) -> RoCrateContent:
+    """Strip volatile fields and order ``@graph`` for stable hashing."""
+    stripped = strip_volatile_rocrate_fields(value)
+    graph = stripped.get("@graph")
+    if isinstance(graph, list):
+        return {**stripped, "@graph": sorted(graph, key=_graph_sort_key)}
+    return stripped
+
+
 def calculate_arc_content_hash(arc_content: RoCrateContent) -> str:
-    """SHA-256 of normalized RO-Crate JSON (volatile timestamp fields excluded)."""
-    normalized = strip_volatile_rocrate_fields(arc_content)
+    """SHA-256 of normalized RO-Crate JSON (volatile timestamps excluded)."""
+    normalized = canonicalize_rocrate_for_hash(arc_content)
     json_str = json.dumps(normalized, sort_keys=True)
     return hashlib.sha256(json_str.encode("utf-8")).hexdigest()
