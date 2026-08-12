@@ -1,5 +1,7 @@
 """CouchDB implementation of DocumentStore."""
 
+import asyncio
+import hashlib
 import logging
 import uuid
 from collections.abc import Callable
@@ -8,11 +10,17 @@ from typing import Any, cast
 
 from middleware.api.document_store.config import CouchDBConfig
 from middleware.api.document_store.content_hash import RoCrateContent, calculate_arc_content_hash
-from middleware.api.document_store.couchdb_client import CouchDBClient
+from middleware.api.document_store.couchdb_client import CouchDBClient, DocumentConflictError
 from middleware.api.utils import calculate_arc_id
 from middleware.shared.api_models.common.models import ArcEventType, ArcLifecycleStatus, HarvestStatus
 
-from . import ArcStoreResult, DocumentStore, DuplicateArcError
+from . import (
+    ArcStoreResult,
+    DocumentStore,
+    DuplicateArcError,
+    IdempotencyBodyConflictError,
+    IdempotencyPendingError,
+)
 from .arc_document import (
     ArcDocument,
     ArcEvent,
@@ -22,9 +30,16 @@ from .harvest_document import (
     HarvestDocument,
     HarvestStatistics,
 )
+from .harvest_idempotency_document import (
+    HarvestIdempotencyDocument,
+    IdempotencyStatus,
+)
 from .task_record import TaskRecord
 
 logger = logging.getLogger(__name__)
+
+_PENDING_POLL_ATTEMPTS = 20
+_PENDING_POLL_DELAY_S = 0.05
 
 
 class CouchDB(DocumentStore):
@@ -288,6 +303,92 @@ class CouchDB(DocumentStore):
         doc_data = doc.model_dump(mode="json", by_alias=True, exclude_none=True)
         await self._client.save_document(doc_id, doc_data)
         return doc_id
+
+    @staticmethod
+    def _idempotency_doc_id(client_id: str, idempotency_key: str) -> str:
+        digest = hashlib.sha256(f"{client_id}\0{idempotency_key}".encode()).hexdigest()
+        return f"harvest-idempotency:{digest}"
+
+    @staticmethod
+    def _bodies_compatible(
+        index: HarvestIdempotencyDocument,
+        rdi: str,
+        expected_datasets: int | None,
+    ) -> bool:
+        return index.rdi == rdi and index.expected_datasets == expected_datasets
+
+    async def _load_idempotency_doc(self, doc_id: str) -> HarvestIdempotencyDocument | None:
+        raw = await self._client.get_document(doc_id)
+        if raw is None:
+            return None
+        return HarvestIdempotencyDocument.model_validate(raw)
+
+    async def _resolve_idempotency_claim(
+        self,
+        doc_id: str,
+        rdi: str,
+        expected_datasets: int | None,
+    ) -> tuple[str, bool]:
+        for _ in range(_PENDING_POLL_ATTEMPTS):
+            index = await self._load_idempotency_doc(doc_id)
+            if index is None:
+                raise IdempotencyPendingError(f"Idempotency claim {doc_id} disappeared")
+            if index.status == IdempotencyStatus.COMMITTED and index.harvest_id:
+                if not self._bodies_compatible(index, rdi, expected_datasets):
+                    raise IdempotencyBodyConflictError("Idempotency-Key was reused with an incompatible create body")
+                return index.harvest_id, True
+            await asyncio.sleep(_PENDING_POLL_DELAY_S)
+
+        raise IdempotencyPendingError(f"Idempotency claim {doc_id} is still pending")
+
+    async def create_harvest_idempotent(
+        self,
+        rdi: str,
+        client_id: str,
+        idempotency_key: str,
+        expected_datasets: int | None = None,
+    ) -> tuple[str, bool]:
+        """Claim-then-finalize keyed harvest create."""
+        doc_id = self._idempotency_doc_id(client_id, idempotency_key)
+        pending = HarvestIdempotencyDocument(
+            doc_id=doc_id,
+            client_id=client_id,
+            idempotency_key=idempotency_key,
+            rdi=rdi,
+            expected_datasets=expected_datasets,
+            status=IdempotencyStatus.PENDING,
+            harvest_id=None,
+            created_at=datetime.now(UTC),
+        )
+        try:
+            await self._client.create_document_exclusive(
+                doc_id,
+                pending.model_dump(mode="json", by_alias=True, exclude_none=True),
+            )
+        except DocumentConflictError:
+            return await self._resolve_idempotency_claim(doc_id, rdi, expected_datasets)
+
+        try:
+            harvest_id = await self.create_harvest(rdi, client_id, expected_datasets=expected_datasets)
+        except Exception:
+            await self._client.delete_document(doc_id)
+            raise
+
+        committed = HarvestIdempotencyDocument(
+            doc_id=doc_id,
+            client_id=client_id,
+            idempotency_key=idempotency_key,
+            rdi=rdi,
+            expected_datasets=expected_datasets,
+            status=IdempotencyStatus.COMMITTED,
+            harvest_id=harvest_id,
+            created_at=pending.created_at,
+        )
+        await self._client.save_document(
+            doc_id,
+            committed.model_dump(mode="json", by_alias=True, exclude_none=True),
+        )
+        return harvest_id, False
 
     async def get_harvest(self, harvest_id: str) -> HarvestDocument | None:
         """Get harvest document."""

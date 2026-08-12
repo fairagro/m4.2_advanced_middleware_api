@@ -11,11 +11,12 @@ from .exceptions import (
     ConflictError,
     DuplicateArcInHarvestError,
     InvalidJsonSemanticError,
+    InvalidRequestError,
     ResourceNotFoundError,
     SetupError,
     TransientError,
 )
-from .harvest_manager import HarvestManager
+from .harvest_manager import CreateHarvestResult, HarvestManager
 from .ports import BrokerHealthChecker, BusinessLogicPorts
 
 __all__ = [
@@ -24,8 +25,10 @@ __all__ = [
     "BusinessLogic",
     "BusinessLogicError",
     "ConflictError",
+    "CreateHarvestResult",
     "DuplicateArcInHarvestError",
     "InvalidJsonSemanticError",
+    "InvalidRequestError",
     "ResourceNotFoundError",
     "SetupError",
     "BrokerHealthChecker",

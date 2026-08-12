@@ -1,15 +1,34 @@
 """Harvest manager service for handling harvest-run lifecycles."""
 
 import logging
+from dataclasses import dataclass
 from typing import Any, Self
 
 from middleware.api.business_logic.config import HarvestConfig
-from middleware.api.business_logic.exceptions import AccessDeniedError, ConflictError, ResourceNotFoundError
-from middleware.api.document_store import DocumentStore
+from middleware.api.business_logic.exceptions import (
+    AccessDeniedError,
+    ConflictError,
+    InvalidRequestError,
+    ResourceNotFoundError,
+    TransientError,
+)
+from middleware.api.document_store import (
+    DocumentStore,
+    IdempotencyBodyConflictError,
+    IdempotencyPendingError,
+)
 from middleware.api.document_store.harvest_document import HarvestDocument
 from middleware.shared.api_models.common.models import HarvestStatus
 
 logger = logging.getLogger(__name__)
+
+
+@dataclass(frozen=True, slots=True)
+class CreateHarvestResult:
+    """Outcome of creating or replaying a harvest run."""
+
+    harvest_id: str
+    replayed: bool = False
 
 
 class HarvestManager:
@@ -36,11 +55,45 @@ class HarvestManager:
         """
         return cls(doc_store, config)
 
-    async def create_harvest(self, rdi: str, client_id: str | None, expected_datasets: int | None = None) -> str:
-        """Start a new harvest run."""
+    async def create_harvest(
+        self,
+        rdi: str,
+        client_id: str | None,
+        expected_datasets: int | None = None,
+        *,
+        idempotency_key: str | None = None,
+    ) -> CreateHarvestResult:
+        """Start a new harvest run, optionally keyed for idempotent retries."""
+        if idempotency_key is not None:
+            if idempotency_key == "":
+                raise InvalidRequestError("Idempotency-Key must not be empty")
+            if client_id is None:
+                raise InvalidRequestError("Idempotency-Key requires an authenticated client")
+            try:
+                harvest_id, replayed = await self._doc_store.create_harvest_idempotent(
+                    rdi,
+                    client_id,
+                    idempotency_key,
+                    expected_datasets=expected_datasets,
+                )
+            except IdempotencyBodyConflictError as exc:
+                raise ConflictError(str(exc)) from exc
+            except IdempotencyPendingError as exc:
+                raise TransientError(str(exc)) from exc
+            if replayed:
+                logger.info(
+                    "[%s] Replayed harvest create for key (rdi=%s): %s",
+                    client_id,
+                    rdi,
+                    harvest_id,
+                )
+            else:
+                logger.info("[%s] Created harvest: %s (rdi=%s, keyed)", client_id, harvest_id, rdi)
+            return CreateHarvestResult(harvest_id=harvest_id, replayed=replayed)
+
         harvest_id = await self._doc_store.create_harvest(rdi, client_id, expected_datasets=expected_datasets)
         logger.info("[%s] Created harvest: %s (rdi=%s)", client_id, harvest_id, rdi)
-        return harvest_id
+        return CreateHarvestResult(harvest_id=harvest_id, replayed=False)
 
     async def get_harvest(self, harvest_id: str) -> HarvestDocument | None:
         """Get harvest details."""

@@ -16,6 +16,14 @@ class DuplicateArcError(DocumentStoreError):
     """Raised when the same ARC is submitted more than once within the same harvest run."""
 
 
+class IdempotencyBodyConflictError(DocumentStoreError):
+    """Raised when an Idempotency-Key is reused with an incompatible create body."""
+
+
+class IdempotencyPendingError(DocumentStoreError):
+    """Raised when a keyed create claim exists but is not yet committed."""
+
+
 class ArcStoreResult:
     """Result of storing an ARC."""
 
@@ -135,6 +143,26 @@ class DocumentStore(ABC):
 
         Returns:
             The harvest_id of the created harvest
+        """
+        raise NotImplementedError
+
+    @abstractmethod
+    async def create_harvest_idempotent(
+        self,
+        rdi: str,
+        client_id: str,
+        idempotency_key: str,
+        expected_datasets: int | None = None,
+    ) -> tuple[str, bool]:
+        """Create a harvest keyed by ``(client_id, idempotency_key)``.
+
+        Returns:
+            ``(harvest_id, replayed)`` where ``replayed`` is True when an existing
+            compatible harvest was returned.
+
+        Raises:
+            IdempotencyBodyConflictError: Key reused with incompatible body.
+            IdempotencyPendingError: Concurrent claim not yet committed.
         """
         raise NotImplementedError
 

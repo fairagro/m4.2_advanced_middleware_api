@@ -9,7 +9,8 @@ from fastapi.testclient import TestClient
 
 from middleware.api.api.fastapi_app import Api
 from middleware.api.business_logic import BusinessLogicError, DuplicateArcInHarvestError, InvalidJsonSemanticError
-from middleware.api.business_logic.exceptions import ConflictError
+from middleware.api.business_logic.exceptions import ConflictError, InvalidRequestError
+from middleware.api.business_logic.harvest_manager import CreateHarvestResult
 from middleware.api.document_store.harvest_document import HarvestDocument, HarvestStatistics
 from middleware.shared.api_models import ArcOperationResult, ArcResponse, ArcStatus
 from middleware.shared.api_models.common.models import HarvestStatus
@@ -29,7 +30,7 @@ def test_create_harvest_success(client: TestClient, cert: str, middleware_api: A
         patch.object(middleware_api.app.state.common_deps, "get_authorized_rdis", new_callable=AsyncMock) as mock_auth,
         patch.object(middleware_api.business_logic.harvest_manager, "get_harvest", new_callable=AsyncMock) as mock_get,
     ):
-        mock_create.return_value = harvest_id
+        mock_create.return_value = CreateHarvestResult(harvest_id=harvest_id, replayed=False)
         mock_auth.return_value = ["rdi-1"]
         mock_get.return_value = HarvestDocument(
             doc_id="harvest-123",
@@ -55,6 +56,104 @@ def test_create_harvest_success(client: TestClient, cert: str, middleware_api: A
         body = r.json()
         assert body["harvest_id"] == harvest_id
         assert body["status"] == "RUNNING"
+        mock_create.assert_awaited_once()
+        assert mock_create.await_args is not None
+        assert mock_create.await_args.kwargs.get("idempotency_key") is None
+
+
+@pytest.mark.unit
+def test_create_harvest_with_idempotency_key_replay(client: TestClient, cert: str, middleware_api: Api) -> None:
+    """Replay path sets Idempotent-Replayed response header."""
+    harvest_id = "harvest-123"
+
+    with (
+        patch.object(
+            middleware_api.business_logic.harvest_manager, "create_harvest", new_callable=AsyncMock
+        ) as mock_create,
+        patch.object(middleware_api.app.state.common_deps, "get_authorized_rdis", new_callable=AsyncMock) as mock_auth,
+        patch.object(middleware_api.business_logic.harvest_manager, "get_harvest", new_callable=AsyncMock) as mock_get,
+    ):
+        mock_create.return_value = CreateHarvestResult(harvest_id=harvest_id, replayed=True)
+        mock_auth.return_value = ["rdi-1"]
+        mock_get.return_value = HarvestDocument(
+            doc_id=harvest_id,
+            rdi="rdi-1",
+            client_id="test-client-cn",
+            status=HarvestStatus.RUNNING,
+            started_at=datetime.now(UTC),
+            statistics=HarvestStatistics(),
+        )
+
+        r = client.post(
+            "/v3/harvests",
+            headers={
+                "ssl-client-cert": cert,
+                "ssl-client-verify": "SUCCESS",
+                "content-type": "application/json",
+                "accept": "application/json",
+                "Idempotency-Key": "same-key",
+            },
+            json={"rdi": "rdi-1"},
+        )
+
+        assert r.status_code == http.HTTPStatus.OK
+        assert r.headers.get("Idempotent-Replayed") == "true"
+        assert mock_create.await_args is not None
+        assert mock_create.await_args.kwargs.get("idempotency_key") == "same-key"
+
+
+@pytest.mark.unit
+def test_create_harvest_empty_idempotency_key(client: TestClient, cert: str, middleware_api: Api) -> None:
+    """Empty Idempotency-Key returns 400."""
+    with (
+        patch.object(
+            middleware_api.business_logic.harvest_manager, "create_harvest", new_callable=AsyncMock
+        ) as mock_create,
+        patch.object(middleware_api.app.state.common_deps, "get_authorized_rdis", new_callable=AsyncMock) as mock_auth,
+    ):
+        mock_auth.return_value = ["rdi-1"]
+        mock_create.side_effect = InvalidRequestError("Idempotency-Key must not be empty")
+
+        r = client.post(
+            "/v3/harvests",
+            headers={
+                "ssl-client-cert": cert,
+                "ssl-client-verify": "SUCCESS",
+                "content-type": "application/json",
+                "accept": "application/json",
+                "Idempotency-Key": "",
+            },
+            json={"rdi": "rdi-1"},
+        )
+
+        assert r.status_code == http.HTTPStatus.BAD_REQUEST
+
+
+@pytest.mark.unit
+def test_create_harvest_idempotency_body_conflict(client: TestClient, cert: str, middleware_api: Api) -> None:
+    """Incompatible keyed reuse returns 409."""
+    with (
+        patch.object(
+            middleware_api.business_logic.harvest_manager, "create_harvest", new_callable=AsyncMock
+        ) as mock_create,
+        patch.object(middleware_api.app.state.common_deps, "get_authorized_rdis", new_callable=AsyncMock) as mock_auth,
+    ):
+        mock_auth.return_value = ["rdi-1"]
+        mock_create.side_effect = ConflictError("Idempotency-Key was reused with an incompatible create body")
+
+        r = client.post(
+            "/v3/harvests",
+            headers={
+                "ssl-client-cert": cert,
+                "ssl-client-verify": "SUCCESS",
+                "content-type": "application/json",
+                "accept": "application/json",
+                "Idempotency-Key": "same-key",
+            },
+            json={"rdi": "rdi-1"},
+        )
+
+        assert r.status_code == http.HTTPStatus.CONFLICT
 
 
 @pytest.mark.unit
@@ -186,7 +285,7 @@ def test_create_harvest_internal_error(client: TestClient, cert: str, middleware
         patch.object(middleware_api.app.state.common_deps, "get_authorized_rdis", new_callable=AsyncMock) as mock_auth,
         patch.object(middleware_api.business_logic.harvest_manager, "get_harvest", new_callable=AsyncMock) as mock_get,
     ):
-        mock_create.return_value = "harvest-xyz"
+        mock_create.return_value = CreateHarvestResult(harvest_id="harvest-xyz", replayed=False)
         mock_auth.return_value = ["rdi-1"]
         mock_get.return_value = None  # Simulate DB failure after creation
 
@@ -667,7 +766,7 @@ def test_create_harvest_with_completed_at(client: TestClient, cert: str, middlew
         patch.object(middleware_api.app.state.common_deps, "get_authorized_rdis", new_callable=AsyncMock) as mock_auth,
         patch.object(middleware_api.business_logic.harvest_manager, "get_harvest", new_callable=AsyncMock) as mock_get,
     ):
-        mock_create.return_value = harvest_id
+        mock_create.return_value = CreateHarvestResult(harvest_id=harvest_id, replayed=False)
         mock_auth.return_value = ["rdi-1"]
         mock_get.return_value = completed_doc
 

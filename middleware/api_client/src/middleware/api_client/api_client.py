@@ -5,6 +5,7 @@ import json
 import logging
 import ssl
 import threading
+import uuid
 from collections.abc import AsyncGenerator, AsyncIterator
 from contextlib import asynccontextmanager
 from datetime import UTC, datetime
@@ -74,7 +75,6 @@ class ApiClient:
         """Return whether *path* is a server-idempotent ARC POST endpoint.
 
         Covers ``POST /v3/arcs`` and ``POST /v3/harvests/{harvest_id}/arcs``.
-        Other POSTs (create/complete harvest) are not safe to retry.
         """
         normalized = path.lstrip("/")
         if normalized == "v3/arcs":
@@ -86,11 +86,23 @@ class ApiClient:
         )
 
     @classmethod
+    def _is_idempotent_post_path(cls, path: str) -> bool:
+        """Return whether a POST path is safe to retry with an identical request.
+
+        Covers idempotent ARC POSTs and keyed ``POST /v3/harvests`` (create).
+        Harvest completion remains non-retryable.
+        """
+        normalized = path.lstrip("/")
+        if normalized == "v3/harvests":
+            return True
+        return cls._is_idempotent_arc_post_path(path)
+
+    @classmethod
     def _is_retryable_method(cls, method: str, path: str) -> bool:
         """Return whether failures for this method/path may be retried."""
         if method in cls._IDEMPOTENT_METHODS:
             return True
-        return method == "POST" and cls._is_idempotent_arc_post_path(path)
+        return method == "POST" and cls._is_idempotent_post_path(path)
 
     @classmethod
     def _configure_global_request_limiter(cls, max_concurrency: int) -> None:
@@ -633,7 +645,8 @@ class ApiClient:
     ) -> HarvestResult:
         """Start a new harvest run.
 
-        Uses ``POST /v3/harvests``.
+        Uses ``POST /v3/harvests`` with a generated ``Idempotency-Key`` so the
+        request is safe to retry after transport failures.
 
         Args:
             rdi: RDI identifier.
@@ -643,7 +656,16 @@ class ApiClient:
             :class:`HarvestResult` with the newly created harvest.
         """
         request = CreateHarvestRequest(rdi=rdi, expected_datasets=expected_datasets)
-        data = await self._post("v3/harvests", request)
+        idempotency_key = str(uuid.uuid4())
+        data = await self._request_with_retries(
+            "POST",
+            "v3/harvests",
+            content=request.model_dump_json(by_alias=True),
+            headers={
+                "content-type": "application/json",
+                "Idempotency-Key": idempotency_key,
+            },
+        )
         return self._parse_harvest_response(data)
 
     async def list_harvests(
