@@ -22,6 +22,7 @@ from middleware.api_client import (
     Config,
     HarvestResult,
 )
+from middleware.shared.api_models.v3.models import CreateHarvestRequest
 
 # ---------------------------------------------------------------------------
 # Initialization
@@ -326,8 +327,6 @@ async def test_create_harvest_retries_on_connect_error(client_config: Config) ->
 @respx.mock
 async def test_unkeyed_harvest_create_post_not_retried(client_config: Config) -> None:
     """POST /v3/harvests without Idempotency-Key must not be retried."""
-    from middleware.shared.api_models.v3.models import CreateHarvestRequest
-
     client_config.retry_backoff_factor = 0.01
     client_config.max_retries = 2
     route = respx.post(f"{client_config.api_url}v3/harvests").mock(side_effect=httpx.ConnectError("Connection refused"))

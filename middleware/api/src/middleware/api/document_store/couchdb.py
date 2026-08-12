@@ -371,7 +371,11 @@ class CouchDB(DocumentStore):
         try:
             harvest_id = await self.create_harvest(rdi, client_id, expected_datasets=expected_datasets)
         except Exception:
-            await self._client.delete_document(doc_id)
+            # Best-effort: release the claim so the same key can retry create.
+            try:
+                await self._client.delete_document(doc_id)
+            except Exception:
+                logger.exception("Failed to roll back idempotency claim %s after create failure", doc_id)
             raise
 
         committed = HarvestIdempotencyDocument(
