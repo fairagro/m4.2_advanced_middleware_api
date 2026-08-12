@@ -292,6 +292,21 @@ async def test_create_harvest_retries_on_connect_error(client_config: Config) ->
 
 @pytest.mark.asyncio
 @respx.mock
+async def test_unkeyed_harvest_create_post_not_retried(client_config: Config) -> None:
+    """POST /v3/harvests without Idempotency-Key must not be retried."""
+    from middleware.shared.api_models.v3.models import CreateHarvestRequest
+
+    client_config.retry_backoff_factor = 0.01
+    client_config.max_retries = 2
+    route = respx.post(f"{client_config.api_url}v3/harvests").mock(side_effect=httpx.ConnectError("Connection refused"))
+    async with ApiClient(client_config) as client:
+        with pytest.raises(ApiClientError, match="Request failed: Connection refused"):
+            await client._post("v3/harvests", CreateHarvestRequest(rdi="test-rdi"))  # noqa: SLF001
+    assert route.call_count == 1
+
+
+@pytest.mark.asyncio
+@respx.mock
 async def test_create_harvest_exhausted_retries(client_config: Config) -> None:
     """Keyed harvest create raises after retries are exhausted."""
     client_config.retry_backoff_factor = 0.01

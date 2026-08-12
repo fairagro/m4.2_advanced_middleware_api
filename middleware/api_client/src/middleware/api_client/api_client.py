@@ -6,7 +6,7 @@ import logging
 import ssl
 import threading
 import uuid
-from collections.abc import AsyncGenerator, AsyncIterator
+from collections.abc import AsyncGenerator, AsyncIterator, Mapping
 from contextlib import asynccontextmanager
 from datetime import UTC, datetime
 from http import HTTPStatus
@@ -71,6 +71,16 @@ class ApiClient:
     _global_state_lock = threading.Lock()
 
     @classmethod
+    def _has_idempotency_key(cls, headers: Mapping[str, str] | None) -> bool:
+        """Return True when headers contain a non-empty Idempotency-Key."""
+        if not headers:
+            return False
+        for key, value in headers.items():
+            if key.lower() == "idempotency-key":
+                return bool(str(value).strip())
+        return False
+
+    @classmethod
     def _is_idempotent_arc_post_path(cls, path: str) -> bool:
         """Return whether *path* is a server-idempotent ARC POST endpoint.
 
@@ -86,23 +96,29 @@ class ApiClient:
         )
 
     @classmethod
-    def _is_idempotent_post_path(cls, path: str) -> bool:
+    def _is_idempotent_post_path(cls, path: str, headers: Mapping[str, str] | None = None) -> bool:
         """Return whether a POST path is safe to retry with an identical request.
 
-        Covers idempotent ARC POSTs and keyed ``POST /v3/harvests`` (create).
-        Harvest completion remains non-retryable.
+        Covers idempotent ARC POSTs and ``POST /v3/harvests`` only when a
+        non-empty ``Idempotency-Key`` header is present. Harvest completion
+        remains non-retryable.
         """
         normalized = path.lstrip("/")
         if normalized == "v3/harvests":
-            return True
+            return cls._has_idempotency_key(headers)
         return cls._is_idempotent_arc_post_path(path)
 
     @classmethod
-    def _is_retryable_method(cls, method: str, path: str) -> bool:
+    def _is_retryable_method(
+        cls,
+        method: str,
+        path: str,
+        headers: Mapping[str, str] | None = None,
+    ) -> bool:
         """Return whether failures for this method/path may be retried."""
         if method in cls._IDEMPOTENT_METHODS:
             return True
-        return method == "POST" and cls._is_idempotent_post_path(path)
+        return method == "POST" and cls._is_idempotent_post_path(path, headers)
 
     @classmethod
     def _configure_global_request_limiter(cls, max_concurrency: int) -> None:
@@ -144,15 +160,27 @@ class ApiClient:
             limiter.release()
 
     @classmethod
-    def _should_retry_http_status(cls, method: str, path: str, status_code: int) -> bool:
+    def _should_retry_http_status(
+        cls,
+        method: str,
+        path: str,
+        status_code: int,
+        headers: Mapping[str, str] | None = None,
+    ) -> bool:
         """Return whether a response status is retryable for a method/path."""
         transient = {httpx.codes.BAD_GATEWAY, httpx.codes.SERVICE_UNAVAILABLE, httpx.codes.GATEWAY_TIMEOUT}
-        return cls._is_retryable_method(method, path) and status_code in transient
+        return cls._is_retryable_method(method, path, headers) and status_code in transient
 
     @classmethod
-    def _should_retry_request_error(cls, method: str, path: str, error: httpx.RequestError) -> bool:
+    def _should_retry_request_error(
+        cls,
+        method: str,
+        path: str,
+        error: httpx.RequestError,
+        headers: Mapping[str, str] | None = None,
+    ) -> bool:
         """Return whether a request error is retryable for a method/path."""
-        if not cls._is_retryable_method(method, path):
+        if not cls._is_retryable_method(method, path, headers):
             return False
         return not isinstance(error, httpx.TimeoutException)
 
@@ -164,12 +192,13 @@ class ApiClient:
         *,
         status_code: int | None = None,
         request_error: httpx.RequestError | None = None,
+        headers: Mapping[str, str] | None = None,
     ) -> bool:
         """Return whether an HTTP failure is retryable for a request method/path."""
         if status_code is not None:
-            return cls._should_retry_http_status(method, path, status_code)
+            return cls._should_retry_http_status(method, path, status_code, headers)
         if request_error is not None:
-            return cls._should_retry_request_error(method, path, request_error)
+            return cls._should_retry_request_error(method, path, request_error, headers)
         return False
 
     @classmethod
@@ -214,22 +243,11 @@ class ApiClient:
         cls,
         failure: httpx.HTTPStatusError | httpx.RequestError,
         *,
-        method: str,
-        path: str,
+        should_retry: bool,
         attempt: int,
         max_retries: int,
     ) -> bool:
         """Return True to retry; otherwise raise a normalized ApiClientError."""
-        status_code = failure.response.status_code if isinstance(failure, httpx.HTTPStatusError) else None
-        request_error = failure if isinstance(failure, httpx.RequestError) else None
-
-        should_retry = cls._should_retry_failure(
-            method,
-            path,
-            status_code=status_code,
-            request_error=request_error,
-        )
-
         if should_retry and attempt < max_retries:
             if isinstance(failure, httpx.HTTPStatusError):
                 logger.warning("Transient HTTP error %d from server, will retry", failure.response.status_code)
@@ -486,6 +504,8 @@ class ApiClient:
         client = self._get_client()
         path = path.lstrip("/")
         method = method.upper()
+        raw_headers = kwargs.get("headers")
+        headers = cast(Mapping[str, str], raw_headers) if isinstance(raw_headers, Mapping) else None
 
         for attempt in range(self._config.max_retries + 1):
             if attempt > 0:
@@ -501,7 +521,7 @@ class ApiClient:
                     resp = await client.request(method, path, **kwargs)
 
                 # Retry on transient server-side errors before raising
-                should_retry = self._should_retry_failure(method, path, status_code=resp.status_code)
+                should_retry = self._should_retry_failure(method, path, status_code=resp.status_code, headers=headers)
                 if should_retry and attempt < self._config.max_retries:
                     logger.warning("Transient HTTP error %d from server, will retry", resp.status_code)
                     continue
@@ -512,10 +532,18 @@ class ApiClient:
                 return self._parse_json_response(resp, method, path)
 
             except (httpx.HTTPStatusError, httpx.RequestError) as e:
+                status_code = e.response.status_code if isinstance(e, httpx.HTTPStatusError) else None
+                request_error = e if isinstance(e, httpx.RequestError) else None
+                should_retry = self._should_retry_failure(
+                    method,
+                    path,
+                    status_code=status_code,
+                    request_error=request_error,
+                    headers=headers,
+                )
                 if self._should_retry_or_raise_failure(
                     e,
-                    method=method,
-                    path=path,
+                    should_retry=should_retry,
                     attempt=attempt,
                     max_retries=self._config.max_retries,
                 ):
