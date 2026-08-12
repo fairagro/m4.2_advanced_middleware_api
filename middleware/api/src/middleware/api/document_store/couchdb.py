@@ -384,10 +384,22 @@ class CouchDB(DocumentStore):
             harvest_id=harvest_id,
             created_at=pending.created_at,
         )
-        await self._client.save_document(
-            doc_id,
-            committed.model_dump(mode="json", by_alias=True, exclude_none=True),
-        )
+        try:
+            await self._client.save_document(
+                doc_id,
+                committed.model_dump(mode="json", by_alias=True, exclude_none=True),
+            )
+        except Exception:
+            # Best-effort rollback so the same key can safely retry create.
+            try:
+                await self._client.delete_document(harvest_id)
+            except Exception:
+                logger.exception("Failed to roll back harvest %s after idempotency commit failure", harvest_id)
+            try:
+                await self._client.delete_document(doc_id)
+            except Exception:
+                logger.exception("Failed to roll back idempotency claim %s after commit failure", doc_id)
+            raise
         return harvest_id, False
 
     async def get_harvest(self, harvest_id: str) -> HarvestDocument | None:

@@ -153,3 +153,21 @@ async def test_create_harvest_idempotent_deletes_claim_on_create_failure(
         await couchdb.create_harvest_idempotent("rdi-1", "client-a", "key-1")
 
     couchdb_client.delete_document.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_create_harvest_idempotent_rolls_back_on_commit_failure(
+    couchdb: CouchDB, couchdb_client: MagicMock, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Failed index commit deletes harvest and claim so the key can be retried."""
+    couchdb_client.create_document_exclusive = AsyncMock()
+    couchdb_client.delete_document = AsyncMock(return_value=True)
+    couchdb_client.save_document = AsyncMock(side_effect=RuntimeError("commit failed"))
+    monkeypatch.setattr(couchdb, "create_harvest", AsyncMock(return_value="harvest-1"))
+
+    with pytest.raises(RuntimeError, match="commit failed"):
+        await couchdb.create_harvest_idempotent("rdi-1", "client-a", "key-1")
+
+    assert couchdb_client.delete_document.await_count == 2  # noqa: PLR2004
+    deleted_ids = [call.args[0] for call in couchdb_client.delete_document.await_args_list]
+    assert deleted_ids == ["harvest-1", CouchDB._idempotency_doc_id("client-a", "key-1")]  # noqa: SLF001
