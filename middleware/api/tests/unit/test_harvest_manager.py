@@ -6,7 +6,12 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 
 from middleware.api.business_logic.config import HarvestConfig
-from middleware.api.business_logic.exceptions import AccessDeniedError, ConflictError, ResourceNotFoundError
+from middleware.api.business_logic.exceptions import (
+    AccessDeniedError,
+    ConflictError,
+    InvalidRequestError,
+    ResourceNotFoundError,
+)
 from middleware.api.business_logic.harvest_manager import CreateHarvestResult, HarvestManager
 from middleware.api.document_store.harvest_document import HarvestDocument, HarvestStatistics
 from middleware.shared.api_models.common.models import HarvestStatus
@@ -97,8 +102,6 @@ async def test_create_harvest_keyed_replay(manager: HarvestManager, doc_store: M
 @pytest.mark.asyncio
 async def test_create_harvest_empty_key_rejected(manager: HarvestManager) -> None:
     """Empty Idempotency-Key raises InvalidRequestError."""
-    from middleware.api.business_logic.exceptions import InvalidRequestError
-
     with pytest.raises(InvalidRequestError, match="must not be empty"):
         await manager.create_harvest("rdi-1", "client-a", idempotency_key="")
 
@@ -106,8 +109,6 @@ async def test_create_harvest_empty_key_rejected(manager: HarvestManager) -> Non
 @pytest.mark.asyncio
 async def test_create_harvest_keyed_requires_client(manager: HarvestManager) -> None:
     """Keyed create without client_id raises InvalidRequestError."""
-    from middleware.api.business_logic.exceptions import InvalidRequestError
-
     with pytest.raises(InvalidRequestError, match="authenticated client"):
         await manager.create_harvest("rdi-1", None, idempotency_key="key-1")
 
