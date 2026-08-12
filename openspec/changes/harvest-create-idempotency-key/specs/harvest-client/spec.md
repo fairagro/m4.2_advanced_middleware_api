@@ -2,23 +2,26 @@
 
 ## ADDED Requirements
 
-### Requirement: Send Idempotency-Key on harvest create
+### Requirement: Optional Idempotency-Key on harvest create
 
-When creating a harvest, the client MUST send a non-empty `Idempotency-Key`
-request header. The key MUST be generated once per logical create attempt and
-MUST be reused for every transport retry of that same attempt. A later distinct
-`create_harvest` call MUST use a different key.
+`Idempotency-Key` on `POST /v3/harvests` remains optional for backward
+compatibility. The client MAY send a non-empty key when client certificate and
+key paths are configured (authenticated `client_id` available). When it sends a
+key, that key MUST be generated once per logical create attempt and MUST be
+reused for every transport retry of that same attempt. A later distinct
+`create_harvest` call MUST use a different key if it sends one. When client
+certificates are not configured, the client MUST omit `Idempotency-Key`.
 
-#### Scenario: First create attempt includes a key
+#### Scenario: Omit key when certificates are not configured
 
-- **GIVEN** the caller starts a new harvest through the client
-- **WHEN** the client issues `POST /v3/harvests`
-- **THEN** the request includes a non-empty `Idempotency-Key` header
+- **GIVEN** the client has no client certificate and key configured
+- **WHEN** the client creates a harvest
+- **THEN** the request omits `Idempotency-Key`
 
-#### Scenario: Retries reuse the same key
+#### Scenario: Keyed create under mTLS reuses the key on retry
 
-- **GIVEN** a create attempt whose first transport attempt failed before a
-  definitive response
+- **GIVEN** a create attempt that included an `Idempotency-Key` under mTLS and
+  whose first transport attempt failed before a definitive response
 - **WHEN** the client retries that create
 - **THEN** it reuses the same `Idempotency-Key` as the failed attempt
 
@@ -31,9 +34,9 @@ responses for `POST /v3/arcs` and `POST /v3/harvests/{harvest_id}/arcs`.
 The client MUST also retry connection failures and those same transient status
 codes for `POST /v3/harvests` when it sent an `Idempotency-Key` on that create,
 reusing the key. It MUST NOT retry harvest completion POSTs or harvest create
-requests that omit an `Idempotency-Key`, and MUST treat `409` conflicting ARC
-content as a conflict rather than success. A `409` from keyed harvest create
-(incompatible body reuse) MUST NOT be retried.
+requests that omit an `Idempotency-Key` (including creates without mTLS), and
+MUST treat `409` conflicting ARC content as a conflict rather than success. A
+`409` from keyed harvest create (incompatible body reuse) MUST NOT be retried.
 
 #### Scenario: Retry a transient harvest-scoped ARC submission failure
 
@@ -47,6 +50,19 @@ content as a conflict rather than success. A `409` from keyed harvest create
   with a connection error before an HTTP response
 - **WHEN** retries remain
 - **THEN** the client retries the same create with the same key and body
+
+#### Scenario: Do not retry unkeyed harvest create
+
+- **GIVEN** `POST /v3/harvests` was sent without an `Idempotency-Key` and fails
+  with a connection error
+- **WHEN** the client handles the failure
+- **THEN** it does not retry the create POST
+
+#### Scenario: Do not retry harvest create without mTLS
+
+- **GIVEN** the client has no client certificates configured
+- **WHEN** `POST /v3/harvests` fails with a connection error
+- **THEN** the client does not retry the create POST
 
 #### Scenario: Do not retry harvest completion
 

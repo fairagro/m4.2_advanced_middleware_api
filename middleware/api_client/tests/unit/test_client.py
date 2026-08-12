@@ -253,7 +253,7 @@ async def test_create_or_update_arc_retries_on_connect_error(client_config: Conf
 @pytest.mark.asyncio
 @respx.mock
 async def test_create_harvest_sends_idempotency_key(client_config: Config) -> None:
-    """create_harvest always sends a non-empty Idempotency-Key header."""
+    """create_harvest may send Idempotency-Key when mTLS certs are configured."""
     route = respx.post(f"{client_config.api_url}v3/harvests").mock(
         return_value=httpx.Response(http.HTTPStatus.OK, json=HARVEST_RESPONSE)
     )
@@ -264,6 +264,38 @@ async def test_create_harvest_sends_idempotency_key(client_config: Config) -> No
     key = route.calls.last.request.headers.get("idempotency-key")
     assert key
     assert len(key) > 0
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_create_harvest_omits_idempotency_key_without_mtls() -> None:
+    """Without client certificates, create_harvest omits Idempotency-Key."""
+    config = Config(api_url="https://test-api.example.com/", verify_ssl=False)
+    route = respx.post(f"{config.api_url}v3/harvests").mock(
+        return_value=httpx.Response(http.HTTPStatus.OK, json=HARVEST_RESPONSE)
+    )
+    async with ApiClient(config) as client:
+        await client.create_harvest(rdi="test-rdi")
+
+    assert route.called
+    assert route.calls.last.request.headers.get("idempotency-key") is None
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_create_harvest_without_mtls_not_retried() -> None:
+    """Unkeyed create against cert-optional deployments is not retried."""
+    config = Config(
+        api_url="https://test-api.example.com/",
+        verify_ssl=False,
+        max_retries=2,
+        retry_backoff_factor=0.01,
+    )
+    route = respx.post(f"{config.api_url}v3/harvests").mock(side_effect=httpx.ConnectError("Connection refused"))
+    async with ApiClient(config) as client:
+        with pytest.raises(ApiClientError, match="Request failed: Connection refused"):
+            await client.create_harvest(rdi="test-rdi")
+    assert route.call_count == 1
 
 
 @pytest.mark.asyncio

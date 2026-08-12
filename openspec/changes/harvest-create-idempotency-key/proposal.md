@@ -33,8 +33,10 @@ network blips as hard repository failures (see
 
 - `harvest-manager`: Optional create-time idempotency key storage, lookup,
   conflict, and atomic uniqueness.
-- `harvest-client`: Send `Idempotency-Key` on create; retry create when a key is
-  present; keep completion non-retryable unless separately specified.
+- `harvest-client`: Optional `Idempotency-Key` on create (send only when mTLS
+  cert+key are configured); retry create only when a key was sent; without
+  certificates omit key and refuse create retries; keep completion non-retryable
+  unless separately specified.
 
 ## Impact
 

@@ -673,8 +673,11 @@ class ApiClient:
     ) -> HarvestResult:
         """Start a new harvest run.
 
-        Uses ``POST /v3/harvests`` with a generated ``Idempotency-Key`` so the
-        request is safe to retry after transport failures.
+        Uses ``POST /v3/harvests``. ``Idempotency-Key`` is optional: when client
+        mTLS certificates are configured the client may send a key so the
+        request is safe to retry after transport failures. Without certificates
+        the create stays unkeyed and MUST NOT be retried (server requires
+        ``client_id`` for keyed creates).
 
         Args:
             rdi: RDI identifier.
@@ -684,15 +687,14 @@ class ApiClient:
             :class:`HarvestResult` with the newly created harvest.
         """
         request = CreateHarvestRequest(rdi=rdi, expected_datasets=expected_datasets)
-        idempotency_key = str(uuid.uuid4())
+        headers: dict[str, str] = {"content-type": "application/json"}
+        if self._config.client_cert_path is not None and self._config.client_key_path is not None:
+            headers["Idempotency-Key"] = str(uuid.uuid4())
         data = await self._request_with_retries(
             "POST",
             "v3/harvests",
             content=request.model_dump_json(by_alias=True),
-            headers={
-                "content-type": "application/json",
-                "Idempotency-Key": idempotency_key,
-            },
+            headers=headers,
         )
         return self._parse_harvest_response(data)
 

@@ -24,8 +24,9 @@
 
 ## 3. API client
 
-- [x] 3.1 Generate a UUID4 `Idempotency-Key` inside `create_harvest` and send it
-  on `POST /v3/harvests`
+- [x] 3.1 Generate a UUID4 `Idempotency-Key` inside `create_harvest` only when
+  client cert+key are configured; omit the header otherwise (legacy
+  non-retryable). When present, send it on `POST /v3/harvests`
 - [x] 3.2 Treat keyed `POST /v3/harvests` as retryable for ConnectError and
   `502`/`503`/`504`, reusing the same key across retries; keep completion
   non-retryable; do not retry create `409`

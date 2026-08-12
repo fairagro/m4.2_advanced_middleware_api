@@ -28,56 +28,59 @@ shared in-memory lock.
 
 ## Decisions
 
-1. **Use the `Idempotency-Key` HTTP header (not a body field)**  
+1. **Use the `Idempotency-Key` HTTP header (not a body field)**
    Reason: industry-standard, keeps `CreateHarvestRequest` unchanged, easy for
-   proxies to log.  
+   proxies to log.
    Alternative considered: optional JSON field — rejected to avoid schema churn
    and mixed locations.
 
-2. **Scope keys by authenticated `client_id`**  
-   Reason: prevents cross-tenant key collisions; matches harvest ownership.  
-   Require `client_id` when a key is present (`400` otherwise).  
+2. **Scope keys by authenticated `client_id`**
+   Reason: prevents cross-tenant key collisions; matches harvest ownership.
+   Require `client_id` when a key is present (`400` otherwise).
    Alternative: global key namespace — rejected (weak keys could collide across
    clients).
 
-3. **Body compatibility = `rdi` + `expected_datasets` equality**  
+3. **Body compatibility = `rdi` + `expected_datasets` equality**
    Reason: those are the only create inputs that define the harvest; mismatched
-   reuse is a client bug → `409`.  
+   reuse is a client bug → `409`.
    Alternative: ignore `expected_datasets` on replay — rejected (progress
    denominator would silently diverge).
 
-4. **Persist via a dedicated CouchDB index document**  
+4. **Persist via a dedicated CouchDB index document**
    Document id pattern: `harvest-idempotency:{client_id}:{key}` (or a stable
-   hash of the key if length/charset is unsafe for `_id`).  
+   hash of the key if length/charset is unsafe for `_id`).
    Document body stores `harvest_id`, `rdi`, `expected_datasets`, and optional
-   timestamps.  
+   timestamps.
    First writer creates the harvest, then puts the index doc; on `_id` conflict,
-   load the winner’s harvest and apply replay/409 rules.  
+   load the winner’s harvest and apply replay/409 rules.
    Reason: CouchDB document-create conflict gives cluster-safe uniqueness
-   without a unique Mango index.  
+   without a unique Mango index.
    Alternative: field on `HarvestDocument` + query — race-prone under concurrent
-   creates.  
+   creates.
    Alternative: use the key as the harvest `_id` — **BREAKING** / couples public
    harvest ids to client keys.
 
-5. **Keep harvest `_id` as `harvest-{uuid}`**  
+5. **Keep harvest `_id` as `harvest-{uuid}`**
    Reason: preserves existing ID format and clients that already store harvest
    ids.
 
-6. **Response status stays `200` for create and replay**  
+6. **Response status stays `200` for create and replay**
    Reason: current create already returns 200; switching first create to 201
-   would be a soft break for strict clients.  
+   would be a soft break for strict clients.
    Optional additive header `Idempotent-Replayed: true` on replay only.
 
-7. **ApiClient always sends a UUID4 key from `create_harvest` / `harvest_arcs`**  
-   Reason: production harvesters get retry safety without config. Raw HTTP
-   callers may omit the header and keep legacy behaviour.  
+7. **ApiClient may send a UUID4 key only when mTLS cert+key are configured**
+   Reason: the wire header stays optional (backward compatible). Keyed create
+   needs authenticated `client_id`; without certificates the API returns `400`
+   for `Idempotency-Key`, so the client omits the header and MUST NOT retry
+   create. With mTLS the library sends a key so create becomes retry-safe.
    Retry classification: treat keyed `POST /v3/harvests` like idempotent ARC
-   POSTs for ConnectError and 502/503/504; still never retry completion.
+   POSTs for ConnectError and 502/503/504; still never retry completion or
+   unkeyed create.
 
-8. **Key retention**  
+8. **Key retention**
    Keep the index document for the lifetime of the harvest document (no short
-   TTL in v1).  
+   TTL in v1).
    Reason: retries can occur minutes later; orphan cleanup of terminal harvests
    can delete the index later as a follow-up.
 
