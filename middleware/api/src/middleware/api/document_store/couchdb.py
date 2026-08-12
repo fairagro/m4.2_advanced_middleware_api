@@ -333,9 +333,9 @@ class CouchDB(DocumentStore):
             index = await self._load_idempotency_doc(doc_id)
             if index is None:
                 raise IdempotencyPendingError(f"Idempotency claim {doc_id} disappeared")
+            if not self._bodies_compatible(index, rdi, expected_datasets):
+                raise IdempotencyBodyConflictError("Idempotency-Key was reused with an incompatible create body")
             if index.status == IdempotencyStatus.COMMITTED and index.harvest_id:
-                if not self._bodies_compatible(index, rdi, expected_datasets):
-                    raise IdempotencyBodyConflictError("Idempotency-Key was reused with an incompatible create body")
                 return index.harvest_id, True
             await asyncio.sleep(_PENDING_POLL_DELAY_S)
 

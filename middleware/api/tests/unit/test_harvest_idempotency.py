@@ -120,6 +120,27 @@ async def test_create_harvest_idempotent_pending_timeout(
 
 
 @pytest.mark.asyncio
+async def test_create_harvest_idempotent_pending_body_conflict(couchdb: CouchDB, couchdb_client: MagicMock) -> None:
+    """Incompatible body while claim is still pending raises conflict immediately."""
+    doc_id = CouchDB._idempotency_doc_id("client-a", "key-1")  # noqa: SLF001
+    index = HarvestIdempotencyDocument(
+        doc_id=doc_id,
+        client_id="client-a",
+        idempotency_key="key-1",
+        rdi="rdi-other",
+        expected_datasets=None,
+        status=IdempotencyStatus.PENDING,
+        harvest_id=None,
+        created_at=datetime.now(UTC),
+    )
+    couchdb_client.create_document_exclusive = AsyncMock(side_effect=DocumentConflictError("exists"))
+    couchdb_client.get_document = AsyncMock(return_value=index.model_dump(mode="json", by_alias=True))
+
+    with pytest.raises(IdempotencyBodyConflictError):
+        await couchdb.create_harvest_idempotent("rdi-1", "client-a", "key-1")
+
+
+@pytest.mark.asyncio
 async def test_create_harvest_idempotent_deletes_claim_on_create_failure(
     couchdb: CouchDB, couchdb_client: MagicMock, monkeypatch: pytest.MonkeyPatch
 ) -> None:

@@ -107,6 +107,13 @@ async def test_create_harvest_empty_key_rejected(manager: HarvestManager) -> Non
 
 
 @pytest.mark.asyncio
+async def test_create_harvest_whitespace_key_rejected(manager: HarvestManager) -> None:
+    """Whitespace-only Idempotency-Key raises InvalidRequestError."""
+    with pytest.raises(InvalidRequestError, match="must not be empty"):
+        await manager.create_harvest("rdi-1", "client-a", idempotency_key="   ")
+
+
+@pytest.mark.asyncio
 async def test_create_harvest_keyed_requires_client(manager: HarvestManager) -> None:
     """Keyed create without client_id raises InvalidRequestError."""
     with pytest.raises(InvalidRequestError, match="authenticated client"):

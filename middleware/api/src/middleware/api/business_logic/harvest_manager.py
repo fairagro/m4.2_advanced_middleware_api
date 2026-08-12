@@ -65,7 +65,7 @@ class HarvestManager:
     ) -> CreateHarvestResult:
         """Start a new harvest run, optionally keyed for idempotent retries."""
         if idempotency_key is not None:
-            if idempotency_key == "":
+            if not idempotency_key.strip():
                 raise InvalidRequestError("Idempotency-Key must not be empty")
             if client_id is None:
                 raise InvalidRequestError("Idempotency-Key requires an authenticated client")
