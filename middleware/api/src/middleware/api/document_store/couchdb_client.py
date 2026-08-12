@@ -211,9 +211,6 @@ class CouchDBClient:
             raise RuntimeError("Not connected to CouchDB")
 
         content = {k: v for k, v in data.items() if k not in {"_id", "_rev"}}
-        existing = await self.get_document(doc_id)
-        if existing is not None:
-            raise DocumentConflictError(f"Document {doc_id} already exists")
 
         try:
             doc = await self._db.create(doc_id, data=content)
