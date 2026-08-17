@@ -22,6 +22,7 @@ from middleware.api_client import (
     Config,
     HarvestResult,
 )
+from middleware.shared.api_models.v3.models import CreateHarvestRequest
 
 # ---------------------------------------------------------------------------
 # Initialization
@@ -252,14 +253,100 @@ async def test_create_or_update_arc_retries_on_connect_error(client_config: Conf
 
 @pytest.mark.asyncio
 @respx.mock
-async def test_create_harvest_network_error_not_retried(client_config: Config) -> None:
-    """Non-ARC POSTs (create harvest) must not retry ConnectError."""
-    client_config.retry_backoff_factor = 0.01
-    route = respx.post(f"{client_config.api_url}v3/harvests").mock(side_effect=httpx.ConnectError("Connection refused"))
+async def test_create_harvest_sends_idempotency_key(client_config: Config) -> None:
+    """create_harvest may send Idempotency-Key when mTLS certs are configured."""
+    route = respx.post(f"{client_config.api_url}v3/harvests").mock(
+        return_value=httpx.Response(http.HTTPStatus.OK, json=HARVEST_RESPONSE)
+    )
     async with ApiClient(client_config) as client:
+        await client.create_harvest(rdi="test-rdi")
+
+    assert route.called
+    key = route.calls.last.request.headers.get("idempotency-key")
+    assert key
+    assert len(key) > 0
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_create_harvest_omits_idempotency_key_without_mtls() -> None:
+    """Without client certificates, create_harvest omits Idempotency-Key."""
+    config = Config(api_url="https://test-api.example.com/", verify_ssl=False)
+    route = respx.post(f"{config.api_url}v3/harvests").mock(
+        return_value=httpx.Response(http.HTTPStatus.OK, json=HARVEST_RESPONSE)
+    )
+    async with ApiClient(config) as client:
+        await client.create_harvest(rdi="test-rdi")
+
+    assert route.called
+    assert route.calls.last.request.headers.get("idempotency-key") is None
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_create_harvest_without_mtls_not_retried() -> None:
+    """Unkeyed create against cert-optional deployments is not retried."""
+    config = Config(
+        api_url="https://test-api.example.com/",
+        verify_ssl=False,
+        max_retries=2,
+        retry_backoff_factor=0.01,
+    )
+    route = respx.post(f"{config.api_url}v3/harvests").mock(side_effect=httpx.ConnectError("Connection refused"))
+    async with ApiClient(config) as client:
         with pytest.raises(ApiClientError, match="Request failed: Connection refused"):
             await client.create_harvest(rdi="test-rdi")
     assert route.call_count == 1
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_create_harvest_retries_on_connect_error(client_config: Config) -> None:
+    """Keyed harvest create retries ConnectError then succeeds."""
+    client_config.retry_backoff_factor = 0.01
+    client_config.max_retries = 2
+    seen_keys: list[str] = []
+
+    def _handler(request: httpx.Request) -> httpx.Response:
+        seen_keys.append(request.headers["idempotency-key"])
+        if len(seen_keys) == 1:
+            raise httpx.ConnectError("Connection refused")
+        return httpx.Response(http.HTTPStatus.OK, json=HARVEST_RESPONSE)
+
+    route = respx.post(f"{client_config.api_url}v3/harvests").mock(side_effect=_handler)
+    async with ApiClient(client_config) as client:
+        result = await client.create_harvest(rdi="test-rdi")
+
+    assert result.harvest_id == HARVEST_RESPONSE["harvest_id"]
+    assert route.call_count == 2  # noqa: PLR2004
+    assert len(seen_keys) == 2  # noqa: PLR2004
+    assert seen_keys[0] == seen_keys[1]
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_unkeyed_harvest_create_post_not_retried(client_config: Config) -> None:
+    """POST /v3/harvests without Idempotency-Key must not be retried."""
+    client_config.retry_backoff_factor = 0.01
+    client_config.max_retries = 2
+    route = respx.post(f"{client_config.api_url}v3/harvests").mock(side_effect=httpx.ConnectError("Connection refused"))
+    async with ApiClient(client_config) as client:
+        with pytest.raises(ApiClientError, match="Request failed: Connection refused"):
+            await client._post("v3/harvests", CreateHarvestRequest(rdi="test-rdi"))  # noqa: SLF001
+    assert route.call_count == 1
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_create_harvest_exhausted_retries(client_config: Config) -> None:
+    """Keyed harvest create raises after retries are exhausted."""
+    client_config.retry_backoff_factor = 0.01
+    client_config.max_retries = 1
+    route = respx.post(f"{client_config.api_url}v3/harvests").mock(side_effect=httpx.ConnectError("Connection refused"))
+    async with ApiClient(client_config) as client:
+        with pytest.raises(ApiClientError, match="Request failed after 1 retries"):
+            await client.create_harvest(rdi="test-rdi")
+    assert route.call_count == 2  # noqa: PLR2004
 
 
 @pytest.mark.asyncio
@@ -384,9 +471,10 @@ def test_format_request_error_falls_back_when_message_empty() -> None:
 @respx.mock
 async def test_empty_connect_error_message_is_not_blank(client_config: Config) -> None:
     """ApiClientError for empty ConnectError still carries a useful message."""
+    client_config.max_retries = 0
     respx.post(f"{client_config.api_url}v3/harvests").mock(side_effect=httpx.ConnectError(""))
     async with ApiClient(client_config) as client:
-        with pytest.raises(ApiClientError, match="Request failed: ConnectError") as exc_info:
+        with pytest.raises(ApiClientError, match="ConnectError") as exc_info:
             await client.create_harvest(rdi="test-rdi")
     assert str(exc_info.value).strip() != "Request failed:"
 
@@ -465,15 +553,20 @@ async def test_create_harvest_without_expected_datasets(client_config: Config) -
 
 @pytest.mark.asyncio
 @respx.mock
-async def test_create_harvest_503_not_retried(client_config: Config) -> None:
-    """POST create_harvest is not retried on transient server errors."""
+async def test_create_harvest_retries_on_503(client_config: Config) -> None:
+    """Keyed harvest create retries transient 503 responses."""
+    client_config.retry_backoff_factor = 0.01
+    client_config.max_retries = 2
     route = respx.post(f"{client_config.api_url}v3/harvests").mock(
-        return_value=httpx.Response(http.HTTPStatus.SERVICE_UNAVAILABLE, text="Busy")
+        side_effect=[
+            httpx.Response(http.HTTPStatus.SERVICE_UNAVAILABLE, text="Busy"),
+            httpx.Response(http.HTTPStatus.OK, json=HARVEST_RESPONSE),
+        ]
     )
     async with ApiClient(client_config) as client:
-        with pytest.raises(ApiClientError, match="HTTP error 503"):
-            await client.create_harvest(rdi="test-rdi")
-    assert route.call_count == 1
+        result = await client.create_harvest(rdi="test-rdi")
+    assert result.harvest_id == HARVEST_RESPONSE["harvest_id"]
+    assert route.call_count == 2  # noqa: PLR2004
 
 
 @pytest.mark.asyncio

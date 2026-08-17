@@ -25,7 +25,9 @@ from ..business_logic.exceptions import (
     BusinessLogicError,
     ConflictError,
     InvalidJsonSemanticError,
+    InvalidRequestError,
     ResourceNotFoundError,
+    TransientError,
 )
 from ..celery_integration import (
     CeleryBrokerHealthChecker,
@@ -264,6 +266,20 @@ class Api:
         async def conflict_handler(_request: Request, exc: ConflictError) -> JSONResponse:
             return JSONResponse(
                 status_code=HTTPStatus.CONFLICT,
+                content={"detail": str(exc)},
+            )
+
+        @self._app.exception_handler(InvalidRequestError)
+        async def invalid_request_handler(_request: Request, exc: InvalidRequestError) -> JSONResponse:
+            return JSONResponse(
+                status_code=HTTPStatus.BAD_REQUEST,
+                content={"detail": str(exc)},
+            )
+
+        @self._app.exception_handler(TransientError)
+        async def transient_error_handler(_request: Request, exc: TransientError) -> JSONResponse:
+            return JSONResponse(
+                status_code=HTTPStatus.SERVICE_UNAVAILABLE,
                 content={"detail": str(exc)},
             )
 

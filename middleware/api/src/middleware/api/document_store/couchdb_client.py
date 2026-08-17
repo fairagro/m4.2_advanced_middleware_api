@@ -198,6 +198,27 @@ class CouchDBClient:
         except NotFoundError:
             return None
 
+    async def create_document_exclusive(self, doc_id: str, data: dict[str, Any]) -> dict[str, Any]:
+        """Create a document only if it does not already exist.
+
+        Unlike :meth:`save_document`, a conflict does not fall through to an update
+        of the existing document.
+
+        Raises:
+            DocumentConflictError: If the document already exists or create races.
+        """
+        if not self._db:
+            raise RuntimeError("Not connected to CouchDB")
+
+        content = {k: v for k, v in data.items() if k not in {"_id", "_rev"}}
+
+        try:
+            doc = await self._db.create(doc_id, data=content)
+            await doc.save()
+        except ConflictError as err:
+            raise DocumentConflictError(f"Document {doc_id} already exists") from err
+        return dict(doc)
+
     async def save_document(
         self,
         doc_id: str,

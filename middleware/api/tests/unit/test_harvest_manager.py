@@ -6,8 +6,13 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 
 from middleware.api.business_logic.config import HarvestConfig
-from middleware.api.business_logic.exceptions import AccessDeniedError, ConflictError, ResourceNotFoundError
-from middleware.api.business_logic.harvest_manager import HarvestManager
+from middleware.api.business_logic.exceptions import (
+    AccessDeniedError,
+    ConflictError,
+    InvalidRequestError,
+    ResourceNotFoundError,
+)
+from middleware.api.business_logic.harvest_manager import CreateHarvestResult, HarvestManager
 from middleware.api.document_store.harvest_document import HarvestDocument, HarvestStatistics
 from middleware.shared.api_models.common.models import HarvestStatus
 
@@ -64,7 +69,7 @@ async def test_create_harvest(manager: HarvestManager, doc_store: MagicMock) -> 
     """create_harvest delegates to doc_store and returns the harvest_id."""
     doc_store.create_harvest = AsyncMock(return_value="harvest-99")
     result = await manager.create_harvest("rdi-1", "client-a")
-    assert result == "harvest-99"
+    assert result == CreateHarvestResult(harvest_id="harvest-99", replayed=False)
     doc_store.create_harvest.assert_called_once()
 
 
@@ -75,6 +80,44 @@ async def test_create_harvest_with_expected_datasets(manager: HarvestManager, do
     await manager.create_harvest("rdi-1", "client-a", expected_datasets=42)
     _, kwargs = doc_store.create_harvest.call_args
     assert kwargs.get("expected_datasets") == 42  # noqa: PLR2004
+
+
+@pytest.mark.asyncio
+async def test_create_harvest_keyed(manager: HarvestManager, doc_store: MagicMock) -> None:
+    """Keyed create delegates to create_harvest_idempotent."""
+    doc_store.create_harvest_idempotent = AsyncMock(return_value=("harvest-1", False))
+    result = await manager.create_harvest("rdi-1", "client-a", idempotency_key="key-1")
+    assert result == CreateHarvestResult(harvest_id="harvest-1", replayed=False)
+    doc_store.create_harvest_idempotent.assert_called_once_with("rdi-1", "client-a", "key-1", expected_datasets=None)
+
+
+@pytest.mark.asyncio
+async def test_create_harvest_keyed_replay(manager: HarvestManager, doc_store: MagicMock) -> None:
+    """Compatible keyed replay sets replayed=True."""
+    doc_store.create_harvest_idempotent = AsyncMock(return_value=("harvest-1", True))
+    result = await manager.create_harvest("rdi-1", "client-a", idempotency_key="key-1")
+    assert result.replayed is True
+
+
+@pytest.mark.asyncio
+async def test_create_harvest_empty_key_rejected(manager: HarvestManager) -> None:
+    """Empty Idempotency-Key raises InvalidRequestError."""
+    with pytest.raises(InvalidRequestError, match="must not be empty"):
+        await manager.create_harvest("rdi-1", "client-a", idempotency_key="")
+
+
+@pytest.mark.asyncio
+async def test_create_harvest_whitespace_key_rejected(manager: HarvestManager) -> None:
+    """Whitespace-only Idempotency-Key raises InvalidRequestError."""
+    with pytest.raises(InvalidRequestError, match="must not be empty"):
+        await manager.create_harvest("rdi-1", "client-a", idempotency_key="   ")
+
+
+@pytest.mark.asyncio
+async def test_create_harvest_keyed_requires_client(manager: HarvestManager) -> None:
+    """Keyed create without client_id raises InvalidRequestError."""
+    with pytest.raises(InvalidRequestError, match="authenticated client"):
+        await manager.create_harvest("rdi-1", None, idempotency_key="key-1")
 
 
 # ---------------------------------------------------------------------------

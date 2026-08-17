@@ -3,7 +3,7 @@
 from http import HTTPStatus
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Request
+from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request, Response
 
 from middleware.api.api.common.dependencies import (
     CommonApiDependencies,
@@ -24,23 +24,31 @@ router = APIRouter(prefix="/v3/harvests", tags=["v3", "harvests"])
 @router.post("", response_model=v3_models.HarvestResponse)
 async def create_harvest(  # noqa: PLR0913, PLR0917
     request: Request,
+    response: Response,
     request_body: v3_models.CreateHarvestRequest,
     bl: Annotated[BusinessLogic, Depends(get_business_logic)],
     deps: Annotated[CommonApiDependencies, Depends(get_common_deps)],
     client_id: Annotated[str | None, Depends(get_client_id)],
     _content_type: Annotated[None, Depends(get_content_type)],
     _accept_type: Annotated[None, Depends(get_accept_type)],
+    idempotency_key: Annotated[str | None, Header(alias="Idempotency-Key")] = None,
 ) -> v3_models.HarvestResponse:
     """Start a new harvest run."""
     await deps.validate_rdi_authorized(request_body.rdi, request)
 
-    harvest_id = await bl.harvest_manager.create_harvest(
-        request_body.rdi, client_id=client_id, expected_datasets=request_body.expected_datasets
+    created = await bl.harvest_manager.create_harvest(
+        request_body.rdi,
+        client_id=client_id,
+        expected_datasets=request_body.expected_datasets,
+        idempotency_key=idempotency_key,
     )
 
-    harvest = await bl.harvest_manager.get_harvest(harvest_id)
+    harvest = await bl.harvest_manager.get_harvest(created.harvest_id)
     if not harvest:
         raise HTTPException(status_code=HTTPStatus.INTERNAL_SERVER_ERROR, detail="Failed to create harvest")
+
+    if created.replayed:
+        response.headers["Idempotent-Replayed"] = "true"
 
     return _map_harvest(harvest)
 

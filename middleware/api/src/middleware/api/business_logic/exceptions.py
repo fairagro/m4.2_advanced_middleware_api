@@ -21,6 +21,15 @@ class DuplicateArcInHarvestError(ConflictError):
     """Arises when the same ARC is submitted more than once within a harvest run."""
 
 
+class InvalidRequestError(BusinessLogicError):
+    """Arises when request parameters or headers are invalid for this operation.
+
+    For example, an empty ``Idempotency-Key`` or a keyed create without an
+    authenticated client. Distinct from :class:`InvalidJsonSemanticError`, which
+    covers ARC JSON that is syntactically valid but semantically incorrect.
+    """
+
+
 class InvalidJsonSemanticError(BusinessLogicError):
     """Arises when the ARC JSON syntax is valid but semantically incorrect.
 
