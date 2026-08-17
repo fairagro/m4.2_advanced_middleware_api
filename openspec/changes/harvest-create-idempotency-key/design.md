@@ -47,7 +47,8 @@ shared in-memory lock.
    denominator would silently diverge).
 
 4. **Persist via a dedicated CouchDB index document (claim-then-finalize)**
-   Document id pattern: `harvest-idempotency:{sha256(client_id + ":" + key)}`.
+   Document id pattern: `harvest-idempotency:{sha256(client_id + NUL + key)}`
+   (NUL `\0` separator in `_idempotency_doc_id`; raw key stored in body).
    Document body stores `client_id`, raw `idempotency_key`, `rdi`,
    `expected_datasets`, `status` (`pending` | `committed`), optional
    `harvest_id`, and timestamps.
