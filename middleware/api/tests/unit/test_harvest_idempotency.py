@@ -95,6 +95,29 @@ async def test_create_harvest_idempotent_body_conflict(couchdb: CouchDB, couchdb
 
 
 @pytest.mark.asyncio
+async def test_create_harvest_idempotent_expected_datasets_conflict(
+    couchdb: CouchDB, couchdb_client: MagicMock
+) -> None:
+    """Existing committed claim with different expected_datasets raises conflict."""
+    doc_id = CouchDB._idempotency_doc_id("client-a", "key-1")  # noqa: SLF001
+    index = HarvestIdempotencyDocument(
+        doc_id=doc_id,
+        client_id="client-a",
+        idempotency_key="key-1",
+        rdi="rdi-1",
+        expected_datasets=3,
+        status=IdempotencyStatus.COMMITTED,
+        harvest_id="harvest-existing",
+        created_at=datetime.now(UTC),
+    )
+    couchdb_client.create_document_exclusive = AsyncMock(side_effect=DocumentConflictError("exists"))
+    couchdb_client.get_document = AsyncMock(return_value=index.model_dump(mode="json", by_alias=True))
+
+    with pytest.raises(IdempotencyBodyConflictError):
+        await couchdb.create_harvest_idempotent("rdi-1", "client-a", "key-1", expected_datasets=5)
+
+
+@pytest.mark.asyncio
 async def test_create_harvest_idempotent_pending_timeout(
     couchdb: CouchDB, couchdb_client: MagicMock, monkeypatch: pytest.MonkeyPatch
 ) -> None:

@@ -22,7 +22,12 @@ class DuplicateArcInHarvestError(ConflictError):
 
 
 class InvalidRequestError(BusinessLogicError):
-    """Arises when the request is syntactically valid JSON but semantically invalid."""
+    """Arises when request parameters or headers are invalid for this operation.
+
+    For example, an empty ``Idempotency-Key`` or a keyed create without an
+    authenticated client. Distinct from :class:`InvalidJsonSemanticError`, which
+    covers ARC JSON that is syntactically valid but semantically incorrect.
+    """
 
 
 class InvalidJsonSemanticError(BusinessLogicError):

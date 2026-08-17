@@ -46,15 +46,20 @@ shared in-memory lock.
    Alternative: ignore `expected_datasets` on replay — rejected (progress
    denominator would silently diverge).
 
-4. **Persist via a dedicated CouchDB index document**
-   Document id pattern: `harvest-idempotency:{client_id}:{key}` (or a stable
-   hash of the key if length/charset is unsafe for `_id`).
-   Document body stores `harvest_id`, `rdi`, `expected_datasets`, and optional
-   timestamps.
-   First writer creates the harvest, then puts the index doc; on `_id` conflict,
-   load the winner’s harvest and apply replay/409 rules.
+4. **Persist via a dedicated CouchDB index document (claim-then-finalize)**
+   Document id pattern: `harvest-idempotency:{sha256(client_id + ":" + key)}`.
+   Document body stores `client_id`, raw `idempotency_key`, `rdi`,
+   `expected_datasets`, `status` (`pending` | `committed`), optional
+   `harvest_id`, and timestamps.
+   Flow: create index doc exclusively as `pending` → create harvest → commit
+   index with `harvest_id`. On `_id` conflict, load the winner and apply
+   replay / body-conflict / pending-poll rules. Best-effort rollback deletes
+   the claim (and harvest, if commit fails) so the same key can retry.
    Reason: CouchDB document-create conflict gives cluster-safe uniqueness
-   without a unique Mango index.
+   without a unique Mango index; claiming first avoids orphan harvests when
+   the index write fails.
+   Alternative: harvest first then index — rejected (orphan harvest on index
+   put failure; see Risks).
    Alternative: field on `HarvestDocument` + query — race-prone under concurrent
    creates.
    Alternative: use the key as the harvest `_id` — **BREAKING** / couples public
@@ -86,21 +91,21 @@ shared in-memory lock.
 
 ## Risks / Trade-offs
 
-- **[Risk] Partial failure: harvest saved, index doc not yet written** →
-  Mitigation: on index put failure, delete/compensate or retry index put; on
-  next keyed create, if no index exists, a second harvest could appear — prefer
-  “create index doc first in `pending` state then attach harvest_id” or
-  transactional ordering documented in tasks with tests for the chosen order.
+- **[Risk] Partial failure after pending claim** → Mitigation: on harvest
+  create failure, best-effort delete the pending claim (log/swallow delete
+  errors; re-raise original). On commit failure, best-effort delete harvest
+  and claim so the key can be retried. Concurrent waiters poll pending; stuck
+  pending eventually surfaces as a transient error.
 - **[Risk] Very long / weird keys as `_id`** → Mitigation: hash the key for
   `_id`, store raw key in the document body for debugging.
 - **[Risk] Clients that manually POST without keys still fail hard on
-  ConnectError** → Accepted; only library users gain retries.
+  ConnectError** → Accepted; only keyed library creates (mTLS) gain retries.
 - **[Trade-off] Index docs add storage** → Small vs harvest docs; acceptable.
 
 ## Migration Plan
 
 1. Deploy API with optional header support (backward compatible).
-2. Release api_client that sends keys and retries keyed create.
+2. Release api_client that sends keys under mTLS and retries keyed create.
 3. Roll harvesters to the new client when convenient — no coordinated cutover
    required.
 4. Rollback: disable client key sending or ignore header server-side; existing
@@ -108,5 +113,5 @@ shared in-memory lock.
 
 ## Open Questions
 
-None deferred — key hashing for `_id`, conflict semantics, and client always-on
-keys are decided above.
+None deferred — key hashing for `_id`, claim-then-finalize ordering, conflict
+semantics, and mTLS-gated client keys are decided above.
