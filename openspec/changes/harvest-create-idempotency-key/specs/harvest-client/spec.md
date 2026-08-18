@@ -6,15 +6,23 @@
 
 `Idempotency-Key` on `POST /v3/harvests` remains optional for backward
 compatibility. The client MAY send a non-empty key when client certificate and
-key paths are configured (authenticated `client_id` available). When it sends a
-key, that key MUST be generated once per logical create attempt and MUST be
-reused for every transport retry of that same attempt. A later distinct
-`create_harvest` call MUST use a different key if it sends one. When client
-certificates are not configured, the client MUST omit `Idempotency-Key`.
+key paths are configured and SSL verification is enabled so mTLS is actually
+presented (authenticated `client_id` available). When it sends a key, that key
+MUST be generated once per logical create attempt and MUST be reused for every
+transport retry of that same attempt. A later distinct `create_harvest` call
+MUST use a different key if it sends one. When client certificates are not used,
+the client MUST omit `Idempotency-Key`.
 
 #### Scenario: Omit key when certificates are not configured
 
 - **GIVEN** the client has no client certificate and key configured
+- **WHEN** the client creates a harvest
+- **THEN** the request omits `Idempotency-Key`
+
+#### Scenario: Omit key when verify_ssl disables mTLS
+
+- **GIVEN** the client has certificate and key paths configured but
+  `verify_ssl` is false (httpx does not present client certificates)
 - **WHEN** the client creates a harvest
 - **THEN** the request omits `Idempotency-Key`
 

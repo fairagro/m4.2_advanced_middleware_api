@@ -75,11 +75,12 @@ shared in-memory lock.
    would be a soft break for strict clients.
    Optional additive header `Idempotent-Replayed: true` on replay only.
 
-7. **ApiClient may send a UUID4 key only when mTLS cert+key are configured**
-   Reason: the wire header stays optional (backward compatible). Keyed create
-   needs authenticated `client_id`; without certificates the API returns `400`
-   for `Idempotency-Key`, so the client omits the header and MUST NOT retry
-   create. With mTLS the library sends a key so create becomes retry-safe.
+7. **ApiClient may send a UUID4 key only when mTLS is actually used**
+   Condition: `verify_ssl` enabled and client cert+key paths configured (same as
+   `_get_client` cert loading). Reason: the wire header stays optional; keyed
+   create needs authenticated `client_id`. With `verify_ssl: false` httpx does
+   not present client certs, so sending a key would yield `400`. With mTLS the
+   library sends a key so create becomes retry-safe.
    Retry classification: treat keyed `POST /v3/harvests` like idempotent ARC
    POSTs for ConnectError and 502/503/504; still never retry completion or
    unkeyed create.

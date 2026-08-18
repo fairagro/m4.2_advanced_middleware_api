@@ -301,6 +301,24 @@ async def test_create_harvest_without_mtls_not_retried() -> None:
 
 @pytest.mark.asyncio
 @respx.mock
+async def test_create_harvest_omits_key_when_verify_ssl_false_despite_cert_paths(
+    test_config_dict: dict,
+) -> None:
+    """Cert paths alone do not send Idempotency-Key when verify_ssl is false."""
+    test_config_dict["verify_ssl"] = "false"
+    config = Config.from_data(test_config_dict)
+    route = respx.post(f"{config.api_url}v3/harvests").mock(
+        return_value=httpx.Response(http.HTTPStatus.OK, json=HARVEST_RESPONSE)
+    )
+    async with ApiClient(config) as client:
+        await client.create_harvest(rdi="test-rdi")
+
+    assert route.called
+    assert route.calls.last.request.headers.get("idempotency-key") is None
+
+
+@pytest.mark.asyncio
+@respx.mock
 async def test_create_harvest_retries_on_connect_error(client_config: Config) -> None:
     """Keyed harvest create retries ConnectError then succeeds."""
     client_config.retry_backoff_factor = 0.01

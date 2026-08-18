@@ -192,6 +192,28 @@ async def test_create_harvest_idempotent_preserves_create_error_if_rollback_fail
 
 
 @pytest.mark.asyncio
+async def test_create_harvest_idempotent_keeps_claim_when_harvest_rollback_fails_on_commit(
+    couchdb: CouchDB, couchdb_client: MagicMock, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Failed harvest rollback on commit failure must not release the claim."""
+
+    async def _delete_side_effect(doc_to_delete: str) -> bool:
+        if doc_to_delete == "harvest-1":
+            raise RuntimeError("harvest delete failed")
+        return True
+
+    couchdb_client.create_document_exclusive = AsyncMock()
+    couchdb_client.delete_document = AsyncMock(side_effect=_delete_side_effect)
+    couchdb_client.save_document = AsyncMock(side_effect=RuntimeError("commit failed"))
+    monkeypatch.setattr(couchdb, "create_harvest", AsyncMock(return_value="harvest-1"))
+
+    with pytest.raises(RuntimeError, match="commit failed"):
+        await couchdb.create_harvest_idempotent("rdi-1", "client-a", "key-1")
+
+    couchdb_client.delete_document.assert_awaited_once_with("harvest-1")
+
+
+@pytest.mark.asyncio
 async def test_create_harvest_idempotent_rolls_back_on_commit_failure(
     couchdb: CouchDB, couchdb_client: MagicMock, monkeypatch: pytest.MonkeyPatch
 ) -> None:

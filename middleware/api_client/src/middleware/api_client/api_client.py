@@ -453,6 +453,14 @@ class ApiClient:
     # HTTP infrastructure
     # ------------------------------------------------------------------
 
+    def _uses_client_certificates(self) -> bool:
+        """Return True when httpx will load and present client certificates."""
+        return (
+            self._config.verify_ssl
+            and self._config.client_cert_path is not None
+            and self._config.client_key_path is not None
+        )
+
     def _get_client(self) -> httpx.AsyncClient:
         """Return the shared httpx.AsyncClient, creating it on first call."""
         if self._client is None:
@@ -674,10 +682,10 @@ class ApiClient:
         """Start a new harvest run.
 
         Uses ``POST /v3/harvests``. ``Idempotency-Key`` is optional: when client
-        mTLS certificates are configured the client may send a key so the
-        request is safe to retry after transport failures. Without certificates
-        the create stays unkeyed and MUST NOT be retried (server requires
-        ``client_id`` for keyed creates).
+        certificates are configured and ``verify_ssl`` is enabled (so mTLS is
+        actually presented), the client may send a key so the request is safe to
+        retry after transport failures. Otherwise the create stays unkeyed and
+        MUST NOT be retried (server requires ``client_id`` for keyed creates).
 
         Args:
             rdi: RDI identifier.
@@ -688,7 +696,7 @@ class ApiClient:
         """
         request = CreateHarvestRequest(rdi=rdi, expected_datasets=expected_datasets)
         headers: dict[str, str] = {"content-type": "application/json"}
-        if self._config.client_cert_path is not None and self._config.client_key_path is not None:
+        if self._uses_client_certificates():
             headers["Idempotency-Key"] = str(uuid.uuid4())
         data = await self._request_with_retries(
             "POST",
