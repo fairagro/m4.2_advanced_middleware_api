@@ -395,14 +395,23 @@ class CouchDB(DocumentStore):
             )
         except Exception:
             # Best-effort rollback so the same key can safely retry create.
+            harvest_rollback_ok = False
             try:
                 await self._client.delete_document(harvest_id)
+                harvest_rollback_ok = True
             except Exception:
                 logger.exception("Failed to roll back harvest %s after idempotency commit failure", harvest_id)
-            try:
-                await self._client.delete_document(doc_id)
-            except Exception:
-                logger.exception("Failed to roll back idempotency claim %s after commit failure", doc_id)
+            if harvest_rollback_ok:
+                try:
+                    await self._client.delete_document(doc_id)
+                except Exception:
+                    logger.exception("Failed to roll back idempotency claim %s after commit failure", doc_id)
+            else:
+                logger.warning(
+                    "Leaving idempotency claim %s pending; harvest %s rollback failed",
+                    doc_id,
+                    harvest_id,
+                )
             raise
         return harvest_id, False
 

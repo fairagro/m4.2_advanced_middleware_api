@@ -453,6 +453,18 @@ class ApiClient:
     # HTTP infrastructure
     # ------------------------------------------------------------------
 
+    def _uses_client_certificates(self) -> bool:
+        """Return True when this client loads a client certificate chain.
+
+        ``verify_ssl`` is server-certificate verification; this client only
+        loads the cert chain in that mode (see ``_get_client``).
+        """
+        return (
+            self._config.verify_ssl
+            and self._config.client_cert_path is not None
+            and self._config.client_key_path is not None
+        )
+
     def _get_client(self) -> httpx.AsyncClient:
         """Return the shared httpx.AsyncClient, creating it on first call."""
         if self._client is None:
@@ -673,11 +685,12 @@ class ApiClient:
     ) -> HarvestResult:
         """Start a new harvest run.
 
-        Uses ``POST /v3/harvests``. ``Idempotency-Key`` is optional: when client
-        mTLS certificates are configured the client may send a key so the
-        request is safe to retry after transport failures. Without certificates
-        the create stays unkeyed and MUST NOT be retried (server requires
-        ``client_id`` for keyed creates).
+        Uses ``POST /v3/harvests``. ``Idempotency-Key`` is optional: this client
+        may send a key when it loads a client certificate chain (cert+key paths
+        set and ``verify_ssl`` true). ``verify_ssl`` itself only verifies the
+        server; this client also skips ``load_cert_chain`` when it is false (see
+        ``_get_client``), so a key is omitted then. Unkeyed create MUST NOT be
+        retried (server requires ``client_id`` for keyed creates).
 
         Args:
             rdi: RDI identifier.
@@ -688,7 +701,7 @@ class ApiClient:
         """
         request = CreateHarvestRequest(rdi=rdi, expected_datasets=expected_datasets)
         headers: dict[str, str] = {"content-type": "application/json"}
-        if self._config.client_cert_path is not None and self._config.client_key_path is not None:
+        if self._uses_client_certificates():
             headers["Idempotency-Key"] = str(uuid.uuid4())
         data = await self._request_with_retries(
             "POST",
