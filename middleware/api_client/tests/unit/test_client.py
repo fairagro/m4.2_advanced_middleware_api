@@ -304,7 +304,7 @@ async def test_create_harvest_without_mtls_not_retried() -> None:
 async def test_create_harvest_omits_key_when_verify_ssl_false_despite_cert_paths(
     test_config_dict: dict,
 ) -> None:
-    """Cert paths alone do not send Idempotency-Key when verify_ssl is false."""
+    """Cert paths do not send Idempotency-Key when ApiClient skips cert loading."""
     test_config_dict["verify_ssl"] = "false"
     config = Config.from_data(test_config_dict)
     route = respx.post(f"{config.api_url}v3/harvests").mock(

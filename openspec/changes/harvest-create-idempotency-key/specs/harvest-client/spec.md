@@ -5,13 +5,12 @@
 ### Requirement: Optional Idempotency-Key on harvest create
 
 `Idempotency-Key` on `POST /v3/harvests` remains optional for backward
-compatibility. The client MAY send a non-empty key when client certificate and
-key paths are configured and SSL verification is enabled so mTLS is actually
-presented (authenticated `client_id` available). When it sends a key, that key
-MUST be generated once per logical create attempt and MUST be reused for every
-transport retry of that same attempt. A later distinct `create_harvest` call
-MUST use a different key if it sends one. When client certificates are not used,
-the client MUST omit `Idempotency-Key`.
+compatibility. The client MAY send a non-empty key when it presents client
+certificates (authenticated `client_id` available). When it sends a key, that
+key MUST be generated once per logical create attempt and MUST be reused for
+every transport retry of that same attempt. A later distinct `create_harvest`
+call MUST use a different key if it sends one. When the client does not present
+client certificates, it MUST omit `Idempotency-Key`.
 
 #### Scenario: Omit key when certificates are not configured
 
@@ -19,10 +18,11 @@ the client MUST omit `Idempotency-Key`.
 - **WHEN** the client creates a harvest
 - **THEN** the request omits `Idempotency-Key`
 
-#### Scenario: Omit key when verify_ssl disables mTLS
+#### Scenario: Omit key when this client does not load the cert chain
 
 - **GIVEN** the client has certificate and key paths configured but
-  `verify_ssl` is false (httpx does not present client certificates)
+  `verify_ssl` is false (`ApiClient` only loads the client cert chain when
+  `verify_ssl` is true; that flag is server-certificate verification, not mTLS)
 - **WHEN** the client creates a harvest
 - **THEN** the request omits `Idempotency-Key`
 

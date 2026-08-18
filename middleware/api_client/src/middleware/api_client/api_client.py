@@ -454,7 +454,11 @@ class ApiClient:
     # ------------------------------------------------------------------
 
     def _uses_client_certificates(self) -> bool:
-        """Return True when httpx will load and present client certificates."""
+        """Return True when this client loads a client certificate chain.
+
+        ``verify_ssl`` is server-certificate verification; this client only
+        loads the cert chain in that mode (see ``_get_client``).
+        """
         return (
             self._config.verify_ssl
             and self._config.client_cert_path is not None
@@ -681,11 +685,11 @@ class ApiClient:
     ) -> HarvestResult:
         """Start a new harvest run.
 
-        Uses ``POST /v3/harvests``. ``Idempotency-Key`` is optional: when client
-        certificates are configured and ``verify_ssl`` is enabled (so mTLS is
-        actually presented), the client may send a key so the request is safe to
-        retry after transport failures. Otherwise the create stays unkeyed and
-        MUST NOT be retried (server requires ``client_id`` for keyed creates).
+        Uses ``POST /v3/harvests``. ``Idempotency-Key`` is optional: when this
+        client loads a client certificate chain, it may send a key so the
+        request is safe to retry after transport failures. Otherwise the create
+        stays unkeyed and MUST NOT be retried (server requires ``client_id`` for
+        keyed creates).
 
         Args:
             rdi: RDI identifier.
