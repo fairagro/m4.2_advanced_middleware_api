@@ -685,11 +685,12 @@ class ApiClient:
     ) -> HarvestResult:
         """Start a new harvest run.
 
-        Uses ``POST /v3/harvests``. ``Idempotency-Key`` is optional: when this
-        client loads a client certificate chain, it may send a key so the
-        request is safe to retry after transport failures. Otherwise the create
-        stays unkeyed and MUST NOT be retried (server requires ``client_id`` for
-        keyed creates).
+        Uses ``POST /v3/harvests``. ``Idempotency-Key`` is optional: this client
+        may send a key when it loads a client certificate chain (cert+key paths
+        set and ``verify_ssl`` true). ``verify_ssl`` itself only verifies the
+        server; this client also skips ``load_cert_chain`` when it is false (see
+        ``_get_client``), so a key is omitted then. Unkeyed create MUST NOT be
+        retried (server requires ``client_id`` for keyed creates).
 
         Args:
             rdi: RDI identifier.
