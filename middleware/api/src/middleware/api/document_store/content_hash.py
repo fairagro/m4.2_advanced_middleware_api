@@ -82,16 +82,15 @@ def _canonicalize_json_for_hash(node: JsonValue, *, parent_key: str | None = Non
         if parent_key in _ORDER_INSENSITIVE_REFERENCE_LIST_FIELDS and all(
             isinstance(elem, dict) and isinstance(elem.get("@id"), str) for elem in canonical_elems
         ):
+            reference_elems: list[dict[str, JsonValue]] = [cast(dict[str, JsonValue], elem) for elem in canonical_elems]
 
-            def _reference_sort_key(elem: JsonValue) -> tuple[str, str]:
-                elem_dict = cast(dict[str, JsonValue], elem)
-                id_part = cast(str, elem_dict["@id"])
-                return (id_part, json.dumps(elem_dict, sort_keys=True))
+            def _reference_sort_key(elem: dict[str, JsonValue]) -> tuple[str, str]:
+                id_part = cast(str, elem["@id"])
+                return (id_part, json.dumps(elem, sort_keys=True))
 
-            return sorted(
-                canonical_elems,  # type: ignore[arg-type]
-                key=_reference_sort_key,
-            )
+            decorated = [(_reference_sort_key(elem), elem) for elem in reference_elems]
+            decorated.sort(key=lambda pair: pair[0])
+            return [elem for _, elem in decorated]
 
         return canonical_elems
 
