@@ -80,19 +80,6 @@ DRY_RUN_PREVIEW_LIMIT = 20
 LIST_PROGRESS_INTERVAL = 1000
 PURGE_PATH_RESOLVE_RETRIES = 3
 PURGE_PATH_RESOLVE_DELAY_S = 0.5
-_GITLAB_TOPIC_RE = re.compile(r"[^a-z0-9-]+")
-
-
-def normalize_gitlab_topic(rdi: str) -> str | None:
-    """Normalize an RDI name for GitLab project topics (lowercase alnum + hyphens).
-
-    This mirrors the middleware fallback logic (normalization only; no configured mapping).
-    """
-    normalized = _GITLAB_TOPIC_RE.sub("-", rdi.strip().lower()).strip("-")
-    if normalized:
-        return normalized
-    alnum = re.sub(r"[^a-z0-9]", "", rdi.lower())
-    return alnum or None
 
 
 class ArcProjectPhase(Enum):
@@ -606,14 +593,9 @@ def _parse_args(argv: list[str] | None) -> argparse.Namespace:
         help="Include projects from subgroups (slower; default: group only)",
     )
     parser.add_argument(
-        "--rdi",
-        default=None,
-        help="Delete only ARC projects whose GitLab topics match this RDI.",
-    )
-    parser.add_argument(
         "--topic",
         default=None,
-        help="Exact GitLab topic to match (overrides --rdi normalization).",
+        help="Exact GitLab topic to match (compared against project.topics).",
     )
     parser.add_argument(
         "--all-projects",
@@ -802,11 +784,8 @@ def main(argv: list[str] | None = None) -> int:
     target_topic: str | None = None
     if args.topic:
         target_topic = args.topic.strip()
-    elif args.rdi:
-        target_topic = normalize_gitlab_topic(args.rdi)
-
-    if (args.topic or args.rdi) and not target_topic:
-        log.error("Could not resolve a GitLab topic from --rdi/--topic")
+    if args.topic and not target_topic:
+        log.error("--topic must not be empty")
         return 1
 
     gl = gitlab.Gitlab(args.url, private_token=args.token, per_page=100)
