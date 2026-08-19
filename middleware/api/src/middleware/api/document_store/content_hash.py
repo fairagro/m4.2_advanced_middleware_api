@@ -49,13 +49,61 @@ def _graph_sort_key(node: JsonValue) -> tuple[str, str]:
     return ("", json.dumps(node, sort_keys=True))
 
 
+def _canonicalize_json_for_hash(node: JsonValue) -> JsonValue:
+    """Canonicalize RO-Crate JSON for stable hashing.
+
+    In addition to excluding volatile timestamp fields (done upstream),
+    this normalizes deterministic ordering for certain RO-Crate structures:
+
+    - ``@graph`` nodes remain handled by the caller (see ``canonicalize_rocrate_for_hash``).
+    - For other lists: if every element is a dict with a string ``@id``, sort deterministically by it.
+    """
+    if isinstance(node, dict):
+        canonical: dict[str, JsonValue] = {}
+        for key, item in node.items():
+            if key == "@graph" and isinstance(item, list):
+                # Keep graph ordering handling in the caller: we only canonicalize nodes.
+                canonical[key] = [_canonicalize_json_for_hash(n) for n in item]
+                continue
+            canonical[key] = _canonicalize_json_for_hash(item)
+        return canonical
+
+    if isinstance(node, list):
+        canonical_elems = [_canonicalize_json_for_hash(elem) for elem in node]
+
+        # Heuristic: sort lists of RO-Crate reference objects deterministically.
+        # This addresses non-semantic list permutations like ``hasPart`` ordering.
+        if all(isinstance(elem, dict) and isinstance(elem.get("@id"), str) for elem in canonical_elems):
+            return sorted(
+                canonical_elems,  # type: ignore[arg-type]
+                key=lambda elem: (
+                    elem["@id"],  # type: ignore[index]
+                    json.dumps(elem, sort_keys=True),
+                ),
+            )
+
+        return canonical_elems
+
+    return node
+
+
 def canonicalize_rocrate_for_hash(value: RoCrateContent) -> RoCrateContent:
-    """Strip volatile fields and order ``@graph`` for stable hashing."""
+    """Strip volatile fields and make RO-Crate JSON order-deterministic for hashing."""
     stripped = strip_volatile_rocrate_fields(value)
-    graph = stripped.get("@graph")
-    if isinstance(graph, list):
-        return {**stripped, "@graph": sorted(graph, key=_graph_sort_key)}
-    return stripped
+
+    # First normalize list ordering for all nested structures (except @graph, which we
+    # keep in its special handling path to avoid changing prior expectations).
+    def _canonicalize_root(node: RoCrateContent) -> RoCrateContent:
+        canonical: dict[str, JsonValue] = {}
+        for key, item in node.items():
+            if key == "@graph" and isinstance(item, list):
+                canonical_nodes = [_canonicalize_json_for_hash(n) for n in item]
+                canonical[key] = sorted(canonical_nodes, key=_graph_sort_key)
+            else:
+                canonical[key] = _canonicalize_json_for_hash(item)
+        return canonical  # type: ignore[return-value]
+
+    return _canonicalize_root(stripped)
 
 
 def calculate_arc_content_hash(arc_content: RoCrateContent) -> str:

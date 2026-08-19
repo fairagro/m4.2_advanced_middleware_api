@@ -113,6 +113,37 @@ def test_calculate_arc_content_hash_ignores_date_modified_only_differences() -> 
     assert calculate_arc_content_hash(base) == calculate_arc_content_hash(changed)
 
 
+def test_calculate_arc_content_hash_ignores_haspart_list_order() -> None:
+    """Permuting RO-Crate reference lists (e.g. ``hasPart``) must not change the hash."""
+    arc_a: RoCrateContent = {
+        "@context": "https://w3id.org/ro/crate/1.1/context",
+        "@graph": [
+            {
+                "@id": "./",
+                "identifier": "arc-1",
+                "hasPart": [{"@id": "#assay-a"}, {"@id": "#assay-b"}],
+            },
+            {"@id": "#assay-a", "name": "Assay A"},
+            {"@id": "#assay-b", "name": "Assay B"},
+        ],
+    }
+
+    arc_b: RoCrateContent = {
+        "@context": "https://w3id.org/ro/crate/1.1/context",
+        "@graph": [
+            {
+                "@id": "./",
+                "identifier": "arc-1",
+                "hasPart": [{"@id": "#assay-b"}, {"@id": "#assay-a"}],
+            },
+            {"@id": "#assay-a", "name": "Assay A"},
+            {"@id": "#assay-b", "name": "Assay B"},
+        ],
+    }
+
+    assert calculate_arc_content_hash(arc_a) == calculate_arc_content_hash(arc_b)
+
+
 def test_calculate_arc_content_hash_ignores_graph_order() -> None:
     """``@graph`` node order must not affect the content hash."""
     first: RoCrateContent = {
