@@ -144,6 +144,37 @@ def test_calculate_arc_content_hash_ignores_haspart_list_order() -> None:
     assert calculate_arc_content_hash(arc_a) == calculate_arc_content_hash(arc_b)
 
 
+def test_calculate_arc_content_hash_preserves_non_allowlisted_list_order() -> None:
+    """Non-allowlisted reference-list properties must keep their original order semantics."""
+    arc_a: RoCrateContent = {
+        "@context": "https://w3id.org/ro/crate/1.1/context",
+        "@graph": [
+            {
+                "@id": "./",
+                "identifier": "arc-1",
+                "creator": [{"@id": "#person-a"}, {"@id": "#person-b"}],
+            },
+            {"@id": "#person-a", "name": "Person A"},
+            {"@id": "#person-b", "name": "Person B"},
+        ],
+    }
+
+    arc_b: RoCrateContent = {
+        "@context": "https://w3id.org/ro/crate/1.1/context",
+        "@graph": [
+            {
+                "@id": "./",
+                "identifier": "arc-1",
+                "creator": [{"@id": "#person-b"}, {"@id": "#person-a"}],
+            },
+            {"@id": "#person-a", "name": "Person A"},
+            {"@id": "#person-b", "name": "Person B"},
+        ],
+    }
+
+    assert calculate_arc_content_hash(arc_a) != calculate_arc_content_hash(arc_b)
+
+
 def test_calculate_arc_content_hash_ignores_graph_order() -> None:
     """``@graph`` node order must not affect the content hash."""
     first: RoCrateContent = {

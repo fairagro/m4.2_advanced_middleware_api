@@ -23,6 +23,11 @@ _VOLATILE_ROCRATE_FIELDS = frozenset({
     "dateModified",
 })
 
+# RO-Crate properties that behave like unordered reference sets for hashing.
+_ORDER_INSENSITIVE_REFERENCE_LIST_FIELDS = frozenset({
+    "hasPart",
+})
+
 
 def strip_volatile_rocrate_fields(value: RoCrateContent) -> RoCrateContent:
     """Return a copy of RO-Crate JSON with serialization timestamps removed."""
@@ -50,14 +55,15 @@ def _graph_sort_key(node: JsonValue) -> tuple[str, str]:
     return ("", json.dumps(node, sort_keys=True))
 
 
-def _canonicalize_json_for_hash(node: JsonValue) -> JsonValue:
+def _canonicalize_json_for_hash(node: JsonValue, *, parent_key: str | None = None) -> JsonValue:
     """Canonicalize RO-Crate JSON for stable hashing.
 
     In addition to excluding volatile timestamp fields (done upstream),
     this normalizes deterministic ordering for certain RO-Crate structures:
 
     - ``@graph`` nodes remain handled by the caller (see ``canonicalize_rocrate_for_hash``).
-    - For other lists: if every element is a dict with a string ``@id``, sort deterministically by it.
+    - For allowlisted reference-list properties such as ``hasPart``: if every element is a
+      dict with a string ``@id``, sort deterministically by it.
     """
     if isinstance(node, dict):
         canonical: dict[str, JsonValue] = {}
@@ -66,15 +72,16 @@ def _canonicalize_json_for_hash(node: JsonValue) -> JsonValue:
                 # Keep graph ordering handling in the caller: we only canonicalize nodes.
                 canonical[key] = [_canonicalize_json_for_hash(n) for n in item]
                 continue
-            canonical[key] = _canonicalize_json_for_hash(item)
+            canonical[key] = _canonicalize_json_for_hash(item, parent_key=key)
         return canonical
 
     if isinstance(node, list):
         canonical_elems = [_canonicalize_json_for_hash(elem) for elem in node]
 
-        # Heuristic: sort lists of RO-Crate reference objects deterministically.
-        # This addresses non-semantic list permutations like ``hasPart`` ordering.
-        if all(isinstance(elem, dict) and isinstance(elem.get("@id"), str) for elem in canonical_elems):
+        # Only canonicalize list order for explicitly allowlisted reference properties.
+        if parent_key in _ORDER_INSENSITIVE_REFERENCE_LIST_FIELDS and all(
+            isinstance(elem, dict) and isinstance(elem.get("@id"), str) for elem in canonical_elems
+        ):
 
             def _reference_sort_key(elem: JsonValue) -> tuple[str, str]:
                 elem_dict = cast(dict[str, JsonValue], elem)
