@@ -105,14 +105,14 @@ def canonicalize_rocrate_for_hash(value: RoCrateContent) -> RoCrateContent:
     # First normalize list ordering for all nested structures (except @graph, which we
     # keep in its special handling path to avoid changing prior expectations).
     def _canonicalize_root(node: RoCrateContent) -> RoCrateContent:
-        canonical: dict[str, JsonValue] = {}
+        canonical: RoCrateContent = {}
         for key, item in node.items():
             if key == "@graph" and isinstance(item, list):
                 canonical_nodes = [_canonicalize_json_for_hash(n) for n in item]
                 canonical[key] = sorted(canonical_nodes, key=_graph_sort_key)
             else:
                 canonical[key] = _canonicalize_json_for_hash(item)
-        return canonical  # type: ignore[return-value]
+        return canonical
 
     return _canonicalize_root(stripped)
 
