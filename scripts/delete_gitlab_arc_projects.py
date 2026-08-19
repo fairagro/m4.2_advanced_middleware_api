@@ -80,6 +80,19 @@ DRY_RUN_PREVIEW_LIMIT = 20
 LIST_PROGRESS_INTERVAL = 1000
 PURGE_PATH_RESOLVE_RETRIES = 3
 PURGE_PATH_RESOLVE_DELAY_S = 0.5
+_GITLAB_TOPIC_RE = re.compile(r"[^a-z0-9-]+")
+
+
+def normalize_gitlab_topic(rdi: str) -> str | None:
+    """Normalize an RDI name for GitLab project topics (lowercase alnum + hyphens).
+
+    This mirrors the middleware fallback logic (normalization only; no configured mapping).
+    """
+    normalized = _GITLAB_TOPIC_RE.sub("-", rdi.strip().lower()).strip("-")
+    if normalized:
+        return normalized
+    alnum = re.sub(r"[^a-z0-9]", "", rdi.lower())
+    return alnum or None
 
 
 class ArcProjectPhase(Enum):
@@ -131,6 +144,16 @@ class ScanResult:
     zombie_matches: int
 
 
+@dataclass(frozen=True)
+class ScanConfig:
+    """Configuration for a scan run."""
+
+    all_projects: bool
+    include_subgroups: bool
+    collect_targets: bool
+    target_topic: str | None
+
+
 def _configure_logging() -> logging.Logger:
     log = logging.getLogger("delete_gitlab_arc_projects")
     log.setLevel(logging.INFO)
@@ -168,17 +191,30 @@ def _classify_arc_project(path: str, *, all_projects: bool) -> ArcProjectPhase |
     return None
 
 
+def _project_has_topic(project: GroupProject, topic: str) -> bool:
+    """Return True when the GitLab project has the given topic."""
+    attributes = project.attributes
+    topics = attributes.get("topics")
+    if isinstance(topics, list):
+        return topic in topics
+
+    # Some GitLab list endpoints might not include topics even when `simple=False`.
+    project_topics = getattr(project, "topics", None)
+    return isinstance(project_topics, list) and topic in project_topics
+
+
 def _iter_group_projects(
     group: Group,
     log: logging.Logger,
     *,
     include_subgroups: bool,
+    simple: bool,
 ) -> Iterator[GroupProject]:
     """Iterate group projects using a lighter, keyset-paginated listing."""
     list_kwargs: dict[str, Any] = {
         "get_all": False,
         "include_subgroups": include_subgroups,
-        "simple": True,
+        "simple": simple,
         "per_page": 100,
         "include_pending_delete": True,
     }
@@ -213,9 +249,7 @@ def _scan_group_projects(
     group: Group,
     log: logging.Logger,
     *,
-    all_projects: bool,
-    include_subgroups: bool,
-    collect_targets: bool,
+    config: ScanConfig,
 ) -> ScanResult:
     mark_targets: list[tuple[int, str]] = []
     purge_targets: list[tuple[int, str]] = []
@@ -229,22 +263,35 @@ def _scan_group_projects(
     start = time.monotonic()
 
     log.info(
-        "Listing projects (simple=keyset, include_subgroups=%s, include_pending_delete=True)...",
-        include_subgroups,
+        "Listing projects (simple=%s, include_subgroups=%s, include_pending_delete=True, rdi_topic=%s)...",
+        not bool(config.target_topic),
+        config.include_subgroups,
+        config.target_topic,
     )
 
-    for project in _iter_group_projects(group, log, include_subgroups=include_subgroups):
+    for project in _iter_group_projects(
+        group,
+        log,
+        include_subgroups=config.include_subgroups,
+        simple=not bool(config.target_topic),
+    ):
         scanned += 1
-        phase = _classify_arc_project(project.path, all_projects=all_projects)
+        phase = _classify_arc_project(project.path, all_projects=config.all_projects)
         if phase is ArcProjectPhase.ACTIVE:
+            if config.target_topic is not None and not _project_has_topic(project, config.target_topic):
+                skipped_non_arc += 1
+                continue
             active_matches += 1
             _append_scan_target(
                 project,
                 mark_targets,
                 mark_preview,
-                collect_targets=collect_targets,
+                collect_targets=config.collect_targets,
             )
         elif phase is ArcProjectPhase.PENDING_DELETION:
+            if config.target_topic is not None and not _project_has_topic(project, config.target_topic):
+                skipped_non_arc += 1
+                continue
             pending_matches += 1
             if not _is_marked_for_deletion(project):
                 zombie_matches += 1
@@ -252,7 +299,7 @@ def _scan_group_projects(
                 project,
                 purge_targets,
                 purge_preview,
-                collect_targets=collect_targets,
+                collect_targets=config.collect_targets,
             )
         else:
             skipped_non_arc += 1
@@ -269,7 +316,7 @@ def _scan_group_projects(
                 skipped_non_arc,
             )
 
-    if not collect_targets:
+    if not config.collect_targets:
         mark_targets = mark_preview
         purge_targets = purge_preview
 
@@ -456,8 +503,7 @@ def _repair_and_purge(
     log: logging.Logger,
 ) -> bool:
     log.warning(
-        "Repairing inconsistent deletion state for %s (%s): "
-        "deletion_scheduled path but not marked for deletion",
+        "Repairing inconsistent deletion state for %s (%s): deletion_scheduled path but not marked for deletion",
         job.listed_path,
         job.project_id,
     )
@@ -560,6 +606,16 @@ def _parse_args(argv: list[str] | None) -> argparse.Namespace:
         help="Include projects from subgroups (slower; default: group only)",
     )
     parser.add_argument(
+        "--rdi",
+        default=None,
+        help="Delete only ARC projects whose GitLab topics match this RDI.",
+    )
+    parser.add_argument(
+        "--topic",
+        default=None,
+        help="Exact GitLab topic to match (overrides --rdi normalization).",
+    )
+    parser.add_argument(
         "--all-projects",
         action="store_true",
         help="Delete every project in the group, not only ARC-hash paths (dangerous)",
@@ -630,6 +686,7 @@ class PhaseExecution:
     scan: ScanResult
     do_mark: bool
     do_purge: bool
+    target_topic: str | None
 
 
 def _run_phases(execution: PhaseExecution, log: logging.Logger) -> int:
@@ -658,9 +715,12 @@ def _run_phases(execution: PhaseExecution, log: logging.Logger) -> int:
         purge_scan = _scan_group_projects(
             execution.group,
             log,
-            all_projects=args.all_projects,
-            include_subgroups=args.include_subgroups,
-            collect_targets=True,
+            config=ScanConfig(
+                all_projects=args.all_projects,
+                include_subgroups=args.include_subgroups,
+                collect_targets=True,
+                target_topic=execution.target_topic,
+            ),
         )
         log.info(
             "Re-scan complete: %d active, %d pending, %d inconsistent",
@@ -739,6 +799,16 @@ def main(argv: list[str] | None = None) -> int:
     if validation_error is not None:
         return validation_error
 
+    target_topic: str | None = None
+    if args.topic:
+        target_topic = args.topic.strip()
+    elif args.rdi:
+        target_topic = normalize_gitlab_topic(args.rdi)
+
+    if (args.topic or args.rdi) and not target_topic:
+        log.error("Could not resolve a GitLab topic from --rdi/--topic")
+        return 1
+
     gl = gitlab.Gitlab(args.url, private_token=args.token, per_page=100)
     gl.auth()
 
@@ -749,14 +819,16 @@ def main(argv: list[str] | None = None) -> int:
     scan = _scan_group_projects(
         group,
         log,
-        all_projects=args.all_projects,
-        include_subgroups=args.include_subgroups,
-        collect_targets=collect_targets,
+        config=ScanConfig(
+            all_projects=args.all_projects,
+            include_subgroups=args.include_subgroups,
+            collect_targets=collect_targets,
+            target_topic=target_topic,
+        ),
     )
 
     log.info(
-        "Scan complete: %d projects scanned, %d active ARC, %d pending deletion, "
-        "%d inconsistent, %d skipped",
+        "Scan complete: %d projects scanned, %d active ARC, %d pending deletion, %d inconsistent, %d skipped",
         scan.scanned,
         scan.active_matches,
         scan.pending_matches,
@@ -769,7 +841,14 @@ def main(argv: list[str] | None = None) -> int:
         return 0
 
     return _run_phases(
-        PhaseExecution(args=args, group=group, scan=scan, do_mark=do_mark, do_purge=do_purge),
+        PhaseExecution(
+            args=args,
+            group=group,
+            scan=scan,
+            do_mark=do_mark,
+            do_purge=do_purge,
+            target_topic=target_topic,
+        ),
         log,
     )
 
