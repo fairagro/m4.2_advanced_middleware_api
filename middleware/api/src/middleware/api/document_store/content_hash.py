@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+from typing import cast
 
 # JSON shapes produced by ``json.loads`` / consumed by ``json.dumps``.
 type JsonPrimitive = str | int | float | bool | None
@@ -74,12 +75,15 @@ def _canonicalize_json_for_hash(node: JsonValue) -> JsonValue:
         # Heuristic: sort lists of RO-Crate reference objects deterministically.
         # This addresses non-semantic list permutations like ``hasPart`` ordering.
         if all(isinstance(elem, dict) and isinstance(elem.get("@id"), str) for elem in canonical_elems):
+
+            def _reference_sort_key(elem: JsonValue) -> tuple[str, str]:
+                elem_dict = cast(dict[str, JsonValue], elem)
+                id_part = cast(str, elem_dict["@id"])
+                return (id_part, json.dumps(elem_dict, sort_keys=True))
+
             return sorted(
                 canonical_elems,  # type: ignore[arg-type]
-                key=lambda elem: (
-                    elem["@id"],  # type: ignore[index]
-                    json.dumps(elem, sort_keys=True),
-                ),
+                key=_reference_sort_key,
             )
 
         return canonical_elems
