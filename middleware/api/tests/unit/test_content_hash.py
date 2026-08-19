@@ -79,6 +79,40 @@ def test_calculate_arc_content_hash_ignores_timestamp_only_differences() -> None
     assert calculate_arc_content_hash(base) == calculate_arc_content_hash(refreshed)
 
 
+def test_calculate_arc_content_hash_ignores_date_modified_only_differences() -> None:
+    """Only ``dateModified`` differences must not change the ARC content hash."""
+    base: RoCrateContent = {
+        "@context": "https://w3id.org/ro/crate/1.1/context",
+        "@graph": [
+            {
+                "@id": "./",
+                "identifier": "arc-1",
+                "dateCreated": "2024-01-15",
+                "datePublished": "2026-01-01T10:00:00.111",
+                "sdDatePublished": "2026-01-01T10:00:00.112",
+                "nested": {"dateModified": "2026-01-01T10:00:00.200"},
+            },
+            {"@id": "#study", "name": "Study", "dateModified": "2026-01-01T10:00:00.201"},
+        ],
+    }
+    changed: RoCrateContent = {
+        "@context": "https://w3id.org/ro/crate/1.1/context",
+        "@graph": [
+            {
+                "@id": "./",
+                "identifier": "arc-1",
+                "dateCreated": "2024-01-15",
+                "datePublished": "2026-01-01T10:00:00.111",
+                "sdDatePublished": "2026-01-01T10:00:00.112",
+                "nested": {"dateModified": "2026-01-02T11:11:11.222"},
+            },
+            {"@id": "#study", "name": "Study", "dateModified": "2026-01-02T11:11:11.333"},
+        ],
+    }
+
+    assert calculate_arc_content_hash(base) == calculate_arc_content_hash(changed)
+
+
 def test_calculate_arc_content_hash_ignores_graph_order() -> None:
     """``@graph`` node order must not affect the content hash."""
     first: RoCrateContent = {
