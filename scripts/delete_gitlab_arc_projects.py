@@ -758,7 +758,12 @@ def _report_dry_run(scan: ScanResult, args: argparse.Namespace, log: logging.Log
 
 
 def _validate_args(args: argparse.Namespace, log: logging.Logger) -> int | None:
-    """Return an exit code when arguments are invalid, else None."""
+    """Return an exit code when arguments are invalid, else None.
+
+    Also normalizes ``args.topic``: omitted stays ``None``; an explicitly empty
+    or whitespace-only value is rejected so ``--mark``/``--purge`` cannot
+    silently run without a topic filter.
+    """
     if not args.token:
         log.error("GitLab token required: pass --token or set GITLAB_TOKEN")
         return 1
@@ -768,6 +773,12 @@ def _validate_args(args: argparse.Namespace, log: logging.Logger) -> int | None:
     if args.count_only and (args.mark or args.purge):
         log.error("--count-only cannot be combined with --mark or --purge")
         return 1
+    if args.topic is not None:
+        stripped_topic = args.topic.strip()
+        if not stripped_topic:
+            log.error("--topic must not be empty")
+            return 1
+        args.topic = stripped_topic
     return None
 
 
@@ -781,12 +792,7 @@ def main(argv: list[str] | None = None) -> int:
     if validation_error is not None:
         return validation_error
 
-    target_topic: str | None = None
-    if args.topic:
-        target_topic = args.topic.strip()
-    if args.topic and not target_topic:
-        log.error("--topic must not be empty")
-        return 1
+    target_topic: str | None = args.topic
 
     gl = gitlab.Gitlab(args.url, private_token=args.token, per_page=100)
     gl.auth()
