@@ -83,8 +83,10 @@ uv run mypy --config-file pyproject.toml middleware/
 uv run ruff format --check --diff --config pyproject.toml middleware/
 uv run ruff check --config pyproject.toml middleware/
 
-# Full CI-parity quality gate (ruff + pylint + mypy + bandit; no pytest)
+# Commit-stage gate (= `pre-commit run --all-files`; no pre-push/pytest)
 ./scripts/quality-check.sh
+# Autofix hooks only (trailing-whitespace, eof, ruff, ruff-format)
+./scripts/quality-fix.sh
 
 # Install all dependecies
 uv sync --dev --all-packages
@@ -231,11 +233,12 @@ by the project's configured tools: **Ruff, Pylance, MyPy, Pylint, and Bandit**.
   discovery would stop there and the Ruff native server often fails to apply
   extended rules → empty Problems tab while CLI still looks fine.
 - Lint diagnostics appear in Problems; **format** drift does not (Ruff applies
-  format via Format on Save / `ruff format`). Before commit, run the same
-  checks as CI via `./scripts/quality-check.sh` (ruff/pylint/mypy/bandit), or
-  the individual `uv run ruff format --check --diff --config pyproject.toml middleware/`
-  / `uv run ruff check --config pyproject.toml middleware/` commands (or
-  `./scripts/quality-fix.sh` then pre-commit / terminal `git commit`).
+  format via Format on Save / `ruff format`). Before commit, run
+  `./scripts/quality-fix.sh` then `./scripts/quality-check.sh` (both wrap
+  pre-commit commit-stage hooks), or `uv run pre-commit run --all-files`, or
+  terminal `git commit`. CI quality steps live in
+  `.github/workflows/reusable-code-quality.yml` and may differ slightly
+  (read-only ruff, full-tree pylint/bandit severity gate).
   Note: Cursor Source Control Commit may skip git hooks (Cursor ≥3.15.6 bug);
   prefer terminal commits until that is fixed.
 - Avoid partially staging a Python file (`MM` in `git status`): pre-commit may

@@ -88,16 +88,11 @@ postCreate installs Ruff via the Cursor or VS Code remote CLI (see
 `scripts/devcontainer-post-create.sh`). Workspace settings point
 `ruff.path` at `.venv/bin/ruff` (same binary as `uv run ruff` / pre-commit / CI).
 
-Fallback / parity check:
+Fallback / parity check (wraps commit-stage pre-commit hooks):
 
 ```bash
-./scripts/quality-check.sh
-# or individually:
-uv run ruff check --config pyproject.toml middleware/
-uv run ruff format --check --diff --config pyproject.toml middleware/
-# or fix + re-check
-./scripts/quality-fix.sh
-./scripts/quality-check.sh
+./scripts/quality-fix.sh   # autofix hooks only
+./scripts/quality-check.sh  # == uv run pre-commit run --all-files
 ```
 
 Do not recommend or enable `ms-python.autopep8` — it fights Ruff as the Python formatter.
