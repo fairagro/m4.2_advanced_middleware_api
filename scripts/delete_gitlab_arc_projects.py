@@ -781,12 +781,15 @@ def main(argv: list[str] | None = None) -> int:
     if validation_error is not None:
         return validation_error
 
+    # ``--topic`` defaults to None when omitted. An explicitly empty value
+    # (e.g. ``--topic ""`` / empty shell variable) must not silently disable
+    # filtering — that would mark/purge the whole group.
     target_topic: str | None = None
-    if args.topic:
+    if args.topic is not None:
         target_topic = args.topic.strip()
-    if args.topic and not target_topic:
-        log.error("--topic must not be empty")
-        return 1
+        if not target_topic:
+            log.error("--topic must not be empty")
+            return 1
 
     gl = gitlab.Gitlab(args.url, private_token=args.token, per_page=100)
     gl.auth()
