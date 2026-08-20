@@ -144,6 +144,71 @@ def test_calculate_arc_content_hash_ignores_haspart_list_order() -> None:
     assert calculate_arc_content_hash(arc_a) == calculate_arc_content_hash(arc_b)
 
 
+def _arc_with_person_refs(field: str, person_ids: list[str]) -> RoCrateContent:
+    return {
+        "@context": "https://w3id.org/ro/crate/1.1/context",
+        "@graph": [
+            {
+                "@id": "./",
+                "identifier": "arc-1",
+                field: [{"@id": pid} for pid in person_ids],
+            },
+            {"@id": "#person-a", "name": "Person A"},
+            {"@id": "#person-b", "name": "Person B"},
+        ],
+    }
+
+
+def test_calculate_arc_content_hash_ignores_creator_list_order() -> None:
+    """Permuting ``creator`` ``@id`` refs must not change the hash."""
+    arc_a = _arc_with_person_refs("creator", ["#person-a", "#person-b"])
+    arc_b = _arc_with_person_refs("creator", ["#person-b", "#person-a"])
+    assert calculate_arc_content_hash(arc_a) == calculate_arc_content_hash(arc_b)
+
+
+def test_calculate_arc_content_hash_ignores_author_list_order() -> None:
+    """Permuting ``author`` ``@id`` refs must not change the hash."""
+    arc_a = _arc_with_person_refs("author", ["#person-a", "#person-b"])
+    arc_b = _arc_with_person_refs("author", ["#person-b", "#person-a"])
+    assert calculate_arc_content_hash(arc_a) == calculate_arc_content_hash(arc_b)
+
+
+def test_calculate_arc_content_hash_ignores_contributor_list_order() -> None:
+    """Permuting ``contributor`` ``@id`` refs must not change the hash."""
+    arc_a = _arc_with_person_refs("contributor", ["#person-a", "#person-b"])
+    arc_b = _arc_with_person_refs("contributor", ["#person-b", "#person-a"])
+    assert calculate_arc_content_hash(arc_a) == calculate_arc_content_hash(arc_b)
+
+
+def test_calculate_arc_content_hash_ignores_comment_ref_list_order() -> None:
+    """Permuting ``comment`` ``@id`` refs must not change the hash."""
+    arc_a: RoCrateContent = {
+        "@context": "https://w3id.org/ro/crate/1.1/context",
+        "@graph": [
+            {
+                "@id": "./",
+                "identifier": "arc-1",
+                "comment": [{"@id": "#c-a"}, {"@id": "#c-b"}],
+            },
+            {"@id": "#c-a", "@type": "Comment", "name": "License", "text": "CC-BY"},
+            {"@id": "#c-b", "@type": "Comment", "name": "Publisher", "text": "Zenodo"},
+        ],
+    }
+    arc_b: RoCrateContent = {
+        "@context": "https://w3id.org/ro/crate/1.1/context",
+        "@graph": [
+            {
+                "@id": "./",
+                "identifier": "arc-1",
+                "comment": [{"@id": "#c-b"}, {"@id": "#c-a"}],
+            },
+            {"@id": "#c-a", "@type": "Comment", "name": "License", "text": "CC-BY"},
+            {"@id": "#c-b", "@type": "Comment", "name": "Publisher", "text": "Zenodo"},
+        ],
+    }
+    assert calculate_arc_content_hash(arc_a) == calculate_arc_content_hash(arc_b)
+
+
 def test_calculate_arc_content_hash_preserves_non_allowlisted_list_order() -> None:
     """Non-allowlisted reference-list properties must keep their original order semantics."""
     arc_a: RoCrateContent = {
@@ -152,7 +217,7 @@ def test_calculate_arc_content_hash_preserves_non_allowlisted_list_order() -> No
             {
                 "@id": "./",
                 "identifier": "arc-1",
-                "creator": [{"@id": "#person-a"}, {"@id": "#person-b"}],
+                "editor": [{"@id": "#person-a"}, {"@id": "#person-b"}],
             },
             {"@id": "#person-a", "name": "Person A"},
             {"@id": "#person-b", "name": "Person B"},
@@ -165,13 +230,38 @@ def test_calculate_arc_content_hash_preserves_non_allowlisted_list_order() -> No
             {
                 "@id": "./",
                 "identifier": "arc-1",
-                "creator": [{"@id": "#person-b"}, {"@id": "#person-a"}],
+                "editor": [{"@id": "#person-b"}, {"@id": "#person-a"}],
             },
             {"@id": "#person-a", "name": "Person A"},
             {"@id": "#person-b", "name": "Person B"},
         ],
     }
 
+    assert calculate_arc_content_hash(arc_a) != calculate_arc_content_hash(arc_b)
+
+
+def test_calculate_arc_content_hash_preserves_order_when_list_lacks_uniform_id_refs() -> None:
+    """Allowlisted fields stay order-sensitive when elements are not all ``{@id}`` dicts."""
+    arc_a: RoCrateContent = {
+        "@context": "https://w3id.org/ro/crate/1.1/context",
+        "@graph": [
+            {
+                "@id": "./",
+                "identifier": "arc-1",
+                "creator": ["Alice", "Bob"],
+            },
+        ],
+    }
+    arc_b: RoCrateContent = {
+        "@context": "https://w3id.org/ro/crate/1.1/context",
+        "@graph": [
+            {
+                "@id": "./",
+                "identifier": "arc-1",
+                "creator": ["Bob", "Alice"],
+            },
+        ],
+    }
     assert calculate_arc_content_hash(arc_a) != calculate_arc_content_hash(arc_b)
 
 
@@ -221,79 +311,54 @@ def test_calculate_arc_content_hash_differs_from_legacy_full_json_hash() -> None
     assert calculate_arc_content_hash(arc) != legacy_hash
 
 
-def test_calculate_arc_content_hash_ignores_keywords_join_order() -> None:
-    """Permuting Schema.org keyword joins must not change the ARC content hash.
-
-    Harvesters may emit the same keyword *set* in different RDF object orders.
-    That changes Investigation Comment / Data-Collection ParameterValue strings and
-    the arctrl ``@id``s derived from them (``#LDComment_Keywords_…``,
-    ``#ParameterValue_Keywords_…``) without a semantic content change.
-    """
-    keywords_a = "DEPTH, water, Longitude of event, Trawling time, Event label"
-    keywords_b = "Longitude of event, Event label, DEPTH, water, Trawling time"
-    expected_sorted = "DEPTH, Event label, Longitude of event, Trawling time, water"
+def test_calculate_arc_content_hash_treats_keyword_join_permutation_as_change() -> None:
+    """Keyword join / derived ``@id`` differences remain hash changes (Harvester concern)."""
+    keywords_a = "DEPTH, water, Longitude of event"
+    keywords_b = "Longitude of event, DEPTH, water"
 
     def _arc_with_keywords(joined: str) -> RoCrateContent:
         comment_id = f"#LDComment_Keywords_{joined.replace(' ', '_')}"
-        param_id = f"#ParameterValue_Keywords_{joined.replace(' ', '_')}"
         return {
             "@context": "https://w3id.org/ro/crate/1.1/context",
             "@graph": [
-                {
-                    "@id": "./",
-                    "identifier": "10.1594/PANGAEA.874745",
-                    "comment": {"@id": comment_id},
-                },
+                {"@id": "./", "identifier": "arc-1", "comment": {"@id": comment_id}},
                 {
                     "@id": comment_id,
                     "@type": "Comment",
                     "name": "Keywords",
                     "text": joined,
                 },
-                {
-                    "@id": param_id,
-                    "@type": "PropertyValue",
-                    "additionalType": "ParameterValue",
-                    "name": "Keywords",
-                    "value": joined,
-                },
-                {
-                    "@id": "#Process_Data_Collection",
-                    "parameterValue": {"@id": param_id},
-                },
             ],
         }
 
-    arc_a = _arc_with_keywords(keywords_a)
-    arc_b = _arc_with_keywords(keywords_b)
-
-    assert calculate_arc_content_hash(arc_a) == calculate_arc_content_hash(arc_b)
-
-    canonical = canonicalize_rocrate_for_hash(arc_a)
-    graph = canonical.get("@graph")
-    assert isinstance(graph, list)
-    by_id = {item["@id"]: item for item in graph if isinstance(item, dict) and isinstance(item.get("@id"), str)}
-    comment = by_id[f"#LDComment_Keywords_{expected_sorted.replace(' ', '_')}"]
-    param = by_id[f"#ParameterValue_Keywords_{expected_sorted.replace(' ', '_')}"]
-    assert isinstance(comment, dict)
-    assert isinstance(param, dict)
-    assert comment["text"] == expected_sorted
-    assert param["value"] == expected_sorted
-    root = by_id["./"]
-    assert isinstance(root, dict)
-    assert root["comment"] == {"@id": comment["@id"]}
+    assert calculate_arc_content_hash(_arc_with_keywords(keywords_a)) != calculate_arc_content_hash(
+        _arc_with_keywords(keywords_b)
+    )
 
 
-def test_calculate_arc_content_hash_detects_different_keyword_sets() -> None:
-    """Different keyword membership must still change the hash."""
+def test_calculate_arc_content_hash_treats_description_language_swap_as_change() -> None:
+    """Different description literals must change the hash (not normalized away)."""
+    arc_de: RoCrateContent = {
+        "@context": "https://w3id.org/ro/crate/1.1/context",
+        "@graph": [{"@id": "./", "identifier": "arc-1", "description": "Deutscher Text"}],
+    }
+    arc_en: RoCrateContent = {
+        "@context": "https://w3id.org/ro/crate/1.1/context",
+        "@graph": [{"@id": "./", "identifier": "arc-1", "description": "English text"}],
+    }
+    assert calculate_arc_content_hash(arc_de) != calculate_arc_content_hash(arc_en)
+
+
+def test_calculate_arc_content_hash_treats_blank_node_comment_text_as_change() -> None:
+    """Blank-node label comment text remains a hash change (Harvester must not persist it)."""
     arc_a: RoCrateContent = {
         "@context": "https://w3id.org/ro/crate/1.1/context",
         "@graph": [
             {
-                "@id": "#LDComment_Keywords_DEPTH,_water",
+                "@id": "#LDComment_contributorOrder_Nad019e26cbb748fc8af372d30f5d9946",
                 "@type": "Comment",
-                "name": "Keywords",
-                "text": "DEPTH, water",
+                "name": "contributorOrder",
+                "text": "Nad019e26cbb748fc8af372d30f5d9946",
             },
         ],
     }
@@ -301,12 +366,11 @@ def test_calculate_arc_content_hash_detects_different_keyword_sets() -> None:
         "@context": "https://w3id.org/ro/crate/1.1/context",
         "@graph": [
             {
-                "@id": "#LDComment_Keywords_DEPTH,_salinity",
+                "@id": "#LDComment_contributorOrder_N47faa23a0594409ea973e49159e269a7",
                 "@type": "Comment",
-                "name": "Keywords",
-                "text": "DEPTH, salinity",
+                "name": "contributorOrder",
+                "text": "N47faa23a0594409ea973e49159e269a7",
             },
         ],
     }
-
     assert calculate_arc_content_hash(arc_a) != calculate_arc_content_hash(arc_b)
