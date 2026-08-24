@@ -7,11 +7,11 @@ from http import HTTPStatus
 import aiohttp
 
 from .arc_store import ArcStore
-from .arc_store.git_repo import GitRepo
-from .arc_store.gitlab_api import GitlabApi
+from .arc_store.factory import create_arc_store
 from .business_logic.ports import BrokerHealthChecker
 from .celery_integration import CeleryWorkerHealthChecker
 from .config import Config
+from .document_store.couchdb import CouchDB
 
 logger = logging.getLogger(__name__)
 
@@ -92,17 +92,8 @@ class ApiHealthService:
                 return await asyncio.to_thread(self._arc_store.check_health)
 
             # Fallback: build a transient store from config (legacy path).
-            # This creates a new ThreadPoolExecutor per call; prefer injecting
-            # arc_store at construction time to avoid this.
-
-            store: GitRepo | GitlabApi
-            if self._config.git_repo is not None:
-                store = GitRepo(self._config.git_repo)
-            elif self._config.gitlab_api is not None:
-                store = GitlabApi(self._config.gitlab_api)
-            else:
-                logger.error("No Git backend configured")
-                return False
+            doc_store = CouchDB(self._config.couchdb)
+            store = create_arc_store(self._config, doc_store)
 
             result = await asyncio.to_thread(store.check_health)
             await store.shutdown()

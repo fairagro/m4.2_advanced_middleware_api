@@ -6,12 +6,7 @@ import hashlib
 import json
 from typing import cast
 
-# JSON shapes produced by ``json.loads`` / consumed by ``json.dumps``.
-type JsonPrimitive = str | int | float | bool | None
-type JsonValue = JsonPrimitive | list[JsonValue] | dict[str, JsonValue]
-
-# Top-level RO-Crate document stored in CouchDB (``@context``, ``@graph``, …).
-type RoCrateContent = dict[str, JsonValue]
+from middleware.shared.json_types import JsonValue, RoCrateContent
 
 # Serialization / harvest timestamps that change without semantic ARC edits.
 # ISA RO-Crate profile: Submission Date → dateCreated, Public Release Date → datePublished.

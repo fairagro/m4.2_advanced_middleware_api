@@ -11,7 +11,7 @@ import threading
 from celery.signals import worker_shutdown
 
 from middleware.api.business_logic import BusinessLogic, BusinessLogicFactory, TransientError
-from middleware.api.business_logic.task_payloads import ArcSyncTask
+from middleware.api.business_logic.task_payloads import ArcSyncTask, CatalogFinalizeTask
 
 from .celery_app import celery_app, loaded_config
 
@@ -125,4 +125,32 @@ def sync_arc_to_gitlab(task: ArcSyncTask) -> None:
         logger.info("[%s] Successfully completed GitLab sync task for RDI %s", client_id, rdi)
     except Exception:
         logger.error("[%s] GitLab sync task failed for RDI %s", client_id, rdi, exc_info=True)
+        raise
+
+
+@celery_app.task(
+    name="finalize_catalog",
+    autoretry_for=(TransientError,),
+    retry_backoff=loaded_config.celery.retry_backoff,
+    retry_backoff_max=loaded_config.celery.retry_backoff_max,
+    retry_jitter=True,
+    max_retries=loaded_config.celery.max_retries,
+)
+def finalize_catalog(task: CatalogFinalizeTask) -> None:
+    """Rebuild and publish consolidated RDI catalog JSON to Git."""
+    if isinstance(task, dict):
+        task = CatalogFinalizeTask.model_validate(task)
+
+    rdi = task.rdi
+    harvest_id = task.harvest_id
+    client_id = task.client_id
+
+    logger.info("[%s] Starting catalog finalize for RDI %s (harvest=%s)", client_id, rdi, harvest_id)
+
+    try:
+        logic, loop = BusinessLogicManager.get()
+        loop.run_until_complete(logic.finalize_catalog(rdi, harvest_id=harvest_id))
+        logger.info("[%s] Completed catalog finalize for RDI %s", client_id, rdi)
+    except Exception:
+        logger.error("[%s] Catalog finalize failed for RDI %s", client_id, rdi, exc_info=True)
         raise

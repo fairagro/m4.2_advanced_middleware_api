@@ -3,7 +3,6 @@
 import json
 import logging
 from datetime import UTC, datetime
-from typing import Any
 
 from arctrl import ARC  # type: ignore[import-untyped]
 from opentelemetry import trace
@@ -11,10 +10,12 @@ from opentelemetry import trace
 from middleware.api.arc_store import ArcStore, ArcStoreTransientError
 from middleware.api.document_store import DocumentStore, DuplicateArcError
 from middleware.api.document_store.arc_document import ArcEvent, ArcEventType
+from middleware.api.document_store.harvest_document import HarvestCatalogEvent
 from middleware.api.rocrate import parse_rocrate
 from middleware.api.utils import calculate_arc_id
 from middleware.shared.api_models.common.models import ArcOperationResult, ArcResponse, ArcStatus
 from middleware.shared.api_models.common.rocrate import RoCratePayload
+from middleware.shared.json_types import RoCrateContent
 
 from .exceptions import BusinessLogicError, DuplicateArcInHarvestError, InvalidJsonSemanticError, TransientError
 from .ports import TaskDispatcher
@@ -61,7 +62,7 @@ class ArcManager:
     async def create_or_update_arc(
         self,
         rdi: str,
-        arc: RoCratePayload | dict[str, Any],
+        arc: RoCratePayload | RoCrateContent,
         client_id: str | None,
         harvest_id: str | None = None,
     ) -> ArcOperationResult:
@@ -116,7 +117,7 @@ class ArcManager:
                     should_trigger_git,
                 )
 
-                if should_trigger_git:
+                if should_trigger_git and self._store.publishes_per_arc_git:
                     logger.info("[%s] Enqueueing GitLab sync task for ARC %s", client_id, arc_id)
                     self._dispatcher.dispatch_sync_arc(
                         ArcSyncTask(
@@ -124,6 +125,12 @@ class ArcManager:
                             arc=arc_content,
                             client_id=client_id,
                         )
+                    )
+                elif should_trigger_git:
+                    logger.info(
+                        "[%s] Skipping per-ARC Git sync for ARC %s (catalog backend uses harvest finalize)",
+                        client_id,
+                        arc_id,
                     )
                 else:
                     logger.info("[%s] Skipping GitLab sync for ARC %s (unchanged)", client_id, arc_id)
@@ -155,7 +162,72 @@ class ArcManager:
                     raise DuplicateArcInHarvestError(str(e)) from e
                 raise BusinessLogicError(f"unexpected error encountered: {str(e)}") from e
 
-    async def sync_to_gitlab(self, rdi: str, arc: RoCratePayload | dict[str, Any]) -> None:
+    async def finalize_catalog(self, rdi: str, *, harvest_id: str | None = None) -> bool:
+        """Rebuild and publish the RDI catalog file (worker mode only)."""
+        if self._dispatcher:
+            raise BusinessLogicError("finalize_catalog must not be called in API mode")
+
+        with self._tracer.start_as_current_span(
+            "api.ArcManager.finalize_catalog",
+            attributes={"rdi": rdi, "harvest_id": harvest_id or ""},
+        ) as span:
+            try:
+                pushed = await self._store.finalize(rdi=rdi)
+                span.set_attribute("pushed", pushed)
+                if harvest_id is not None:
+                    message = (
+                        f"Published catalog for RDI {rdi}" if pushed else f"Catalog for RDI {rdi} unchanged on remote"
+                    )
+                    await self._append_harvest_catalog_event(
+                        harvest_id,
+                        ArcEventType.CATALOG_PUSH_SUCCESS,
+                        message,
+                    )
+                return pushed
+            except ArcStoreTransientError as exc:
+                if harvest_id is not None:
+                    try:
+                        await self._append_harvest_catalog_event(
+                            harvest_id,
+                            ArcEventType.CATALOG_PUSH_FAILED,
+                            str(exc),
+                        )
+                    except Exception as log_error:  # noqa: BLE001
+                        logger.warning("Could not record catalog failure on harvest %s: %s", harvest_id, log_error)
+                span.record_exception(exc)
+                raise TransientError(str(exc)) from exc
+            except Exception as exc:
+                if harvest_id is not None:
+                    try:
+                        await self._append_harvest_catalog_event(
+                            harvest_id,
+                            ArcEventType.CATALOG_PUSH_FAILED,
+                            str(exc),
+                        )
+                    except Exception as log_error:  # noqa: BLE001
+                        logger.warning("Could not record catalog failure on harvest %s: %s", harvest_id, log_error)
+                span.record_exception(exc)
+                if isinstance(exc, BusinessLogicError):
+                    raise
+                raise BusinessLogicError(f"catalog finalize failed: {exc}") from exc
+
+    async def _append_harvest_catalog_event(
+        self,
+        harvest_id: str,
+        event_type: ArcEventType,
+        message: str,
+    ) -> None:
+        event = HarvestCatalogEvent(
+            timestamp=datetime.now(UTC),
+            type=event_type.value,
+            message=message,
+        )
+        await self._doc_store.update_harvest(
+            harvest_id,
+            {"append_catalog_event": event.model_dump(mode="json")},
+        )
+
+    async def sync_to_gitlab(self, rdi: str, arc: RoCratePayload | RoCrateContent) -> None:
         """Synchronize ARC to GitLab storage.
 
         This method performs the slow GitLab sync operation. It must only be
@@ -194,14 +266,15 @@ class ArcManager:
                     rdi=rdi,
                 )
 
-                await self._doc_store.add_event(
-                    arc_id,
-                    ArcEvent(
-                        timestamp=datetime.now(UTC),
-                        type=ArcEventType.GIT_PUSH_SUCCESS,
-                        message="Successfully synchronized to GitLab",
-                    ),
-                )
+                if self._store.publishes_per_arc_git:
+                    await self._doc_store.add_event(
+                        arc_id,
+                        ArcEvent(
+                            timestamp=datetime.now(UTC),
+                            type=ArcEventType.GIT_PUSH_SUCCESS,
+                            message="Successfully synchronized to GitLab",
+                        ),
+                    )
 
                 span.set_attribute("success", True)
                 logger.info("Successfully synced ARC %s to GitLab", arc_id)
@@ -215,7 +288,7 @@ class ArcManager:
                 logger.error("Unexpected error while syncing ARC to GitLab: %s", e, exc_info=True)
                 span.record_exception(e)
 
-                if arc_id is not None:
+                if arc_id is not None and self._store.publishes_per_arc_git:
                     try:
                         await self._doc_store.add_event(
                             arc_id,

@@ -5,7 +5,7 @@ import logging
 from celery import Celery
 
 from .business_logic.ports import BrokerHealthChecker
-from .business_logic.task_payloads import ArcSyncTask
+from .business_logic.task_payloads import ArcSyncTask, CatalogFinalizeTask
 from .config import Config
 
 logger = logging.getLogger(__name__)
@@ -33,6 +33,10 @@ class CeleryTaskDispatcher:
     def dispatch_sync_arc(self, task: ArcSyncTask) -> None:
         """Dispatch sync_arc_to_gitlab task to Celery."""
         self._celery_app.send_task("sync_arc_to_gitlab", args=(task.model_dump(),))
+
+    def dispatch_finalize_catalog(self, task: CatalogFinalizeTask) -> None:
+        """Dispatch finalize_catalog task to Celery."""
+        self._celery_app.send_task("finalize_catalog", args=(task.model_dump(),))
 
 
 class CeleryBrokerHealthChecker(BrokerHealthChecker):

@@ -6,13 +6,14 @@ import logging
 import uuid
 from collections.abc import Callable
 from datetime import UTC, datetime
-from typing import Any, cast
+from typing import cast
 
 from middleware.api.document_store.config import CouchDBConfig
 from middleware.api.document_store.content_hash import RoCrateContent, calculate_arc_content_hash
 from middleware.api.document_store.couchdb_client import CouchDBClient, DocumentConflictError
 from middleware.api.utils import calculate_arc_id
 from middleware.shared.api_models.common.models import ArcEventType, ArcLifecycleStatus, HarvestStatus
+from middleware.shared.json_types import CouchDbDocument, JsonObject
 
 from . import (
     ArcStoreResult,
@@ -27,8 +28,10 @@ from .arc_document import (
     ArcMetadata,
 )
 from .harvest_document import (
+    HarvestCatalogEvent,
     HarvestDocument,
     HarvestStatistics,
+    HarvestUpdatePayload,
 )
 from .harvest_idempotency_document import (
     HarvestIdempotencyDocument,
@@ -149,12 +152,14 @@ class CouchDB(DocumentStore):
         harvest_id: str,
         identifier: str,
         content_hash: str,
-    ) -> Callable[[dict[str, Any]], None]:
+    ) -> Callable[[CouchDbDocument], None]:
         """Return a save-time validator for harvest-local ARC identity (TOCTOU-safe)."""
 
-        def _check_duplicate_on_retry(fresh_doc: dict[str, Any]) -> None:
-            fresh_metadata = fresh_doc.get("metadata") or {}
-            if fresh_metadata.get("last_harvest_id") != harvest_id:
+        def _check_duplicate_on_retry(fresh_doc: CouchDbDocument) -> None:
+            fresh_metadata_raw = fresh_doc.get("metadata")
+            if not isinstance(fresh_metadata_raw, dict):
+                return
+            if fresh_metadata_raw.get("last_harvest_id") != harvest_id:
                 return
             fresh_content = fresh_doc.get("arc_content")
             if isinstance(fresh_content, dict):
@@ -170,7 +175,7 @@ class CouchDB(DocumentStore):
     async def store_arc(
         self,
         rdi: str,
-        arc_content: dict[str, Any],
+        arc_content: RoCrateContent,
         identifier: str,
         harvest_id: str | None = None,
     ) -> ArcStoreResult:
@@ -226,18 +231,24 @@ class CouchDB(DocumentStore):
 
         return ArcStoreResult(arc_id=arc_id, is_new=is_new, has_changes=has_changes)
 
-    async def get_arc_content(self, arc_id: str) -> dict[str, Any] | None:
+    async def get_arc_content(self, arc_id: str) -> RoCrateContent | None:
         """Get raw ARC RO-Crate JSON."""
         doc_id = f"arc_{arc_id}"
         doc = await self._client.get_document(doc_id)
-        return doc.get("arc_content") if doc else None
+        if not doc:
+            return None
+        content = doc.get("arc_content")
+        return cast(RoCrateContent, content) if isinstance(content, dict) else None
 
     async def get_metadata(self, arc_id: str) -> ArcMetadata | None:
         """Get ARC metadata without full content."""
         doc_id = f"arc_{arc_id}"
         doc = await self._client.get_document(doc_id)
-        if doc and "metadata" in doc:
-            return ArcMetadata(**doc["metadata"])
+        if not doc:
+            return None
+        metadata_raw = doc.get("metadata")
+        if isinstance(metadata_raw, dict):
+            return ArcMetadata.model_validate(metadata_raw)
         return None
 
     async def add_event(self, arc_id: str, event: ArcEvent) -> None:
@@ -269,6 +280,7 @@ class CouchDB(DocumentStore):
         # Create indices for common queries
         await self._client.create_index(["type", "rdi"], name="idx_type_rdi")
         await self._client.create_index(["doc_type", "metadata.last_harvest_id"], name="idx_doc_type_harvest")
+        await self._client.create_index(["doc_type", "rdi"], name="idx_doc_type_rdi")
         logger.info("CouchDB document store indices initialized")
 
     async def connect(self) -> None:
@@ -298,6 +310,7 @@ class CouchDB(DocumentStore):
             started_at=datetime.now(UTC),
             status=HarvestStatus.RUNNING,
             statistics=HarvestStatistics(expected_datasets=expected_datasets),
+            catalog_events=[],
         )
 
         doc_data = doc.model_dump(mode="json", by_alias=True, exclude_none=True)
@@ -420,7 +433,7 @@ class CouchDB(DocumentStore):
         doc = await self._client.get_document(harvest_id)
         return HarvestDocument.model_validate(doc) if doc else None
 
-    async def update_harvest(self, harvest_id: str, updates: dict[str, Any]) -> HarvestDocument:
+    async def update_harvest(self, harvest_id: str, updates: HarvestUpdatePayload) -> HarvestDocument:
         """Update a harvest record and return the updated document."""
         doc_dict = await self._client.get_document(harvest_id)
         if not doc_dict:
@@ -435,6 +448,9 @@ class CouchDB(DocumentStore):
             doc.statistics = HarvestStatistics.model_validate(updates["statistics"])
         if "completed_at" in updates:
             doc.completed_at = updates["completed_at"]
+        if "append_catalog_event" in updates:
+            event = HarvestCatalogEvent.model_validate(updates["append_catalog_event"])
+            doc.catalog_events = [*doc.catalog_events, event]
 
         # If completing, set completed_at if not provided
         if doc.status == HarvestStatus.COMPLETED and not doc.completed_at:
@@ -451,7 +467,7 @@ class CouchDB(DocumentStore):
         limit: int | None = None,
     ) -> list[HarvestDocument]:
         """List harvest records."""
-        selector: dict[str, Any] = {"type": "harvest"}
+        selector: JsonObject = {"type": "harvest"}
         if rdi:
             selector["rdi"] = rdi
 
@@ -460,7 +476,8 @@ class CouchDB(DocumentStore):
 
     async def get_harvest_statistics(self, harvest_id: str) -> HarvestStatistics:
         """Calculate and return statistics for a specific harvest run."""
-        selector = {"doc_type": "arc", "metadata.last_harvest_id": harvest_id}
+        selector: JsonObject = {"doc_type": "arc"}
+        selector["metadata.last_harvest_id"] = harvest_id
         docs = await self._client.find_projected(
             selector,
             fields=["metadata.first_harvest_id", "metadata.last_changed_harvest_id"],
@@ -470,10 +487,12 @@ class CouchDB(DocumentStore):
         stats.arcs_submitted = len(docs)
 
         for doc_dict in docs:
-            meta = doc_dict.get("metadata", {})
-            if meta.get("first_harvest_id") == harvest_id:
+            meta_raw = doc_dict.get("metadata")
+            if not isinstance(meta_raw, dict):
+                continue
+            if meta_raw.get("first_harvest_id") == harvest_id:
                 stats.arcs_new += 1
-            elif meta.get("last_changed_harvest_id") == harvest_id:
+            elif meta_raw.get("last_changed_harvest_id") == harvest_id:
                 stats.arcs_updated += 1
             else:
                 stats.arcs_unchanged += 1
@@ -490,3 +509,22 @@ class CouchDB(DocumentStore):
         doc_id = f"task_status_{task_record.task_id}"
         payload = task_record.model_dump(mode="json", exclude_none=True)
         await self._client.save_document(doc_id, payload)
+
+    async def list_arc_contents_by_rdi(self, rdi: str) -> list[tuple[str, RoCrateContent]]:
+        """List ``(arc_id, arc_content)`` for all ARC documents of an RDI."""
+        selector: JsonObject = {"doc_type": "arc"}
+        selector["rdi"] = rdi
+        results: list[tuple[str, RoCrateContent]] = []
+        skip = 0
+        page_size = 500
+        while True:
+            docs = await self._client.find(selector, limit=page_size, skip=skip)
+            for doc in docs:
+                doc_id = doc.get("_id")
+                content = doc.get("arc_content")
+                if isinstance(doc_id, str) and doc_id.startswith("arc_") and isinstance(content, dict):
+                    results.append((doc_id[len("arc_") :], cast(RoCrateContent, content)))
+            if len(docs) < page_size:
+                break
+            skip += page_size
+        return results

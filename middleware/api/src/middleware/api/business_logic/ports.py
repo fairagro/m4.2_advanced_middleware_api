@@ -3,7 +3,7 @@
 from dataclasses import dataclass
 from typing import Protocol, runtime_checkable
 
-from .task_payloads import ArcSyncTask
+from .task_payloads import ArcSyncTask, CatalogFinalizeTask
 
 
 @runtime_checkable
@@ -12,6 +12,10 @@ class TaskDispatcher(Protocol):
 
     def dispatch_sync_arc(self, task: ArcSyncTask) -> None:
         """Dispatch a task to sync an ARC to GitLab."""
+        raise NotImplementedError
+
+    def dispatch_finalize_catalog(self, task: CatalogFinalizeTask) -> None:
+        """Dispatch a task to finalize the consolidated RDI catalog."""
         raise NotImplementedError
 
 

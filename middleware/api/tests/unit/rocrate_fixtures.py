@@ -1,8 +1,8 @@
 """RO-Crate wire-format helpers for API unit tests."""
 
-from typing import Any
+from middleware.shared.json_types import JsonValue, RoCrateContent, RoCrateGraphNode
 
-_ARCTRL_METADATA_ENTITY: dict[str, Any] = {
+_ARCTRL_METADATA_ENTITY: RoCrateGraphNode = {
     "@id": "ro-crate-metadata.json",
     "@type": "CreativeWork",
     "conformsTo": {"@id": "https://w3id.org/ro/crate/1.1"},
@@ -10,14 +10,14 @@ _ARCTRL_METADATA_ENTITY: dict[str, Any] = {
 }
 
 
-def arctrl_metadata_descriptor() -> dict[str, Any]:
+def arctrl_metadata_descriptor() -> RoCrateGraphNode:
     """Return the RO-Crate metadata descriptor node required by arctrl."""
     return dict(_ARCTRL_METADATA_ENTITY)
 
 
-def minimal_rocrate_dict(identifier: str, **root_fields: Any) -> dict[str, Any]:
+def minimal_rocrate_dict(identifier: str, **root_fields: JsonValue) -> RoCrateContent:
     """Build a minimal RO-Crate wire document (arctrl-compatible for worker-path tests)."""
-    root: dict[str, Any] = {
+    root: RoCrateGraphNode = {
         "@id": "./",
         "@type": "Dataset",
         "additionalType": "Investigation",

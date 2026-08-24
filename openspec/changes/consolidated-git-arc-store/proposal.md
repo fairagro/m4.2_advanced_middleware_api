@@ -68,6 +68,9 @@ callers. Tracked in
   mapping in `AGENTS.md`.
 - **Ops:** Configurable catalog remote (Advanced-owned; not Basic’s
   `middleware_repo`); migrate operators from top-level store keys to
-  `arc_store.type`.
+  `arc_store.type`. Operator notes: one backend per deployment (no dual-write);
+  `{rdi}.json` only in v1; CouchDB ARC bodies are the catalog source (no
+  dirty markers); ephemeral Git clone per finalize (no shared local working
+  copy).
 - **Issue:** Implements
   [#319](https://github.com/fairagro/m4.2_advanced_middleware_api/issues/319).

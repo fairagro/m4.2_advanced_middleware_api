@@ -6,17 +6,18 @@ import logging
 import shutil
 from collections.abc import Callable
 from pathlib import Path
-from typing import Any, TypeVar
+from types import TracebackType
+from typing import ParamSpec, TypeVar
 
 import git.cmd
 from arctrl import ARC  # type: ignore[import-untyped]
 from git import Repo
 from git.exc import GitCommandError
 from opentelemetry import context, trace
-from pydantic import BaseModel, SecretStr
 
 from . import ArcStore, ArcStoreTransientError
 from .config import GitRepoConfig
+from .git_cli_settings import GitContextConfig
 from .remote_git_provider import (
     RemoteGitProvider,
     git_project_metadata_from_arc,
@@ -25,6 +26,7 @@ from .remote_git_provider import (
 logger = logging.getLogger(__name__)
 
 T = TypeVar("T")
+P = ParamSpec("P")
 
 
 def is_soft_git_error(exc: GitCommandError) -> bool:
@@ -55,19 +57,6 @@ def is_transient_git_error(exc: GitCommandError) -> bool:
     return any(p in stderr.lower() for p in transient_patterns)
 
 
-class GitContextConfig(BaseModel):
-    """Configuration for a specific GitContext."""
-
-    repo_url: SecretStr
-    branch: str
-    user_name: str | None
-    user_email: str | None
-    local_path: Path
-    command_timeout: float | None = None
-    http_low_speed_limit: int | None = None
-    http_low_speed_time: int | None = None
-
-
 _T = TypeVar("_T")
 
 
@@ -80,7 +69,7 @@ class GitContext:
         self.repo: Repo | None = None
         self._tracer = trace.get_tracer(__name__)
 
-    def _run_git_command(self, action: str, func: Callable[..., _T], *args: object, **kwargs: object) -> _T:
+    def _run_git_command(self, action: str, func: Callable[P, _T], *args: P.args, **kwargs: P.kwargs) -> _T:
         """Run a git command with optional timeout and duration logging."""
         if self.config.command_timeout is not None:
             kwargs.setdefault("kill_after_timeout", self.config.command_timeout)
@@ -194,7 +183,12 @@ class GitContext:
 
         return self
 
-    def __exit__(self, exc_type: object, exc_val: object, exc_tb: object) -> None:
+    def __exit__(
+        self,
+        exc_type: type[BaseException] | None,
+        exc_val: BaseException | None,
+        exc_tb: TracebackType | None,
+    ) -> None:
         """Exit context."""
         if self.repo:
             self.repo.close()
@@ -246,14 +240,14 @@ class GitRepo(ArcStore):
             token=token,
         )
 
-    async def _run_in_executor(self, func: Callable[..., T], *args: Any) -> T:
+    async def _run_in_executor(self, func: Callable[P, T], *args: P.args, **kwargs: P.kwargs) -> T:
         loop = asyncio.get_running_loop()
         otel_ctx = context.get_current()
 
         def _wrapper() -> T:
             token = context.attach(otel_ctx)
             try:
-                return func(*args)
+                return func(*args, **kwargs)
             finally:
                 context.detach(token)
 
@@ -269,20 +263,11 @@ class GitRepo(ArcStore):
         return self._remote_provider.check_health()
 
     def _get_context_config(self, arc_id: str) -> GitContextConfig:
-        auth_url = self._remote_provider.get_repo_url(arc_id, authenticated=True)
-
-        # cache_dir is guaranteed to be a Path by Pydantic validation
+        repo_url = self._remote_provider.get_repo_url(arc_id, authenticated=False)
         local_path = self._config.cache_dir / arc_id
-
-        return GitContextConfig(
-            repo_url=SecretStr(auth_url),
-            branch=self._config.branch,
-            user_name=self._config.user_name,
-            user_email=self._config.user_email,
+        return self._config.git_context_config(
+            repo_url=repo_url,
             local_path=local_path,
-            command_timeout=self._config.command_timeout,
-            http_low_speed_limit=self._config.http_low_speed_limit,
-            http_low_speed_time=self._config.http_low_speed_time,
         )
 
     async def _create_or_update(

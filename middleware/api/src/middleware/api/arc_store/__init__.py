@@ -70,6 +70,28 @@ class ArcStore(ABC):
         """Check connection to the storage backend."""
         raise NotImplementedError("`ArcStore._check_health` is not implemented")
 
+    @property
+    def publishes_per_arc_git(self) -> bool:
+        """Whether ``create_or_update`` pushes one Git project per ARC.
+
+        Consolidated catalog backends return False so callers skip per-ARC
+        ``GIT_PUSH_*`` events.
+        """
+        return True
+
+    @property
+    def supports_standalone_upload(self) -> bool:
+        """Whether ``POST /v3/arcs`` is allowed for this backend."""
+        return True
+
+    async def finalize(self, *, rdi: str) -> bool:  # noqa: PLR6301, ARG002
+        """Publish pending catalog state for an RDI.
+
+        Default is a successful no-op returning False (nothing pushed) so
+        orchestrators can call finalize for every backend without branching.
+        """
+        return False
+
     async def shutdown(self) -> None:  # noqa: PLR6301
         """Release resources held by the store (e.g. thread-pool executors).
 

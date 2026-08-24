@@ -108,3 +108,35 @@ def test_create_or_update_arc_v3_rdi_not_authorized(client: TestClient, cert: st
         assert r.status_code == http.HTTPStatus.FORBIDDEN
 
     middleware_api.app.dependency_overrides.clear()
+
+
+@pytest.mark.unit
+def test_create_or_update_arc_v3_rejected_for_consolidated_backend(
+    client: TestClient, cert: str, middleware_api: Api
+) -> None:
+    """Standalone POST /v3/arcs returns 400 when consolidated catalog backend is active."""
+    with (
+        patch.object(middleware_api.app.state.common_deps, "get_authorized_rdis", new_callable=AsyncMock) as mock_auth,
+        patch.object(middleware_api.business_logic.arc_store, "supports_standalone_upload", False),
+    ):
+        mock_auth.return_value = ["rdi-1"]
+
+        r = client.post(
+            "/v3/arcs",
+            headers={
+                "ssl-client-cert": cert,
+                "ssl-client-verify": "SUCCESS",
+                "content-type": "application/json",
+                "accept": "application/json",
+            },
+            json={
+                "rdi": "rdi-1",
+                "arc": {
+                    "@context": "https://w3id.org/ro/crate/1.1/context",
+                    "@graph": [{"@id": "./", "identifier": "ARC-001"}],
+                },
+            },
+        )
+
+    assert r.status_code == http.HTTPStatus.BAD_REQUEST
+    assert "consolidated" in r.json()["detail"].lower()

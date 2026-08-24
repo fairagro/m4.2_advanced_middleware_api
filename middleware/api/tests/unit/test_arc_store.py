@@ -3,6 +3,7 @@
 from unittest.mock import MagicMock, patch
 
 import pytest
+from arctrl import ARC  # type: ignore[import-untyped]
 
 from middleware.api.arc_store import ArcStore, ArcStoreError
 
@@ -22,8 +23,8 @@ def create_mock_arc_store() -> ArcStore:
         async def _exists(self, *_args: object, **_kwargs: object) -> bool:  # noqa: PLR6301
             return False
 
-        async def _get(self, *_args: object, **_kwargs: object) -> object:
-            pass
+        async def _get(self, *_args: object, **_kwargs: object) -> ARC | None:  # noqa: PLR6301
+            return None
 
         def _check_health(self) -> bool:  # noqa: PLR6301
             return True
@@ -50,6 +51,14 @@ class TestArcStoreError:
 
 class TestArcStoreWrapperMethods:
     """Test suite for ArcStore wrapper methods that handle errors."""
+
+    @pytest.mark.asyncio
+    @staticmethod
+    async def test_finalize_default_no_op() -> None:
+        """Default finalize succeeds without pushing."""
+        store = create_mock_arc_store()
+        pushed = await store.finalize(rdi="edal")
+        assert pushed is False
 
     @pytest.mark.asyncio
     @staticmethod

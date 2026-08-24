@@ -64,6 +64,18 @@ middleware/api_client/   ← optional client library for API consumers
 - `SecretStr` for passwords and tokens — call `.get_secret_value()` only at
   the point of use (never log or cast to `str`).
 
+### Function signatures and `**kwargs`
+
+- Name every parameter the caller is expected to pass — in tests, production code,
+  and monkey-patches that mirror upstream APIs.
+- Do **not** replace known parameters with `**kwargs` just to satisfy linters or
+  shorten signatures.
+- `**kwargs` / `**_ignored` is allowed only for genuinely open-ended extension
+  points (e.g. forwarding extras from a third-party library whose future keyword
+  arguments are not fixed at compile time).
+- When a signature must match an upstream definition, mirror its explicit
+  parameters and reserve `**kwargs` for the same passthrough role upstream uses.
+
 ---
 
 ## Code Quality

@@ -1,10 +1,11 @@
 """Contains the DocumentStore interface and its implementations."""
 
 from abc import ABC, abstractmethod
-from typing import Any
+
+from middleware.shared.json_types import JsonObject as JsonObject, RoCrateContent
 
 from .arc_document import ArcEvent, ArcMetadata
-from .harvest_document import HarvestDocument, HarvestStatistics
+from .harvest_document import HarvestDocument, HarvestStatistics, HarvestUpdatePayload
 from .task_record import TaskRecord
 
 
@@ -52,7 +53,7 @@ class DocumentStore(ABC):
     async def store_arc(
         self,
         rdi: str,
-        arc_content: dict[str, Any],
+        arc_content: RoCrateContent,
         identifier: str,
         harvest_id: str | None = None,
     ) -> ArcStoreResult:
@@ -70,7 +71,7 @@ class DocumentStore(ABC):
         raise NotImplementedError
 
     @abstractmethod
-    async def get_arc_content(self, arc_id: str) -> dict[str, Any] | None:
+    async def get_arc_content(self, arc_id: str) -> RoCrateContent | None:
         """Get raw ARC RO-Crate JSON.
 
         Args:
@@ -179,7 +180,7 @@ class DocumentStore(ABC):
         raise NotImplementedError
 
     @abstractmethod
-    async def update_harvest(self, harvest_id: str, updates: dict[str, Any]) -> HarvestDocument:
+    async def update_harvest(self, harvest_id: str, updates: HarvestUpdatePayload) -> HarvestDocument:
         """Update a harvest record.
 
         Args:
@@ -238,4 +239,9 @@ class DocumentStore(ABC):
         Args:
             task_record: Task record model to persist
         """
+        raise NotImplementedError
+
+    @abstractmethod
+    async def list_arc_contents_by_rdi(self, rdi: str) -> list[tuple[str, RoCrateContent]]:
+        """List ``(arc_id, arc_content)`` for all ARC documents of an RDI."""
         raise NotImplementedError

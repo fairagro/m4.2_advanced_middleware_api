@@ -5,12 +5,14 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 from rocrate_fixtures import minimal_rocrate_dict
 
+from middleware.api.arc_store import ArcStoreTransientError
 from middleware.api.business_logic import (
     BusinessLogic,
     BusinessLogicError,
     BusinessLogicFactory,
     InvalidJsonSemanticError,
     SetupError,
+    TransientError,
 )
 from middleware.api.business_logic.ports import BusinessLogicPorts
 from middleware.api.business_logic.task_payloads import ArcSyncTask
@@ -26,6 +28,9 @@ def mock_store() -> MagicMock:
     store.arc_id.side_effect = lambda i, r: f"arc_{i}_{r}"
     store.create_or_update = AsyncMock()
     store.shutdown = AsyncMock()
+    store.publishes_per_arc_git = True
+    store.supports_standalone_upload = True
+    store.finalize = AsyncMock(return_value=False)
     return store
 
 
@@ -47,6 +52,7 @@ def mock_task_dispatcher() -> MagicMock:
     """Mock TaskDispatcher."""
     dispatcher = MagicMock()
     dispatcher.dispatch_sync_arc = MagicMock()
+    dispatcher.dispatch_finalize_catalog = MagicMock()
     return dispatcher
 
 
@@ -98,6 +104,68 @@ def api_ports(
 def worker_logic(mock_config: MagicMock, mock_store: MagicMock, mock_doc_store: MagicMock) -> BusinessLogic:
     """BusinessLogic in Worker mode."""
     return BusinessLogic(config=mock_config, store=mock_store, doc_store=mock_doc_store)
+
+
+@pytest.mark.asyncio
+async def test_api_mode_skips_per_arc_sync_for_catalog_backend(
+    api_logic: BusinessLogic,
+    mock_doc_store: MagicMock,
+    mock_task_dispatcher: MagicMock,
+    mock_store: MagicMock,
+) -> None:
+    """Consolidated catalog backend skips per-ARC Celery sync on ingest."""
+    mock_store.publishes_per_arc_git = False
+    mock_doc_store.store_arc.return_value = ArcStoreResult(arc_id="arc_id", is_new=True, has_changes=True)
+
+    await api_logic.create_or_update_arc("test-rdi", minimal_rocrate_dict("ABC"), "client")
+
+    mock_task_dispatcher.dispatch_sync_arc.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_transition_harvest_enqueues_finalize_for_catalog_backend(
+    api_logic: BusinessLogic,
+    mock_task_dispatcher: MagicMock,
+    mock_store: MagicMock,
+) -> None:
+    """Completing a harvest enqueues catalog finalize when backend uses harvest scope."""
+    from datetime import UTC, datetime
+
+    from middleware.api.document_store.harvest_document import HarvestDocument, HarvestStatistics
+    from middleware.shared.api_models.common.models import HarvestStatus
+
+    mock_store.publishes_per_arc_git = False
+    harvest = HarvestDocument(
+        doc_id="harvest-1",
+        rdi="edal",
+        client_id="client",
+        started_at=datetime.now(UTC),
+        status=HarvestStatus.RUNNING,
+        statistics=HarvestStatistics(arcs_new=1),
+    )
+    completed = harvest.model_copy(
+        update={"status": HarvestStatus.COMPLETED, "statistics": HarvestStatistics(arcs_new=1, arcs_submitted=1)},
+    )
+    api_logic._harvest_manager.transition_harvest = AsyncMock(return_value=completed)  # noqa: SLF001
+
+    result = await api_logic.transition_harvest(harvest, HarvestStatus.COMPLETED, "client")
+
+    assert result.status == HarvestStatus.COMPLETED
+    mock_task_dispatcher.dispatch_finalize_catalog.assert_called_once()
+
+
+@pytest.mark.asyncio
+async def test_finalize_catalog_transient_error_still_raises_when_event_logging_fails(
+    worker_logic: BusinessLogic,
+    mock_store: MagicMock,
+    mock_doc_store: MagicMock,
+) -> None:
+    """Transient Git failures must remain retryable even if CouchDB event logging fails."""
+    mock_store.finalize = AsyncMock(side_effect=ArcStoreTransientError("git unreachable"))
+    mock_doc_store.update_harvest = AsyncMock(side_effect=RuntimeError("couchdb down"))
+
+    with pytest.raises(TransientError, match="git unreachable"):
+        await worker_logic.finalize_catalog("test-rdi", harvest_id="harvest-1")
 
 
 @pytest.mark.asyncio
@@ -277,13 +345,13 @@ async def test_api_mode_dispatches_sync_arc_based_on_arc_status(
 def test_factory_create_api_mode() -> None:
     """Test factory creates API mode BusinessLogic."""
     config = MagicMock()
-    config.git_repo = MagicMock()
     config.couchdb = MagicMock()
 
     with (
         patch("middleware.api.business_logic.business_logic_factory.CouchDB"),
-        patch("middleware.api.business_logic.business_logic_factory.GitRepo"),
+        patch("middleware.api.business_logic.business_logic_factory.create_arc_store") as mock_create,
     ):
+        mock_create.return_value = MagicMock()
         bl = BusinessLogicFactory.create(
             config,
             mode="api",

@@ -430,9 +430,7 @@ def test_complete_harvest_success(client: TestClient, cert: str, middleware_api:
     with (
         patch.object(middleware_api.business_logic.harvest_manager, "get_harvest", new_callable=AsyncMock) as mock_get,
         patch.object(middleware_api.app.state.common_deps, "get_authorized_rdis", new_callable=AsyncMock) as mock_auth,
-        patch.object(
-            middleware_api.business_logic.harvest_manager, "complete_harvest", new_callable=AsyncMock
-        ) as mock_complete,
+        patch.object(middleware_api.business_logic, "complete_harvest", new_callable=AsyncMock) as mock_complete,
     ):
         mock_get.return_value = harvest
         mock_auth.return_value = ["rdi-1"]
@@ -491,9 +489,7 @@ def test_patch_harvest_status_success(
     with (
         patch.object(middleware_api.business_logic.harvest_manager, "get_harvest", new_callable=AsyncMock) as mock_get,
         patch.object(middleware_api.app.state.common_deps, "get_authorized_rdis", new_callable=AsyncMock) as mock_auth,
-        patch.object(
-            middleware_api.business_logic.harvest_manager, "transition_harvest", new_callable=AsyncMock
-        ) as mock_transition,
+        patch.object(middleware_api.business_logic, "transition_harvest", new_callable=AsyncMock) as mock_transition,
     ):
         mock_get.return_value = harvest
         mock_auth.return_value = ["rdi-1"]
@@ -542,9 +538,7 @@ def test_patch_harvest_status_conflict(client: TestClient, cert: str, middleware
     with (
         patch.object(middleware_api.business_logic.harvest_manager, "get_harvest", new_callable=AsyncMock) as mock_get,
         patch.object(middleware_api.app.state.common_deps, "get_authorized_rdis", new_callable=AsyncMock) as mock_auth,
-        patch.object(
-            middleware_api.business_logic.harvest_manager, "transition_harvest", new_callable=AsyncMock
-        ) as mock_transition,
+        patch.object(middleware_api.business_logic, "transition_harvest", new_callable=AsyncMock) as mock_transition,
     ):
         mock_get.return_value = harvest
         mock_auth.return_value = ["rdi-1"]

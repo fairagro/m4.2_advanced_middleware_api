@@ -13,7 +13,8 @@ from git.exc import GitCommandError
 from pydantic import SecretStr
 
 from middleware.api.arc_store.config import GitRepoConfig
-from middleware.api.arc_store.git_repo import GitContext, GitContextConfig, GitRepo, is_soft_git_error
+from middleware.api.arc_store.git_cli_settings import GitContextConfig
+from middleware.api.arc_store.git_repo import GitContext, GitRepo, is_soft_git_error
 from middleware.api.arc_store.remote_git_provider import GitProjectMetadata
 
 _TEST_GIT_METADATA = GitProjectMetadata(
@@ -59,6 +60,21 @@ def test_git_repo_context_config_generation(git_repo: GitRepo) -> None:
     assert config.local_path is not None
     assert config.local_path == git_repo._config.cache_dir / "arc123"
     assert config.repo_url.get_secret_value() == "https://gitlab.example.com/mygroup/arc123.git"
+
+
+def test_git_repo_context_config_embeds_token_once() -> None:
+    """HTTPS repo URLs must not double-embed oauth2 credentials."""
+    config = GitRepoConfig(
+        url="https://gitlab.example.com",
+        group="mygroup",
+        token=SecretStr("secret-token"),
+        cache_dir=Path(tempfile.gettempdir()),
+    )
+    repo = GitRepo(config)
+    ctx_config = repo._get_context_config("arc123")
+    repo_url = ctx_config.repo_url.get_secret_value()
+    assert repo_url == "https://oauth2:secret-token@gitlab.example.com/mygroup/arc123.git"
+    assert repo_url.count("oauth2:") == 1
 
 
 def test_git_context_ensure_path(tmp_path: Path) -> None:

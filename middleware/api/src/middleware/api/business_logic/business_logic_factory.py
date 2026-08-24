@@ -3,9 +3,7 @@
 import logging
 from typing import Literal
 
-from ..arc_store import ArcStore
-from ..arc_store.git_repo import GitRepo
-from ..arc_store.gitlab_api import GitlabApi
+from ..arc_store.factory import create_arc_store
 from ..document_store.couchdb import CouchDB
 from .business_logic import BusinessLogic
 from .config import BusinessLogicFactoryConfig
@@ -36,19 +34,8 @@ class BusinessLogicFactory:
         Returns:
             BusinessLogic: Initialized logic implementation.
         """
-        # Initialize Stores (both API and Worker need these)
-        store: ArcStore
-        if config.git_repo:
-            store = GitRepo(config.git_repo)
-        elif config.gitlab_api:
-            # GitlabApi is deprecated, but we keep it for backward compatibility
-            # until removed from Config.
-            store = GitlabApi(config.gitlab_api)
-        else:
-            raise ValueError("Invalid ArcStore configuration")
-
-        # Initialize Document Store
         doc_store = CouchDB(config.couchdb)
+        store = create_arc_store(config, doc_store)
 
         if mode == "api" and task_dispatcher is None:
             raise ValueError("API mode requires a configured task_dispatcher")

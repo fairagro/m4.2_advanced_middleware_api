@@ -15,7 +15,7 @@ import logging
 import tempfile
 from collections.abc import Callable
 from pathlib import Path
-from typing import Annotated, Any, TypeVar
+from typing import Annotated, ParamSpec, TypeVar
 
 import gitlab
 from arctrl import ARC  # type: ignore[import-untyped]
@@ -25,11 +25,14 @@ from opentelemetry import context
 from pydantic import BaseModel, Field, HttpUrl, SecretStr, field_validator
 from typing_extensions import deprecated
 
+from middleware.shared.json_types import JsonObject
+
 from . import ArcStore
 
 logger = logging.getLogger(__name__)
 
 T = TypeVar("T")
+P = ParamSpec("P")
 
 
 @deprecated("GitlabApiConfig is deprecated. Use GitRepoConfig from middleware.api.arc_store.config instead.")
@@ -102,14 +105,14 @@ class GitlabApi(ArcStore):
         self._gitlab = gitlab.Gitlab(str(self._config.url), private_token=self._config.token.get_secret_value())
         self._executor = concurrent.futures.ThreadPoolExecutor(max_workers=self._config.max_workers)
 
-    async def _run_in_executor(self, func: Callable[..., T], *args: Any) -> T:
+    async def _run_in_executor(self, func: Callable[P, T], *args: P.args, **kwargs: P.kwargs) -> T:
         loop = asyncio.get_running_loop()
         otel_ctx = context.get_current()
 
         def _wrapper() -> T:
             token = context.attach(otel_ctx)
             try:
-                return func(*args)
+                return func(*args, **kwargs)
             finally:
                 context.detach(token)
 
@@ -205,7 +208,7 @@ class GitlabApi(ArcStore):
 
     def _prepare_file_actions(
         self, project: Project, arc_path: Path, old_hash: str | None, new_hash: str
-    ) -> list[dict[str, Any]]:
+    ) -> list[JsonObject]:
         """Prepare file actions with optimized batch file existence check."""
         with self._tracer.start_as_current_span(
             "api.GitlabApi._prepare_file_actions",
@@ -231,7 +234,7 @@ class GitlabApi(ArcStore):
             actions.append(self._build_hash_action(old_hash, new_hash))
             return actions
 
-    def _build_file_action(self, file_path: Path, relative_path: str, action_type: str) -> dict[str, Any]:
+    def _build_file_action(self, file_path: Path, relative_path: str, action_type: str) -> JsonObject:
         """Erstellt ein Action-Dict für eine Datei (Text oder Binär)."""
         content_bytes = file_path.read_bytes()
         if self._is_text_file(content_bytes):
@@ -257,7 +260,7 @@ class GitlabApi(ArcStore):
             return False
 
     @classmethod
-    def _build_hash_action(cls, old_hash: str | None, new_hash: str) -> dict[str, Any]:
+    def _build_hash_action(cls, old_hash: str | None, new_hash: str) -> JsonObject:
         """Erstellt die Commit-Action für die .arc_hash Datei."""
         return {
             "action": "create" if not old_hash else "update",
@@ -266,7 +269,7 @@ class GitlabApi(ArcStore):
         }
 
     # -------------------------- Commit --------------------------
-    def _commit_actions(self, project: Project, actions: list[dict[str, Any]], arc_id: str) -> None:
+    def _commit_actions(self, project: Project, actions: list[JsonObject], arc_id: str) -> None:
         with self._tracer.start_as_current_span(
             "api.GitlabApi._commit_actions",
             attributes={"arc_id": arc_id, "num_actions": len(actions)},
