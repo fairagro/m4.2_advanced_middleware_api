@@ -87,15 +87,15 @@ allowlist MUST remain order-sensitive.
 
 ### Requirement: Canonicalize Keywords comment text as an unordered multiset
 
-In the hash input, for every `@graph` node that is a Comment (or equivalent
-comment node) whose `name` is `Keywords`, the system SHALL treat the keyword
-payload text as an unordered multiset of tokens: split on commas, strip
-surrounding whitespace per token, drop empty tokens, sort tokens with
-Unicode casefold ordering, and rejoin with `", "`. If that canonical join
-differs from the original text, the hash input MUST use the canonical text
-and MUST rewrite any `@id` values and `@id` references in the document that
-encoded the pre-canonical join so identity tracks the multiset, not join
-order.
+In the hash input, for every `@graph` node whose `@type` is `Comment` or
+`PropertyValue` (string or list member) and whose `name` is `Keywords`, the
+system SHALL treat the keyword payload text as an unordered multiset of tokens:
+split on commas, strip surrounding whitespace per token, drop empty tokens,
+sort tokens with Unicode casefold ordering (original token string as
+tie-breaker), and rejoin with `", "`. If that canonical join differs from the
+original text, the hash input MUST use the canonical text and MUST rewrite any
+`@id` values and `@id` references in the document that encoded the
+pre-canonical join so identity tracks the multiset, not join order.
 
 #### Scenario: Keywords token order only
 

@@ -385,6 +385,31 @@ def test_calculate_arc_content_hash_ignores_keywords_array_casefold_tie_order() 
     assert calculate_arc_content_hash(arc_a) == calculate_arc_content_hash(arc_b)
 
 
+def test_calculate_arc_content_hash_preserves_untyped_keywords_named_node_order() -> None:
+    """Nodes named Keywords without a known payload ``@type`` stay order-sensitive."""
+    arc_a: RoCrateContent = {
+        "@context": "https://w3id.org/ro/crate/1.1/context",
+        "@graph": [
+            {
+                "@id": "#other",
+                "name": "Keywords",
+                "text": "DEPTH, water",
+            },
+        ],
+    }
+    arc_b: RoCrateContent = {
+        "@context": "https://w3id.org/ro/crate/1.1/context",
+        "@graph": [
+            {
+                "@id": "#other",
+                "name": "Keywords",
+                "text": "water, DEPTH",
+            },
+        ],
+    }
+    assert calculate_arc_content_hash(arc_a) != calculate_arc_content_hash(arc_b)
+
+
 def test_calculate_arc_content_hash_detects_keyword_set_change() -> None:
     """A real Keywords token membership change must change the hash."""
     arc_a: RoCrateContent = {

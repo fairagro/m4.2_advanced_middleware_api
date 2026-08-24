@@ -63,12 +63,14 @@ migration / diff surface).
 
 ### Decision: Keywords Comment rule — comma-split, casefold sort, `", "` join + @id rewrite
 
-**Choice:** For `@graph` nodes with `name == "Keywords"` (string), canonicalize
-`text` / primary textual value fields used as the keyword payload by splitting
-on `,`, stripping tokens, dropping empties, sorting with `casefold`, rejoining
-with `", "`. If the joined string changes, replace occurrences of the old
-string inside `@id` values across the document and update `{ "@id": … }`
-references accordingly (same old→new map).
+**Choice:** For `@graph` nodes with `name == "Keywords"` and `@type` of
+`Comment` or `PropertyValue` (string or list member), canonicalize
+`text` / `value` by splitting on `,`, stripping tokens, dropping empties,
+sorting with `(casefold, original)` keys, rejoining with `", "`. If the joined
+string changes, replace occurrences of the old string inside `@id` values
+across the document and update `{ "@id": … }` references accordingly (same
+old→new map). Nodes that only share the name without those types are left
+alone.
 
 **Why:** Matches OpenAgrar / Schema.org→ARC noise (Investigation Comment
 “Keywords” and derived `#…Keywords…` ids) without domain-specific keyword

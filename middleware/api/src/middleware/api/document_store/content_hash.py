@@ -38,6 +38,21 @@ _ORDER_INSENSITIVE_REFERENCE_LIST_FIELDS = frozenset({
 # RO-Crate node ``name`` whose textual payload is treated as an unordered keyword multiset.
 _KEYWORDS_COMMENT_NAME = "Keywords"
 _KEYWORDS_TEXT_FIELDS = ("text", "value")
+# Only these ``@type`` values (string or member of a type list) are keyword-payload carriers.
+_KEYWORDS_NODE_TYPES = frozenset({
+    "Comment",
+    "PropertyValue",
+})
+
+
+def _node_has_keywords_payload_type(node: dict[str, JsonValue]) -> bool:
+    """Return whether ``@type`` is a known Keywords payload carrier."""
+    node_type = node.get("@type")
+    if isinstance(node_type, str):
+        return node_type in _KEYWORDS_NODE_TYPES
+    if isinstance(node_type, list):
+        return any(isinstance(item, str) and item in _KEYWORDS_NODE_TYPES for item in node_type)
+    return False
 
 
 def strip_volatile_rocrate_fields(value: RoCrateContent) -> RoCrateContent:
@@ -81,6 +96,8 @@ def _canonicalize_keywords_comments(content: RoCrateContent) -> dict[str, str]:
         if not isinstance(node, dict):
             continue
         if node.get("name") != _KEYWORDS_COMMENT_NAME:
+            continue
+        if not _node_has_keywords_payload_type(node):
             continue
         for field in _KEYWORDS_TEXT_FIELDS:
             value = node.get(field)
