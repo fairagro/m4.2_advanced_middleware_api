@@ -25,8 +25,7 @@ _VOLATILE_ROCRATE_FIELDS = frozenset({
 
 # RO-Crate properties that behave like unordered reference sets for hashing.
 # Only applied when every list element is a dict with a string ``@id`` (safe heuristic).
-# Domain-specific payload noise (keyword join order, blank-node comment text, DE/EN
-# description choice) is intentionally NOT normalized here — fix those in harvesters.
+# Language preference and blank-node comment text are intentionally NOT normalized here.
 _ORDER_INSENSITIVE_REFERENCE_LIST_FIELDS = frozenset({
     "hasPart",
     "creator",
@@ -35,6 +34,25 @@ _ORDER_INSENSITIVE_REFERENCE_LIST_FIELDS = frozenset({
     # Investigation/root often links Comments via ``[{"@id": …}, …]``; order is not semantic.
     "comment",
 })
+
+# RO-Crate node ``name`` whose textual payload is treated as an unordered keyword multiset.
+_KEYWORDS_COMMENT_NAME = "Keywords"
+_KEYWORDS_TEXT_FIELDS = ("text", "value")
+# Only these ``@type`` values (string or member of a type list) are keyword-payload carriers.
+_KEYWORDS_NODE_TYPES = frozenset({
+    "Comment",
+    "PropertyValue",
+})
+
+
+def _node_has_keywords_payload_type(node: dict[str, JsonValue]) -> bool:
+    """Return whether ``@type`` is a known Keywords payload carrier."""
+    node_type = node.get("@type")
+    if isinstance(node_type, str):
+        return node_type in _KEYWORDS_NODE_TYPES
+    if isinstance(node_type, list):
+        return any(isinstance(item, str) and item in _KEYWORDS_NODE_TYPES for item in node_type)
+    return False
 
 
 def strip_volatile_rocrate_fields(value: RoCrateContent) -> RoCrateContent:
@@ -54,6 +72,72 @@ def strip_volatile_rocrate_fields(value: RoCrateContent) -> RoCrateContent:
     return stripped
 
 
+def _keyword_token_sort_key(token: str) -> tuple[str, str]:
+    """Total order for keyword tokens: casefold primary, original string as tie-breaker."""
+    return (token.casefold(), token)
+
+
+def _canonicalize_keyword_join(text: str) -> str:
+    """Comma-split, strip, drop empties, casefold-sort, rejoin with comma-space."""
+    tokens = [part.strip() for part in text.split(",")]
+    tokens = [token for token in tokens if token]
+    tokens.sort(key=_keyword_token_sort_key)
+    return ", ".join(tokens)
+
+
+def _canonicalize_keywords_comments(content: RoCrateContent) -> dict[str, str]:
+    """Canonicalize Keywords comment text/value; return old→new join replacements."""
+    replacements: dict[str, str] = {}
+    graph = content.get("@graph")
+    if not isinstance(graph, list):
+        return replacements
+
+    for node in graph:
+        if not isinstance(node, dict):
+            continue
+        if node.get("name") != _KEYWORDS_COMMENT_NAME:
+            continue
+        if not _node_has_keywords_payload_type(node):
+            continue
+        for field in _KEYWORDS_TEXT_FIELDS:
+            value = node.get(field)
+            if not isinstance(value, str):
+                continue
+            canonical = _canonicalize_keyword_join(value)
+            if canonical != value:
+                replacements[value] = canonical
+            node[field] = canonical
+    return replacements
+
+
+def _rewrite_id_string(id_value: str, replacements: dict[str, str]) -> str:
+    """Apply keyword-join replacements inside an ``@id`` (raw and space→underscore forms)."""
+    result = id_value
+    for old, new in sorted(replacements.items(), key=lambda item: len(item[0]), reverse=True):
+        if old in result:
+            result = result.replace(old, new)
+        old_underscore = old.replace(" ", "_")
+        new_underscore = new.replace(" ", "_")
+        if old_underscore != old and old_underscore in result:
+            result = result.replace(old_underscore, new_underscore)
+    return result
+
+
+def _rewrite_ids_for_keyword_joins(node: JsonValue, replacements: dict[str, str]) -> JsonValue:
+    """Rewrite ``@id`` strings (and nested structures) using keyword-join replacements."""
+    if isinstance(node, dict):
+        rewritten: dict[str, JsonValue] = {}
+        for key, item in node.items():
+            if key == "@id" and isinstance(item, str):
+                rewritten[key] = _rewrite_id_string(item, replacements)
+            else:
+                rewritten[key] = _rewrite_ids_for_keyword_joins(item, replacements)
+        return rewritten
+    if isinstance(node, list):
+        return [_rewrite_ids_for_keyword_joins(item, replacements) for item in node]
+    return node
+
+
 def _graph_sort_key(node: JsonValue) -> tuple[str, str]:
     """Stable sort key for ``@graph`` nodes (order must not affect the content hash)."""
     if isinstance(node, dict):
@@ -66,12 +150,13 @@ def _graph_sort_key(node: JsonValue) -> tuple[str, str]:
 def _canonicalize_json_for_hash(node: JsonValue, *, parent_key: str | None = None) -> JsonValue:
     """Canonicalize RO-Crate JSON for stable hashing.
 
-    In addition to excluding volatile timestamp fields (done upstream),
+    In addition to excluding volatile timestamp fields and Keywords joins (done upstream),
     this normalizes deterministic ordering for certain RO-Crate structures:
 
     - ``@graph`` nodes remain handled by the caller (see ``canonicalize_rocrate_for_hash``).
     - For allowlisted reference-list properties (``hasPart``, ``creator``, …): if every
       element is a dict with a string ``@id``, sort deterministically by it.
+    - Homogeneous string ``keywords`` arrays are sorted casefold.
     """
     if isinstance(node, dict):
         canonical: dict[str, JsonValue] = {}
@@ -85,6 +170,14 @@ def _canonicalize_json_for_hash(node: JsonValue, *, parent_key: str | None = Non
 
     if isinstance(node, list):
         canonical_elems = [_canonicalize_json_for_hash(elem) for elem in node]
+
+        # Schema.org-style keywords arrays: unordered string multisets.
+        if parent_key == "keywords" and all(isinstance(elem, str) for elem in canonical_elems):
+            string_elems = cast(list[str], canonical_elems)
+            return cast(
+                JsonValue,
+                sorted(string_elems, key=_keyword_token_sort_key),
+            )
 
         # Only canonicalize list order for explicitly allowlisted reference properties.
         if parent_key in _ORDER_INSENSITIVE_REFERENCE_LIST_FIELDS and all(
@@ -108,6 +201,13 @@ def _canonicalize_json_for_hash(node: JsonValue, *, parent_key: str | None = Non
 def canonicalize_rocrate_for_hash(value: RoCrateContent) -> RoCrateContent:
     """Strip volatile fields and make RO-Crate JSON order-deterministic for hashing."""
     stripped = strip_volatile_rocrate_fields(value)
+    replacements = _canonicalize_keywords_comments(stripped)
+    if replacements:
+        rewritten = _rewrite_ids_for_keyword_joins(stripped, replacements)
+        if not isinstance(rewritten, dict):
+            msg = "RO-Crate content must be a JSON object"
+            raise TypeError(msg)
+        stripped = rewritten
 
     canonical: RoCrateContent = {}
     for key, item in stripped.items():
@@ -120,7 +220,7 @@ def canonicalize_rocrate_for_hash(value: RoCrateContent) -> RoCrateContent:
 
 
 def calculate_arc_content_hash(arc_content: RoCrateContent) -> str:
-    """SHA-256 of normalized RO-Crate JSON (volatile timestamps excluded)."""
+    """SHA-256 of normalized RO-Crate JSON (volatile timestamps / order noise excluded)."""
     normalized = canonicalize_rocrate_for_hash(arc_content)
     json_str = json.dumps(normalized, sort_keys=True)
     return hashlib.sha256(json_str.encode("utf-8")).hexdigest()
