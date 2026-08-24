@@ -134,12 +134,13 @@ async def test_couchdb_store_lifecycle(store: CouchDB, mock_client_instance: Mag
 async def test_couchdb_store_setup(store: CouchDB, mock_client_instance: MagicMock) -> None:
     """Test setup calls client.create_index."""
     await store.setup()
-    assert mock_client_instance.create_index.call_count == 2  # noqa: PLR2004
+    assert mock_client_instance.create_index.call_count == 3  # noqa: PLR2004
     mock_client_instance.create_index.assert_any_call(["type", "rdi"], name="idx_type_rdi")
     mock_client_instance.create_index.assert_any_call(
         ["doc_type", "metadata.last_harvest_id"],
         name="idx_doc_type_harvest",
     )
+    mock_client_instance.create_index.assert_any_call(["doc_type", "rdi"], name="idx_doc_type_rdi")
 
 
 @pytest.mark.asyncio
