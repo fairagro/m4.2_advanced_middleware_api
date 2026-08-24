@@ -8,7 +8,7 @@ from middleware.api.arc_store.consolidated_git_config import ConsolidatedGitConf
 from middleware.api.arc_store.resolution import is_consolidated_backend, resolve_arc_store_backend
 from middleware.api.config import Config
 
-_ARC_STORE_CONFIG = TypeAdapter(ArcStoreConfig)
+_ARC_STORE_CONFIG: TypeAdapter[ArcStoreConfig] = TypeAdapter(ArcStoreConfig)
 
 
 def _minimal_couchdb() -> dict[str, str]:

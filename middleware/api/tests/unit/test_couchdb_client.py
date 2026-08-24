@@ -15,6 +15,7 @@ from middleware.api.document_store.couchdb_client import (
     DocumentConflictError,
     _patch_aiocouch_aiohttp_auth,
 )
+from middleware.shared.json_types import JsonObject
 
 
 @pytest.fixture
@@ -403,7 +404,7 @@ async def test_couchdb_client_find(couchdb_client: CouchDBClient) -> None:
     mock_db.find.return_value = mock_result
     couchdb_client._db = mock_db  # noqa: SLF001
 
-    selector = {"type": "arc"}
+    selector: JsonObject = {"type": "arc"}
     result = await couchdb_client.find(selector, limit=10)
 
     assert result == docs
@@ -416,7 +417,7 @@ async def test_couchdb_client_find_projected(couchdb_client: CouchDBClient) -> N
     couchdb_client._db = MagicMock()  # noqa: SLF001
     couchdb_client._db_name = "test_db"  # noqa: SLF001
 
-    selector = {"type": "arc"}
+    selector: JsonObject = {"type": "arc"}
     fields = ["metadata.events"]
     expected_docs = [{"metadata": {"events": [{"type": "arc_created"}]}}]
 

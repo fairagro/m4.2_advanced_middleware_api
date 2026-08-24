@@ -1,6 +1,6 @@
 """Unit tests for the create_or_update_arc functionality in BusinessLogic."""
 
-from typing import Any
+from typing import Any, cast
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -11,6 +11,7 @@ from middleware.api.business_logic import (
     BusinessLogic,
     InvalidJsonSemanticError,
 )
+from middleware.shared.json_types import RoCrateContent
 
 pytestmark = pytest.mark.filterwarnings("ignore:gitlab_api configuration is deprecated.*:DeprecationWarning")
 
@@ -107,7 +108,11 @@ async def test_update_arc_success(service: BusinessLogic) -> None:
     mock_result.arc_id = "cd67f37475d4b47c093a778c1a938f36c53e071c5a93910c2657755f1f97a5b6"
     mock_result.rev = "2-abc"
     with patch.object(service._doc_store, "store_arc", AsyncMock(return_value=mock_result)):  # noqa: SLF001
-        result = await service.create_or_update_arc(rdi="TestRDI", arc=rocrate, client_id="TestClient")
+        result = await service.create_or_update_arc(
+            rdi="TestRDI",
+            arc=cast(RoCrateContent, rocrate),
+            client_id="TestClient",
+        )
 
     assert isinstance(result, ArcOperationResult)  # nosec
     assert result.client_id == "TestClient"  # nosec

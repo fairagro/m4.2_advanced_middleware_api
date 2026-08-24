@@ -2,7 +2,7 @@
 
 from abc import ABC, abstractmethod
 
-from middleware.shared.json_types import JsonObject as JsonObject, RoCrateContent
+from middleware.shared.json_types import RoCrateContent
 
 from .arc_document import ArcEvent, ArcMetadata
 from .harvest_document import HarvestDocument, HarvestStatistics, HarvestUpdatePayload

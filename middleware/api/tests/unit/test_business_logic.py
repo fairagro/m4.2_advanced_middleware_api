@@ -1,5 +1,7 @@
 """Unit tests for the unified BusinessLogic class."""
 
+from datetime import UTC, datetime
+from typing import cast
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -17,7 +19,9 @@ from middleware.api.business_logic import (
 from middleware.api.business_logic.ports import BusinessLogicPorts
 from middleware.api.business_logic.task_payloads import ArcSyncTask
 from middleware.api.document_store import ArcStoreResult
-from middleware.shared.api_models.common.models import ArcOperationResult, ArcStatus
+from middleware.api.document_store.harvest_document import HarvestDocument, HarvestStatistics
+from middleware.shared.api_models.common.models import ArcOperationResult, ArcStatus, HarvestStatus
+from middleware.shared.json_types import RoCrateContent
 
 
 @pytest.fixture
@@ -129,11 +133,6 @@ async def test_transition_harvest_enqueues_finalize_for_catalog_backend(
     mock_store: MagicMock,
 ) -> None:
     """Completing a harvest enqueues catalog finalize when backend uses harvest scope."""
-    from datetime import UTC, datetime
-
-    from middleware.api.document_store.harvest_document import HarvestDocument, HarvestStatistics
-    from middleware.shared.api_models.common.models import HarvestStatus
-
     mock_store.publishes_per_arc_git = False
     harvest = HarvestDocument(
         doc_id="harvest-1",
@@ -146,9 +145,12 @@ async def test_transition_harvest_enqueues_finalize_for_catalog_backend(
     completed = harvest.model_copy(
         update={"status": HarvestStatus.COMPLETED, "statistics": HarvestStatistics(arcs_new=1, arcs_submitted=1)},
     )
-    api_logic._harvest_manager.transition_harvest = AsyncMock(return_value=completed)  # noqa: SLF001
-
-    result = await api_logic.transition_harvest(harvest, HarvestStatus.COMPLETED, "client")
+    with patch.object(
+        api_logic._harvest_manager,  # noqa: SLF001
+        "transition_harvest",
+        AsyncMock(return_value=completed),
+    ):
+        result = await api_logic.transition_harvest(harvest, HarvestStatus.COMPLETED, "client")
 
     assert result.status == HarvestStatus.COMPLETED
     mock_task_dispatcher.dispatch_finalize_catalog.assert_called_once()
@@ -377,7 +379,7 @@ async def test_create_or_update_missing_identifier(api_logic: BusinessLogic) -> 
     arc_data = {"@context": "https://w3id.org/ro/crate/1.1/context", "@graph": [{"@id": "not-root"}]}
 
     with pytest.raises(InvalidJsonSemanticError):
-        await api_logic.create_or_update_arc("test_rdi", arc_data, "client_1")
+        await api_logic.create_or_update_arc("test_rdi", cast(RoCrateContent, arc_data), "client_1")
 
 
 @pytest.mark.asyncio
@@ -388,7 +390,7 @@ async def test_create_or_update_generic_exception(api_logic: BusinessLogic, mock
     arc_data = minimal_rocrate_dict("test")
 
     with pytest.raises(BusinessLogicError, match="unexpected error encountered"):
-        await api_logic.create_or_update_arc("test_rdi", arc_data, "client_1")
+        await api_logic.create_or_update_arc("test_rdi", cast(RoCrateContent, arc_data), "client_1")
 
 
 @pytest.mark.asyncio
@@ -397,7 +399,7 @@ async def test_sync_to_gitlab_missing_identifier(worker_logic: BusinessLogic) ->
     arc_data = {"@context": "https://w3id.org/ro/crate/1.1/context", "@graph": [{"@id": "arc"}]}
 
     with pytest.raises(InvalidJsonSemanticError):
-        await worker_logic.sync_to_gitlab("test_rdi", arc_data)
+        await worker_logic.sync_to_gitlab("test_rdi", cast(RoCrateContent, arc_data))
 
 
 @pytest.mark.asyncio

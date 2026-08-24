@@ -20,6 +20,7 @@ from testcontainers.core.wait_strategies import HttpWaitStrategy  # type: ignore
 
 from middleware.api.document_store.config import CouchDBConfig
 from middleware.api.document_store.couchdb_client import CouchDBClient
+from middleware.shared.json_types import JsonObject
 
 _COUCHDB_IMAGE = "couchdb:3.3"
 _COUCHDB_USER = "admin"
@@ -89,7 +90,7 @@ async def test_new_document_is_persisted(couchdb_client: CouchDBClient) -> None:
     returned None — causing every task to stay PENDING forever.
     """
     doc_id = f"task_status_{uuid.uuid4()}"
-    payload = {"status": "SUCCESS", "result": {"arc_id": "arc-001"}}
+    payload: JsonObject = {"status": "SUCCESS", "result": {"arc_id": "arc-001"}}
 
     await couchdb_client.save_document(doc_id, payload)
 
