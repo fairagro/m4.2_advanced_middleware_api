@@ -60,11 +60,11 @@ class HarvestDocument(BaseModel):
     status: Annotated[HarvestStatus, Field(description="Harvest status")]
     statistics: Annotated[
         HarvestStatistics,
-        Field(default_factory=HarvestStatistics, description="Harvest statistics"),
+        Field(description="Harvest statistics"),
     ] = Field(default_factory=HarvestStatistics)
     catalog_events: Annotated[
         list[HarvestCatalogEvent],
-        Field(default_factory=list, description="Consolidated catalog flush events"),
+        Field(description="Consolidated catalog flush events"),
     ] = Field(default_factory=list)
 
     model_config = ConfigDict(populate_by_name=True, extra="ignore")
