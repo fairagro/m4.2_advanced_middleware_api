@@ -6,12 +6,8 @@ import warnings
 
 from pydantic import BaseModel
 
-OBSOLETE_TOP_LEVEL_GIT_REPO = (
-    "Top-level git_repo is obsolete; use arc_store.type with nested settings instead."
-)
-OBSOLETE_TOP_LEVEL_GITLAB_API = (
-    "Top-level gitlab_api is obsolete; use arc_store.type with nested settings instead."
-)
+OBSOLETE_TOP_LEVEL_GIT_REPO = "Top-level git_repo is obsolete; use arc_store.type with nested settings instead."
+OBSOLETE_TOP_LEVEL_GITLAB_API = "Top-level gitlab_api is obsolete; use arc_store.type with nested settings instead."
 OBSOLETE_TOP_LEVEL_CONSOLIDATED_GIT = (
     "Top-level consolidated_git is obsolete; use arc_store.type with nested settings instead."
 )
