@@ -347,6 +347,44 @@ def test_calculate_arc_content_hash_ignores_keyword_join_permutation() -> None:
     )
 
 
+def test_calculate_arc_content_hash_ignores_keyword_casefold_tie_order() -> None:
+    """Tokens that casefold equal must still canonicalize to a total order."""
+    keywords_a = "Depth, DEPTH, water"
+    keywords_b = "DEPTH, water, Depth"
+
+    def _arc_with_keywords(joined: str) -> RoCrateContent:
+        comment_id = f"#LDComment_Keywords_{joined.replace(' ', '_')}"
+        return {
+            "@context": "https://w3id.org/ro/crate/1.1/context",
+            "@graph": [
+                {"@id": "./", "identifier": "arc-1", "comment": {"@id": comment_id}},
+                {
+                    "@id": comment_id,
+                    "@type": "Comment",
+                    "name": "Keywords",
+                    "text": joined,
+                },
+            ],
+        }
+
+    assert calculate_arc_content_hash(_arc_with_keywords(keywords_a)) == calculate_arc_content_hash(
+        _arc_with_keywords(keywords_b)
+    )
+
+
+def test_calculate_arc_content_hash_ignores_keywords_array_casefold_tie_order() -> None:
+    """Homogeneous keywords arrays with casefold ties must not depend on input order."""
+    arc_a: RoCrateContent = {
+        "@context": "https://w3id.org/ro/crate/1.1/context",
+        "@graph": [{"@id": "./", "identifier": "arc-1", "keywords": ["Depth", "water", "DEPTH"]}],
+    }
+    arc_b: RoCrateContent = {
+        "@context": "https://w3id.org/ro/crate/1.1/context",
+        "@graph": [{"@id": "./", "identifier": "arc-1", "keywords": ["DEPTH", "Depth", "water"]}],
+    }
+    assert calculate_arc_content_hash(arc_a) == calculate_arc_content_hash(arc_b)
+
+
 def test_calculate_arc_content_hash_detects_keyword_set_change() -> None:
     """A real Keywords token membership change must change the hash."""
     arc_a: RoCrateContent = {

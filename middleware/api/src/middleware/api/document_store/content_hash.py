@@ -57,11 +57,16 @@ def strip_volatile_rocrate_fields(value: RoCrateContent) -> RoCrateContent:
     return stripped
 
 
+def _keyword_token_sort_key(token: str) -> tuple[str, str]:
+    """Total order for keyword tokens: casefold primary, original string as tie-breaker."""
+    return (token.casefold(), token)
+
+
 def _canonicalize_keyword_join(text: str) -> str:
     """Comma-split, strip, drop empties, casefold-sort, rejoin with comma-space."""
     tokens = [part.strip() for part in text.split(",")]
     tokens = [token for token in tokens if token]
-    tokens.sort(key=str.casefold)
+    tokens.sort(key=_keyword_token_sort_key)
     return ", ".join(tokens)
 
 
@@ -154,7 +159,7 @@ def _canonicalize_json_for_hash(node: JsonValue, *, parent_key: str | None = Non
             string_elems = cast(list[str], canonical_elems)
             return cast(
                 JsonValue,
-                sorted(string_elems, key=lambda item: item.casefold()),
+                sorted(string_elems, key=_keyword_token_sort_key),
             )
 
         # Only canonicalize list order for explicitly allowlisted reference properties.
