@@ -311,29 +311,105 @@ def test_calculate_arc_content_hash_differs_from_legacy_full_json_hash() -> None
     assert calculate_arc_content_hash(arc) != legacy_hash
 
 
-def test_calculate_arc_content_hash_treats_keyword_join_permutation_as_change() -> None:
-    """Keyword join / derived ``@id`` differences remain hash changes (Harvester concern)."""
+def test_calculate_arc_content_hash_ignores_keyword_join_permutation() -> None:
+    """Keywords comment token order (and join-derived ``@id``s) must not change the hash."""
     keywords_a = "DEPTH, water, Longitude of event"
     keywords_b = "Longitude of event, DEPTH, water"
 
     def _arc_with_keywords(joined: str) -> RoCrateContent:
         comment_id = f"#LDComment_Keywords_{joined.replace(' ', '_')}"
+        param_id = f"#ParameterValue_Keywords_{joined.replace(' ', '_')}"
         return {
             "@context": "https://w3id.org/ro/crate/1.1/context",
             "@graph": [
-                {"@id": "./", "identifier": "arc-1", "comment": {"@id": comment_id}},
+                {
+                    "@id": "./",
+                    "identifier": "arc-1",
+                    "comment": {"@id": comment_id},
+                },
                 {
                     "@id": comment_id,
                     "@type": "Comment",
                     "name": "Keywords",
                     "text": joined,
                 },
+                {
+                    "@id": param_id,
+                    "@type": "PropertyValue",
+                    "name": "Keywords",
+                    "value": joined,
+                },
             ],
         }
 
-    assert calculate_arc_content_hash(_arc_with_keywords(keywords_a)) != calculate_arc_content_hash(
+    assert calculate_arc_content_hash(_arc_with_keywords(keywords_a)) == calculate_arc_content_hash(
         _arc_with_keywords(keywords_b)
     )
+
+
+def test_calculate_arc_content_hash_detects_keyword_set_change() -> None:
+    """A real Keywords token membership change must change the hash."""
+    arc_a: RoCrateContent = {
+        "@context": "https://w3id.org/ro/crate/1.1/context",
+        "@graph": [
+            {
+                "@id": "#LDComment_Keywords_a",
+                "@type": "Comment",
+                "name": "Keywords",
+                "text": "DEPTH, water",
+            },
+        ],
+    }
+    arc_b: RoCrateContent = {
+        "@context": "https://w3id.org/ro/crate/1.1/context",
+        "@graph": [
+            {
+                "@id": "#LDComment_Keywords_b",
+                "@type": "Comment",
+                "name": "Keywords",
+                "text": "DEPTH, soil",
+            },
+        ],
+    }
+    assert calculate_arc_content_hash(arc_a) != calculate_arc_content_hash(arc_b)
+
+
+def test_calculate_arc_content_hash_ignores_keywords_array_order() -> None:
+    """Homogeneous string ``keywords`` arrays are order-insensitive for hashing."""
+    arc_a: RoCrateContent = {
+        "@context": "https://w3id.org/ro/crate/1.1/context",
+        "@graph": [{"@id": "./", "identifier": "arc-1", "keywords": ["water", "DEPTH", "soil"]}],
+    }
+    arc_b: RoCrateContent = {
+        "@context": "https://w3id.org/ro/crate/1.1/context",
+        "@graph": [{"@id": "./", "identifier": "arc-1", "keywords": ["soil", "water", "DEPTH"]}],
+    }
+    assert calculate_arc_content_hash(arc_a) == calculate_arc_content_hash(arc_b)
+
+
+def test_calculate_arc_content_hash_preserves_mixed_keywords_array_order() -> None:
+    """Mixed-type ``keywords`` arrays must remain order-sensitive."""
+    arc_a: RoCrateContent = {
+        "@context": "https://w3id.org/ro/crate/1.1/context",
+        "@graph": [
+            {
+                "@id": "./",
+                "identifier": "arc-1",
+                "keywords": ["water", {"@id": "#kw"}],
+            },
+        ],
+    }
+    arc_b: RoCrateContent = {
+        "@context": "https://w3id.org/ro/crate/1.1/context",
+        "@graph": [
+            {
+                "@id": "./",
+                "identifier": "arc-1",
+                "keywords": [{"@id": "#kw"}, "water"],
+            },
+        ],
+    }
+    assert calculate_arc_content_hash(arc_a) != calculate_arc_content_hash(arc_b)
 
 
 def test_calculate_arc_content_hash_treats_description_language_swap_as_change() -> None:

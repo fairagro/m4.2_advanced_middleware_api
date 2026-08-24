@@ -297,6 +297,9 @@ Before generating or modifying code, read the relevant specs:
 - **[`openspec/specs/document-store/`](openspec/specs/document-store/)** —
   CouchDB persistence layer, race-condition-safe initialization, and
   content-hash idempotency.
+- **[`openspec/specs/arc-content-hash/`](openspec/specs/arc-content-hash/)** —
+  RO-Crate canonicalization contract for `content_hash` (volatile timestamps,
+  `@graph` / reference-list order, Keywords multisets).
 - **[`openspec/specs/harvest-manager/`](openspec/specs/harvest-manager/)** —
   Harvest run lifecycle, ownership validation, and progress tracking.
 - **[`openspec/specs/admission-control/`](openspec/specs/admission-control/)** —
@@ -329,6 +332,7 @@ Agents (`/opsx-apply` and default Agent mode) use it to locate affected code.
 | `openspec/specs/arc-manager/` | `middleware/api/src/middleware/api/business_logic/arc_manager.py` |
 | `openspec/specs/arc-store/` | `middleware/api/src/middleware/api/arc_store/git_repo.py`, `gitlab_api.py` (deprecated) |
 | `openspec/specs/document-store/` | `middleware/api/src/middleware/api/document_store/couchdb_client.py`, `couchdb.py` |
+| `openspec/specs/arc-content-hash/` | `middleware/api/src/middleware/api/document_store/content_hash.py` |
 | `openspec/specs/harvest-manager/` | `middleware/api/src/middleware/api/business_logic/harvest_manager.py` |
 | `openspec/specs/arc-upload/` | `middleware/api/src/middleware/api/api/v3/arcs.py` |
 | `openspec/specs/harvest-arc-upload/` | `middleware/api/src/middleware/api/api/v3/harvests.py` |
