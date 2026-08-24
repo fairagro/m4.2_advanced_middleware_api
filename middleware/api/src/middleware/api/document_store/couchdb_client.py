@@ -6,7 +6,7 @@ Provides async access to CouchDB for ARC and Harvest document storage.
 import logging
 from collections.abc import Callable
 from http import HTTPStatus
-from typing import Self, cast
+from typing import Any, Self, cast
 from urllib.parse import quote
 
 import aiohttp
@@ -41,16 +41,22 @@ def _patch_aiocouch_aiohttp_auth() -> None:
         password: str | None = None,
         cookie: str | None = None,
         headers: dict[str, str] | None = None,
-        **_ignored_client_session_kwargs: object,
+        **client_session_kwargs: Any,
     ) -> None:
         self._server = server
         session_headers: dict[str, str] = dict(headers or {})
+        extra_headers = client_session_kwargs.pop("headers", None)
+        if isinstance(extra_headers, dict):
+            session_headers.update(extra_headers)
         if cookie:
             session_headers["Cookie"] = "AuthSession=" + cookie
         if user is not None and password is not None:
             session_headers["Authorization"] = aiohttp.encode_basic_auth(user, password)
+        # Upstream aiocouch still passes deprecated auth=; never forward it.
+        client_session_kwargs.pop("auth", None)
         self._http_session = aiohttp.ClientSession(
             headers=session_headers if session_headers else None,
+            **client_session_kwargs,
         )
 
     setattr(patched_init, _PATCH_MARKER, True)

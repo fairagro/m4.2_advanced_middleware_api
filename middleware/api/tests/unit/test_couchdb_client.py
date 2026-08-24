@@ -67,6 +67,20 @@ async def test_aiocouch_remote_server_avoids_basicauth_deprecation() -> None:
 
 
 @pytest.mark.asyncio
+async def test_aiocouch_remote_server_forwards_client_session_kwargs() -> None:
+    """Patched aiocouch must pass through ClientSession kwargs from upstream callers."""
+    _patch_aiocouch_aiohttp_auth()
+
+    with patch("middleware.api.document_store.couchdb_client.aiohttp.ClientSession") as mock_session:
+        RemoteServer("http://localhost:5984", user="admin", password="secret", timeout=42)
+        mock_session.assert_called_once()
+        _, kwargs = mock_session.call_args
+        assert kwargs["timeout"] == 42
+        assert "auth" not in kwargs
+        assert kwargs["headers"]["Authorization"].startswith("Basic ")
+
+
+@pytest.mark.asyncio
 async def test_aiocouch_remote_server_encodes_empty_string_credentials() -> None:
     """Empty-string user/password are set values and must still yield Basic auth."""
     _patch_aiocouch_aiohttp_auth()

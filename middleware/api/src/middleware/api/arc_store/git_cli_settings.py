@@ -5,7 +5,7 @@ from __future__ import annotations
 import tempfile
 from pathlib import Path
 from typing import Annotated
-from urllib.parse import quote
+from urllib.parse import quote, urlparse
 
 from pydantic import BaseModel, Field, SecretStr, field_validator
 
@@ -43,10 +43,10 @@ class GitCliSettings(BaseModel):
     cache_dir: Annotated[
         Path,
         Field(
-            default_factory=_default_git_cache_dir,
             description="Local directory for ephemeral git working clones",
+            validate_default=True,
         ),
-    ]
+    ] = Field(default_factory=_default_git_cache_dir)
 
     @classmethod
     def validate_git_url_scheme(cls, value: str) -> str:
@@ -70,6 +70,8 @@ class GitCliSettings(BaseModel):
             return url
         token = self.token.get_secret_value()
         if not token:
+            return url
+        if urlparse(url).username is not None:
             return url
         safe_token = quote(token)
         if url.startswith("https://"):

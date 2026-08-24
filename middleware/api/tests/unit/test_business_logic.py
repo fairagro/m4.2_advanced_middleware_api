@@ -157,6 +157,59 @@ async def test_transition_harvest_enqueues_finalize_for_catalog_backend(
 
 
 @pytest.mark.asyncio
+async def test_transition_harvest_enqueues_finalize_for_per_arc_backend(
+    api_logic: BusinessLogic,
+    mock_task_dispatcher: MagicMock,
+    mock_store: MagicMock,
+) -> None:
+    """Per-ARC backends still enqueue finalize (worker no-op) per harvest-manager spec."""
+    mock_store.publishes_per_arc_git = True
+    harvest = HarvestDocument(
+        doc_id="harvest-1",
+        rdi="edal",
+        client_id="client",
+        started_at=datetime.now(UTC),
+        status=HarvestStatus.RUNNING,
+        statistics=HarvestStatistics(),
+    )
+    completed = harvest.model_copy(update={"status": HarvestStatus.COMPLETED})
+    with patch.object(
+        api_logic._harvest_manager,  # noqa: SLF001
+        "transition_harvest",
+        AsyncMock(return_value=completed),
+    ):
+        await api_logic.transition_harvest(harvest, HarvestStatus.COMPLETED, "client")
+
+    mock_task_dispatcher.dispatch_finalize_catalog.assert_called_once()
+
+
+@pytest.mark.asyncio
+async def test_transition_harvest_skips_empty_finalize_for_catalog_backend(
+    api_logic: BusinessLogic,
+    mock_task_dispatcher: MagicMock,
+    mock_store: MagicMock,
+) -> None:
+    """Consolidated backend may skip finalize enqueue when no ARCs changed."""
+    mock_store.publishes_per_arc_git = False
+    harvest = HarvestDocument(
+        doc_id="harvest-1",
+        rdi="edal",
+        client_id="client",
+        started_at=datetime.now(UTC),
+        status=HarvestStatus.RUNNING,
+    )
+    completed = harvest.model_copy(update={"status": HarvestStatus.COMPLETED})
+    with patch.object(
+        api_logic._harvest_manager,  # noqa: SLF001
+        "transition_harvest",
+        AsyncMock(return_value=completed),
+    ):
+        await api_logic.transition_harvest(harvest, HarvestStatus.COMPLETED, "client")
+
+    mock_task_dispatcher.dispatch_finalize_catalog.assert_not_called()
+
+
+@pytest.mark.asyncio
 async def test_finalize_catalog_transient_error_still_raises_when_event_logging_fails(
     worker_logic: BusinessLogic,
     mock_store: MagicMock,

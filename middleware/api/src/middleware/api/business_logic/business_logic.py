@@ -195,24 +195,24 @@ class BusinessLogic:
     ) -> HarvestDocument:
         """Transition a harvest and enqueue catalog finalize when appropriate."""
         updated = await self._harvest_manager.transition_harvest(harvest, target_status, client_id)
-        if (
-            target_status == HarvestStatus.COMPLETED
-            and self._ports.task_dispatcher is not None
-            and not self._arc_manager.store.publishes_per_arc_git
-        ):
+        if target_status == HarvestStatus.COMPLETED and self._ports.task_dispatcher is not None:
             stats = updated.statistics
-            if stats.arcs_new + stats.arcs_updated > 0:
+            skip_empty_harvest = (
+                not self._arc_manager.store.publishes_per_arc_git
+                and stats.arcs_new + stats.arcs_updated == 0
+            )
+            if skip_empty_harvest:
+                logger.info(
+                    "Skipping catalog finalize enqueue for harvest %s (no new or updated ARCs)",
+                    updated.doc_id,
+                )
+            else:
                 self._ports.task_dispatcher.dispatch_finalize_catalog(
                     CatalogFinalizeTask(
                         rdi=updated.rdi,
                         harvest_id=updated.doc_id,
                         client_id=client_id,
                     )
-                )
-            else:
-                logger.info(
-                    "Skipping catalog finalize enqueue for harvest %s (no new or updated ARCs)",
-                    updated.doc_id,
                 )
         return updated
 

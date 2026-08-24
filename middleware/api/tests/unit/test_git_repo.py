@@ -13,7 +13,7 @@ from git.exc import GitCommandError
 from pydantic import SecretStr
 
 from middleware.api.arc_store.config import GitRepoConfig
-from middleware.api.arc_store.git_cli_settings import GitContextConfig
+from middleware.api.arc_store.git_cli_settings import GitCliSettings, GitContextConfig
 from middleware.api.arc_store.git_repo import GitContext, GitRepo, is_soft_git_error
 from middleware.api.arc_store.remote_git_provider import GitProjectMetadata
 
@@ -75,6 +75,13 @@ def test_git_repo_context_config_embeds_token_once() -> None:
     repo_url = ctx_config.repo_url.get_secret_value()
     assert repo_url == "https://oauth2:secret-token@gitlab.example.com/mygroup/arc123.git"
     assert repo_url.count("oauth2:") == 1
+
+
+def test_authenticated_repo_url_skips_already_embedded_credentials() -> None:
+    """Do not double-embed oauth2 when the remote URL already carries userinfo."""
+    settings = GitCliSettings(token=SecretStr("secret-token"))
+    url = "https://oauth2:existing-token@gitlab.example.com/group/catalog.git"
+    assert settings.authenticated_repo_url(url) == url
 
 
 def test_git_context_ensure_path(tmp_path: Path) -> None:
