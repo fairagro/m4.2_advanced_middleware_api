@@ -5,16 +5,20 @@
 ### Requirement: Finalize ArcStore catalog on harvest completion
 
 When a harvest transitions to `COMPLETED`, the system SHALL request ArcStore
-`finalize` for that harvest’s RDI (via an asynchronous worker task). Harvest
-status transition to `COMPLETED` MUST NOT wait for the Git push to finish. The
-system MUST record distinct harvest/catalog events for catalog publish success
-and failure so operators can distinguish “harvest complete” from “RDI catalog
-flushed”.
+`finalize(rdi=…)` for that harvest’s RDI (via an asynchronous worker task).
+Harvest status transition to `COMPLETED` MUST NOT wait for the Git push to
+finish. The system MUST record distinct catalog events for publish success and
+failure so operators can distinguish “harvest complete” from “RDI catalog
+flushed”. The system MAY skip enqueueing finalize when harvest statistics show
+no new or updated ARCs; when finalize runs, byte-stable comparison still
+governs whether a Git push occurs. Worker task payloads MAY include
+`harvest_id` for correlation only; catalog membership is always “all current
+ARCs for the RDI”.
 
 #### Scenario: Complete harvest enqueues catalog finalize
 
 - **GIVEN** a running harvest for RDI `edal` with the consolidated backend
-  configured
+  configured and at least one new or updated ARC
 - **WHEN** the harvest is completed
 - **THEN** the harvest status becomes `COMPLETED` and a finalize task for
   `edal` is enqueued

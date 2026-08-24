@@ -17,28 +17,29 @@ callers. Tracked in
 - Extend the `ArcStore` port with an optional **`finalize`** operation (default
   no-op on `GitRepo` / `GitlabApi`) so orchestrators stay backend-agnostic.
 - Add a **consolidated Git** `ArcStore` implementation selected by config
-  (mutually exclusive with `git_repo` / `gitlab_api`):
-  - `create_or_update` **stages** work for an ARC/RDI via a **durable dirty
-    set in CouchDB** (markers only — not a second copy of ARC bodies; bodies
-    already live in the document store). No full RDI file rewrite on every ARC
-    when avoidable;
-  - `finalize` rebuilds `{rdi}.json` from current CouchDB ARC documents for
-    that RDI, commits/pushes to the shared remote, and clears dirty markers.
+  (`arc_store.type`, with legacy top-level keys kept working but obsolete):
+  - Harvest ARC uploads write **only to CouchDB** (existing content-hash path).
+    **No per-ARC Celery Git sync** for this backend — CouchDB already holds the
+    authoritative ARC bodies.
+  - On harvest `COMPLETED`, **one** finalize task calls `finalize(rdi=…)` and
+    rebuilds `{rdi}.json` from **all** current CouchDB ARC documents for that
+    RDI, then commit/push to a **separately configured** shared remote (skip
+    push when file bytes already match). Not Basic’s `middleware_repo`.
 - Produce a **byte-stable** consolidated JSON-LD file: identical logical ARC
   set → identical file bytes across harvests (deterministic ordering,
-  canonical JSON serialization, no build-time timestamps or other volatile
-  fields injected at catalog build).
+  canonical JSON serialization, no build-time timestamps injected at catalog
+  build).
 - Extract Schema.org `Dataset` records from stored ARC RO-Crate content (no
   parallel raw Schema.org upload).
-- Wire harvest completion to invoke `finalize` for the harvest’s RDI.
 - When the consolidating backend is configured, **reject** standalone
   `POST /v3/arcs` (harvest-scoped product cut).
 - Document output shape vs Basic; v1 is one file per configured RDI name
   (Basic `openagrar_*` / `publisso_*` special cases deferred).
-- **Non-goals:** dual-write with per-ARC GitLab; moving content-hash into the
-  worker; bit-identical Basic jq-merge splits; replacing DataHUB; using
-  CouchDB as a full RO-Crate staging dump (bodies stay the normal ARC
-  documents).
+- **Non-goals:** dual-write with per-ARC GitLab; CouchDB dirty-marker
+  documents; per-ARC Git worker tasks for the consolidated backend; sharing
+  Basic’s production remote; moving content-hash into the worker;
+  bit-identical Basic jq-merge splits; replacing DataHUB.
+- Issue #319 open questions are answered explicitly in `design.md`.
 
 ## Capabilities
 
@@ -48,23 +49,25 @@ callers. Tracked in
 
 ### Modified Capabilities
 
-- `arc-store`: Consolidated Git backend; CouchDB dirty-marker staging; stage
-  vs finalize; byte-stable `{rdi}.json` publish; extraction; `finalize` no-op
-  on existing backends.
-- `harvest-manager`: On successful harvest completion, invoke ArcStore
-  `finalize` for the harvest RDI (async worker task; observable flush events).
+- `arc-store`: Consolidated Git backend; harvest-end `finalize(rdi=…)` rebuilds
+  byte-stable `{rdi}.json` from CouchDB; no dirty-marker staging;
+  `finalize` no-op on existing backends; skip per-ARC Git sync when this
+  backend is selected; `arc_store.type` preferred over obsolete top-level keys.
+- `harvest-manager`: On harvest `COMPLETED`, enqueue catalog `finalize` for
+  the harvest RDI (async worker task; observable flush events).
 - `arc-upload`: When consolidating store is configured, standalone ARC create
   MUST fail fast with a client error (4xx).
 
 ## Impact
 
 - **Code:** `middleware/api/.../arc_store/` (new implementation + port method),
-  factory/`Config` mutual exclusivity, `HarvestManager` / worker finalize task,
-  `POST /v3/arcs` guard, events/metrics for catalog flush.
+  factory/`Config` (`arc_store.type` + deprecated legacy keys),
+  harvest-complete → finalize task (not per-ARC sync), `POST /v3/arcs` guard,
+  catalog flush events/metrics.
 - **Specs:** deltas under this change; main specs after archive; Spec-to-Code
   mapping in `AGENTS.md`.
-- **Ops:** New config block for shared-repo URL/credentials/path; coexistence
-  with Basic writers on the same remote is an operator/race concern (no
-  distributed lock in v1).
+- **Ops:** Configurable catalog remote (Advanced-owned; not Basic’s
+  `middleware_repo`); migrate operators from top-level store keys to
+  `arc_store.type`.
 - **Issue:** Implements
   [#319](https://github.com/fairagro/m4.2_advanced_middleware_api/issues/319).

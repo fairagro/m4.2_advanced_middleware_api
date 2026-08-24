@@ -4,10 +4,12 @@
 
 ### Requirement: Support optional finalize on ArcStore
 
-The `ArcStore` port SHALL expose a `finalize` operation scoped to an RDI (and
-MAY accept harvest context). Existing per-ARC backends (`GitRepo`, `GitlabApi`)
-MUST implement `finalize` as a successful no-op. Callers MUST be able to invoke
-`finalize` after a harvest without branching on backend type.
+The `ArcStore` port SHALL expose a `finalize` operation scoped to an RDI
+(`finalize(rdi=…)`). Existing per-ARC backends (`GitRepo`, `GitlabApi`) MUST
+implement `finalize` as a successful no-op. Callers MUST be able to invoke
+`finalize` after a harvest without branching on backend type. Finalize MUST
+NOT take `harvest_id` as a store argument (CouchDB holds latest ARC bodies
+only; harvest cannot filter catalog membership).
 
 #### Scenario: Finalize on per-ARC Git backend
 
@@ -15,49 +17,42 @@ MUST implement `finalize` as a successful no-op. Callers MUST be able to invoke
 - **WHEN** `finalize` is invoked for an RDI
 - **THEN** the call succeeds without writing a consolidated catalog file
 
-### Requirement: Stage ARCs in the consolidated Git backend
+### Requirement: Skip per-ARC Git sync for the consolidated backend
 
-When the consolidated Git backend is configured, `create_or_update` SHALL
-durably record that the ARC/RDI requires inclusion in the next catalog publish
-by writing a **CouchDB dirty marker** (not a duplicate ARC body). It MUST NOT
-require rewriting the shared RDI catalog file on every individual ARC sync.
-Unchanged ARC content (no content-hash change relative to the already stored
-document) MUST NOT mark the ARC dirty for catalog publish. Authoritative ARC
-RO-Crate bodies remain the normal document-store ARC documents.
+When the consolidated Git backend is configured, harvest ARC ingestion SHALL
+persist ARC bodies in the document store only and MUST NOT enqueue per-ARC Git
+synchronization tasks. Catalog publication happens exclusively via `finalize`.
 
-#### Scenario: Stage a changed ARC
+#### Scenario: Changed ARC does not enqueue per-ARC Git sync
 
-- **GIVEN** the consolidated Git backend is configured
-- **WHEN** a changed ARC is synced with an RDI
-- **THEN** a CouchDB dirty marker records that ARC for the RDI without
-  publishing `{rdi}.json` and without storing a second full RO-Crate copy
-
-#### Scenario: Skip staging for unchanged content
-
-- **GIVEN** an ARC whose content hash is unchanged
-- **WHEN** sync runs on the consolidated backend
-- **THEN** staging is not marked dirty for that ARC
+- **GIVEN** `consolidated_git` is configured
+- **WHEN** a harvest submits a new or changed ARC
+- **THEN** the ARC is stored in CouchDB and no per-ARC Git sync task is
+  dispatched
 
 ### Requirement: Publish a byte-stable consolidated RDI catalog file on finalize
 
 On `finalize` for an RDI, the consolidated Git backend SHALL rebuild the
 catalog file `{rdi}.json` as a top-level JSON array of Schema.org `Dataset`
-objects extracted from stored ARC RO-Crate content for that RDI, write the
-file into the configured shared Git repository, commit, and push. It MUST then
-clear dirty markers for that RDI. The file bytes MUST be deterministic: for
+objects extracted from **all** current document-store ARC RO-Crate bodies for
+that RDI, write the file into the configured shared Git repository, commit, and
+push when the remote blob differs. Each finalize Git operation MUST use a
+**dedicated ephemeral local clone** (unique temporary directory, deleted after
+the operation completes or fails) — MUST NOT reuse a stable shared working copy
+across concurrent finalize tasks. The file bytes MUST be deterministic: for
 the same set of ARC contents, two rebuilds MUST produce identical bytes
 (stable Dataset order by `@id`, canonical JSON serialization with sorted
 object keys, no finalize-/build-time timestamps or other volatile fields
 injected into the payload). Overlapping finalizes for the same RDI MUST
-converge on CouchDB as the source of truth for current ARC bodies (last
-successful push wins on the remote).
+converge on the document store as the source of truth for current ARC bodies
+(last successful push wins on the remote).
 
-#### Scenario: Finalize publishes catalog
+#### Scenario: Finalize publishes full RDI catalog
 
-- **GIVEN** one or more dirty-marked ARCs for RDI `edal`
+- **GIVEN** CouchDB holds one or more ARCs for RDI `edal`
 - **WHEN** `finalize` runs for that RDI
-- **THEN** `edal.json` contains the extracted Dataset array, is pushed to the
-  shared remote, and dirty markers for `edal` are cleared
+- **THEN** `edal.json` contains the extracted Dataset array for all those ARCs
+  and is pushed to the shared remote when bytes differ from the remote file
 
 #### Scenario: Unchanged ARC set yields identical catalog bytes
 
@@ -66,13 +61,6 @@ successful push wins on the remote).
   rebuilds the catalog
 - **THEN** the newly built file bytes are identical to the previous catalog
   bytes and the backend skips commit/push when the remote blob already matches
-
-#### Scenario: Empty dirty set skips publish when bytes match
-
-- **GIVEN** no dirty markers for the RDI and the remote catalog already equals
-  a fresh rebuild
-- **WHEN** `finalize` runs
-- **THEN** the backend skips commit/push and still succeeds
 
 ### Requirement: Extract Schema.org Dataset records from RO-Crate
 
@@ -91,16 +79,26 @@ treated as a permanent persistence error for that ARC during finalize.
 
 ### Requirement: Select exactly one ArcStore backend
 
-Configuration MUST allow at most one of `git_repo`, `gitlab_api`, or
-`consolidated_git`. The factory MUST construct the matching `ArcStore`
-implementation. Dual-write of per-ARC Git projects and consolidated catalog
+Configuration MUST select exactly one ArcStore backend. Preferred form is
+`arc_store.type` with value `git_repo`, `gitlab_api`, or `consolidated_git`
+and nested settings. Legacy top-level `git_repo` / `gitlab_api` (and any
+transitional top-level `consolidated_git`) MUST remain accepted and MUST be
+documented as obsolete. Mixing more than one effective backend MUST fail
+validation. Dual-write of per-ARC Git projects and consolidated catalog
 files in one deployment is out of scope.
 
 #### Scenario: Reject dual backend config
 
-- **GIVEN** more than one of the mutually exclusive store config keys is set
+- **GIVEN** more than one effective ArcStore backend is configured (via
+  `arc_store` and/or obsolete top-level keys)
 - **WHEN** configuration is validated
 - **THEN** validation fails before the API starts
+
+#### Scenario: Prefer arc_store.type
+
+- **GIVEN** `arc_store.type` is `consolidated_git` with nested catalog settings
+- **WHEN** the factory constructs ArcStore
+- **THEN** the consolidated Git implementation is used
 
 ### Requirement: Classify consolidated Git failures
 
