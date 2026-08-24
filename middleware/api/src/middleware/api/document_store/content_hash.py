@@ -35,7 +35,7 @@ _ORDER_INSENSITIVE_REFERENCE_LIST_FIELDS = frozenset({
     "comment",
 })
 
-# Comment ``name`` whose textual payload is treated as an unordered keyword multiset.
+# RO-Crate node ``name`` whose textual payload is treated as an unordered keyword multiset.
 _KEYWORDS_COMMENT_NAME = "Keywords"
 _KEYWORDS_TEXT_FIELDS = ("text", "value")
 

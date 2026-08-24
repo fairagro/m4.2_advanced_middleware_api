@@ -6,8 +6,8 @@
 
 When deciding whether stored ARC content changed, the document store SHALL
 compare `content_hash` values computed under the `arc-content-hash` capability.
-It MUST NOT treat raw JSON serialization differences that that capability
-canonicalizes away as a content change.
+It MUST NOT treat raw JSON serialization differences that the `arc-content-hash`
+capability canonicalizes away as a content change.
 
 #### Scenario: Re-submit after order-only RO-Crate noise
 
