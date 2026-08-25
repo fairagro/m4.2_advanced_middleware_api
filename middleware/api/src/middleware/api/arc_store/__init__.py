@@ -18,7 +18,7 @@ logger = logging.getLogger(__name__)
 
 
 class ArcStoreError(Exception):
-    """Excpetion base class for all ArcStore errors."""
+    """Exception base class for all ArcStore errors."""
 
     def __str__(self) -> str:
         """Hide URL userinfo (e.g. oauth2 tokens) in messages and events."""

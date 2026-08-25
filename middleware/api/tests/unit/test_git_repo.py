@@ -21,6 +21,7 @@ from middleware.api.arc_store.git_repo import (
     format_git_error_detail,
     is_soft_git_error,
     is_transient_git_error,
+    record_git_span_failure,
 )
 from middleware.api.arc_store.remote_git_provider import GitProjectMetadata
 
@@ -526,6 +527,28 @@ def test_format_git_error_detail_prefers_stderr() -> None:
     assert "failed to push some refs" in detail
     assert "https://example.com/repo.git" in detail
     assert "Cmd('push')" not in detail
+
+
+def test_record_git_span_failure_redacts_oauth_token() -> None:
+    """OTEL span events/status must not receive raw oauth2 userinfo."""
+    span = MagicMock()
+    detail = "failed to push to 'https://oauth2:secret-token@gitlab.example.com/g/c.git'"
+
+    record_git_span_failure(span, detail)
+
+    span.add_event.assert_called_once()
+    event_attrs = span.add_event.call_args.kwargs["attributes"]
+    assert "secret-token" not in event_attrs["stderr"]
+    assert "https://***@gitlab.example.com/g/c.git" in event_attrs["stderr"]
+    status = span.set_status.call_args.args[0]
+    assert "secret-token" not in status.description
+    span.record_exception.assert_not_called()
+
+    span.reset_mock()
+    record_git_span_failure(span, detail, expected=True)
+    assert span.add_event.call_args.args[0] == "git.expected_failure"
+    status = span.set_status.call_args.args[0]
+    assert status.status_code.name == "OK"
 
 
 @patch("middleware.api.arc_store.git_repo.Repo")

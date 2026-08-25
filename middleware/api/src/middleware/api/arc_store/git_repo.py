@@ -14,6 +14,9 @@ from arctrl import ARC  # type: ignore[import-untyped]
 from git import Repo
 from git.exc import GitCommandError
 from opentelemetry import context, trace
+from opentelemetry.trace import Span
+
+from middleware.shared.security.url_redact import redact_url_userinfo
 
 from . import ArcStore, ArcStoreTransientError
 from .config import GitRepoConfig
@@ -30,9 +33,25 @@ P = ParamSpec("P")
 
 
 def format_git_error_detail(exc: GitCommandError) -> str:
-    """Prefer concise stderr for messages (URL credentials are redacted centrally)."""
+    """Prefer concise stderr for messages (URL credentials are redacted at sinks)."""
     stderr = str(getattr(exc, "stderr", "") or "").strip()
     return stderr or str(exc).strip()
+
+
+def record_git_span_failure(span: Span, detail: str, *, expected: bool = False) -> None:
+    """Record a git failure on a span without exporting URL userinfo credentials.
+
+    Prefer this over ``span.record_exception(GitCommandError)``: exception
+    payloads and unredacted status descriptions can leak oauth2 tokens to
+    tracing backends. Logging remains covered by the central redacting formatter.
+    """
+    safe = redact_url_userinfo(detail)
+    if expected:
+        span.add_event("git.expected_failure", attributes={"stderr": safe})
+        span.set_status(trace.Status(trace.StatusCode.OK))
+    else:
+        span.add_event("git.failure", attributes={"stderr": safe})
+        span.set_status(trace.Status(trace.StatusCode.ERROR, safe))
 
 
 def is_soft_git_error(exc: GitCommandError) -> bool:
@@ -100,26 +119,24 @@ class GitContext:
                 return result
             except GitCommandError as exc:  # pragma: no cover - behavior validated indirectly
                 detail = format_git_error_detail(exc)
+                safe_detail = redact_url_userinfo(detail)
                 if is_soft_git_error(exc):
                     # Soft errors (e.g. 404) are expected; ls-remote → DEBUG, other actions → INFO.
                     # Do not mark the span as error.
                     level = logging.DEBUG if action == "ls-remote" else logging.INFO
                     logger.log(level, "Git %s failed as expected: %s", action, detail)
-                    span.add_event("git.expected_failure", attributes={"stderr": detail})
-                    span.set_status(trace.Status(trace.StatusCode.OK))
+                    record_git_span_failure(span, detail, expected=True)
                 elif is_transient_git_error(exc):
                     status = getattr(exc, "status", None)
                     status_msg = f" (status {status})" if status is not None else ""
                     logger.info("Git %s failed with transient error%s: %s", action, status_msg, detail)
-                    span.record_exception(exc)
-                    span.set_status(trace.Status(trace.StatusCode.ERROR, detail))
-                    raise ArcStoreTransientError(f"Transient Git error during {action}: {detail}") from exc
+                    record_git_span_failure(span, detail)
+                    raise ArcStoreTransientError(f"Transient Git error during {action}: {safe_detail}") from exc
                 else:
                     status = getattr(exc, "status", None)
                     status_msg = f" (status {status})" if status is not None else ""
                     logger.warning("Git %s failed%s: %s", action, status_msg, detail)
-                    span.record_exception(exc)
-                    span.set_status(trace.Status(trace.StatusCode.ERROR, detail))
+                    record_git_span_failure(span, detail)
                 raise
 
     def _apply_repo_config(self) -> None:
@@ -337,12 +354,11 @@ class GitRepo(ArcStore):
                         # Commit and push
                         ctx.commit_and_push(f"Update ARC {arc_id}")
                 except GitCommandError as e:
+                    detail = format_git_error_detail(e)
                     if is_soft_git_error(e):
-                        span.add_event("git.expected_failure", attributes={"stderr": str(e.stderr)})
-                        span.set_status(trace.Status(trace.StatusCode.OK))
+                        record_git_span_failure(span, detail, expected=True)
                     else:
-                        span.record_exception(e)
-                        span.set_status(trace.Status(trace.StatusCode.ERROR, str(e)))
+                        record_git_span_failure(span, detail)
                     # Try to diagnose connection issues
                     self._check_health()
                     raise
@@ -382,14 +398,13 @@ class GitRepo(ArcStore):
                             span.record_exception(e)
                             return None
                 except GitCommandError as e:
+                    detail = format_git_error_detail(e)
                     if is_soft_git_error(e):
                         logger.debug("Failed to clone/access repo for %s: %s", arc_id, e)
-                        span.add_event("git.expected_failure", attributes={"stderr": str(e.stderr)})
-                        span.set_status(trace.Status(trace.StatusCode.OK))
+                        record_git_span_failure(span, detail, expected=True)
                     else:
                         logger.warning("Failed to clone/access repo for %s: %s", arc_id, e)
-                        span.record_exception(e)
-                        span.set_status(trace.Status(trace.StatusCode.ERROR, str(e)))
+                        record_git_span_failure(span, detail)
                     return None
                 except Exception as e:  # pylint: disable=broad-exception-caught # noqa: BLE001
                     logger.warning(
@@ -427,7 +442,7 @@ class GitRepo(ArcStore):
             ) as span:
                 # We can try to ls-remote using the authenticated URL
                 url = self._remote_provider.get_repo_url(arc_id, authenticated=True)
-                span.set_attribute("git.repo_url", url)
+                span.set_attribute("git.repo_url", redact_url_userinfo(url))
 
                 g = git.cmd.Git()
                 try:
@@ -442,24 +457,24 @@ class GitRepo(ArcStore):
                                 g.ls_remote(url)
                             inner_span.set_status(trace.Status(trace.StatusCode.OK))
                         except GitCommandError as e:
+                            detail = format_git_error_detail(e)
                             if is_soft_git_error(e):
-                                inner_span.set_status(trace.Status(trace.StatusCode.OK))
-                                inner_span.add_event("git.expected_failure", attributes={"stderr": str(e.stderr)})
+                                record_git_span_failure(inner_span, detail, expected=True)
                             else:
-                                inner_span.set_status(trace.Status(trace.StatusCode.ERROR, str(e)))
-                                inner_span.record_exception(e)
+                                record_git_span_failure(inner_span, detail)
                             raise
 
                     logger.info("Git ls-remote for %s succeeded", arc_id)
                     span.set_attribute("exists", True)
                     return True
                 except GitCommandError as e:
+                    detail = format_git_error_detail(e)
                     if is_soft_git_error(e):
                         logger.debug("Git ls-remote for %s failed (repo not found)", arc_id)
-                        span.set_status(trace.Status(trace.StatusCode.OK))
+                        record_git_span_failure(span, detail, expected=True)
                     else:
                         logger.warning("Git ls-remote for %s failed: %s", arc_id, e)
-                        span.set_status(trace.Status(trace.StatusCode.ERROR, str(e)))
+                        record_git_span_failure(span, detail)
                     span.set_attribute("exists", False)
                     return False
 
