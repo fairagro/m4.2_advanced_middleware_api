@@ -14,8 +14,11 @@ from middleware.api.arc_store.consolidated_git_config import ConsolidatedGitConf
 
 @pytest.fixture
 def consolidated_config(tmp_path: Path) -> ConsolidatedGitConfig:
-    """Consolidated Git config with isolated cache directory."""
-    return ConsolidatedGitConfig(repo_url="file:///tmp/catalog.git", cache_dir=tmp_path / "cache")
+    """Consolidated Git config with isolated cache directory and file:// remote."""
+    return ConsolidatedGitConfig(
+        repo_url=f"file://{(tmp_path / 'catalog.git').resolve()}",
+        cache_dir=tmp_path / "cache",
+    )
 
 
 @pytest.fixture
