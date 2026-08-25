@@ -32,7 +32,15 @@ ARCs for the RDI”.
 
 #### Scenario: Catalog push failure is observable
 
-- **GIVEN** finalize fails after harvest `COMPLETED`
+- **GIVEN** finalize fails permanently after harvest `COMPLETED`
 - **WHEN** the worker records the outcome
 - **THEN** a catalog-failure event is stored and the harvest remains
   `COMPLETED` (retry of finalize is allowed without re-opening the harvest)
+
+#### Scenario: Transient catalog push does not record failure before retry
+
+- **GIVEN** finalize raises a retryable store error after harvest `COMPLETED`
+- **WHEN** the worker re-raises for Celery retry
+- **THEN** no `CATALOG_PUSH_FAILED` event is appended (matching per-ARC
+  `GIT_PUSH_*` handling); a later successful attempt MAY record only
+  `CATALOG_PUSH_SUCCESS`

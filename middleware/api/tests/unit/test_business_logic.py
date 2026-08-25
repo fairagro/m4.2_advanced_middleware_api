@@ -246,18 +246,39 @@ async def test_finalize_catalog_records_success_event_for_catalog_backend(
 
 
 @pytest.mark.asyncio
-async def test_finalize_catalog_transient_error_still_raises_when_event_logging_fails(
+async def test_finalize_catalog_transient_error_skips_failure_event(
     worker_logic: BusinessLogic,
     mock_store: MagicMock,
     mock_doc_store: MagicMock,
 ) -> None:
-    """Transient Git failures must remain retryable even if CouchDB event logging fails."""
+    """Transient finalize failures must not append CATALOG_PUSH_FAILED before Celery retry."""
     mock_store.publishes_per_arc_git = False
     mock_store.finalize = AsyncMock(side_effect=ArcStoreTransientError("git unreachable"))
-    mock_doc_store.update_harvest = AsyncMock(side_effect=RuntimeError("couchdb down"))
+    mock_doc_store.update_harvest = AsyncMock()
 
     with pytest.raises(TransientError, match="git unreachable"):
         await worker_logic.finalize_catalog("test-rdi", harvest_id="harvest-1")
+
+    mock_doc_store.update_harvest.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_finalize_catalog_permanent_error_records_failure_event(
+    worker_logic: BusinessLogic,
+    mock_store: MagicMock,
+    mock_doc_store: MagicMock,
+) -> None:
+    """Permanent catalog push failures record CATALOG_PUSH_FAILED on the harvest."""
+    mock_store.publishes_per_arc_git = False
+    mock_store.finalize = AsyncMock(side_effect=ArcStoreError("invalid catalog"))
+    mock_doc_store.update_harvest = AsyncMock()
+
+    with pytest.raises(BusinessLogicError, match="catalog finalize failed"):
+        await worker_logic.finalize_catalog("test-rdi", harvest_id="harvest-1")
+
+    mock_doc_store.update_harvest.assert_called_once()
+    patch = mock_doc_store.update_harvest.call_args.args[1]
+    assert patch["append_catalog_event"]["type"] == "CATALOG_PUSH_FAILED"
 
 
 @pytest.mark.asyncio

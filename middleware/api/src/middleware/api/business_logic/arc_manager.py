@@ -185,19 +185,15 @@ class ArcManager:
                     )
                 return pushed
             except ArcStoreTransientError as exc:
-                if harvest_id is not None:
-                    try:
-                        await self._append_harvest_catalog_event(
-                            harvest_id,
-                            CatalogPushEventType.CATALOG_PUSH_FAILED,
-                            str(exc),
-                        )
-                    except Exception as log_error:  # noqa: BLE001
-                        logger.warning(
-                            "Could not record catalog failure on harvest %s: %s",
-                            harvest_id,
-                            log_error,
-                        )
+                # Do not append CATALOG_PUSH_FAILED: Celery will retry, and
+                # recording here would bloat catalog_events / leave false
+                # failures after a later success (same as GIT_PUSH_*).
+                logger.info(
+                    "Transient error during catalog finalize for RDI %s (harvest %s): %s",
+                    rdi,
+                    harvest_id or "none",
+                    exc,
+                )
                 span.record_exception(exc)
                 raise TransientError(str(exc)) from exc
             except Exception as exc:
