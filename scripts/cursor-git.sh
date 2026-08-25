@@ -6,9 +6,10 @@
 # GIT_CONFIG_KEY_*/GIT_CONFIG_VALUE_*, sometimes as ``git -c``), which silently
 # skips pre-commit / commit-msg / pre-push. Terminal ``git`` is unaffected.
 #
-# Point workspace ``git.path`` at this script (see .vscode/settings.json).
+# Point **Remote** ``git.path`` (not workspace settings) at this script:
+#   /workspaces/m4.2_advanced_middleware_api/scripts/cursor-git.sh
 # After a UI commit, check ``/tmp/cursor-git-wrapper.log`` — if empty, Cursor
-# is not using this wrapper (reload window / verify git.path).
+# is not using this wrapper (set Remote git.path, then Reload Window).
 # https://forum.cursor.com/t/167719
 
 set -euo pipefail

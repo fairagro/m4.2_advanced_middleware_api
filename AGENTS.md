@@ -240,10 +240,13 @@ by the project's configured tools: **Ruff, Pylance, MyPy, Pylint, and Bandit**.
   `.github/workflows/reusable-code-quality.yml` and may differ slightly
   (read-only ruff, full-tree pylint/bandit severity gate).
   Note: Cursor Source Control Commit may skip git hooks (Cursor ≥3.15.6 bug:
-  extension forces `core.hooksPath=/dev/null` via `GIT_CONFIG_*`). Workspace
-  setting `git.path` → `scripts/cursor-git.sh` strips that pin so the UI Commit
-  button runs hooks again. Terminal `git commit` always works. Remove the
-  wrapper setting once Cursor ships a fix (forum thread #167719).
+  extension forces `core.hooksPath=/dev/null` via `GIT_CONFIG_*`).
+  Workaround: set **Remote** setting `git.path` to
+  `/workspaces/m4.2_advanced_middleware_api/scripts/cursor-git.sh`
+  (not workspace `.vscode/settings.json` — Cursor greys that out).
+  `scripts/cursor-git.sh` strips the null pin. Verify via
+  `/tmp/cursor-git-wrapper.log` after a UI commit. Dev Container also prepends
+  `scripts/bin` via `remoteEnv` PATH. Remove once Cursor ships a fix (#167719).
   Prefer terminal commits if the wrapper is unavailable.
 - Avoid partially staging a Python file (`MM` in `git status`): pre-commit may
   auto-format the index, then roll back when the stash conflicts with unstaged
