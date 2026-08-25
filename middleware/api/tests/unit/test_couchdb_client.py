@@ -75,7 +75,7 @@ async def test_aiocouch_remote_server_forwards_client_session_kwargs() -> None:
         RemoteServer("http://localhost:5984", user="admin", password="secret", timeout=42)
         mock_session.assert_called_once()
         _, kwargs = mock_session.call_args
-        assert kwargs["timeout"] == 42
+        assert kwargs["timeout"] == 42  # noqa: PLR2004
         assert "auth" not in kwargs
         assert kwargs["headers"]["Authorization"].startswith("Basic ")
 
