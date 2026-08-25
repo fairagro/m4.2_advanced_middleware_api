@@ -67,8 +67,13 @@ def is_soft_git_error(exc: GitCommandError) -> bool:
 def is_transient_git_error(exc: GitCommandError) -> bool:
     """Check if a GitCommandError is retryable (network or concurrent push conflict).
 
-    Non-fast-forward / rejected pushes are transient under last-successful-push
-    semantics: Celery retry re-clones from remote and rebuilds from CouchDB.
+    Concurrent non-fast-forward / fetch-first pushes are transient under
+    last-successful-push semantics: Celery retry re-clones from remote and
+    rebuilds from CouchDB.
+
+    Do not match generic phrases like ``failed to push some refs`` or
+    ``updates were rejected`` — those also appear on permanent failures
+    (protected branch, hook rejection, permission denied).
     """
     stderr = str(getattr(exc, "stderr", "")).lower()
     transient_patterns = [
@@ -82,10 +87,8 @@ def is_transient_git_error(exc: GitCommandError) -> bool:
         "unexpected disconnect",
         "early eof",
         "the requested url returned error: 50",
-        # Concurrent push (middleware-only writers; last successful push wins)
+        # Concurrent push only (not generic push rejection wrappers)
         "non-fast-forward",
-        "failed to push some refs",
-        "updates were rejected",
         "fetch first",
     ]
     return any(p in stderr for p in transient_patterns)

@@ -509,11 +509,47 @@ def test_is_transient_git_error_network_and_push_conflict() -> None:
     )
     assert is_transient_git_error(push_conflict) is True
 
-    rejected = GitCommandError("push", 1, stderr="hint: Updates were rejected because the remote contains work")
-    assert is_transient_git_error(rejected) is True
+    fetch_first = GitCommandError(
+        "push",
+        1,
+        stderr=(
+            "! [rejected] main -> main (fetch first)\n"
+            "error: failed to push some refs to 'origin'\n"
+            "hint: Updates were rejected because the remote contains work"
+        ),
+    )
+    assert is_transient_git_error(fetch_first) is True
 
     permanent = GitCommandError("push", 1, stderr="remote: HTTP Basic: Access denied")
     assert is_transient_git_error(permanent) is False
+
+
+@pytest.mark.parametrize(
+    "stderr",
+    [
+        (
+            "remote: GitLab: You are not allowed to push code to protected branches "
+            "on this project.\n"
+            "! [remote rejected] main -> main (pre-receive hook declined)\n"
+            "error: failed to push some refs to 'https://gitlab.example.com/g/c.git'"
+        ),
+        (
+            "! [remote rejected] main -> main (hook declined)\n"
+            "error: failed to push some refs to 'origin'\n"
+            "hint: Updates were rejected because a hook declined the push"
+        ),
+        (
+            "remote: GitLab: The project you were looking for could not be found "
+            "or you don't have permission to view it.\n"
+            "fatal: unable to access '...': The requested URL returned error: 403\n"
+            "error: failed to push some refs to 'origin'"
+        ),
+    ],
+)
+def test_is_transient_git_error_rejects_permanent_push_failures(stderr: str) -> None:
+    """Generic push-rejection wrappers must not be treated as retryable."""
+    exc = GitCommandError("push", 1, stderr=stderr)
+    assert is_transient_git_error(exc) is False
 
 
 def test_format_git_error_detail_prefers_stderr() -> None:
