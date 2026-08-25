@@ -14,7 +14,6 @@ from ..arc_store.legacy_config import (
     OBSOLETE_TOP_LEVEL_CONSOLIDATED_GIT,
     OBSOLETE_TOP_LEVEL_GIT_REPO,
     OBSOLETE_TOP_LEVEL_GITLAB_API,
-    warn_obsolete_top_level_arc_store_fields,
 )
 from ..arc_store.resolution import validate_arc_store_config
 from ..business_logic.config import HarvestConfig
@@ -77,7 +76,6 @@ class WorkerConfig(ConfigBase):
     @model_validator(mode="after")
     def validate_git_repo_rdi_gitlab_topics(self) -> Self:
         """Validate ArcStore backend exclusivity and GitLab topic mapping."""
-        warn_obsolete_top_level_arc_store_fields(self)
         validate_arc_store_config(self)
         if self.git_repo is not None and self.known_rdis:
             validated_topics = GitRepoConfig.validate_rdi_gitlab_topics_for_known_rdis(
