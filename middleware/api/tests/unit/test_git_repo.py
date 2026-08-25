@@ -84,6 +84,19 @@ def test_authenticated_repo_url_skips_already_embedded_credentials() -> None:
     assert settings.authenticated_repo_url(url) == url
 
 
+def test_authenticated_repo_url_case_insensitive_scheme_and_quotes_slash() -> None:
+    """Uppercase schemes still get tokens; '/' in tokens must be percent-encoded."""
+    settings = GitCliSettings(token=SecretStr("tok/en"))
+    assert (
+        settings.authenticated_repo_url("HTTPS://gitlab.example.com/group/catalog.git")
+        == "https://oauth2:tok%2Fen@gitlab.example.com/group/catalog.git"
+    )
+    assert (
+        settings.authenticated_repo_url("HTTP://gitlab.example.com/group/catalog.git")
+        == "http://oauth2:tok%2Fen@gitlab.example.com/group/catalog.git"
+    )
+
+
 def test_git_context_ensure_path(tmp_path: Path) -> None:
     """Test that GitContext creates local directories."""
     target_path = tmp_path / "deep" / "nested" / "repo"

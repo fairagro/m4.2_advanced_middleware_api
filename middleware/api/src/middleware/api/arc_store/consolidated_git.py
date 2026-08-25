@@ -62,7 +62,7 @@ class ConsolidatedGitArcStore(ArcStore):
 
     @override
     def _check_health(self) -> bool:
-        """Check that the configured catalog remote is reachable (or file:// exists)."""
+        """Check catalog remote reachability (file://: path or parent may exist for lazy init)."""
         url = self._config.repo_url
         if url.lower().startswith("file://"):
             parsed = urlparse(url)

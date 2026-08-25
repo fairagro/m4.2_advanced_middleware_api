@@ -73,10 +73,12 @@ class GitCliSettings(BaseModel):
             return url
         if urlparse(url).username is not None:
             return url
-        safe_token = quote(token)
-        if url.startswith("https://"):
+        # Escape the full userinfo token (default quote() leaves "/" unescaped).
+        safe_token = quote(token, safe="")
+        lower = url.lower()
+        if lower.startswith("https://"):
             return f"https://oauth2:{safe_token}@{url[8:]}"
-        if url.startswith("http://"):
+        if lower.startswith("http://"):
             return f"http://oauth2:{safe_token}@{url[7:]}"
         return url
 
