@@ -14,7 +14,7 @@ from pydantic import SecretStr
 
 from middleware.api.arc_store.config import GitRepoConfig
 from middleware.api.arc_store.git_cli_settings import GitCliSettings, GitContextConfig
-from middleware.api.arc_store.git_repo import GitContext, GitRepo, is_soft_git_error
+from middleware.api.arc_store.git_repo import GitContext, GitRepo, is_soft_git_error, is_transient_git_error
 from middleware.api.arc_store.remote_git_provider import GitProjectMetadata
 
 _TEST_GIT_METADATA = GitProjectMetadata(
@@ -478,6 +478,25 @@ def test_is_soft_git_error() -> None:
     # Negative case
     err = GitCommandError("command", 1, "permission denied")
     assert is_soft_git_error(err) is False
+
+
+def test_is_transient_git_error_network_and_push_conflict() -> None:
+    """Network failures and concurrent non-fast-forward pushes are retryable."""
+    network = GitCommandError("fetch", 1, "Could not resolve host: gitlab.example.com")
+    assert is_transient_git_error(network) is True
+
+    push_conflict = GitCommandError(
+        "push",
+        1,
+        stderr="! [rejected] main -> main (non-fast-forward)\nerror: failed to push some refs to 'origin'",
+    )
+    assert is_transient_git_error(push_conflict) is True
+
+    rejected = GitCommandError("push", 1, stderr="hint: Updates were rejected because the remote contains work")
+    assert is_transient_git_error(rejected) is True
+
+    permanent = GitCommandError("push", 1, stderr="remote: HTTP Basic: Access denied")
+    assert is_transient_git_error(permanent) is False
 
 
 @patch("middleware.api.arc_store.git_repo.Repo")

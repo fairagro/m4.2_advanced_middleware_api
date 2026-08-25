@@ -40,10 +40,14 @@ def is_soft_git_error(exc: GitCommandError) -> bool:
 
 
 def is_transient_git_error(exc: GitCommandError) -> bool:
-    """Check if a GitCommandError is likely a transient network/availability issue."""
-    stderr = str(getattr(exc, "stderr", ""))
-    # Common messages for connection/availability issues
+    """Check if a GitCommandError is retryable (network or concurrent push conflict).
+
+    Non-fast-forward / rejected pushes are transient under last-successful-push
+    semantics: Celery retry re-clones from remote and rebuilds from CouchDB.
+    """
+    stderr = str(getattr(exc, "stderr", "")).lower()
     transient_patterns = [
+        # Network / availability
         "could not resolve host",
         "failed to connect",
         "connection refused",
@@ -53,8 +57,13 @@ def is_transient_git_error(exc: GitCommandError) -> bool:
         "unexpected disconnect",
         "early eof",
         "the requested url returned error: 50",
+        # Concurrent push (middleware-only writers; last successful push wins)
+        "non-fast-forward",
+        "failed to push some refs",
+        "updates were rejected",
+        "fetch first",
     ]
-    return any(p in stderr.lower() for p in transient_patterns)
+    return any(p in stderr for p in transient_patterns)
 
 
 _T = TypeVar("_T")

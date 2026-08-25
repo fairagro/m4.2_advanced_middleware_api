@@ -8,7 +8,7 @@ from git.exc import GitCommandError
 from pydantic import SecretStr
 from rocrate_fixtures import minimal_rocrate_dict
 
-from middleware.api.arc_store import ArcStoreError
+from middleware.api.arc_store import ArcStoreError, ArcStoreTransientError
 from middleware.api.arc_store.consolidated_git import ConsolidatedGitArcStore
 from middleware.api.arc_store.consolidated_git_config import ConsolidatedGitConfig
 
@@ -67,6 +67,35 @@ def test_publish_catalog_bytes_rejects_unsafe_rdi(consolidated_config: Consolida
         store._publish_catalog_bytes("edal/nested", b"[]\n")
     with pytest.raises(ArcStoreError, match="Invalid RDI for catalog filename"):
         store._publish_catalog_bytes("", b"[]\n")
+
+
+def test_publish_catalog_bytes_push_conflict_is_transient(
+    consolidated_config: ConsolidatedGitConfig,
+    tmp_path: Path,
+) -> None:
+    """Concurrent non-fast-forward push becomes ArcStoreTransientError for Celery retry."""
+    store = ConsolidatedGitArcStore(consolidated_config, MagicMock())
+    work_dir = tmp_path / "catalog_finalize_work"
+    work_dir.mkdir()
+
+    ctx_instance = MagicMock()
+    ctx_instance.path = str(work_dir)
+    ctx_instance.__enter__.return_value = ctx_instance
+    ctx_instance.commit_and_push.side_effect = GitCommandError(
+        "push",
+        1,
+        stderr="! [rejected] main -> main (non-fast-forward)\nerror: failed to push some refs",
+    )
+
+    with (
+        patch("middleware.api.arc_store.consolidated_git.tempfile.mkdtemp", return_value=str(work_dir)),
+        patch("middleware.api.arc_store.consolidated_git.GitContext", return_value=ctx_instance),
+        patch("middleware.api.arc_store.consolidated_git.shutil.rmtree"),
+        patch("middleware.api.arc_store.consolidated_git.Path.exists", return_value=False),
+        patch("middleware.api.arc_store.consolidated_git.Path.write_bytes"),
+        pytest.raises(ArcStoreTransientError),
+    ):
+        store._publish_catalog_bytes("edal", b"[]\n")
 
 
 @pytest.mark.asyncio
