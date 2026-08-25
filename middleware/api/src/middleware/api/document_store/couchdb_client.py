@@ -342,7 +342,7 @@ class CouchDBClient:
         result = self._db.find(selector, limit=effective_limit, skip=skip)
         docs = [dict(doc) async for doc in result]
 
-        if len(docs) == effective_limit:
+        if limit is None and len(docs) == effective_limit:
             logger.warning(
                 "CouchDB find() returned exactly %d documents for selector %s — "
                 "results may be silently truncated. Use skip/limit for pagination.",
@@ -402,7 +402,7 @@ class CouchDBClient:
         docs_raw = response_data.get("docs", [])
         docs: list[CouchDbDocument] = [dict(doc) for doc in docs_raw]
 
-        if len(docs) == effective_limit:
+        if limit is None and len(docs) == effective_limit:
             logger.warning(
                 "CouchDB find_projected() returned exactly %d documents for selector %s — "
                 "results may be silently truncated. Use skip/limit for pagination.",
