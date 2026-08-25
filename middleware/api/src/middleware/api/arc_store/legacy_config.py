@@ -21,7 +21,8 @@ def count_obsolete_top_level_arc_store_fields(config: BaseModel) -> int:
     """Count obsolete top-level ArcStore backends that are actually configured.
 
     Explicit ``null`` values are ignored: only non-``None`` backends count toward
-    mutual exclusivity. Accessing the fields may emit Pydantic ``Field(deprecated=...)``
-    warnings; that is intentional for production use of obsolete keys.
+    mutual exclusivity. Reads via ``__dict__`` so preferred ``arc_store`` configs do
+    not emit ``Field(deprecated=...)`` noise when legacy keys are unset; real use of
+    obsolete keys still warns at config construction / attribute access elsewhere.
     """
-    return sum(1 for name in OBSOLETE_TOP_LEVEL_FIELDS if getattr(config, name, None) is not None)
+    return sum(1 for name in OBSOLETE_TOP_LEVEL_FIELDS if config.__dict__.get(name) is not None)

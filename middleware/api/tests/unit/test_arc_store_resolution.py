@@ -1,5 +1,7 @@
 """Tests for ArcStore backend resolution and config validation."""
 
+import warnings
+
 import pytest
 from pydantic import TypeAdapter, ValidationError
 
@@ -29,7 +31,11 @@ def test_arc_store_type_consolidated_git() -> None:
             "consolidated_git": {"repo_url": "file:///tmp/catalog.git"},
         },
     })
-    backend_type, settings = resolve_arc_store_backend(config)
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("always", DeprecationWarning)
+        backend_type, settings = resolve_arc_store_backend(config)
+        obsolete = [w for w in caught if "Top-level" in str(w.message) and "obsolete" in str(w.message)]
+    assert obsolete == []
     assert backend_type == ArcStoreBackendType.CONSOLIDATED_GIT
     assert isinstance(settings, ConsolidatedGitConfig)
     assert is_consolidated_backend(config)
