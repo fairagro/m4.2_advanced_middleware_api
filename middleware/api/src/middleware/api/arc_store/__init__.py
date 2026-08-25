@@ -8,7 +8,10 @@ from abc import ABC, abstractmethod
 from arctrl import ARC  # type: ignore[import-untyped]
 from opentelemetry import trace
 
+from middleware.api.arc_store.arctrl_compat import patch_fable_int32_for_openpyxl
 from middleware.api.utils import calculate_arc_id
+
+patch_fable_int32_for_openpyxl()
 
 logger = logging.getLogger(__name__)
 
