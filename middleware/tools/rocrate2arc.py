@@ -21,8 +21,10 @@ def _patch_fable_int32_for_openpyxl() -> None:
         result = divmod(int(other), int(self))  # type: ignore[call-overload]
         return int(result[0]), int(result[1])
 
-    Int32.__divmod__ = divmod_method  # type: ignore[method-assign, assignment]
-    Int32.__rdivmod__ = rdivmod_method  # type: ignore[method-assign, assignment]
+    if "__divmod__" not in Int32.__dict__:
+        Int32.__divmod__ = divmod_method  # type: ignore[method-assign, assignment]
+    if "__rdivmod__" not in Int32.__dict__:
+        Int32.__rdivmod__ = rdivmod_method  # type: ignore[method-assign, assignment]
 
 
 _patch_fable_int32_for_openpyxl()
