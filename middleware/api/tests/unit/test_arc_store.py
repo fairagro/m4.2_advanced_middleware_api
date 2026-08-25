@@ -62,6 +62,31 @@ class TestArcStoreWrapperMethods:
 
     @pytest.mark.asyncio
     @staticmethod
+    async def test_finalize_generic_exception_records_redacted_error() -> None:
+        """OTEL must record a redacted ArcStoreError, not a raw token-bearing exception."""
+        store = create_mock_arc_store()
+        leak = RuntimeError("push https://oauth2:secret-token@gitlab.example.com/g/c.git")
+        mock_span = MagicMock()
+        mock_cm = MagicMock()
+        mock_cm.__enter__.return_value = mock_span
+        mock_cm.__exit__.return_value = None
+
+        with (
+            patch.object(store, "_finalize", side_effect=leak),
+            patch.object(store._tracer, "start_as_current_span", return_value=mock_cm),  # noqa: SLF001
+            pytest.raises(ArcStoreError) as raised,
+        ):
+            await store.finalize(rdi="edal")
+
+        assert "secret-token" not in str(raised.value)
+        assert "secret-token" not in raised.value.args[0]
+        recorded = mock_span.record_exception.call_args.args[0]
+        assert isinstance(recorded, ArcStoreError)
+        assert "secret-token" not in str(recorded)
+        assert recorded is raised.value
+
+    @pytest.mark.asyncio
+    @staticmethod
     async def test_create_or_update_arc_store_error_passthrough() -> None:
         """Test create_or_update passes through ArcStoreError."""
         store = create_mock_arc_store()
