@@ -21,6 +21,7 @@ from opentelemetry import context
 
 from middleware.api.document_store import DocumentStore
 from middleware.shared.json_types import CatalogDatasetRecord
+from middleware.shared.security.url_redact import redact_url_userinfo
 
 from . import ArcStore, ArcStoreError, ArcStoreTransientError
 from .catalog_serialize import extract_catalog_dataset, serialize_catalog_file
@@ -90,7 +91,7 @@ class ConsolidatedGitArcStore(ArcStore):
             else:
                 git_cli.ls_remote(remote_url)
         except GitCommandError as exc:
-            detail = format_git_error_detail(exc)
+            detail = redact_url_userinfo(format_git_error_detail(exc))
             if is_soft_git_error(exc):
                 logger.debug("Catalog remote health check: remote not found (%s)", detail)
             else:
@@ -168,7 +169,7 @@ class ConsolidatedGitArcStore(ArcStore):
                 try:
                     git_ctx.commit_and_push(f"Update {filename}")
                 except GitCommandError as exc:
-                    detail = format_git_error_detail(exc)
+                    detail = redact_url_userinfo(format_git_error_detail(exc))
                     if is_transient_git_error(exc):
                         raise ArcStoreTransientError(detail) from exc
                     if is_soft_git_error(exc):

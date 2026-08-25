@@ -124,18 +124,18 @@ class GitContext:
                     # Soft errors (e.g. 404) are expected; ls-remote → DEBUG, other actions → INFO.
                     # Do not mark the span as error.
                     level = logging.DEBUG if action == "ls-remote" else logging.INFO
-                    logger.log(level, "Git %s failed as expected: %s", action, detail)
+                    logger.log(level, "Git %s failed as expected: %s", action, safe_detail)
                     record_git_span_failure(span, detail, expected=True)
                 elif is_transient_git_error(exc):
                     status = getattr(exc, "status", None)
                     status_msg = f" (status {status})" if status is not None else ""
-                    logger.info("Git %s failed with transient error%s: %s", action, status_msg, detail)
+                    logger.info("Git %s failed with transient error%s: %s", action, status_msg, safe_detail)
                     record_git_span_failure(span, detail)
                     raise ArcStoreTransientError(f"Transient Git error during {action}: {safe_detail}") from exc
                 else:
                     status = getattr(exc, "status", None)
                     status_msg = f" (status {status})" if status is not None else ""
-                    logger.warning("Git %s failed%s: %s", action, status_msg, detail)
+                    logger.warning("Git %s failed%s: %s", action, status_msg, safe_detail)
                     record_git_span_failure(span, detail)
                 raise
 
