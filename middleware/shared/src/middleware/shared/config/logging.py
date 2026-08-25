@@ -61,10 +61,15 @@ def install_url_userinfo_redaction(logger: logging.Logger | None = None) -> None
     if not any(isinstance(f, _RedactingLogFilter) for f in target.filters):
         target.addFilter(_RedactingLogFilter())
     for handler in target.handlers:
+        if not isinstance(handler, logging.Handler):
+            # Skip test doubles / non-stdlib handlers without a real formatter API.
+            continue
         if not any(isinstance(f, _RedactingLogFilter) for f in handler.filters):
             handler.addFilter(_RedactingLogFilter())
         current = handler.formatter
         if isinstance(current, RedactingFormatter):
+            continue
+        if current is not None and not isinstance(current, logging.Formatter):
             continue
         handler.setFormatter(RedactingFormatter(current))
 
