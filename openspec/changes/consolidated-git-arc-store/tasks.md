@@ -37,8 +37,9 @@
 - [x] 3.2 Add catalog flush success/failure events (distinct from
       `GIT_PUSH_SUCCESS`); never emit false per-ARC push success for this
       backend
-- [x] 3.3 When consolidated backend is configured, reject `POST /v3/arcs` with
-      HTTP `400` before sync scheduling
+- [x] 3.3 When consolidated backend is configured, reject standalone ARC create
+      (`POST /v1/arcs`, `/v2/arcs`, `/v3/arcs`) with HTTP `400` before CouchDB
+      staging (enforced in `ArcManager` when `harvest_id` is absent)
 
 ## 4. Tests and docs
 

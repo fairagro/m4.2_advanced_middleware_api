@@ -17,11 +17,22 @@ from middleware.shared.api_models.common.models import ArcOperationResult, ArcRe
 from middleware.shared.api_models.common.rocrate import RoCratePayload
 from middleware.shared.json_types import RoCrateContent
 
-from .exceptions import BusinessLogicError, DuplicateArcInHarvestError, InvalidJsonSemanticError, TransientError
+from .exceptions import (
+    BusinessLogicError,
+    DuplicateArcInHarvestError,
+    InvalidJsonSemanticError,
+    InvalidRequestError,
+    TransientError,
+)
 from .ports import TaskDispatcher
 from .task_payloads import ArcSyncTask
 
 logger = logging.getLogger(__name__)
+
+_STANDALONE_UPLOAD_UNSUPPORTED = (
+    "Standalone ARC upload is not supported with the consolidated Git catalog backend. "
+    "Submit ARCs via POST /v3/harvests/{harvest_id}/arcs and complete the harvest."
+)
 
 
 class ArcManager:
@@ -81,11 +92,18 @@ class ArcManager:
             ArcOperationResult: Response containing details of the processed ARC.
 
         Raises:
+            InvalidRequestError: If standalone upload is used with a backend that
+                requires harvest finalize (e.g. consolidated Git catalog).
             InvalidJsonSemanticError: If the JSON is semantically incorrect.
             BusinessLogicError: If an error occurs during the operation or if not in API mode.
         """
         if not self._dispatcher:
             raise BusinessLogicError("create_or_update_arc can only be called in API mode")
+
+        # Reject before CouchDB staging: consolidated catalog has no per-ARC Git
+        # sync and no harvest finalize signal on standalone v1/v2/v3 uploads.
+        if harvest_id is None and not self._store.supports_standalone_upload:
+            raise InvalidRequestError(_STANDALONE_UPLOAD_UNSUPPORTED)
 
         with self._tracer.start_as_current_span(
             "api.ArcManager.create_or_update_arc",

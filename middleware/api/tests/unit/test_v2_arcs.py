@@ -1,7 +1,8 @@
 """Unit tests for the v2/arcs endpoint."""
 
 import http
-from unittest.mock import AsyncMock, patch
+from typing import cast
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from fastapi.testclient import TestClient
@@ -76,6 +77,36 @@ def test_create_or_update_arc_success(
         body = r.json()
         assert body["task_id"] == "task-123"
         assert body["status"] == TaskStatus.SUCCESS
+
+
+@pytest.mark.unit
+def test_create_or_update_arc_v2_rejected_for_consolidated_backend(
+    client: TestClient, cert: str, middleware_api: Api
+) -> None:
+    """Standalone POST /v2/arcs returns 400 when consolidated catalog backend is active."""
+    cast(MagicMock, middleware_api.business_logic.arc_store).supports_standalone_upload = False
+    with patch.object(middleware_api.app.state.common_deps, "get_authorized_rdis", new_callable=AsyncMock) as mock_auth:
+        mock_auth.return_value = ["rdi-1"]
+
+        r = client.post(
+            "/v2/arcs",
+            headers={
+                "ssl-client-cert": cert,
+                "ssl-client-verify": "SUCCESS",
+                "content-type": "application/json",
+                "accept": "application/json",
+            },
+            json={
+                "rdi": "rdi-1",
+                "arc": {
+                    "@context": "https://w3id.org/ro/crate/1.1/context",
+                    "@graph": [{"@id": "./", "identifier": "ARC-001"}],
+                },
+            },
+        )
+
+    assert r.status_code == http.HTTPStatus.BAD_REQUEST
+    assert "consolidated" in r.json()["detail"].lower()
 
 
 @pytest.mark.unit

@@ -32,7 +32,7 @@ callers. Tracked in
 - Extract Schema.org `Dataset` records from stored ARC RO-Crate content (no
   parallel raw Schema.org upload).
 - When the consolidating backend is configured, **reject** standalone
-  `POST /v3/arcs` (harvest-scoped product cut).
+  ARC create on `/v1/arcs`, `/v2/arcs`, and `/v3/arcs` (harvest-scoped product cut).
 - Document output shape vs Basic; v1 is one file per configured RDI name
   (Basic `openagrar_*` / `publisso_*` special cases deferred).
 - **Non-goals:** dual-write with per-ARC GitLab; CouchDB dirty-marker
@@ -62,7 +62,7 @@ callers. Tracked in
 
 - **Code:** `middleware/api/.../arc_store/` (new implementation + port method),
   factory/`Config` (`arc_store.type` + deprecated legacy keys),
-  harvest-complete → finalize task (not per-ARC sync), `POST /v3/arcs` guard,
+  harvest-complete → finalize task (not per-ARC sync), standalone ARC create guard,
   catalog flush events/metrics.
 - **Specs:** deltas under this change; main specs after archive; Spec-to-Code
   mapping in `AGENTS.md`.

@@ -13,6 +13,7 @@ from middleware.api.business_logic import (
     BusinessLogicError,
     BusinessLogicFactory,
     InvalidJsonSemanticError,
+    InvalidRequestError,
     SetupError,
     TransientError,
 )
@@ -311,6 +312,39 @@ async def test_api_mode_create_or_update_success(
     mock_task_dispatcher.dispatch_sync_arc.assert_called_once_with(
         ArcSyncTask(rdi=rdi, arc=arc_data, client_id=client_id)
     )
+
+
+@pytest.mark.asyncio
+async def test_api_mode_rejects_standalone_when_unsupported(
+    api_logic: BusinessLogic, mock_store: MagicMock, mock_doc_store: MagicMock, mock_task_dispatcher: MagicMock
+) -> None:
+    """Standalone create_or_update_arc must fail before CouchDB when backend forbids it."""
+    mock_store.supports_standalone_upload = False
+    arc_data = minimal_rocrate_dict("ABC")
+
+    with pytest.raises(InvalidRequestError, match="Standalone ARC upload is not supported"):
+        await api_logic.create_or_update_arc("test-rdi", arc_data, "client")
+
+    mock_doc_store.store_arc.assert_not_called()
+    mock_task_dispatcher.dispatch_sync_arc.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_api_mode_allows_harvest_when_standalone_unsupported(
+    api_logic: BusinessLogic, mock_store: MagicMock, mock_doc_store: MagicMock, mock_task_dispatcher: MagicMock
+) -> None:
+    """Harvest-scoped upload remains allowed when standalone upload is unsupported."""
+    mock_store.supports_standalone_upload = False
+    mock_store.publishes_per_arc_git = False
+    mock_doc_store.store_arc.return_value = ArcStoreResult(arc_id="arc_id", is_new=True, has_changes=True)
+    mock_doc_store.get_harvest = AsyncMock(return_value=MagicMock(client_id="client"))
+    arc_data = minimal_rocrate_dict("ABC")
+
+    result = await api_logic.create_or_update_arc("test-rdi", arc_data, "client", harvest_id="harvest-1")
+
+    assert result.arc.id == "arc_id"
+    mock_doc_store.store_arc.assert_called_once()
+    mock_task_dispatcher.dispatch_sync_arc.assert_not_called()
 
 
 @pytest.mark.asyncio

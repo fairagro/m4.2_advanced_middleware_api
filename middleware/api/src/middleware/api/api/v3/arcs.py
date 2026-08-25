@@ -33,15 +33,6 @@ async def create_or_update_arc(
     rdi = request_body.rdi
     await deps.validate_rdi_authorized(rdi, request)
 
-    if not bl.arc_store.supports_standalone_upload:
-        raise HTTPException(
-            status_code=HTTPStatus.BAD_REQUEST,
-            detail=(
-                "Standalone ARC upload is not supported with the consolidated Git catalog backend. "
-                "Submit ARCs via POST /v3/harvests/{harvest_id}/arcs and complete the harvest."
-            ),
-        )
-
     result = await bl.create_or_update_arc(rdi, request_body.arc, client_id)
 
     arc_id = result.arc.id

@@ -47,7 +47,7 @@ Explicit decisions for the numbered open questions in
 
 | # | Question (issue) | Decision |
 | --- | --- | --- |
-| **1** | Standalone `POST /v3/arcs` when consolidating store is configured? | **Reject with HTTP 400.** No silent staging, no debounce, no eager per-ARC rewrite. Harvest-scoped product cut. |
+| **1** | Standalone ARC create (`/v1/arcs`, `/v2/arcs`, `/v3/arcs`) when consolidating store is configured? | **Reject with HTTP 400.** No silent staging, no debounce, no eager per-ARC rewrite. Harvest-scoped product cut. Enforced in `ArcManager` (not HTTP-layer only). |
 | **2** | Finalize trigger and HTTP semantics? | Mark harvest **`COMPLETED` first**, then **enqueue** async Celery finalize. HTTP MUST NOT wait for Git push. On **permanent** catalog push failure: harvest stays `COMPLETED`; record `CATALOG_PUSH_FAILED`. On **transient** failure: do **not** append `CATALOG_PUSH_FAILED` before Celery retry (same as per-ARC `GIT_PUSH_*`); finalize MAY be retried without re-opening the harvest. |
 | **3** | Finalize scope: `rdi` vs `harvest_id` vs both? Overlapping harvests? | **`finalize(rdi=…)` only.** CouchDB stores the **latest** ARC body per `arc_id`, not a harvest-scoped snapshot, so `harvest_id` cannot select “ARCs of that harvest” for a rebuild. Rebuild from **all** current ARC documents for the RDI. Overlapping harvests converge on CouchDB; **last successful push** wins on the remote. A Celery task MAY still *carry* `harvest_id` for logging/correlation; it is not an ArcStore finalize argument. |
 | **4** | Staging model vs CouchDB / content-hash? | **No dirty-marker documents.** Staging = normal CouchDB ARC documents. Content-hash still gates CouchDB writes (unchanged ARC → no doc update). Optional: skip finalize **enqueue** when harvest stats show `arcs_new + arcs_updated == 0`. When finalize runs, **byte equality** vs remote file skips commit/push. |
@@ -139,12 +139,14 @@ legacy top-level key), never dual-write.
 backward-compatible deployments and Helm/env overlays that still set top-level
 keys.
 
-### Decision: Standalone `POST /v3/arcs` → fail-fast 400
+### Decision: Standalone ARC create endpoints → fail-fast 400
 
-**Choice:** When consolidating backend is configured, reject standalone upload.
+**Choice:** When consolidating backend is configured, reject standalone upload
+on `POST /v1/arcs`, `POST /v2/arcs`, and `POST /v3/arcs` (enforced in
+`ArcManager.create_or_update_arc` when `harvest_id` is absent).
 
 **Why:** No harvest finalize signal; preferred product cut is harvest-scoped
-(issue table).
+(issue table). HTTP-layer-only guards miss legacy standalone routes.
 
 ### Decision: Finalize trigger — async after COMPLETED
 
@@ -316,7 +318,7 @@ catalog tasks share one remote (not one path per `arc_id`).
    legacy keys).
 2. Implement consolidated store + extraction + list-by-RDI + tests.
 3. Skip per-ARC sync dispatch when consolidated; harvest complete → finalize.
-4. Guard `POST /v3/arcs` when consolidated config active.
+4. Guard standalone ARC create (`/v1/arcs`, `/v2/arcs`, `/v3/arcs`) when consolidated config active.
 5. Roll out against the **Advanced-owned** catalog remote.
 6. Rollback: switch config back to `git_repo` (legacy or `arc_store.type`).
 

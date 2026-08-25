@@ -116,6 +116,8 @@ def service(config: Config) -> BusinessLogic:
     store.delete = AsyncMock()
     store.create_or_update = AsyncMock()
     store.shutdown = AsyncMock()
+    store.publishes_per_arc_git = True
+    store.supports_standalone_upload = True
 
     doc_store = MagicMock()
 
