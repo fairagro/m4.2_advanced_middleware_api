@@ -217,6 +217,9 @@ class ArcManager:
         event_type: ArcEventType,
         message: str,
     ) -> None:
+        # Per-ARC backends have no consolidated catalog; skip CATALOG_PUSH_* events.
+        if self._store.publishes_per_arc_git:
+            return
         event = HarvestCatalogEvent(
             timestamp=datetime.now(UTC),
             type=event_type.value,
