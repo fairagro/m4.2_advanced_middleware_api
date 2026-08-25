@@ -3,7 +3,6 @@
 import asyncio
 import concurrent.futures
 import logging
-import re
 import shutil
 from collections.abc import Callable
 from pathlib import Path
@@ -29,20 +28,11 @@ logger = logging.getLogger(__name__)
 T = TypeVar("T")
 P = ParamSpec("P")
 
-# Match http(s)://userinfo@host — credentials must not enter logs/events.
-_GIT_URL_USERINFO = re.compile(r"(https?://)([^/\s]+)@", re.IGNORECASE)
-
-
-def redact_git_url_userinfo(text: str) -> str:
-    """Replace URL userinfo (e.g. ``oauth2:token@``) with ``***@``."""
-    return _GIT_URL_USERINFO.sub(r"\1***@", text)
-
 
 def format_git_error_detail(exc: GitCommandError) -> str:
-    """Prefer concise stderr for messages; always redact embedded URL credentials."""
+    """Prefer concise stderr for messages (URL credentials are redacted centrally)."""
     stderr = str(getattr(exc, "stderr", "") or "").strip()
-    raw = stderr or str(exc).strip()
-    return redact_git_url_userinfo(raw)
+    return stderr or str(exc).strip()
 
 
 def is_soft_git_error(exc: GitCommandError) -> bool:

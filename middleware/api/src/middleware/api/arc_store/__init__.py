@@ -10,6 +10,7 @@ from opentelemetry import trace
 
 from middleware.api.arc_store.arctrl_compat import patch_fable_int32_for_openpyxl
 from middleware.api.utils import calculate_arc_id
+from middleware.shared.security.url_redact import redact_url_userinfo
 
 patch_fable_int32_for_openpyxl()
 
@@ -18,6 +19,10 @@ logger = logging.getLogger(__name__)
 
 class ArcStoreError(Exception):
     """Excpetion base class for all ArcStore errors."""
+
+    def __str__(self) -> str:
+        """Hide URL userinfo (e.g. oauth2 tokens) in messages and events."""
+        return redact_url_userinfo(super().__str__())
 
 
 class ArcStoreTransientError(ArcStoreError):

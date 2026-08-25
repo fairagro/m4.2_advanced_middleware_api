@@ -193,7 +193,11 @@ class ArcManager:
                             str(exc),
                         )
                     except Exception as log_error:  # noqa: BLE001
-                        logger.warning("Could not record catalog failure on harvest %s: %s", harvest_id, log_error)
+                        logger.warning(
+                            "Could not record catalog failure on harvest %s: %s",
+                            harvest_id,
+                            log_error,
+                        )
                 span.record_exception(exc)
                 raise TransientError(str(exc)) from exc
             except Exception as exc:
@@ -205,7 +209,11 @@ class ArcManager:
                             str(exc),
                         )
                     except Exception as log_error:  # noqa: BLE001
-                        logger.warning("Could not record catalog failure on harvest %s: %s", harvest_id, log_error)
+                        logger.warning(
+                            "Could not record catalog failure on harvest %s: %s",
+                            harvest_id,
+                            log_error,
+                        )
                 span.record_exception(exc)
                 if isinstance(exc, BusinessLogicError):
                     raise
@@ -298,7 +306,7 @@ class ArcManager:
                             ArcEvent(
                                 timestamp=datetime.now(UTC),
                                 type=ArcEventType.GIT_PUSH_FAILED,
-                                message=f"GitLab sync failed: {str(e)}",
+                                message=f"GitLab sync failed: {e!s}",
                             ),
                         )
                     except Exception as log_error:  # noqa: BLE001
@@ -308,4 +316,4 @@ class ArcManager:
                     raise
                 if isinstance(e, BusinessLogicError):
                     raise
-                raise BusinessLogicError(f"unexpected error encountered: {str(e)}") from e
+                raise BusinessLogicError(f"unexpected error encountered: {e!s}") from e

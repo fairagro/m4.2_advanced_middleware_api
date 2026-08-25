@@ -11,6 +11,7 @@ from rocrate_fixtures import minimal_rocrate_dict
 from middleware.api.arc_store import ArcStoreError, ArcStoreTransientError
 from middleware.api.arc_store.consolidated_git import ConsolidatedGitArcStore
 from middleware.api.arc_store.consolidated_git_config import ConsolidatedGitConfig
+from middleware.shared.config.logging import install_url_userinfo_redaction
 
 
 @pytest.fixture
@@ -170,6 +171,7 @@ def test_check_health_https_ls_remote_failure(tmp_path: Path, caplog: pytest.Log
         stderr="fatal: could not read from remote 'https://oauth2:secret-token@gitlab.example.com/group/catalog.git'",
     )
 
+    install_url_userinfo_redaction()
     with (
         patch("middleware.api.arc_store.consolidated_git.git.cmd.Git", return_value=mock_git),
         caplog.at_level("WARNING"),

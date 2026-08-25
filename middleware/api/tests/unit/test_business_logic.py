@@ -7,7 +7,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 from rocrate_fixtures import minimal_rocrate_dict
 
-from middleware.api.arc_store import ArcStoreTransientError
+from middleware.api.arc_store import ArcStoreError, ArcStoreTransientError
 from middleware.api.business_logic import (
     BusinessLogic,
     BusinessLogicError,
@@ -505,6 +505,32 @@ async def test_sync_to_gitlab_generic_exception(worker_logic: BusinessLogic, moc
 
         with pytest.raises(BusinessLogicError, match="unexpected error encountered"):
             await worker_logic.sync_to_gitlab("test_rdi", arc_data)
+
+
+@pytest.mark.asyncio
+async def test_sync_to_gitlab_redacts_oauth_token_in_failure_event(
+    worker_logic: BusinessLogic,
+    mock_store: MagicMock,
+    mock_doc_store: MagicMock,
+) -> None:
+    """GIT_PUSH_FAILED event messages redact oauth2 credentials via ArcStoreError.__str__."""
+    mock_store.create_or_update.side_effect = ArcStoreError(
+        "failed to push to 'https://oauth2:secret-token@gitlab.example.com/group/arc.git'"
+    )
+    arc_data = minimal_rocrate_dict("test")
+
+    with patch("middleware.api.business_logic.arc_manager.ARC") as mock_arc_class:
+        mock_arc_obj = MagicMock()
+        mock_arc_obj.Identifier = "test"
+        mock_arc_class.from_rocrate_json_string.return_value = mock_arc_obj
+
+        with pytest.raises(BusinessLogicError, match="https://\\*\\*\\*@gitlab.example.com"):
+            await worker_logic.sync_to_gitlab("test_rdi", arc_data)
+
+    mock_doc_store.add_event.assert_awaited()
+    event = mock_doc_store.add_event.await_args.args[1]
+    assert "secret-token" not in event.message
+    assert "https://***@gitlab.example.com" in event.message
 
 
 @pytest.mark.asyncio

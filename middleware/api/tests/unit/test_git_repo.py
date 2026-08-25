@@ -13,6 +13,7 @@ from git.exc import GitCommandError
 from pydantic import SecretStr
 
 from middleware.api.arc_store.config import GitRepoConfig
+from middleware.api.arc_store.consolidated_git_config import ConsolidatedGitConfig
 from middleware.api.arc_store.git_cli_settings import GitCliSettings, GitContextConfig
 from middleware.api.arc_store.git_repo import (
     GitContext,
@@ -20,7 +21,6 @@ from middleware.api.arc_store.git_repo import (
     format_git_error_detail,
     is_soft_git_error,
     is_transient_git_error,
-    redact_git_url_userinfo,
 )
 from middleware.api.arc_store.remote_git_provider import GitProjectMetadata
 
@@ -182,8 +182,6 @@ def test_default_cache_dir_validator() -> None:
 
 def test_consolidated_null_cache_dir_uses_catalog_default() -> None:
     """Explicit null must use ConsolidatedGitConfig's default_factory, not GitRepo's."""
-    from middleware.api.arc_store.consolidated_git_config import ConsolidatedGitConfig
-
     config = ConsolidatedGitConfig.model_validate({
         "repo_url": "file:///tmp/catalog.git",
         "cache_dir": None,
@@ -517,21 +515,17 @@ def test_is_transient_git_error_network_and_push_conflict() -> None:
     assert is_transient_git_error(permanent) is False
 
 
-def test_redact_git_url_userinfo_and_format_detail() -> None:
-    """Error details prefer stderr and strip oauth2/userinfo credentials."""
-    assert (
-        redact_git_url_userinfo("failed to push to 'https://oauth2:secret-token@gitlab.example.com/g/c.git'")
-        == "failed to push to 'https://***@gitlab.example.com/g/c.git'"
-    )
+def test_format_git_error_detail_prefers_stderr() -> None:
+    """Error details prefer concise stderr over the full GitCommandError string."""
     exc = GitCommandError(
         "push",
         1,
-        stderr="error: failed to push some refs to 'https://oauth2:secret-token@host/repo.git'",
+        stderr="error: failed to push some refs to 'https://example.com/repo.git'",
     )
     detail = format_git_error_detail(exc)
-    assert "secret-token" not in detail
-    assert "https://***@host/repo.git" in detail
     assert "failed to push some refs" in detail
+    assert "https://example.com/repo.git" in detail
+    assert "Cmd('push')" not in detail
 
 
 @patch("middleware.api.arc_store.git_repo.Repo")
