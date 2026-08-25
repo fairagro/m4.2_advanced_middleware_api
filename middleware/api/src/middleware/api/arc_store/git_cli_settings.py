@@ -3,8 +3,9 @@
 from __future__ import annotations
 
 import tempfile
+from collections.abc import Callable
 from pathlib import Path
-from typing import Annotated
+from typing import Annotated, cast
 from urllib.parse import quote, urlparse
 
 from pydantic import BaseModel, Field, SecretStr, field_validator
@@ -59,9 +60,13 @@ class GitCliSettings(BaseModel):
     @field_validator("cache_dir", mode="before")
     @classmethod
     def normalize_cache_dir(cls, value: Path | str | None) -> Path | str:
-        """Accept omitted/null YAML and coerce strings before validation."""
+        """Accept omitted/null YAML; ``None`` uses this model's ``cache_dir`` default_factory."""
         if value is None:
-            return _default_git_cache_dir()
+            factory = cls.model_fields["cache_dir"].default_factory
+            if not callable(factory):
+                return _default_git_cache_dir()
+            # Pydantic types default_factory as ``()`` or ``(data)``; ours are zero-arg.
+            return cast(Callable[[], Path], factory)()
         return value
 
     def authenticated_repo_url(self, url: str) -> str:

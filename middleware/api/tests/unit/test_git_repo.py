@@ -177,7 +177,18 @@ def test_default_cache_dir_validator() -> None:
         group="b",
         cache_dir=None,  # type: ignore[arg-type]
     )
-    assert config.cache_dir is not None
+    assert config.cache_dir == Path(tempfile.gettempdir()) / "middleware_git_cache"
+
+
+def test_consolidated_null_cache_dir_uses_catalog_default() -> None:
+    """Explicit null must use ConsolidatedGitConfig's default_factory, not GitRepo's."""
+    from middleware.api.arc_store.consolidated_git_config import ConsolidatedGitConfig
+
+    config = ConsolidatedGitConfig.model_validate({
+        "repo_url": "file:///tmp/catalog.git",
+        "cache_dir": None,
+    })
+    assert config.cache_dir == Path(tempfile.gettempdir()) / "middleware_catalog_git_cache"
 
 
 @pytest.mark.asyncio

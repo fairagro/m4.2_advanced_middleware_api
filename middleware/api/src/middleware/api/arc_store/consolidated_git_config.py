@@ -34,14 +34,6 @@ class ConsolidatedGitConfig(GitCliSettings):
         """Ensure catalog repo URL uses HTTP, HTTPS or FILE."""
         return GitCliSettings.validate_git_url_scheme(value)
 
-    @field_validator("cache_dir", mode="before")
-    @classmethod
-    def set_catalog_cache_dir(cls, value: Path | str | None) -> Path | str:
-        """Accept explicit YAML null; omitted values use ``default_factory``."""
-        if value is None:
-            return _default_catalog_git_cache_dir()
-        return value
-
     def catalog_repo_url(self) -> str:
         """Return the authenticated URL for the shared catalog remote."""
         return self.authenticated_repo_url(self.repo_url)
