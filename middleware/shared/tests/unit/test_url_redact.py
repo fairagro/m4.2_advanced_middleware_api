@@ -13,6 +13,13 @@ def test_redact_url_userinfo_oauth2_token() -> None:
     assert "secret-token" not in redact_url_userinfo(raw)
 
 
+def test_redacting_formatter_preserves_wrapped_fmt() -> None:
+    """Outer formatter exposes the same _fmt as the wrapped layout."""
+    inner = logging.Formatter("%(asctime)s %(levelname)s %(name)s: %(message)s")
+    outer = RedactingFormatter(inner)
+    assert outer._fmt == inner._fmt  # noqa: SLF001
+
+
 def test_redacting_formatter_covers_message_and_exception_text() -> None:
     """Formatted log lines (including traceback text) are redacted."""
     logger = logging.getLogger("test_url_redact_formatter")

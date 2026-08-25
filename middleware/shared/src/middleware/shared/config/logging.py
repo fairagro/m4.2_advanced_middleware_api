@@ -19,9 +19,16 @@ class RedactingFormatter(logging.Formatter):
     """Wrap another formatter and redact URL userinfo in the final log line."""
 
     def __init__(self, wrapped: logging.Formatter | None = None) -> None:
-        """Initialize with an optional underlying formatter."""
-        super().__init__()
+        """Initialize with an optional underlying formatter.
+
+        Mirrors the wrapped ``_fmt`` / ``datefmt`` so introspection of
+        ``handler.formatter._fmt`` still reflects the real log layout.
+        """
         self._wrapped = wrapped if wrapped is not None else logging.Formatter()
+        super().__init__(
+            fmt=getattr(self._wrapped, "_fmt", None),
+            datefmt=getattr(self._wrapped, "datefmt", None),
+        )
 
     def format(self, record: logging.LogRecord) -> str:
         """Format the record, then strip URL credentials from the result."""
