@@ -198,8 +198,7 @@ class BusinessLogic:
         if target_status == HarvestStatus.COMPLETED and self._ports.task_dispatcher is not None:
             stats = updated.statistics
             skip_empty_harvest = (
-                not self._arc_manager.store.publishes_per_arc_git
-                and stats.arcs_new + stats.arcs_updated == 0
+                not self._arc_manager.store.publishes_per_arc_git and stats.arcs_new + stats.arcs_updated == 0
             )
             if skip_empty_harvest:
                 logger.info(
