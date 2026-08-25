@@ -23,7 +23,8 @@ def patch_fable_int32_for_openpyxl() -> None:
     indices from arctrl 3.2 / fable-library 5.13 are ``fable.Int32``, which
     implements ``//`` and ``%`` but not ``__divmod__``, so builtins ``divmod``
     raises ``TypeError``. Adding ``__divmod__`` / ``__rdivmod__`` restores Write
-    for study/assay ISA files (see ARCtrl#631 and related Int32 issues).
+    for study/assay ISA files (see ARCtrl#638). Duplicated in ``middleware/tools/rocrate2arc.py``
+    (no api dependency); remove both when fixed (fairagro/m4.2_advanced_middleware_api#339).
     """
     if _state["patched"]:
         return

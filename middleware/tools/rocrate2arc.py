@@ -7,7 +7,12 @@ from arctrl import ARC  # type: ignore[import-untyped]
 
 
 def _patch_fable_int32_for_openpyxl() -> None:
-    """Apply openpyxl/fable Int32 divmod shim (tools has no dependency on api)."""
+    """Apply openpyxl/fable Int32 divmod shim (tools has no dependency on api).
+
+    Intentionally duplicated from ``middleware.api.arc_store.arctrl_compat`` so this
+    tool stays free of an ``api`` dependency. Keep in sync; remove both when upstream
+    is fixed (https://github.com/fairagro/m4.2_advanced_middleware_api/issues/339).
+    """
     try:
         from fable_library.core import Int32  # type: ignore[import-untyped]
     except ImportError:
