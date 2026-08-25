@@ -54,7 +54,7 @@ def extract_catalog_dataset(arc_content: RoCrateContent) -> CatalogDatasetRecord
 def _dataset_sort_key(dataset: CatalogDatasetRecord) -> tuple[str, str]:
     node_id = dataset.get("@id")
     id_part = node_id if isinstance(node_id, str) else ""
-    return (id_part, json.dumps(dataset, sort_keys=True, separators=(",", ":")))
+    return (id_part, json.dumps(dataset, sort_keys=True, separators=(",", ":"), ensure_ascii=False))
 
 
 def serialize_catalog_file(datasets: list[CatalogDatasetRecord]) -> bytes:

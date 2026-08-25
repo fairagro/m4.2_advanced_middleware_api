@@ -41,3 +41,14 @@ def test_serialize_catalog_file_byte_stable_order() -> None:
     second = serialize_catalog_file([ds_b, ds_a])
     assert first == second
     assert first.startswith(b"[")
+
+
+def test_serialize_catalog_file_non_ascii_stable() -> None:
+    """Sort-key and payload both use ensure_ascii=False for non-ASCII content."""
+    ds_a = cast(CatalogDatasetRecord, {"@id": "https://example.org/ds", "name": "Äpfel"})
+    ds_b = cast(CatalogDatasetRecord, {"@id": "https://example.org/ds", "name": "Öl"})
+    first = serialize_catalog_file([ds_a, ds_b])
+    second = serialize_catalog_file([ds_b, ds_a])
+    assert first == second
+    assert "Äpfel".encode() in first
+    assert b"\\u" not in first
