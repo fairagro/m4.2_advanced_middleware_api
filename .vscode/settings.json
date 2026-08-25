@@ -79,6 +79,12 @@
 
   "remote.autoForwardPortsSource": "process",
 
+  // Workaround Cursor ≥3.15.6 SCM bug: git extension injects
+  // core.hooksPath=/dev/null via GIT_CONFIG_* and silently skips hooks.
+  // This wrapper strips only that null pin. Remove when Cursor ships a fix:
+  // https://forum.cursor.com/t/167719
+  "git.path": "${workspaceFolder}/scripts/cursor-git.sh",
+
   "json.schemas": [
     {
       "fileMatch": ["renovate.json"],
