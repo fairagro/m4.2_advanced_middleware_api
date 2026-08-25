@@ -1,23 +1,37 @@
 #!/usr/bin/env bash
 # Wrapper for Cursor Source Control: strip the extension's
-# GIT_CONFIG_* override of core.hooksPath → /dev/null (or Windows NUL).
+# core.hooksPath → /dev/null (or Windows NUL) override.
 #
-# Cursor ≥3.15.6 injects that override on every SCM git spawn, which silently
-# skips pre-commit / commit-msg / pre-push. Terminal `git` is unaffected.
-# Point "git.path" at this script (see .vscode/settings.json) until Cursor fixes it:
+# Cursor ≥3.15.6 injects that pin on every SCM git spawn (usually via
+# GIT_CONFIG_KEY_*/GIT_CONFIG_VALUE_*, sometimes as ``git -c``), which silently
+# skips pre-commit / commit-msg / pre-push. Terminal ``git`` is unaffected.
+#
+# Point workspace ``git.path`` at this script (see .vscode/settings.json).
+# After a UI commit, check ``/tmp/cursor-git-wrapper.log`` — if empty, Cursor
+# is not using this wrapper (reload window / verify git.path).
 # https://forum.cursor.com/t/167719
-#
-# Only removes null-device hooksPath pins; other injected keys are left alone.
 
 set -euo pipefail
 
+LOG_FILE="${CURSOR_GIT_WRAPPER_LOG:-/tmp/cursor-git-wrapper.log}"
+WRAPPER_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
 REAL_GIT="${CURSOR_REAL_GIT:-}"
 if [[ -z "${REAL_GIT}" ]]; then
-  if [[ -x /usr/bin/git ]]; then
-    REAL_GIT=/usr/bin/git
-  else
-    REAL_GIT="$(command -v -p git 2>/dev/null || command -v git)"
+  # Prefer a real binary, never this wrapper (avoid recursion if PATH is odd).
+  for candidate in /usr/bin/git /usr/local/bin/git; do
+    if [[ -x "${candidate}" && "${candidate}" != "${BASH_SOURCE[0]}" ]]; then
+      REAL_GIT="${candidate}"
+      break
+    fi
+  done
+  if [[ -z "${REAL_GIT}" ]]; then
+    REAL_GIT="$(command -v -p git 2>/dev/null || true)"
   fi
+fi
+if [[ -z "${REAL_GIT}" || ! -x "${REAL_GIT}" ]]; then
+  echo "cursor-git.sh: could not find real git binary" >&2
+  exit 127
 fi
 
 is_null_hooks_path() {
@@ -27,7 +41,9 @@ is_null_hooks_path() {
   esac
 }
 
+# --- Strip GIT_CONFIG_* command-scope pin ------------------------------------
 count="${GIT_CONFIG_COUNT:-0}"
+stripped_env=0
 if [[ "${count}" =~ ^[0-9]+$ ]] && ((count > 0)); then
   new_keys=()
   new_vals=()
@@ -37,6 +53,7 @@ if [[ "${count}" =~ ^[0-9]+$ ]] && ((count > 0)); then
     key="${!key_var-}"
     val="${!val_var-}"
     if [[ "${key}" == "core.hooksPath" ]] && is_null_hooks_path "${val}"; then
+      stripped_env=1
       continue
     fi
     new_keys+=("${key}")
@@ -53,4 +70,41 @@ if [[ "${count}" =~ ^[0-9]+$ ]] && ((count > 0)); then
   done
 fi
 
-exec "${REAL_GIT}" "$@"
+# --- Strip ``git -c core.hooksPath=/dev/null`` if present ---------------------
+filtered_args=()
+stripped_argv=0
+args=("$@")
+i=0
+while ((i < ${#args[@]})); do
+  arg="${args[$i]}"
+  if [[ "${arg}" == "-c" ]]; then
+    next="${args[$((i + 1))]:-}"
+    if [[ "${next}" == core.hooksPath=* ]]; then
+      val="${next#core.hooksPath=}"
+      if is_null_hooks_path "${val}"; then
+        stripped_argv=1
+        i=$((i + 2))
+        continue
+      fi
+    fi
+  elif [[ "${arg}" == -ccore.hooksPath=* ]]; then
+    val="${arg#-ccore.hooksPath=}"
+    if is_null_hooks_path "${val}"; then
+      stripped_argv=1
+      i=$((i + 1))
+      continue
+    fi
+  fi
+  filtered_args+=("${arg}")
+  i=$((i + 1))
+done
+
+# Diagnostic: proves the SCM UI invoked this wrapper (not system git).
+{
+  printf '%s cmd=%q' "$(date -Iseconds)" "${REAL_GIT}"
+  printf ' %q' "${filtered_args[@]}"
+  printf ' stripped_env=%s stripped_argv=%s GIT_CONFIG_COUNT=%s\n' \
+    "${stripped_env}" "${stripped_argv}" "${GIT_CONFIG_COUNT:-0}"
+} >>"${LOG_FILE}" 2>/dev/null || true
+
+exec "${REAL_GIT}" "${filtered_args[@]}"

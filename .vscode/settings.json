@@ -81,9 +81,14 @@
 
   // Workaround Cursor ≥3.15.6 SCM bug: git extension injects
   // core.hooksPath=/dev/null via GIT_CONFIG_* and silently skips hooks.
-  // This wrapper strips only that null pin. Remove when Cursor ships a fix:
+  // Prefer an absolute path — ${workspaceFolder} is not always expanded for
+  // git.path. After UI commit, /tmp/cursor-git-wrapper.log must gain a line;
+  // if not, reload the window (Developer: Reload Window).
   // https://forum.cursor.com/t/167719
-  "git.path": "${workspaceFolder}/scripts/cursor-git.sh",
+  "git.path": [
+    "/workspaces/m4.2_advanced_middleware_api/scripts/cursor-git.sh",
+    "${workspaceFolder}/scripts/cursor-git.sh"
+  ],
 
   "json.schemas": [
     {
