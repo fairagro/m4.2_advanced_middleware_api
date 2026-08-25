@@ -21,7 +21,7 @@ class RedactingFormatter(logging.Formatter):
     def __init__(self, wrapped: logging.Formatter | None = None) -> None:
         """Initialize with an optional underlying formatter.
 
-        Mirrors the wrapped ``_fmt`` / ``datefmt`` so introspection of
+        Copies the wrapped ``_fmt`` / ``datefmt`` into this instance so
         ``handler.formatter._fmt`` still reflects the real log layout.
         """
         self._wrapped = wrapped if wrapped is not None else logging.Formatter()
