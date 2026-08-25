@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import concurrent.futures
 import logging
+import re
 import shutil
 import tempfile
 from collections.abc import Callable
@@ -31,6 +32,15 @@ logger = logging.getLogger(__name__)
 
 T = TypeVar("T")
 P = ParamSpec("P")
+
+# Same character set as Config.validate_known_rdis (single path segment for "{rdi}.json").
+_SAFE_RDI_FILENAME = re.compile(r"^[a-zA-Z0-9_.-]+$")
+
+
+def _require_safe_catalog_rdi(rdi: str) -> None:
+    """Reject RDIs that are unsafe as a single catalog filename segment."""
+    if not rdi or not _SAFE_RDI_FILENAME.fullmatch(rdi):
+        raise ArcStoreError(f"Invalid RDI for catalog filename: {rdi!r}")
 
 
 class ConsolidatedGitArcStore(ArcStore):
@@ -142,6 +152,7 @@ class ConsolidatedGitArcStore(ArcStore):
 
     def _publish_catalog_bytes(self, rdi: str, catalog_bytes: bytes) -> bool:
         """Clone into a temp dir, write catalog file, push if bytes differ. Returns True if pushed."""
+        _require_safe_catalog_rdi(rdi)
         self._config.cache_dir.mkdir(parents=True, exist_ok=True)
         temp_dir = Path(tempfile.mkdtemp(prefix="catalog_finalize_", dir=self._config.cache_dir))
         try:

@@ -8,6 +8,7 @@ from git.exc import GitCommandError
 from pydantic import SecretStr
 from rocrate_fixtures import minimal_rocrate_dict
 
+from middleware.api.arc_store import ArcStoreError
 from middleware.api.arc_store.consolidated_git import ConsolidatedGitArcStore
 from middleware.api.arc_store.consolidated_git_config import ConsolidatedGitConfig
 
@@ -55,6 +56,17 @@ def test_publish_catalog_bytes_removes_ephemeral_clone(
 
     assert pushed is True
     mock_rmtree.assert_called_once_with(work_dir, ignore_errors=True)
+
+
+def test_publish_catalog_bytes_rejects_unsafe_rdi(consolidated_config: ConsolidatedGitConfig) -> None:
+    """RDI must be a single safe filename segment (same charset as known_rdis)."""
+    store = ConsolidatedGitArcStore(consolidated_config, MagicMock())
+    with pytest.raises(ArcStoreError, match="Invalid RDI for catalog filename"):
+        store._publish_catalog_bytes("../etc/passwd", b"[]\n")
+    with pytest.raises(ArcStoreError, match="Invalid RDI for catalog filename"):
+        store._publish_catalog_bytes("edal/nested", b"[]\n")
+    with pytest.raises(ArcStoreError, match="Invalid RDI for catalog filename"):
+        store._publish_catalog_bytes("", b"[]\n")
 
 
 @pytest.mark.asyncio
