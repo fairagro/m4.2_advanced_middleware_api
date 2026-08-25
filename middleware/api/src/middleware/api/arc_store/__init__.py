@@ -87,7 +87,7 @@ class ArcStore(ABC):
         """Whether ``POST /v3/arcs`` is allowed for this backend."""
         return True
 
-    async def finalize(self, *, rdi: str) -> bool:  # noqa: PLR6301, ARG002
+    async def _finalize(self, *, rdi: str) -> bool:  # noqa: PLR6301, ARG002
         """Publish pending catalog state for an RDI.
 
         Default is a successful no-op returning False (nothing pushed) so
@@ -141,6 +141,28 @@ class ArcStore(ABC):
                 )
                 span.record_exception(e)
                 raise ArcStoreError(f"General exception caught in `ArcStore.create_or_update`: {str(e)}") from e
+
+    async def finalize(self, *, rdi: str) -> bool:
+        """Publish pending catalog state for an RDI.
+
+        Raises:
+            ArcStoreError: If an error occurs during the operation.
+        """
+        with self._tracer.start_as_current_span(
+            "api.ArcStore.finalize",
+            attributes={"rdi": rdi},
+        ) as span:
+            try:
+                pushed = await self._finalize(rdi=rdi)
+                span.set_attribute("pushed", pushed)
+                return pushed
+            except ArcStoreError as e:
+                span.record_exception(e)
+                raise
+            except Exception as e:
+                logger.exception("Caught exception when finalizing catalog for RDI '%s': %s", rdi, str(e))
+                span.record_exception(e)
+                raise ArcStoreError(f"General exception caught in `ArcStore.finalize`: {str(e)}") from e
 
     async def get(self, arc_id: str) -> ARC | None:
         """_Get an ARC by its ID.

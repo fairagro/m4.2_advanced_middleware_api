@@ -166,7 +166,7 @@ class ConsolidatedGitArcStore(ArcStore):
             shutil.rmtree(temp_dir, ignore_errors=True)
 
     @override
-    async def finalize(self, *, rdi: str) -> bool:
+    async def _finalize(self, *, rdi: str) -> bool:
         """Rebuild ``{rdi}.json`` from all CouchDB ARC bodies for the RDI."""
         arcs = await self._doc_store.list_arc_contents_by_rdi(rdi)
         datasets: list[CatalogDatasetRecord] = []
