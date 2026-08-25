@@ -10,7 +10,7 @@ from opentelemetry import trace
 from middleware.api.arc_store import ArcStore, ArcStoreTransientError
 from middleware.api.document_store import DocumentStore, DuplicateArcError
 from middleware.api.document_store.arc_document import ArcEvent, ArcEventType
-from middleware.api.document_store.harvest_document import HarvestCatalogEvent
+from middleware.api.document_store.harvest_document import CatalogPushEventType, HarvestCatalogEvent
 from middleware.api.rocrate import parse_rocrate
 from middleware.api.utils import calculate_arc_id
 from middleware.shared.api_models.common.models import ArcOperationResult, ArcResponse, ArcStatus
@@ -180,7 +180,7 @@ class ArcManager:
                     )
                     await self._append_harvest_catalog_event(
                         harvest_id,
-                        ArcEventType.CATALOG_PUSH_SUCCESS,
+                        CatalogPushEventType.CATALOG_PUSH_SUCCESS,
                         message,
                     )
                 return pushed
@@ -189,7 +189,7 @@ class ArcManager:
                     try:
                         await self._append_harvest_catalog_event(
                             harvest_id,
-                            ArcEventType.CATALOG_PUSH_FAILED,
+                            CatalogPushEventType.CATALOG_PUSH_FAILED,
                             str(exc),
                         )
                     except Exception as log_error:  # noqa: BLE001
@@ -201,7 +201,7 @@ class ArcManager:
                     try:
                         await self._append_harvest_catalog_event(
                             harvest_id,
-                            ArcEventType.CATALOG_PUSH_FAILED,
+                            CatalogPushEventType.CATALOG_PUSH_FAILED,
                             str(exc),
                         )
                     except Exception as log_error:  # noqa: BLE001
@@ -214,7 +214,7 @@ class ArcManager:
     async def _append_harvest_catalog_event(
         self,
         harvest_id: str,
-        event_type: ArcEventType,
+        event_type: CatalogPushEventType,
         message: str,
     ) -> None:
         # Per-ARC backends have no consolidated catalog; skip CATALOG_PUSH_* events.
@@ -222,7 +222,7 @@ class ArcManager:
             return
         event = HarvestCatalogEvent(
             timestamp=datetime.now(UTC),
-            type=event_type.value,
+            type=event_type,
             message=message,
         )
         await self._doc_store.update_harvest(

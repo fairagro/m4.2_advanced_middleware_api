@@ -28,5 +28,9 @@ def warn_obsolete_top_level_arc_store_fields(model: BaseModel) -> None:
 
 
 def count_obsolete_top_level_arc_store_fields(config: BaseModel) -> int:
-    """Count obsolete top-level ArcStore keys explicitly set in config."""
-    return sum(1 for name in OBSOLETE_TOP_LEVEL_FIELD_MESSAGES if name in config.model_fields_set)
+    """Count obsolete top-level ArcStore backends that are actually configured.
+
+    Explicit ``null`` values are ignored: only non-``None`` backends count toward
+    mutual exclusivity. Deprecation warnings still use ``model_fields_set``.
+    """
+    return sum(1 for name in OBSOLETE_TOP_LEVEL_FIELD_MESSAGES if getattr(config, name, None) is not None)

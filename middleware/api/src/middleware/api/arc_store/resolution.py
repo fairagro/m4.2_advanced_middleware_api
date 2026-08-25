@@ -78,8 +78,9 @@ def resolve_arc_store_backend(
         return ArcStoreBackendType.GIT_REPO, config.git_repo
     if config.gitlab_api is not None:
         return ArcStoreBackendType.GITLAB_API, config.gitlab_api
-    assert config.consolidated_git is not None
-    return ArcStoreBackendType.CONSOLIDATED_GIT, config.consolidated_git
+    if config.consolidated_git is not None:
+        return ArcStoreBackendType.CONSOLIDATED_GIT, config.consolidated_git
+    raise ValueError("One of arc_store or git_repo, gitlab_api, consolidated_git must be configured")
 
 
 def is_consolidated_backend(config: ArcStoreConfigSource) -> bool:

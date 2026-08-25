@@ -47,6 +47,47 @@ def test_legacy_git_repo_still_works() -> None:
     assert backend_type == ArcStoreBackendType.GIT_REPO
 
 
+def test_legacy_null_sibling_does_not_count_as_configured() -> None:
+    """Explicit null legacy keys must not block another legacy backend."""
+    with pytest.warns(DeprecationWarning, match="Top-level git_repo is obsolete"):
+        config = Config.from_data({
+            "couchdb": _minimal_couchdb(),
+            "celery": _minimal_celery(),
+            "git_repo": {"url": "https://gitlab.example/repo.git", "group": "fairagro"},
+            "gitlab_api": None,
+            "consolidated_git": None,
+        })
+    backend_type, _ = resolve_arc_store_backend(config)
+    assert backend_type == ArcStoreBackendType.GIT_REPO
+
+
+def test_legacy_only_null_backends_rejected() -> None:
+    """Legacy keys set only to null are not a configured backend."""
+    with pytest.raises(ValueError, match="must be configured"):
+        Config.from_data({
+            "couchdb": _minimal_couchdb(),
+            "celery": _minimal_celery(),
+            "git_repo": None,
+            "gitlab_api": None,
+            "consolidated_git": None,
+        })
+
+
+def test_arc_store_with_null_legacy_key_accepted() -> None:
+    """arc_store plus explicit null legacy keys is still a single backend."""
+    config = Config.from_data({
+        "couchdb": _minimal_couchdb(),
+        "celery": _minimal_celery(),
+        "git_repo": None,
+        "arc_store": {
+            "type": "consolidated_git",
+            "consolidated_git": {"repo_url": "file:///tmp/catalog.git"},
+        },
+    })
+    backend_type, _ = resolve_arc_store_backend(config)
+    assert backend_type == ArcStoreBackendType.CONSOLIDATED_GIT
+
+
 def test_reject_dual_arc_store_and_legacy() -> None:
     """arc_store plus legacy top-level key is invalid."""
     with pytest.raises(ValueError, match="not both"):

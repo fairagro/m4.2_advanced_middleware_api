@@ -8,7 +8,15 @@ aliasing behavior of the HarvestDocument schema.
 from datetime import datetime
 from typing import Any
 
-from middleware.api.document_store.harvest_document import HarvestDocument, HarvestStatistics
+import pytest
+from pydantic import ValidationError
+
+from middleware.api.document_store.harvest_document import (
+    CatalogPushEventType,
+    HarvestCatalogEvent,
+    HarvestDocument,
+    HarvestStatistics,
+)
 from middleware.shared.api_models.common.models import HarvestStatus
 
 ARCS_SUBMITTED = 10
@@ -115,3 +123,23 @@ def test_harvest_document_backward_compat_config_field_ignored() -> None:
     # Neither 'config' nor 'source' must appear on the new model
     assert not hasattr(doc, "config")
     assert not hasattr(doc, "source")
+
+
+def test_harvest_catalog_event_accepts_known_types() -> None:
+    """Catalog flush events accept the two CATALOG_PUSH_* outcomes."""
+    event = HarvestCatalogEvent(
+        timestamp=datetime.now(),
+        type=CatalogPushEventType.CATALOG_PUSH_SUCCESS,
+        message="ok",
+    )
+    assert event.type is CatalogPushEventType.CATALOG_PUSH_SUCCESS
+
+
+def test_harvest_catalog_event_rejects_unknown_type() -> None:
+    """Invalid catalog event types must fail validation."""
+    with pytest.raises(ValidationError):
+        HarvestCatalogEvent.model_validate({
+            "timestamp": datetime.now().isoformat(),
+            "type": "GIT_PUSH_SUCCESS",
+            "message": "wrong domain",
+        })
