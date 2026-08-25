@@ -1,11 +1,8 @@
 #!/usr/bin/env python3
 """Minimal repro: fable.Int32 breaks openpyxl column letters (arctrl 3.2 Write).
 
-Requires:
-    pip install 'arctrl==3.2.1'
-
 Run:
-    python repro_fable_int32_divmod.py
+    uv run --with 'arctrl==3.2.1' python repro_fable_int32_divmod.py
 """
 
 from __future__ import annotations

@@ -40,10 +40,16 @@ def patch_fable_int32_for_openpyxl() -> None:
         result = divmod(int(other), int(self))  # type: ignore[call-overload]
         return int(result[0]), int(result[1])
 
-    _FableInt32.__divmod__ = divmod_method
-    _FableInt32.__rdivmod__ = rdivmod_method
+    changed = False
+    if "__divmod__" not in _FableInt32.__dict__:
+        _FableInt32.__divmod__ = divmod_method
+        changed = True
+    if "__rdivmod__" not in _FableInt32.__dict__:
+        _FableInt32.__rdivmod__ = rdivmod_method
+        changed = True
     _state["patched"] = True
-    logger.debug("Patched fable.Int32.__divmod__ for openpyxl column letters")
+    if changed:
+        logger.debug("Patched fable.Int32.__divmod__ for openpyxl column letters")
 
 
 def reset_fable_int32_patch_for_tests() -> None:
