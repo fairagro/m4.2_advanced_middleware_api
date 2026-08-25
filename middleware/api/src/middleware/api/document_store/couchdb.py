@@ -511,7 +511,11 @@ class CouchDB(DocumentStore):
         await self._client.save_document(doc_id, payload)
 
     async def list_arc_contents_by_rdi(self, rdi: str) -> list[tuple[str, RoCrateContent]]:
-        """List ``(arc_id, arc_content)`` for all ARC documents of an RDI."""
+        """List ``(arc_id, arc_content)`` for all ARC documents of an RDI.
+
+        Raises:
+            ValueError: If a document with ``doc_type=arc`` has an unexpected shape.
+        """
         selector: JsonObject = {"doc_type": "arc"}
         selector["rdi"] = rdi
         results: list[tuple[str, RoCrateContent]] = []
@@ -522,8 +526,15 @@ class CouchDB(DocumentStore):
             for doc in docs:
                 doc_id = doc.get("_id")
                 content = doc.get("arc_content")
-                if isinstance(doc_id, str) and doc_id.startswith("arc_") and isinstance(content, dict):
-                    results.append((doc_id[len("arc_") :], cast(RoCrateContent, content)))
+                if not isinstance(doc_id, str) or not doc_id.startswith("arc_"):
+                    raise ValueError(
+                        f"Malformed ARC document for RDI {rdi!r}: expected _id starting with 'arc_', got {doc_id!r}"
+                    )
+                if not isinstance(content, dict):
+                    raise ValueError(
+                        f"Malformed ARC document {doc_id!r} for RDI {rdi!r}: arc_content must be an object"
+                    )
+                results.append((doc_id[len("arc_") :], cast(RoCrateContent, content)))
             if len(docs) < page_size:
                 break
             skip += page_size

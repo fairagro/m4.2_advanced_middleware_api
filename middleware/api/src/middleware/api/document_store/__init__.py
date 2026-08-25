@@ -243,5 +243,9 @@ class DocumentStore(ABC):
 
     @abstractmethod
     async def list_arc_contents_by_rdi(self, rdi: str) -> list[tuple[str, RoCrateContent]]:
-        """List ``(arc_id, arc_content)`` for all ARC documents of an RDI."""
+        """List ``(arc_id, arc_content)`` for all ARC documents of an RDI.
+
+        Raises:
+            ValueError: If a stored ARC document has an unexpected shape.
+        """
         raise NotImplementedError

@@ -550,3 +550,40 @@ async def test_get_harvest_statistics(  # noqa: PLR0913, PLR0917
     assert stats.arcs_new == expected_new
     assert stats.arcs_updated == expected_updated
     assert stats.arcs_unchanged == expected_unchanged
+
+
+@pytest.mark.asyncio
+async def test_list_arc_contents_by_rdi(store: CouchDB, mock_client_instance: MagicMock) -> None:
+    """list_arc_contents_by_rdi returns arc_id and RO-Crate bodies for an RDI."""
+    content = {"@context": "https://w3id.org/ro/crate/1.1/context", "@graph": []}
+    mock_client_instance.find = AsyncMock(
+        return_value=[{"_id": "arc_ds-1", "doc_type": "arc", "rdi": "edal", "arc_content": content}],
+    )
+
+    results = await store.list_arc_contents_by_rdi("edal")
+
+    assert results == [("ds-1", content)]
+    mock_client_instance.find.assert_awaited_once_with(
+        {"doc_type": "arc", "rdi": "edal"},
+        limit=500,
+        skip=0,
+    )
+
+
+@pytest.mark.asyncio
+async def test_list_arc_contents_by_rdi_rejects_malformed_docs(
+    store: CouchDB,
+    mock_client_instance: MagicMock,
+) -> None:
+    """Malformed ARC documents must fail the catalog listing, not be skipped."""
+    mock_client_instance.find = AsyncMock(
+        return_value=[{"_id": "not_an_arc", "doc_type": "arc", "rdi": "edal", "arc_content": {}}],
+    )
+    with pytest.raises(ValueError, match="expected _id starting with 'arc_'"):
+        await store.list_arc_contents_by_rdi("edal")
+
+    mock_client_instance.find = AsyncMock(
+        return_value=[{"_id": "arc_ds-1", "doc_type": "arc", "rdi": "edal", "arc_content": "oops"}],
+    )
+    with pytest.raises(ValueError, match="arc_content must be an object"):
+        await store.list_arc_contents_by_rdi("edal")
