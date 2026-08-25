@@ -90,10 +90,11 @@ class ConsolidatedGitArcStore(ArcStore):
             else:
                 git_cli.ls_remote(remote_url)
         except GitCommandError as exc:
+            detail = format_git_error_detail(exc)
             if is_soft_git_error(exc):
-                logger.debug("Catalog remote health check: remote not found (%s)", exc)
+                logger.debug("Catalog remote health check: remote not found (%s)", detail)
             else:
-                logger.warning("Catalog remote health check failed: %s", exc)
+                logger.warning("Catalog remote health check failed: %s", detail)
             return False
         return True
 

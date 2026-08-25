@@ -109,28 +109,27 @@ class GitContext:
                 logger.debug("Git %s succeeded", action)
                 return result
             except GitCommandError as exc:  # pragma: no cover - behavior validated indirectly
+                detail = format_git_error_detail(exc)
                 if is_soft_git_error(exc):
                     # Soft errors (like 404) are expected in some workflows
-                    # We log them at INFO (LS-remote) or DEBUG and don't mark span as error
+                    # We log them at INFO (ls-remote) or DEBUG and don't mark span as error
                     level = logging.DEBUG if action == "ls-remote" else logging.INFO
-                    logger.log(level, "Git %s failed as expected: %s", action, exc)
-                    span.add_event("git.expected_failure", attributes={"stderr": str(exc.stderr)})
+                    logger.log(level, "Git %s failed as expected: %s", action, detail)
+                    span.add_event("git.expected_failure", attributes={"stderr": detail})
                     span.set_status(trace.Status(trace.StatusCode.OK))
                 elif is_transient_git_error(exc):
                     status = getattr(exc, "status", None)
                     status_msg = f" (status {status})" if status is not None else ""
-                    logger.info("Git %s failed with transient error%s: %s", action, status_msg, exc)
+                    logger.info("Git %s failed with transient error%s: %s", action, status_msg, detail)
                     span.record_exception(exc)
-                    span.set_status(trace.Status(trace.StatusCode.ERROR, str(exc)))
-                    raise ArcStoreTransientError(
-                        f"Transient Git error during {action}: {format_git_error_detail(exc)}"
-                    ) from exc
+                    span.set_status(trace.Status(trace.StatusCode.ERROR, detail))
+                    raise ArcStoreTransientError(f"Transient Git error during {action}: {detail}") from exc
                 else:
                     status = getattr(exc, "status", None)
                     status_msg = f" (status {status})" if status is not None else ""
-                    logger.warning("Git %s failed%s: %s", action, status_msg, exc)
+                    logger.warning("Git %s failed%s: %s", action, status_msg, detail)
                     span.record_exception(exc)
-                    span.set_status(trace.Status(trace.StatusCode.ERROR, str(exc)))
+                    span.set_status(trace.Status(trace.StatusCode.ERROR, detail))
                 raise
 
     def _apply_repo_config(self) -> None:

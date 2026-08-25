@@ -155,15 +155,26 @@ def test_check_health_https_uses_ls_remote(tmp_path: Path) -> None:
     )
 
 
-def test_check_health_https_ls_remote_failure(tmp_path: Path) -> None:
-    """Unreachable HTTPS catalog remotes report unhealthy."""
+def test_check_health_https_ls_remote_failure(tmp_path: Path, caplog: pytest.LogCaptureFixture) -> None:
+    """Unreachable HTTPS catalog remotes report unhealthy without logging tokens."""
     config = ConsolidatedGitConfig(
         repo_url="https://gitlab.example.com/group/catalog.git",
+        token=SecretStr("secret-token"),
         cache_dir=tmp_path / "cache",
     )
     store = ConsolidatedGitArcStore(config, MagicMock())
     mock_git = MagicMock()
-    mock_git.ls_remote.side_effect = GitCommandError("ls-remote", 128, stderr="fatal: could not read from remote")
+    mock_git.ls_remote.side_effect = GitCommandError(
+        "ls-remote",
+        128,
+        stderr="fatal: could not read from remote 'https://oauth2:secret-token@gitlab.example.com/group/catalog.git'",
+    )
 
-    with patch("middleware.api.arc_store.consolidated_git.git.cmd.Git", return_value=mock_git):
+    with (
+        patch("middleware.api.arc_store.consolidated_git.git.cmd.Git", return_value=mock_git),
+        caplog.at_level("WARNING"),
+    ):
         assert store.check_health() is False
+
+    assert "secret-token" not in caplog.text
+    assert "https://***@gitlab.example.com/group/catalog.git" in caplog.text
