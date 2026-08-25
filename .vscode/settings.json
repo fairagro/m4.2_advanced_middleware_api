@@ -79,11 +79,6 @@
 
   "remote.autoForwardPortsSource": "process",
 
-  // git.path cannot live here (workspace): Cursor only applies it in User
-  // settings (local) or Remote/Machine settings (devcontainer). See AGENTS.md
-  // and scripts/cursor-git.sh — set remotely to:
-  //   /workspaces/m4.2_advanced_middleware_api/scripts/cursor-git.sh
-
   "json.schemas": [
     {
       "fileMatch": ["renovate.json"],
