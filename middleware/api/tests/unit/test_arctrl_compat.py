@@ -7,7 +7,6 @@ from pathlib import Path
 
 import pytest
 from arctrl import ARC  # type: ignore[import-untyped]
-from fable_library.core import int32  # type: ignore[import-untyped]
 
 from middleware.api.arc_store.arctrl_compat import (
     patch_fable_int32_for_openpyxl,
@@ -25,7 +24,8 @@ def test_patch_fable_int32_divmod_is_idempotent() -> None:
 
 def test_patch_fable_int32_enables_divmod_with_python_int() -> None:
     """Openpyxl column-letter path needs builtins.divmod(Int32, int)."""
-    pytest.importorskip("fable_library.core")
+    fable_core = pytest.importorskip("fable_library.core")
+    int32 = fable_core.int32
 
     reset_fable_int32_patch_for_tests()
     patch_fable_int32_for_openpyxl()
