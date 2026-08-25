@@ -7,13 +7,14 @@ from pathlib import Path
 
 import pytest
 from arctrl import ARC  # type: ignore[import-untyped]
+from packaging.version import Version
 
 from middleware.api.arc_store.arctrl_compat import (
     patch_fable_int32_for_openpyxl,
     reset_fable_int32_patch_for_tests,
 )
 
-_ARCTRL_VERSION = importlib.metadata.version("arctrl")
+_ARCTRL_VERSION = Version(importlib.metadata.version("arctrl"))
 
 
 def test_patch_fable_int32_divmod_is_idempotent() -> None:
@@ -35,8 +36,8 @@ def test_patch_fable_int32_enables_divmod_with_python_int() -> None:
 
 
 @pytest.mark.skipif(
-    _ARCTRL_VERSION.startswith("3.1."),
-    reason="arctrl 3.1.x Write does not hit the Int32/divmod openpyxl path",
+    Version("3.2") > _ARCTRL_VERSION,
+    reason="arctrl < 3.2 Write does not hit the Int32/divmod openpyxl path",
 )
 def test_sample_rocrate_write_succeeds_with_compat_patch(tmp_path: Path) -> None:
     """Regression: sample.json study/assay XLSX write under arctrl 3.2+."""
