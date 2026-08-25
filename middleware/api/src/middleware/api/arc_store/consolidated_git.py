@@ -26,7 +26,7 @@ from . import ArcStore, ArcStoreError, ArcStoreTransientError
 from .catalog_serialize import extract_catalog_dataset, serialize_catalog_file
 from .consolidated_git_config import ConsolidatedGitConfig
 from .git_cli_settings import GitContextConfig
-from .git_repo import GitContext, is_soft_git_error, is_transient_git_error
+from .git_repo import GitContext, format_git_error_detail, is_soft_git_error, is_transient_git_error
 
 logger = logging.getLogger(__name__)
 
@@ -167,11 +167,12 @@ class ConsolidatedGitArcStore(ArcStore):
                 try:
                     git_ctx.commit_and_push(f"Update {filename}")
                 except GitCommandError as exc:
+                    detail = format_git_error_detail(exc)
                     if is_transient_git_error(exc):
-                        raise ArcStoreTransientError(str(exc)) from exc
+                        raise ArcStoreTransientError(detail) from exc
                     if is_soft_git_error(exc):
-                        raise ArcStoreError(str(exc)) from exc
-                    raise ArcStoreError(f"Git failure publishing {filename}: {exc}") from exc
+                        raise ArcStoreError(detail) from exc
+                    raise ArcStoreError(f"Git failure publishing {filename}: {detail}") from exc
                 return True
         finally:
             shutil.rmtree(temp_dir, ignore_errors=True)

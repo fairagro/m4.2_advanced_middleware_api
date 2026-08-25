@@ -84,7 +84,11 @@ def test_publish_catalog_bytes_push_conflict_is_transient(
     ctx_instance.commit_and_push.side_effect = GitCommandError(
         "push",
         1,
-        stderr="! [rejected] main -> main (non-fast-forward)\nerror: failed to push some refs",
+        stderr=(
+            "! [rejected] main -> main (non-fast-forward)\n"
+            "error: failed to push some refs to "
+            "'https://oauth2:secret-token@gitlab.example.com/group/catalog.git'"
+        ),
     )
 
     with (
@@ -93,9 +97,14 @@ def test_publish_catalog_bytes_push_conflict_is_transient(
         patch("middleware.api.arc_store.consolidated_git.shutil.rmtree"),
         patch("middleware.api.arc_store.consolidated_git.Path.exists", return_value=False),
         patch("middleware.api.arc_store.consolidated_git.Path.write_bytes"),
-        pytest.raises(ArcStoreTransientError),
+        pytest.raises(ArcStoreTransientError) as raised,
     ):
         store._publish_catalog_bytes("edal", b"[]\n")
+
+    message = str(raised.value)
+    assert "secret-token" not in message
+    assert "https://***@gitlab.example.com/group/catalog.git" in message
+    assert "non-fast-forward" in message
 
 
 @pytest.mark.asyncio

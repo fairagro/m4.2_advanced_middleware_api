@@ -14,7 +14,14 @@ from pydantic import SecretStr
 
 from middleware.api.arc_store.config import GitRepoConfig
 from middleware.api.arc_store.git_cli_settings import GitCliSettings, GitContextConfig
-from middleware.api.arc_store.git_repo import GitContext, GitRepo, is_soft_git_error, is_transient_git_error
+from middleware.api.arc_store.git_repo import (
+    GitContext,
+    GitRepo,
+    format_git_error_detail,
+    is_soft_git_error,
+    is_transient_git_error,
+    redact_git_url_userinfo,
+)
 from middleware.api.arc_store.remote_git_provider import GitProjectMetadata
 
 _TEST_GIT_METADATA = GitProjectMetadata(
@@ -497,6 +504,23 @@ def test_is_transient_git_error_network_and_push_conflict() -> None:
 
     permanent = GitCommandError("push", 1, stderr="remote: HTTP Basic: Access denied")
     assert is_transient_git_error(permanent) is False
+
+
+def test_redact_git_url_userinfo_and_format_detail() -> None:
+    """Error details prefer stderr and strip oauth2/userinfo credentials."""
+    assert (
+        redact_git_url_userinfo("failed to push to 'https://oauth2:secret-token@gitlab.example.com/g/c.git'")
+        == "failed to push to 'https://***@gitlab.example.com/g/c.git'"
+    )
+    exc = GitCommandError(
+        "push",
+        1,
+        stderr="error: failed to push some refs to 'https://oauth2:secret-token@host/repo.git'",
+    )
+    detail = format_git_error_detail(exc)
+    assert "secret-token" not in detail
+    assert "https://***@host/repo.git" in detail
+    assert "failed to push some refs" in detail
 
 
 @patch("middleware.api.arc_store.git_repo.Repo")

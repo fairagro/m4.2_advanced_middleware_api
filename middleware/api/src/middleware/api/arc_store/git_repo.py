@@ -3,6 +3,7 @@
 import asyncio
 import concurrent.futures
 import logging
+import re
 import shutil
 from collections.abc import Callable
 from pathlib import Path
@@ -27,6 +28,21 @@ logger = logging.getLogger(__name__)
 
 T = TypeVar("T")
 P = ParamSpec("P")
+
+# Match http(s)://userinfo@host — credentials must not enter logs/events.
+_GIT_URL_USERINFO = re.compile(r"(https?://)([^/\s]+)@", re.IGNORECASE)
+
+
+def redact_git_url_userinfo(text: str) -> str:
+    """Replace URL userinfo (e.g. ``oauth2:token@``) with ``***@``."""
+    return _GIT_URL_USERINFO.sub(r"\1***@", text)
+
+
+def format_git_error_detail(exc: GitCommandError) -> str:
+    """Prefer concise stderr for messages; always redact embedded URL credentials."""
+    stderr = str(getattr(exc, "stderr", "") or "").strip()
+    raw = stderr or str(exc).strip()
+    return redact_git_url_userinfo(raw)
 
 
 def is_soft_git_error(exc: GitCommandError) -> bool:
@@ -106,7 +122,9 @@ class GitContext:
                     logger.info("Git %s failed with transient error%s: %s", action, status_msg, exc)
                     span.record_exception(exc)
                     span.set_status(trace.Status(trace.StatusCode.ERROR, str(exc)))
-                    raise ArcStoreTransientError(f"Transient Git error during {action}: {exc.stderr.strip()}") from exc
+                    raise ArcStoreTransientError(
+                        f"Transient Git error during {action}: {format_git_error_detail(exc)}"
+                    ) from exc
                 else:
                     status = getattr(exc, "status", None)
                     status_msg = f" (status {status})" if status is not None else ""
