@@ -12,8 +12,6 @@ import logging
 from middleware.shared.config.config_base import LogLevel
 from middleware.shared.security.url_redact import redact_url_userinfo
 
-_HANDLER_REDACT_ATTR = "_fairagro_url_userinfo_redact"
-
 
 class RedactingFormatter(logging.Formatter):
     """Wrap another formatter and redact URL userinfo in the final log line."""
@@ -55,24 +53,20 @@ class _RedactingLogFilter(logging.Filter):
 def install_url_userinfo_redaction(logger: logging.Logger | None = None) -> None:
     """Ensure handlers redact ``https://userinfo@`` in every formatted log line.
 
-    Safe to call repeatedly; already-wrapped handlers are skipped. Also attaches a
-    logger-level filter so late log records still get message/args scrubbed when
-    possible.
+    Safe to call repeatedly; handlers that already use :class:`RedactingFormatter`
+    are left unchanged. Also attaches a logger-level filter so message/args are
+    scrubbed when possible.
     """
     target = logging.getLogger() if logger is None else logger
     if not any(isinstance(f, _RedactingLogFilter) for f in target.filters):
         target.addFilter(_RedactingLogFilter())
     for handler in target.handlers:
-        if getattr(handler, _HANDLER_REDACT_ATTR, False):
-            continue
         if not any(isinstance(f, _RedactingLogFilter) for f in handler.filters):
             handler.addFilter(_RedactingLogFilter())
         current = handler.formatter
         if isinstance(current, RedactingFormatter):
-            setattr(handler, _HANDLER_REDACT_ATTR, True)
             continue
         handler.setFormatter(RedactingFormatter(current))
-        setattr(handler, _HANDLER_REDACT_ATTR, True)
 
 
 def configure_logging(level: LogLevel) -> None:

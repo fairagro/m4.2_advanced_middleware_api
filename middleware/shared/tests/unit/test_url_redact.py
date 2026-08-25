@@ -54,3 +54,31 @@ def test_install_url_userinfo_redaction_is_idempotent() -> None:
         assert not isinstance(handler.formatter._wrapped, RedactingFormatter)  # noqa: SLF001
     finally:
         root.removeHandler(handler)
+
+
+def test_install_url_userinfo_redaction_rewraps_replaced_formatter() -> None:
+    """If a handler formatter is replaced after install, the next install re-wraps."""
+    root = logging.getLogger()
+    handler = logging.StreamHandler()
+    handler.setFormatter(logging.Formatter("%(message)s"))
+    root.addHandler(handler)
+    try:
+        install_url_userinfo_redaction()
+        assert isinstance(handler.formatter, RedactingFormatter)
+        handler.setFormatter(logging.Formatter("%(levelname)s %(message)s"))
+        install_url_userinfo_redaction()
+        assert isinstance(handler.formatter, RedactingFormatter)
+        assert handler.formatter._fmt == "%(levelname)s %(message)s"  # noqa: SLF001
+        assert "secret-token" not in handler.format(
+            logging.LogRecord(
+                "test",
+                logging.ERROR,
+                __file__,
+                1,
+                "leak https://oauth2:secret-token@host/r.git",
+                (),
+                None,
+            )
+        )
+    finally:
+        root.removeHandler(handler)
