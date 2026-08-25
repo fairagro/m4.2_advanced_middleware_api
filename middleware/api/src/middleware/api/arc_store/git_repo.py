@@ -111,8 +111,8 @@ class GitContext:
             except GitCommandError as exc:  # pragma: no cover - behavior validated indirectly
                 detail = format_git_error_detail(exc)
                 if is_soft_git_error(exc):
-                    # Soft errors (like 404) are expected in some workflows
-                    # We log them at INFO (ls-remote) or DEBUG and don't mark span as error
+                    # Soft errors (e.g. 404) are expected; ls-remote → DEBUG, other actions → INFO.
+                    # Do not mark the span as error.
                     level = logging.DEBUG if action == "ls-remote" else logging.INFO
                     logger.log(level, "Git %s failed as expected: %s", action, detail)
                     span.add_event("git.expected_failure", attributes={"stderr": detail})
