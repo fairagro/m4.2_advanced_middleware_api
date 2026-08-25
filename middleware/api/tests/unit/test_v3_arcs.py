@@ -118,9 +118,7 @@ def test_create_or_update_arc_v3_rejected_for_consolidated_backend(
     """Standalone POST /v3/arcs returns 400 when consolidated catalog backend is active."""
     # Fixture store is a MagicMock; typed as ArcStore (@property), so cast to assign.
     cast(MagicMock, middleware_api.business_logic.arc_store).supports_standalone_upload = False
-    with patch.object(
-        middleware_api.app.state.common_deps, "get_authorized_rdis", new_callable=AsyncMock
-    ) as mock_auth:
+    with patch.object(middleware_api.app.state.common_deps, "get_authorized_rdis", new_callable=AsyncMock) as mock_auth:
         mock_auth.return_value = ["rdi-1"]
 
         r = client.post(
