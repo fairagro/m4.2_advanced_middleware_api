@@ -13,7 +13,8 @@ from middleware.api.document_store.arc_document import ArcDocument, ArcEvent, Ar
 from middleware.api.document_store.config import CouchDBConfig
 from middleware.api.document_store.content_hash import RoCrateContent, calculate_arc_content_hash
 from middleware.api.document_store.couchdb import CouchDB
-from middleware.shared.api_models.common.models import ArcEventType, ArcLifecycleStatus
+from middleware.api.document_store.couchdb_client import DocumentConflictError
+from middleware.shared.api_models.common.models import ArcEventType, ArcLifecycleStatus, HarvestStatus
 
 
 @pytest.fixture
@@ -619,3 +620,60 @@ async def test_iter_arc_contents_by_rdi_rejects_malformed_docs(
     with pytest.raises(ValueError, match="arc_content must be an object"):
         async for _ in store.iter_arc_contents_by_rdi("edal"):
             pass
+
+
+@pytest.mark.asyncio
+async def test_update_harvest_append_catalog_event_retries_on_conflict(
+    store: CouchDB,
+    mock_client_instance: MagicMock,
+) -> None:
+    """Concurrent harvest updates re-fetch and re-append instead of clobbering events."""
+    harvest_id = "harvest-1"
+    base = {
+        "_id": harvest_id,
+        "type": "harvest",
+        "rdi": "edal",
+        "started_at": "2024-01-01T00:00:00+00:00",
+        "status": HarvestStatus.COMPLETED.value,
+        "statistics": {},
+        "catalog_events": [],
+    }
+    concurrent = {
+        **base,
+        "_rev": "2-bbb",
+        "catalog_events": [
+            {
+                "timestamp": "2024-01-01T00:00:01+00:00",
+                "type": "CATALOG_PUSH_SUCCESS",
+                "message": "first",
+            }
+        ],
+    }
+    mock_client_instance.get_document = AsyncMock(
+        side_effect=[
+            {**base, "_rev": "1-aaa"},
+            concurrent,
+        ]
+    )
+    mock_client_instance.save_document_if_revision_matches = AsyncMock(
+        side_effect=[DocumentConflictError("conflict"), {**concurrent, "_rev": "3-ccc"}],
+    )
+
+    updated = await store.update_harvest(
+        harvest_id,
+        {
+            "append_catalog_event": {
+                "timestamp": "2024-01-01T00:00:02+00:00",
+                "type": "CATALOG_PUSH_FAILED",
+                "message": "second",
+            }
+        },
+    )
+
+    assert len(updated.catalog_events) == 2
+    assert updated.catalog_events[0].message == "first"
+    assert updated.catalog_events[1].message == "second"
+    assert mock_client_instance.save_document_if_revision_matches.await_count == 2
+    second_payload = mock_client_instance.save_document_if_revision_matches.await_args_list[1].args[1]
+    assert len(second_payload["catalog_events"]) == 2
+    mock_client_instance.save_document.assert_not_called()

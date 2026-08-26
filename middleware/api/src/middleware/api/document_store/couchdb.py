@@ -430,15 +430,9 @@ class CouchDB(DocumentStore):
         doc = await self._client.get_document(harvest_id)
         return HarvestDocument.model_validate(doc) if doc else None
 
-    async def update_harvest(self, harvest_id: str, updates: HarvestUpdatePayload) -> HarvestDocument:
-        """Update a harvest record and return the updated document."""
-        doc_dict = await self._client.get_document(harvest_id)
-        if not doc_dict:
-            raise ValueError(f"Harvest {harvest_id} not found")
-
-        doc = HarvestDocument.model_validate(doc_dict)
-
-        # Apply updates to the model
+    @staticmethod
+    def _apply_harvest_updates(doc: HarvestDocument, updates: HarvestUpdatePayload) -> None:
+        """Mutate *doc* in place with the fields present in *updates*."""
         if "status" in updates:
             doc.status = updates["status"]
         if "statistics" in updates:
@@ -448,14 +442,49 @@ class CouchDB(DocumentStore):
         if "append_catalog_event" in updates:
             event = HarvestCatalogEvent.model_validate(updates["append_catalog_event"])
             doc.catalog_events = [*doc.catalog_events, event]
-
-        # If completing, set completed_at if not provided
         if doc.status == HarvestStatus.COMPLETED and not doc.completed_at:
             doc.completed_at = datetime.now(UTC)
 
-        doc_data = doc.model_dump(mode="json", by_alias=True, exclude_none=True)
-        await self._client.save_document(harvest_id, doc_data)
-        return doc
+    async def update_harvest(self, harvest_id: str, updates: HarvestUpdatePayload) -> HarvestDocument:
+        """Update a harvest record and return the updated document.
+
+        Uses revision-matched saves with re-fetch/re-apply on conflict so concurrent
+        ``append_catalog_event`` (or other field) updates do not clobber each other via
+        ``save_document``'s last-write-wins retry.
+        """
+        last_conflict: DocumentConflictError | None = None
+        for attempt in range(1, self._config.max_save_retries + 1):
+            doc_dict = await self._client.get_document(harvest_id)
+            if not doc_dict:
+                raise ValueError(f"Harvest {harvest_id} not found")
+
+            rev = doc_dict.get("_rev")
+            if not isinstance(rev, str) or not rev:
+                raise ValueError(f"Harvest {harvest_id} is missing a CouchDB revision")
+
+            doc = HarvestDocument.model_validate(doc_dict)
+            self._apply_harvest_updates(doc, updates)
+            doc_data = doc.model_dump(mode="json", by_alias=True, exclude_none=True)
+            try:
+                await self._client.save_document_if_revision_matches(
+                    harvest_id,
+                    doc_data,
+                    expected_rev=rev,
+                )
+                return doc
+            except DocumentConflictError as err:
+                last_conflict = err
+                if attempt >= self._config.max_save_retries:
+                    break
+                logger.debug(
+                    "Harvest %s update conflict (attempt %d/%d), re-applying",
+                    harvest_id,
+                    attempt,
+                    self._config.max_save_retries,
+                )
+
+        assert last_conflict is not None
+        raise last_conflict
 
     async def list_harvests(
         self,
