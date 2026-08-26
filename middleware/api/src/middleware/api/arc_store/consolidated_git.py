@@ -73,12 +73,14 @@ class ConsolidatedGitArcStore(ArcStore):
 
     @override
     def _check_health(self) -> bool:
-        """Check catalog remote reachability (file://: path or parent may exist for lazy init)."""
-        url = self._config.repo_url
-        if url.lower().startswith("file://"):
-            parsed = urlparse(url)
-            path = Path(unquote(parsed.path))
-            return path.exists() or path.parent.exists()
+        """Check catalog remote reachability.
+
+        ``file://`` remotes match ``LocalFileSystemGitProvider``: always healthy.
+        The bare repo is created lazily on first publish (``_ensure_remote_bare_repo``),
+        so readiness must not require the path to exist yet.
+        """
+        if self._config.repo_url.lower().startswith("file://"):
+            return True
         return self._check_remote_catalog_health()
 
     def _check_remote_catalog_health(self) -> bool:

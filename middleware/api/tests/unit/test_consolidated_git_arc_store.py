@@ -139,6 +139,19 @@ async def test_finalize_catalog_backend_flags(
     assert store.supports_standalone_upload is False
 
 
+def test_check_health_file_url_without_existing_path(tmp_path: Path) -> None:
+    """file:// health is True even when the bare remote path does not exist yet."""
+    missing = tmp_path / "nested" / "missing" / "catalog.git"
+    config = ConsolidatedGitConfig(
+        repo_url=f"file://{missing.resolve()}",
+        cache_dir=tmp_path / "cache",
+    )
+    store = ConsolidatedGitArcStore(config, MagicMock())
+    assert not missing.exists()
+    assert not missing.parent.exists()
+    assert store.check_health() is True
+
+
 def test_check_health_https_uses_ls_remote(tmp_path: Path) -> None:
     """HTTPS health checks probe the remote instead of only formatting the URL."""
     config = ConsolidatedGitConfig(
