@@ -55,13 +55,22 @@ def record_git_span_failure(span: Span, detail: str, *, expected: bool = False) 
 
 
 def is_soft_git_error(exc: GitCommandError) -> bool:
-    """Check if a GitCommandError is an expected 'soft' error (e.g. repo/branch not found)."""
+    """Check if a GitCommandError looks like a missing remote/repo/branch (404-ish).
+
+    Whether that outcome is *expected* depends on the git action — see
+    :data:`_ACTIONS_WITH_EXPECTED_SOFT_ERRORS`.
+    """
     stderr = str(getattr(exc, "stderr", ""))
     # Common messages for missing repo or branch
     soft_patterns = [
         "not found",
     ]
     return any(p in stderr.lower() for p in soft_patterns)
+
+
+# Soft "not found" is a normal probe/init outcome only for these actions.
+# For push/fetch/reset it usually means misconfiguration and must stay ERROR in traces.
+_ACTIONS_WITH_EXPECTED_SOFT_ERRORS = frozenset({"ls-remote", "clone"})
 
 
 def is_transient_git_error(exc: GitCommandError) -> bool:
@@ -123,12 +132,15 @@ class GitContext:
             except GitCommandError as exc:  # pragma: no cover - behavior validated indirectly
                 detail = format_git_error_detail(exc)
                 safe_detail = redact_url_userinfo(detail)
-                if is_soft_git_error(exc):
-                    # Soft errors (e.g. 404) are expected; ls-remote → DEBUG, other actions → INFO.
-                    # Do not mark the span as error.
+                if is_soft_git_error(exc) and action in _ACTIONS_WITH_EXPECTED_SOFT_ERRORS:
+                    # Soft 404 on ls-remote / clone is expected (probe or first-time remote).
                     level = logging.DEBUG if action == "ls-remote" else logging.INFO
                     logger.log(level, "Git %s failed as expected: %s", action, safe_detail)
                     record_git_span_failure(span, detail, expected=True)
+                elif is_soft_git_error(exc):
+                    # Same stderr pattern on push/fetch/reset is an operational failure.
+                    logger.warning("Git %s failed (missing remote/ref): %s", action, safe_detail)
+                    record_git_span_failure(span, detail)
                 elif is_transient_git_error(exc):
                     status = getattr(exc, "status", None)
                     status_msg = f" (status {status})" if status is not None else ""
@@ -358,10 +370,9 @@ class GitRepo(ArcStore):
                         ctx.commit_and_push(f"Update ARC {arc_id}")
                 except GitCommandError as e:
                     detail = format_git_error_detail(e)
-                    if is_soft_git_error(e):
-                        record_git_span_failure(span, detail, expected=True)
-                    else:
-                        record_git_span_failure(span, detail)
+                    # Soft "not found" during create/update is not expected (clone soft is
+                    # swallowed in GitContext.__enter__; remaining failures are often push).
+                    record_git_span_failure(span, detail)
                     # Try to diagnose connection issues
                     self._check_health()
                     raise

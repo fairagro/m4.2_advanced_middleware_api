@@ -497,6 +497,42 @@ def test_is_soft_git_error() -> None:
     assert is_soft_git_error(err) is False
 
 
+@pytest.mark.parametrize(
+    ("action", "expected_soft"),
+    [
+        ("ls-remote", True),
+        ("clone", True),
+        ("push", False),
+        ("fetch", False),
+        ("reset", False),
+    ],
+)
+def test_run_git_command_soft_span_status_depends_on_action(
+    action: str,
+    expected_soft: bool,
+    tmp_path: Path,
+) -> None:
+    """Soft 'not found' is expected only for probe/init actions, not push/fetch/reset."""
+    config = GitContextConfig(
+        repo_url=SecretStr("https://example.com/repo.git"),
+        branch="main",
+        user_name=None,
+        user_email=None,
+        local_path=tmp_path / "repo",
+    )
+    ctx = GitContext(config)
+    soft_err = GitCommandError(action, 1, stderr="repository not found")
+
+    def _boom() -> None:
+        raise soft_err
+
+    with patch("middleware.api.arc_store.git_repo.record_git_span_failure") as record:
+        with pytest.raises(GitCommandError):
+            ctx._run_git_command(action, _boom)
+        record.assert_called_once()
+        assert record.call_args.kwargs.get("expected", False) is expected_soft
+
+
 def test_is_transient_git_error_network_and_push_conflict() -> None:
     """Network failures and concurrent non-fast-forward pushes are retryable."""
     network = GitCommandError("fetch", 1, "Could not resolve host: gitlab.example.com")
