@@ -143,12 +143,14 @@ class Config(ConfigBase):
     def validate_mutual_exclusivity(self) -> Self:
         """Validate storage backend and GitLab topic mapping."""
         validate_arc_store_config(self)
-        if self.git_repo is not None and self.known_rdis:
+        # Prefer ``__dict__`` so unset deprecated top-level keys do not warn on access.
+        git_repo = self.__dict__.get("git_repo")
+        if git_repo is not None and self.known_rdis:
             validated_topics = GitRepoConfig.validate_rdi_gitlab_topics_for_known_rdis(
                 self.known_rdis,
-                self.git_repo.rdi_gitlab_topics,
+                git_repo.rdi_gitlab_topics,
             )
-            self.git_repo = self.git_repo.model_copy(update={"rdi_gitlab_topics": validated_topics})
+            self.git_repo = git_repo.model_copy(update={"rdi_gitlab_topics": validated_topics})
         if isinstance(self.arc_store, GitRepoArcStoreConfig) and self.known_rdis:
             git_repo = self.arc_store.git_repo
             validated_topics = GitRepoConfig.validate_rdi_gitlab_topics_for_known_rdis(

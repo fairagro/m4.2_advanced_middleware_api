@@ -34,28 +34,61 @@ def test_arc_store_type_consolidated_git() -> None:
     with warnings.catch_warnings(record=True) as caught:
         warnings.simplefilter("always", DeprecationWarning)
         backend_type, settings = resolve_arc_store_backend(config)
-        obsolete = [w for w in caught if "Top-level" in str(w.message) and "obsolete" in str(w.message)]
+        obsolete = [
+            w
+            for w in caught
+            if issubclass(w.category, DeprecationWarning)
+            and ("obsolete" in str(w.message).lower() or str(w.message) == "deprecated")
+        ]
     assert obsolete == []
     assert backend_type == ArcStoreBackendType.CONSOLIDATED_GIT
     assert isinstance(settings, ConsolidatedGitConfig)
     assert is_consolidated_backend(config)
 
 
+def test_legacy_gitlab_api_resolve_does_not_warn_about_unset_git_repo() -> None:
+    """Accessing unset deprecated siblings must not emit deprecation noise."""
+    with warnings.catch_warnings(record=True):
+        warnings.simplefilter("ignore", DeprecationWarning)
+        config = Config.from_data({
+            "couchdb": _minimal_couchdb(),
+            "celery": _minimal_celery(),
+            "gitlab_api": {
+                "url": "https://gitlab.example",
+                "group": "fairagro",
+                "token": "x",
+            },
+        })
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("always", DeprecationWarning)
+        backend_type, _ = resolve_arc_store_backend(config)
+        messages = [str(w.message) for w in caught if issubclass(w.category, DeprecationWarning)]
+    assert backend_type == ArcStoreBackendType.GITLAB_API
+    assert any("Top-level gitlab_api is obsolete" in msg for msg in messages)
+    assert not any("git_repo" in msg for msg in messages)
+
+
 def test_legacy_git_repo_still_works() -> None:
     """Obsolete top-level git_repo remains accepted."""
-    with pytest.warns(DeprecationWarning, match="Top-level git_repo is obsolete"):
+    with warnings.catch_warnings(record=True):
+        warnings.simplefilter("ignore", DeprecationWarning)
         config = Config.from_data({
             "couchdb": _minimal_couchdb(),
             "celery": _minimal_celery(),
             "git_repo": {"url": "https://gitlab.example/repo.git", "group": "fairagro"},
         })
-    backend_type, _ = resolve_arc_store_backend(config)
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("always", DeprecationWarning)
+        backend_type, _ = resolve_arc_store_backend(config)
+        obsolete = [w for w in caught if "Top-level git_repo is obsolete" in str(w.message)]
+    assert len(obsolete) == 1
     assert backend_type == ArcStoreBackendType.GIT_REPO
 
 
 def test_legacy_null_sibling_does_not_count_as_configured() -> None:
     """Explicit null legacy keys must not block another legacy backend."""
-    with pytest.warns(DeprecationWarning, match="Top-level git_repo is obsolete"):
+    with warnings.catch_warnings(record=True):
+        warnings.simplefilter("ignore", DeprecationWarning)
         config = Config.from_data({
             "couchdb": _minimal_couchdb(),
             "celery": _minimal_celery(),
@@ -63,8 +96,13 @@ def test_legacy_null_sibling_does_not_count_as_configured() -> None:
             "gitlab_api": None,
             "consolidated_git": None,
         })
-    backend_type, _ = resolve_arc_store_backend(config)
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("always", DeprecationWarning)
+        backend_type, _ = resolve_arc_store_backend(config)
+        messages = [str(w.message) for w in caught if issubclass(w.category, DeprecationWarning)]
     assert backend_type == ArcStoreBackendType.GIT_REPO
+    assert sum("Top-level git_repo is obsolete" in msg for msg in messages) == 1
+    assert not any("gitlab_api" in msg and "obsolete" in msg for msg in messages)
 
 
 def test_legacy_only_null_backends_rejected() -> None:

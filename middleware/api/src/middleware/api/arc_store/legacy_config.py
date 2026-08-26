@@ -22,7 +22,8 @@ def count_obsolete_top_level_arc_store_fields(config: BaseModel) -> int:
 
     Explicit ``null`` values are ignored: only non-``None`` backends count toward
     mutual exclusivity. Reads via ``__dict__`` so preferred ``arc_store`` configs do
-    not emit ``Field(deprecated=...)`` noise when legacy keys are unset; real use of
-    obsolete keys still warns at config construction / attribute access elsewhere.
+    not emit ``Field(deprecated=...)`` noise when legacy keys are unset.
+    ``resolve_arc_store_backend`` emits exactly one explicit warning for the
+    configured obsolete key when the legacy path is used.
     """
     return sum(1 for name in OBSOLETE_TOP_LEVEL_FIELDS if config.__dict__.get(name) is not None)
