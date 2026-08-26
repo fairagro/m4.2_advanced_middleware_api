@@ -1,6 +1,7 @@
 """Contains the DocumentStore interface and its implementations."""
 
 from abc import ABC, abstractmethod
+from collections.abc import AsyncIterator
 
 from middleware.shared.json_types import RoCrateContent
 
@@ -242,14 +243,13 @@ class DocumentStore(ABC):
         raise NotImplementedError
 
     @abstractmethod
-    async def list_arc_contents_by_rdi(self, rdi: str) -> list[tuple[str, RoCrateContent]]:
-        """List ``(arc_id, arc_content)`` for all ARC documents of an RDI.
+    def iter_arc_contents_by_rdi(self, rdi: str) -> AsyncIterator[tuple[str, RoCrateContent]]:
+        """Yield ``(arc_id, arc_content)`` for ARC documents of an RDI.
 
-        Implementations MAY load results into memory (v1 catalog finalize). Callers
-        must treat large RDIs as potentially expensive.
+        Implementations MUST stream (paginate) so callers need not hold all
+        RO-Crate bodies in memory at once.
 
         Raises:
-            ValueError: If a stored ARC document has an unexpected shape, or if an
-                implementation-defined size limit is exceeded.
+            ValueError: If a stored ARC document has an unexpected shape.
         """
         raise NotImplementedError

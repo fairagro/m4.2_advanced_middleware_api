@@ -4,7 +4,7 @@ import asyncio
 import hashlib
 import logging
 import uuid
-from collections.abc import Callable
+from collections.abc import AsyncIterator, Callable
 from datetime import UTC, datetime
 from typing import cast
 
@@ -44,10 +44,9 @@ logger = logging.getLogger(__name__)
 _PENDING_POLL_ATTEMPTS = 20
 _PENDING_POLL_DELAY_S = 0.05
 
-# Catalog finalize loads full ARC bodies for an RDI into memory (v1). Page through
-# CouchDB Mango results, but reject runaway RDIs before the worker OOMs.
+# Catalog finalize streams ARC bodies page-by-page so peak RO-Crate RAM is
+# roughly one Mango page (not the whole RDI). Callers retain extracted Datasets.
 _CATALOG_LIST_PAGE_SIZE = 500
-_MAX_ARCS_PER_RDI_FOR_CATALOG = 25_000
 
 
 class CouchDB(DocumentStore):
@@ -515,22 +514,18 @@ class CouchDB(DocumentStore):
         payload = task_record.model_dump(mode="json", exclude_none=True)
         await self._client.save_document(doc_id, payload)
 
-    async def list_arc_contents_by_rdi(self, rdi: str) -> list[tuple[str, RoCrateContent]]:
-        """List ``(arc_id, arc_content)`` for all ARC documents of an RDI.
+    async def iter_arc_contents_by_rdi(self, rdi: str) -> AsyncIterator[tuple[str, RoCrateContent]]:
+        """Yield ``(arc_id, arc_content)`` for ARC documents of an RDI.
 
-        Paginates with ``_CATALOG_LIST_PAGE_SIZE`` and accumulates results in
-        memory. Acceptable for expected v1 catalog sizes; raises if the RDI
-        exceeds ``_MAX_ARCS_PER_RDI_FOR_CATALOG`` so Celery workers fail fast
-        instead of unbounded growth. A future change MAY stream or raise the
-        cap via config.
+        Fetches CouchDB in pages of ``_CATALOG_LIST_PAGE_SIZE`` and yields one
+        ARC at a time so only the current page of full RO-Crate bodies is retained
+        (plus whatever the caller accumulates, e.g. extracted Dataset records).
 
         Raises:
-            ValueError: If a document with ``doc_type=arc`` has an unexpected
-                shape, or if the RDI has more ARCs than the catalog hard cap.
+            ValueError: If a document with ``doc_type=arc`` has an unexpected shape.
         """
         selector: JsonObject = {"doc_type": "arc"}
         selector["rdi"] = rdi
-        results: list[tuple[str, RoCrateContent]] = []
         skip = 0
         page_size = _CATALOG_LIST_PAGE_SIZE
         while True:
@@ -546,13 +541,7 @@ class CouchDB(DocumentStore):
                     raise ValueError(
                         f"Malformed ARC document {doc_id!r} for RDI {rdi!r}: arc_content must be an object"
                     )
-                results.append((doc_id[len("arc_") :], cast(RoCrateContent, content)))
-            if len(results) > _MAX_ARCS_PER_RDI_FOR_CATALOG:
-                raise ValueError(
-                    f"RDI {rdi!r} has more than {_MAX_ARCS_PER_RDI_FOR_CATALOG} ARC documents; "
-                    "refusing unbounded catalog load (raise the cap or stream in a later version)"
-                )
+                yield doc_id[len("arc_") :], cast(RoCrateContent, content)
             if len(docs) < page_size:
                 break
             skip += page_size
-        return results

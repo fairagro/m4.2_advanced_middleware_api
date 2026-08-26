@@ -1,7 +1,7 @@
 """Tests for ConsolidatedGitArcStore finalize and ephemeral clone behaviour."""
 
 from pathlib import Path
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import MagicMock, patch
 
 import pytest
 from git.exc import GitCommandError
@@ -27,9 +27,11 @@ def consolidated_config(tmp_path: Path) -> ConsolidatedGitConfig:
 def doc_store() -> MagicMock:
     """Document store mock returning one ARC for finalize."""
     store = MagicMock()
-    store.list_arc_contents_by_rdi = AsyncMock(
-        return_value=[("arc-1", minimal_rocrate_dict("DS-1"))],
-    )
+
+    async def _iter_arcs(_rdi: str):
+        yield ("arc-1", minimal_rocrate_dict("DS-1"))
+
+    store.iter_arc_contents_by_rdi = MagicMock(side_effect=_iter_arcs)
     return store
 
 
@@ -120,7 +122,7 @@ async def test_finalize_loads_arcs_from_couchdb(
         pushed = await store.finalize(rdi="edal")
 
     assert pushed is False
-    doc_store.list_arc_contents_by_rdi.assert_awaited_once_with("edal")
+    doc_store.iter_arc_contents_by_rdi.assert_called_once_with("edal")
     mock_publish.assert_called_once()
     catalog_bytes = mock_publish.call_args[0][1]
     assert catalog_bytes.startswith(b"[")

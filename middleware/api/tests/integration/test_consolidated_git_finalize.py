@@ -5,7 +5,7 @@ from __future__ import annotations
 import tempfile
 from collections.abc import Generator
 from pathlib import Path
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import MagicMock
 
 import pytest
 from git import Repo
@@ -68,13 +68,18 @@ def consolidated_config(bare_catalog_remote: Path, cache_dir: Path) -> Consolida
 @pytest.fixture
 def doc_store() -> MagicMock:
     """Document store returning two ARC bodies for catalog rebuild."""
+    arcs = [
+        ("arc-b", _minimal_rocrate_dict("DS-B", name="Dataset B")),
+        ("arc-a", _minimal_rocrate_dict("DS-A", name="Dataset A")),
+    ]
     store = MagicMock()
-    store.list_arc_contents_by_rdi = AsyncMock(
-        return_value=[
-            ("arc-b", _minimal_rocrate_dict("DS-B", name="Dataset B")),
-            ("arc-a", _minimal_rocrate_dict("DS-A", name="Dataset A")),
-        ],
-    )
+
+    async def _iter_arcs(_rdi: str):
+        for item in arcs:
+            yield item
+
+    store.iter_arc_contents_by_rdi = MagicMock(side_effect=_iter_arcs)
+    store._catalog_arcs = arcs  # test helper for expected bytes
     return store
 
 
@@ -90,8 +95,7 @@ def catalog_store(
 
 def _expected_catalog_bytes(doc_store: MagicMock) -> bytes:
     """Rebuild expected catalog bytes the same way finalize does."""
-    arcs = doc_store.list_arc_contents_by_rdi.return_value
-    datasets = [extract_catalog_dataset(content) for _, content in arcs]
+    datasets = [extract_catalog_dataset(content) for _, content in doc_store._catalog_arcs]
     return serialize_catalog_file(datasets)
 
 

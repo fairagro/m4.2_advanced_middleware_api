@@ -181,10 +181,9 @@ class ConsolidatedGitArcStore(ArcStore):
 
     @override
     async def _finalize(self, *, rdi: str) -> bool:
-        """Rebuild ``{rdi}.json`` from all CouchDB ARC bodies for the RDI."""
-        arcs = await self._doc_store.list_arc_contents_by_rdi(rdi)
+        """Rebuild ``{rdi}.json`` from CouchDB ARC bodies (streamed, Dataset-only retained)."""
         datasets: list[CatalogDatasetRecord] = []
-        for arc_id, content in arcs:
+        async for arc_id, content in self._doc_store.iter_arc_contents_by_rdi(rdi):
             try:
                 datasets.append(extract_catalog_dataset(content))
             except ValueError as exc:

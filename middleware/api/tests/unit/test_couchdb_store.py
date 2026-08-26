@@ -553,14 +553,14 @@ async def test_get_harvest_statistics(  # noqa: PLR0913, PLR0917
 
 
 @pytest.mark.asyncio
-async def test_list_arc_contents_by_rdi(store: CouchDB, mock_client_instance: MagicMock) -> None:
-    """list_arc_contents_by_rdi returns arc_id and RO-Crate bodies for an RDI."""
+async def test_iter_arc_contents_by_rdi(store: CouchDB, mock_client_instance: MagicMock) -> None:
+    """iter_arc_contents_by_rdi streams arc_id and RO-Crate bodies for an RDI."""
     content = {"@context": "https://w3id.org/ro/crate/1.1/context", "@graph": []}
     mock_client_instance.find = AsyncMock(
         return_value=[{"_id": "arc_ds-1", "doc_type": "arc", "rdi": "edal", "arc_content": content}],
     )
 
-    results = await store.list_arc_contents_by_rdi("edal")
+    results = [item async for item in store.iter_arc_contents_by_rdi("edal")]
 
     assert results == [("ds-1", content)]
     mock_client_instance.find.assert_awaited_once_with(
@@ -571,38 +571,51 @@ async def test_list_arc_contents_by_rdi(store: CouchDB, mock_client_instance: Ma
 
 
 @pytest.mark.asyncio
-async def test_list_arc_contents_by_rdi_rejects_over_cap(
+async def test_iter_arc_contents_by_rdi_pages(
     store: CouchDB,
     mock_client_instance: MagicMock,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """Catalog listing fails fast when an RDI exceeds the in-memory hard cap."""
-    monkeypatch.setattr("middleware.api.document_store.couchdb._MAX_ARCS_PER_RDI_FOR_CATALOG", 1)
+    """Streaming walks multiple Mango pages without building a full list in the store."""
+    monkeypatch.setattr("middleware.api.document_store.couchdb._CATALOG_LIST_PAGE_SIZE", 2)
     content = {"@context": "https://w3id.org/ro/crate/1.1/context", "@graph": []}
-    mock_client_instance.find = AsyncMock(
-        return_value=[
-            {"_id": "arc_ds-1", "doc_type": "arc", "rdi": "edal", "arc_content": content},
-            {"_id": "arc_ds-2", "doc_type": "arc", "rdi": "edal", "arc_content": content},
-        ],
-    )
-    with pytest.raises(ValueError, match="more than 1 ARC documents"):
-        await store.list_arc_contents_by_rdi("edal")
+    page1 = [
+        {"_id": "arc_ds-1", "doc_type": "arc", "rdi": "edal", "arc_content": content},
+        {"_id": "arc_ds-2", "doc_type": "arc", "rdi": "edal", "arc_content": content},
+    ]
+    page2 = [
+        {"_id": "arc_ds-3", "doc_type": "arc", "rdi": "edal", "arc_content": content},
+    ]
+    mock_client_instance.find = AsyncMock(side_effect=[page1, page2])
+
+    results = [item async for item in store.iter_arc_contents_by_rdi("edal")]
+
+    assert [arc_id for arc_id, _ in results] == ["ds-1", "ds-2", "ds-3"]
+    assert mock_client_instance.find.await_count == 2
+    first_call = mock_client_instance.find.await_args_list[0]
+    second_call = mock_client_instance.find.await_args_list[1]
+    assert first_call.kwargs["limit"] == 2
+    assert first_call.kwargs["skip"] == 0
+    assert second_call.kwargs["limit"] == 2
+    assert second_call.kwargs["skip"] == 2
 
 
 @pytest.mark.asyncio
-async def test_list_arc_contents_by_rdi_rejects_malformed_docs(
+async def test_iter_arc_contents_by_rdi_rejects_malformed_docs(
     store: CouchDB,
     mock_client_instance: MagicMock,
 ) -> None:
-    """Malformed ARC documents must fail the catalog listing, not be skipped."""
+    """Malformed ARC documents must fail the catalog stream, not be skipped."""
     mock_client_instance.find = AsyncMock(
         return_value=[{"_id": "not_an_arc", "doc_type": "arc", "rdi": "edal", "arc_content": {}}],
     )
     with pytest.raises(ValueError, match="expected _id starting with 'arc_'"):
-        await store.list_arc_contents_by_rdi("edal")
+        async for _ in store.iter_arc_contents_by_rdi("edal"):
+            pass
 
     mock_client_instance.find = AsyncMock(
         return_value=[{"_id": "arc_ds-1", "doc_type": "arc", "rdi": "edal", "arc_content": "oops"}],
     )
     with pytest.raises(ValueError, match="arc_content must be an object"):
-        await store.list_arc_contents_by_rdi("edal")
+        async for _ in store.iter_arc_contents_by_rdi("edal"):
+            pass
