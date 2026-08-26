@@ -16,6 +16,7 @@ from middleware.api.utils import calculate_arc_id
 from middleware.shared.api_models.common.models import ArcOperationResult, ArcResponse, ArcStatus
 from middleware.shared.api_models.common.rocrate import RoCratePayload
 from middleware.shared.json_types import RoCrateContent
+from middleware.shared.security.url_redact import redact_url_userinfo
 
 from .exceptions import (
     BusinessLogicError,
@@ -217,10 +218,11 @@ class ArcManager:
             except Exception as exc:
                 if harvest_id is not None:
                     try:
+                        # Redact before CouchDB persist (log redaction does not apply).
                         await self._append_harvest_catalog_event(
                             harvest_id,
                             CatalogPushEventType.CATALOG_PUSH_FAILED,
-                            str(exc),
+                            redact_url_userinfo(str(exc)),
                         )
                     except Exception as log_error:  # noqa: BLE001
                         logger.warning(
@@ -245,7 +247,7 @@ class ArcManager:
         event = HarvestCatalogEvent(
             timestamp=datetime.now(UTC),
             type=event_type,
-            message=message,
+            message=redact_url_userinfo(message),
         )
         await self._doc_store.update_harvest(
             harvest_id,
@@ -320,7 +322,7 @@ class ArcManager:
                             ArcEvent(
                                 timestamp=datetime.now(UTC),
                                 type=ArcEventType.GIT_PUSH_FAILED,
-                                message=f"GitLab sync failed: {e!s}",
+                                message=redact_url_userinfo(f"GitLab sync failed: {e!s}"),
                             ),
                         )
                     except Exception as log_error:  # noqa: BLE001

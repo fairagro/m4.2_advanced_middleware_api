@@ -283,6 +283,29 @@ async def test_finalize_catalog_permanent_error_records_failure_event(
 
 
 @pytest.mark.asyncio
+async def test_finalize_catalog_redacts_oauth_token_in_failure_event(
+    worker_logic: BusinessLogic,
+    mock_store: MagicMock,
+    mock_doc_store: MagicMock,
+) -> None:
+    """CATALOG_PUSH_FAILED messages must not persist oauth2 credentials in CouchDB."""
+    mock_store.publishes_per_arc_git = False
+    # Plain Exception: no ArcStoreError/BusinessLogicError.__str__ redaction.
+    mock_store.finalize = AsyncMock(
+        side_effect=RuntimeError("push failed: https://oauth2:secret-token@gitlab.example.com/group/catalog.git")
+    )
+    mock_doc_store.update_harvest = AsyncMock()
+
+    with pytest.raises(BusinessLogicError, match="catalog finalize failed"):
+        await worker_logic.finalize_catalog("test-rdi", harvest_id="harvest-1")
+
+    patch = mock_doc_store.update_harvest.call_args.args[1]
+    message = patch["append_catalog_event"]["message"]
+    assert "secret-token" not in message
+    assert "https://***@gitlab.example.com" in message
+
+
+@pytest.mark.asyncio
 async def test_api_mode_create_or_update_success(
     api_logic: BusinessLogic, mock_doc_store: MagicMock, mock_task_dispatcher: MagicMock
 ) -> None:
