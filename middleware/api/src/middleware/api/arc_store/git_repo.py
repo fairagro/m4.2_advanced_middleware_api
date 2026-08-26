@@ -209,7 +209,7 @@ class GitContext:
     def __enter__(self) -> "GitContext":
         """Enter context: clone or init repo."""
         repo_path = self._ensure_path()
-        url = self.config.repo_url.get_secret_value()
+        url = self.config.repo_url.unredacted()
 
         logger.debug("Accessing repo at %s", repo_path)
         try:
@@ -314,7 +314,7 @@ class GitRepo(ArcStore):
         repo_url = self._remote_provider.get_repo_url(arc_id, authenticated=False)
         local_path = self._config.cache_dir / arc_id
         return self._config.git_context_config(
-            repo_url=repo_url,
+            repo_url=repo_url.unredacted(),
             local_path=local_path,
         )
 
@@ -456,7 +456,8 @@ class GitRepo(ArcStore):
             ) as span:
                 # We can try to ls-remote using the authenticated URL
                 url = self._remote_provider.get_repo_url(arc_id, authenticated=True)
-                span.set_attribute("git.repo_url", redact_url_userinfo(url))
+                span.set_attribute("git.repo_url", str(url))
+                remote = url.unredacted()
 
                 g = git.cmd.Git()
                 try:
@@ -466,9 +467,9 @@ class GitRepo(ArcStore):
                     ) as inner_span:
                         try:
                             if self._config.command_timeout is not None:
-                                g.ls_remote(url, kill_after_timeout=self._config.command_timeout)
+                                g.ls_remote(remote, kill_after_timeout=self._config.command_timeout)
                             else:
-                                g.ls_remote(url)
+                                g.ls_remote(remote)
                             inner_span.set_status(trace.Status(trace.StatusCode.OK))
                         except GitCommandError as e:
                             detail = format_git_error_detail(e)

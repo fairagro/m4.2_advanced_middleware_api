@@ -85,7 +85,7 @@ class ConsolidatedGitArcStore(ArcStore):
 
     def _check_remote_catalog_health(self) -> bool:
         """Probe HTTPS/HTTP catalog remotes with ``git ls-remote``."""
-        remote_url = self._config.catalog_repo_url()
+        remote_url = self._config.catalog_repo_url().unredacted()
         git_cli = git.cmd.Git()
         try:
             if self._config.command_timeout is not None:

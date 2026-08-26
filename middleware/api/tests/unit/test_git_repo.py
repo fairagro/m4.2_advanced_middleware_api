@@ -24,6 +24,7 @@ from middleware.api.arc_store.git_repo import (
     record_git_span_failure,
 )
 from middleware.api.arc_store.remote_git_provider import GitProjectMetadata
+from middleware.shared.security import UrlStr
 
 _TEST_GIT_METADATA = GitProjectMetadata(
     rdi="test-rdi",
@@ -67,7 +68,7 @@ def test_git_repo_context_config_generation(git_repo: GitRepo) -> None:
     config = git_repo._get_context_config("arc123")
     assert config.local_path is not None
     assert config.local_path == git_repo._config.cache_dir / "arc123"
-    assert config.repo_url.get_secret_value() == "https://gitlab.example.com/mygroup/arc123.git"
+    assert config.repo_url.unredacted() == "https://gitlab.example.com/mygroup/arc123.git"
 
 
 def test_git_repo_context_config_embeds_token_once() -> None:
@@ -80,8 +81,9 @@ def test_git_repo_context_config_embeds_token_once() -> None:
     )
     repo = GitRepo(config)
     ctx_config = repo._get_context_config("arc123")
-    repo_url = ctx_config.repo_url.get_secret_value()
+    repo_url = ctx_config.repo_url.unredacted()
     assert repo_url == "https://oauth2:secret-token@gitlab.example.com/mygroup/arc123.git"
+    assert "secret-token" not in str(ctx_config.repo_url)
     assert repo_url.count("oauth2:") == 1
 
 
@@ -109,7 +111,7 @@ def test_git_context_ensure_path(tmp_path: Path) -> None:
     """Test that GitContext creates local directories."""
     target_path = tmp_path / "deep" / "nested" / "repo"
     config = GitContextConfig(
-        repo_url=SecretStr("https://example.com/repo.git"),
+        repo_url=UrlStr("https://example.com/repo.git"),
         branch="main",
         user_name=None,
         user_email=None,
@@ -131,7 +133,7 @@ def test_git_context_enter_clone(mock_repo: MagicMock, tmp_path: Path) -> None:
     target_path.mkdir()
 
     config = GitContextConfig(
-        repo_url=SecretStr("https://example.com/repo.git"),
+        repo_url=UrlStr("https://example.com/repo.git"),
         branch="main",
         user_name=None,
         user_email=None,
@@ -155,7 +157,7 @@ def test_git_context_enter_existing(mock_repo: MagicMock, tmp_path: Path) -> Non
     (target_path / ".git").mkdir()
 
     config = GitContextConfig(
-        repo_url=SecretStr("https://example.com/repo.git"),
+        repo_url=UrlStr("https://example.com/repo.git"),
         branch="main",
         user_name=None,
         user_email=None,
@@ -514,7 +516,7 @@ def test_run_git_command_soft_span_status_depends_on_action(
 ) -> None:
     """Soft 'not found' is expected only for probe/init actions, not push/fetch/reset."""
     config = GitContextConfig(
-        repo_url=SecretStr("https://example.com/repo.git"),
+        repo_url=UrlStr("https://example.com/repo.git"),
         branch="main",
         user_name=None,
         user_email=None,
@@ -631,7 +633,7 @@ def test_git_context_sync_fail(mock_repo: MagicMock, tmp_path: Path) -> None:
     (target_path / ".git").mkdir()
 
     config = GitContextConfig(
-        repo_url=SecretStr("https://example.com/repo.git"),
+        repo_url=UrlStr("https://example.com/repo.git"),
         branch="main",
         user_name=None,
         user_email=None,

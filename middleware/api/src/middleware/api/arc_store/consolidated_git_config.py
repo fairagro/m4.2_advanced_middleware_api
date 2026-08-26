@@ -6,6 +6,8 @@ from typing import Annotated
 
 from pydantic import Field, field_validator
 
+from middleware.shared.security import UrlStr
+
 from .git_cli_settings import GitCliSettings
 
 
@@ -34,6 +36,6 @@ class ConsolidatedGitConfig(GitCliSettings):
         """Ensure catalog repo URL uses HTTP, HTTPS or FILE."""
         return GitCliSettings.validate_git_url_scheme(value)
 
-    def catalog_repo_url(self) -> str:
+    def catalog_repo_url(self) -> UrlStr:
         """Return the authenticated URL for the shared catalog remote."""
         return self.authenticated_repo_url(self.repo_url)

@@ -63,6 +63,10 @@ middleware/api_client/   ← optional client library for API consumers
 - Concrete Pydantic types for nested configs.
 - `SecretStr` for passwords and tokens — call `.get_secret_value()` only at
   the point of use (never log or cast to `str`).
+- `UrlStr` for credential-bearing HTTP(S) URLs (e.g. Git remotes with oauth2
+  userinfo) — `str(url)` redacts userinfo while keeping host/path; call
+  `.unredacted()` only when passing the URL to Git CLI / GitPython. Keep
+  `redact_url_userinfo` on free-form text (Git stderr, logs, persisted events).
 
 ### Function signatures and `**kwargs`
 

@@ -10,6 +10,8 @@ from urllib.parse import quote, urlparse
 
 from pydantic import BaseModel, Field, SecretStr, field_validator
 
+from middleware.shared.security import UrlStr
+
 _GIT_URL_SCHEMES = ("https://", "file://", "http://")
 
 
@@ -20,7 +22,7 @@ def _default_git_cache_dir() -> Path:
 class GitContextConfig(BaseModel):
     """Configuration for a specific GitContext clone operation."""
 
-    repo_url: SecretStr
+    repo_url: UrlStr
     branch: str
     user_name: str | None
     user_email: str | None
@@ -62,35 +64,37 @@ class GitCliSettings(BaseModel):
     def normalize_cache_dir(cls, value: Path | str | None) -> Path | str:
         """Accept omitted/null YAML; ``None`` uses this model's ``cache_dir`` default_factory."""
         if value is None:
-            factory = cls.model_fields["cache_dir"].default_factory
+            field_info = cls.model_fields.get("cache_dir")
+            factory = field_info.default_factory if field_info is not None else None
             if not callable(factory):
                 return _default_git_cache_dir()
             # Pydantic types default_factory as ``()`` or ``(data)``; ours are zero-arg.
             return cast(Callable[[], Path], factory)()
         return value
 
-    def authenticated_repo_url(self, url: str) -> str:
+    def authenticated_repo_url(self, url: str) -> UrlStr:
         """Return *url* with optional oauth2 token embedded for HTTPS remotes."""
         if self.token is None:
-            return url
+            return UrlStr(url)
         token = self.token.get_secret_value()
         if not token:
-            return url
+            return UrlStr(url)
         if urlparse(url).username is not None:
-            return url
+            return UrlStr(url)
         # Escape the full userinfo token (default quote() leaves "/" unescaped).
         safe_token = quote(token, safe="")
         lower = url.lower()
         if lower.startswith("https://"):
-            return f"https://oauth2:{safe_token}@{url[8:]}"
+            return UrlStr(f"https://oauth2:{safe_token}@{url[8:]}")
         if lower.startswith("http://"):
-            return f"http://oauth2:{safe_token}@{url[7:]}"
-        return url
+            return UrlStr(f"http://oauth2:{safe_token}@{url[7:]}")
+        return UrlStr(url)
 
-    def git_context_config(self, *, repo_url: str, local_path: Path) -> GitContextConfig:
+    def git_context_config(self, *, repo_url: str | UrlStr, local_path: Path) -> GitContextConfig:
         """Build runtime ``GitContext`` settings from shared CLI options."""
+        base = repo_url.unredacted() if isinstance(repo_url, UrlStr) else repo_url
         return GitContextConfig(
-            repo_url=SecretStr(self.authenticated_repo_url(repo_url)),
+            repo_url=self.authenticated_repo_url(base),
             branch=self.branch,
             user_name=self.user_name,
             user_email=self.user_email,
