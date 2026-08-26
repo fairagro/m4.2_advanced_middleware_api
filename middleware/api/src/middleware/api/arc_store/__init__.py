@@ -101,7 +101,7 @@ class ArcStore(ABC):
 
     @property
     def supports_standalone_upload(self) -> bool:
-        """Whether ``POST /v3/arcs`` is allowed for this backend."""
+        """Whether standalone ARC create (``/v1/arcs``, ``/v2/arcs``, ``/v3/arcs``) is allowed."""
         return True
 
     async def _finalize(self, *, rdi: str) -> bool:  # noqa: PLR6301, ARG002

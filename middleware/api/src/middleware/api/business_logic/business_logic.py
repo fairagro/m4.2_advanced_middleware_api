@@ -193,7 +193,17 @@ class BusinessLogic:
         target_status: HarvestStatus,
         client_id: str | None,
     ) -> HarvestDocument:
-        """Transition a harvest and enqueue catalog finalize when appropriate."""
+        """Transition a harvest via :class:`HarvestManager`, then enqueue catalog finalize.
+
+        Delegates status/ownership/statistics updates to
+        ``HarvestManager.transition_harvest``. When ``target_status`` is
+        ``COMPLETED`` and a task dispatcher is configured, additionally enqueues
+        ``dispatch_finalize_catalog`` (skipped for empty consolidating harvests).
+
+        Prefer this method from HTTP handlers over calling
+        ``harvest_manager.transition_harvest`` directly so finalize enqueue stays
+        consistent.
+        """
         updated = await self._harvest_manager.transition_harvest(harvest, target_status, client_id)
         if target_status == HarvestStatus.COMPLETED and self._ports.task_dispatcher is not None:
             stats = updated.statistics
@@ -220,7 +230,7 @@ class BusinessLogic:
         harvest: HarvestDocument,
         client_id: str | None,
     ) -> HarvestDocument:
-        """Mark a harvest completed and enqueue catalog finalize when configured."""
+        """Mark a harvest completed (via :meth:`transition_harvest`, including finalize enqueue)."""
         return await self.transition_harvest(harvest, HarvestStatus.COMPLETED, client_id)
 
     async def finalize_catalog(self, rdi: str, *, harvest_id: str | None = None) -> bool:

@@ -136,10 +136,11 @@ class HarvestManager:
         target_status: HarvestStatus,
         client_id: str | None,
     ) -> HarvestDocument:
-        """Transition a harvest run to a terminal status.
+        """Transition a harvest run to a terminal status (document-store only).
 
         Only a ``RUNNING`` harvest may transition; any other current status raises
-        ``ConflictError``.
+        ``ConflictError``. Does **not** enqueue catalog finalize — that orchestration
+        lives on ``BusinessLogic.transition_harvest``.
 
         Args:
             harvest: Already-fetched harvest document.

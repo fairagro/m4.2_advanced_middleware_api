@@ -571,6 +571,25 @@ async def test_list_arc_contents_by_rdi(store: CouchDB, mock_client_instance: Ma
 
 
 @pytest.mark.asyncio
+async def test_list_arc_contents_by_rdi_rejects_over_cap(
+    store: CouchDB,
+    mock_client_instance: MagicMock,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Catalog listing fails fast when an RDI exceeds the in-memory hard cap."""
+    monkeypatch.setattr("middleware.api.document_store.couchdb._MAX_ARCS_PER_RDI_FOR_CATALOG", 1)
+    content = {"@context": "https://w3id.org/ro/crate/1.1/context", "@graph": []}
+    mock_client_instance.find = AsyncMock(
+        return_value=[
+            {"_id": "arc_ds-1", "doc_type": "arc", "rdi": "edal", "arc_content": content},
+            {"_id": "arc_ds-2", "doc_type": "arc", "rdi": "edal", "arc_content": content},
+        ],
+    )
+    with pytest.raises(ValueError, match="more than 1 ARC documents"):
+        await store.list_arc_contents_by_rdi("edal")
+
+
+@pytest.mark.asyncio
 async def test_list_arc_contents_by_rdi_rejects_malformed_docs(
     store: CouchDB,
     mock_client_instance: MagicMock,
