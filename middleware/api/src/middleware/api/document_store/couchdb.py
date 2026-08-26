@@ -41,13 +41,6 @@ from .task_record import TaskRecord
 
 logger = logging.getLogger(__name__)
 
-_PENDING_POLL_ATTEMPTS = 20
-_PENDING_POLL_DELAY_S = 0.05
-
-# Catalog finalize streams ARC bodies page-by-page so peak RO-Crate RAM is
-# roughly one Mango page (not the whole RDI). Callers retain extracted Datasets.
-_CATALOG_LIST_PAGE_SIZE = 500
-
 
 class CouchDB(DocumentStore):
     """CouchDB implementation of DocumentStore."""
@@ -346,7 +339,7 @@ class CouchDB(DocumentStore):
         rdi: str,
         expected_datasets: int | None,
     ) -> tuple[str, bool]:
-        for _ in range(_PENDING_POLL_ATTEMPTS):
+        for _ in range(self._config.pending_poll_attempts):
             index = await self._load_idempotency_doc(doc_id)
             if index is None:
                 raise IdempotencyPendingError(f"Idempotency claim {doc_id} disappeared")
@@ -354,7 +347,7 @@ class CouchDB(DocumentStore):
                 raise IdempotencyBodyConflictError("Idempotency-Key was reused with an incompatible create body")
             if index.status == IdempotencyStatus.COMMITTED and index.harvest_id:
                 return index.harvest_id, True
-            await asyncio.sleep(_PENDING_POLL_DELAY_S)
+            await asyncio.sleep(self._config.pending_poll_delay_s)
 
         raise IdempotencyPendingError(f"Idempotency claim {doc_id} is still pending")
 
@@ -517,7 +510,7 @@ class CouchDB(DocumentStore):
     async def iter_arc_contents_by_rdi(self, rdi: str) -> AsyncIterator[tuple[str, RoCrateContent]]:
         """Yield ``(arc_id, arc_content)`` for ARC documents of an RDI.
 
-        Fetches CouchDB in pages of ``_CATALOG_LIST_PAGE_SIZE`` and yields one
+        Fetches CouchDB in pages of ``catalog_list_page_size`` and yields one
         ARC at a time so only the current page of full RO-Crate bodies is retained
         (plus whatever the caller accumulates, e.g. extracted Dataset records).
 
@@ -527,7 +520,7 @@ class CouchDB(DocumentStore):
         selector: JsonObject = {"doc_type": "arc"}
         selector["rdi"] = rdi
         skip = 0
-        page_size = _CATALOG_LIST_PAGE_SIZE
+        page_size = self._config.catalog_list_page_size
         while True:
             docs = await self._client.find(selector, limit=page_size, skip=skip)
             for doc in docs:

@@ -574,10 +574,10 @@ async def test_iter_arc_contents_by_rdi(store: CouchDB, mock_client_instance: Ma
 async def test_iter_arc_contents_by_rdi_pages(
     store: CouchDB,
     mock_client_instance: MagicMock,
-    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """Streaming walks multiple Mango pages without building a full list in the store."""
-    monkeypatch.setattr("middleware.api.document_store.couchdb._CATALOG_LIST_PAGE_SIZE", 2)
+    page_size = 2
+    store._config.catalog_list_page_size = page_size  # noqa: SLF001
     content = {"@context": "https://w3id.org/ro/crate/1.1/context", "@graph": []}
     page1 = [
         {"_id": "arc_ds-1", "doc_type": "arc", "rdi": "edal", "arc_content": content},
@@ -594,10 +594,10 @@ async def test_iter_arc_contents_by_rdi_pages(
     assert mock_client_instance.find.await_count == 2
     first_call = mock_client_instance.find.await_args_list[0]
     second_call = mock_client_instance.find.await_args_list[1]
-    assert first_call.kwargs["limit"] == 2
+    assert first_call.kwargs["limit"] == page_size
     assert first_call.kwargs["skip"] == 0
-    assert second_call.kwargs["limit"] == 2
-    assert second_call.kwargs["skip"] == 2
+    assert second_call.kwargs["limit"] == page_size
+    assert second_call.kwargs["skip"] == page_size
 
 
 @pytest.mark.asyncio

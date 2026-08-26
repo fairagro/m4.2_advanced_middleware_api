@@ -31,6 +31,32 @@ class CouchDBConfig(BaseModel):
             description="Maximum retry attempts for save_document on CouchDB revision conflicts",
         ),
     ] = 3
+    pending_poll_attempts: Annotated[
+        int,
+        Field(
+            default=20,
+            ge=1,
+            le=10_000,
+            description="Poll attempts while waiting for a pending harvest idempotency claim",
+        ),
+    ] = 20
+    pending_poll_delay_s: Annotated[
+        float,
+        Field(
+            default=0.05,
+            ge=0.0,
+            description="Delay in seconds between pending idempotency claim poll attempts",
+        ),
+    ] = 0.05
+    catalog_list_page_size: Annotated[
+        int,
+        Field(
+            default=500,
+            ge=1,
+            le=10_000,
+            description="Mango page size when streaming ARC contents for catalog finalize",
+        ),
+    ] = 500
 
     @field_validator("url")
     @classmethod
