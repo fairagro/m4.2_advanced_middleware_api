@@ -44,7 +44,7 @@ def extract_catalog_dataset(arc_content: RoCrateContent) -> CatalogDatasetRecord
         raise ValueError(msg)
 
     # Keep a self-contained record: copy node and attach top-level @context when present.
-    record: CatalogDatasetRecord = dict(chosen)
+    record = chosen.copy()
     context = arc_content.get("@context")
     if context is not None and "@context" not in record:
         record["@context"] = context
@@ -52,6 +52,10 @@ def extract_catalog_dataset(arc_content: RoCrateContent) -> CatalogDatasetRecord
 
 
 def _dataset_sort_key(dataset: CatalogDatasetRecord) -> tuple[str, str]:
+    """Primary ``@id``, then canonical JSON for missing/duplicate-``@id`` tie-breaks.
+
+    ``sorted(..., key=...)`` evaluates this once per element (not per comparison).
+    """
     node_id = dataset.get("@id")
     id_part = node_id if isinstance(node_id, str) else ""
     return (id_part, json.dumps(dataset, sort_keys=True, separators=(",", ":"), ensure_ascii=False))
