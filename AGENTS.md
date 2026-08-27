@@ -7,7 +7,7 @@ project for AI assistants (GitHub Copilot, Claude, etc.).
 
 | Component | Version | Details |
 | --------- | ------- | ------- |
-| Python | `versions.env` → `PYTHON_VERSION` | Patch pin; `.python-version` synced for uv |
+| Python | `versions.env` → `PYTHON_VERSION` | Patch pin; `.python-version` mirrored (Renovate + `load-versions-env.sh`) |
 | Alpine | `versions.env` → `ALPINE_VERSION` | Patch pin; minor derived for `python:*-alpine*` / apk |
 | Toolchain | `versions.env` | uv, pip, kubectl, helm, … (see file) |
 | FastAPI | Latest | REST API framework |

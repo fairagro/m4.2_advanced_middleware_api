@@ -52,6 +52,18 @@
       "versioningTemplate": "loose"
     },
     {
+      "description": "Python patch pin in .python-version (mirror of versions.env)",
+      "customType": "regex",
+      "fileMatch": ["^\\.python-version$"],
+      "matchStrings": [
+        "^(?<currentValue>\\d+\\.\\d+\\.\\d+)\\s*$"
+      ],
+      "datasourceTemplate": "docker",
+      "depNameTemplate": "python",
+      "extractVersionTemplate": "^(?<version>\\d+\\.\\d+\\.\\d+)$",
+      "versioningTemplate": "loose"
+    },
+    {
       "description": "Alpine patch pin in versions.env",
       "customType": "regex",
       "fileMatch": ["^versions\\.env$"],
@@ -89,7 +101,7 @@
 
   "packageRules": [
     {
-      "description": "🔒 Python 3.12 global lock (versions.env)",
+      "description": "🔒 Python 3.12 global lock (versions.env + .python-version)",
       "matchManagers": ["dockerfile", "devcontainer", "github-actions", "custom.regex"],
       "matchPackagePatterns": ["python"],
       "allowedVersions": "/^3\\.12/",
