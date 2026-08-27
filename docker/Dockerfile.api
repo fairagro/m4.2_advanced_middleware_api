@@ -5,7 +5,9 @@
 #   ALPINE_MINOR    ← ${ALPINE_VERSION%.*}     (e.g. 3.24)         → python:*-alpine${ALPINE_MINOR}
 # Official python images only publish alpine${major.minor}, not patch tags.
 # Fallbacks keep `FROM` valid for BuildKit InvalidDefaultArgInFrom.
+# Declare all FROM-consumed ARGs before the first FROM (global build-arg scope).
 ARG PYTHON_VERSION
+ARG ALPINE_VERSION
 ARG ALPINE_MINOR
 
 FROM python:${PYTHON_VERSION:-3.12}-alpine${ALPINE_MINOR:-3.24} AS package-builder
