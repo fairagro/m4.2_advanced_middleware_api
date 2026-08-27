@@ -90,6 +90,9 @@ uv run ruff check --config pyproject.toml middleware/
 # Autofix hooks only (trailing-whitespace, eof, ruff, ruff-format)
 ./scripts/quality-fix.sh
 
+# Refresh Docker/apk/pip/uv pins (versions.env + Dockerfile.api fallbacks)
+./scripts/update-docker-pins.sh
+
 # Install all dependecies
 uv sync --dev --all-packages
 ```

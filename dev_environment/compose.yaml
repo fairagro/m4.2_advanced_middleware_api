@@ -37,7 +37,7 @@ services:
       dockerfile: docker/Dockerfile.api
       # Optional: set by ./start.sh from versions.env.
       # Do not use ${VAR:?…} — Compose interpolates on every command (down/logs/…).
-      # Empty → Dockerfile FROM fallbacks.
+      # Empty strings are ok: Dockerfile uses ${VAR:-default} for FROM and pip/uv installs.
       args:
         PYTHON_VERSION: ${PYTHON_VERSION:-}
         ALPINE_VERSION: ${ALPINE_VERSION:-}

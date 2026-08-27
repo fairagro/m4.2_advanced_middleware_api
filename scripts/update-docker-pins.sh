@@ -1,4 +1,12 @@
 #!/usr/bin/env bash
+# Update pinned versions in docker/Dockerfile.api and versions.env:
+#   - Alpine apk package pins (from Alpine APKINDEX)
+#   - pip / uv pins in versions.env (from PyPI)
+#   - Dockerfile ${VAR:-fallback} defaults (kept aligned with versions.env)
+#
+# Usage:
+#   ./scripts/update-docker-pins.sh
+#   ./scripts/update-docker-pins.sh path/to/Dockerfile
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -28,6 +36,31 @@ update_versions_env_pin() {
   else
     echo "${key}=${value}" >> "${VERSIONS_ENV}"
   fi
+}
+
+# Sync Dockerfile ${NAME:-fallback} defaults to match versions.env (SoT).
+# Quoting is pieced so bash never treats :- as its own parameter-expansion operator.
+sync_dockerfile_arg_fallback() {
+  local arg_name="$1"
+  local fallback="$2"
+  local pattern='\$\{'"${arg_name}"':-[^}]+\}'
+  local replacement='${'"${arg_name}"':-'"${fallback}"'}'
+  if grep -qE "${pattern}" "$DOCKERFILE"; then
+    sed -i -E "s#${pattern}#${replacement}#g" "$DOCKERFILE"
+    echo "✔ Dockerfile \${${arg_name}:-…} → ${fallback}"
+  else
+    echo "⚠️  No \${${arg_name}:-…} fallback found in Dockerfile"
+  fi
+}
+
+sync_all_dockerfile_fallbacks() {
+  echo "📌 Syncing Dockerfile :-fallbacks from versions.env..."
+  sync_dockerfile_arg_fallback "PIP_VERSION" "${PIP_VERSION}"
+  sync_dockerfile_arg_fallback "UV_VERSION" "${UV_VERSION}"
+  # FROM python:${PYTHON_VERSION:-X.Y} uses major.minor only
+  sync_dockerfile_arg_fallback "PYTHON_VERSION" "${PYTHON_VERSION%.*}"
+  sync_dockerfile_arg_fallback "ALPINE_VERSION" "${ALPINE_VERSION}"
+  sync_dockerfile_arg_fallback "ALPINE_MINOR" "${ALPINE_MINOR}"
 }
 
 TMP_DIR=$(mktemp -d)
@@ -74,7 +107,7 @@ latest_apk_version() {
   printf '%s\n' "$versions" | sed '/^$/d' | sort -V | tail -1
 }
 
-echo "🔍 Updating Dockerfile..."
+echo "🔍 Updating Alpine apk pins in Dockerfile..."
 
 cp "$DOCKERFILE" "${DOCKERFILE}.bak"
 
@@ -105,8 +138,7 @@ while IFS= read -r match; do
 
 done < <(grep -oE '[a-z0-9][a-z0-9_-]*=[0-9][a-z0-9._]+-r[0-9]+' "$DOCKERFILE" || true)
 
-# --- Update pip-installed Python packages (PEP 440: name==X.Y.Z) ---
-# Dockerfile uses pip==${PIP_VERSION} / uv==${UV_VERSION}; keep versions.env in sync.
+# --- Update pip / uv in versions.env (PyPI), then mirror into Dockerfile :-fallbacks ---
 echo "🐍 Updating pip/uv pins in versions.env..."
 
 for pkg_key in pip:PIP_VERSION uv:UV_VERSION; do
@@ -130,9 +162,10 @@ for pkg_key in pip:PIP_VERSION uv:UV_VERSION; do
   update_versions_env_pin "${env_key}" "${latest}"
 done
 
-# Re-sync .python-version after any versions.env edits
+# Re-load pins after versions.env edits, sync .python-version + Dockerfile fallbacks
 # shellcheck source=load-versions-env.sh
 source "${SCRIPT_DIR}/load-versions-env.sh"
+sync_all_dockerfile_fallbacks
 
 echo "✅ Done. Backup at ${DOCKERFILE}.bak"
 rm -rf "$TMP_DIR"
