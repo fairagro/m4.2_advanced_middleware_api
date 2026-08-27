@@ -1,5 +1,5 @@
 # ---- Package Build Stage ----
-FROM python:3.12.13-alpine3.24 AS package-builder
+FROM python:3.12.14-alpine3.24 AS package-builder
 
 # Accept PEP 440 compliant version from CI
 ARG APP_VERSION=0.0.0
@@ -23,7 +23,7 @@ RUN uv build --package fairagro-middleware-shared --wheel && \
 
 
 # ---- Binary Build Stage ----
-FROM python:3.12.13-alpine3.24 AS binary-builder
+FROM python:3.12.14-alpine3.24 AS binary-builder
 
 RUN apk add --no-cache \
     build-base=0.5-r4 \
