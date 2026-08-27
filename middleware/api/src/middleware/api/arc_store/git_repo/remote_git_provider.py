@@ -334,7 +334,8 @@ class GitlabGitProvider(RemoteGitProvider):
         if not authenticated or not self.token:
             return UrlStr(repo_url)
 
-        safe_token = quote(self.token)
+        # Escape the full userinfo token (default quote() leaves "/" unescaped).
+        safe_token = quote(self.token, safe="")
         if repo_url.startswith("https://"):
             return UrlStr(f"https://oauth2:{safe_token}@{repo_url[8:]}")
         if repo_url.startswith("http://"):
