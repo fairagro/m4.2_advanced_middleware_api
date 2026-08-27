@@ -3,11 +3,10 @@
 from abc import ABC, abstractmethod
 from collections.abc import AsyncIterator
 
+from middleware.api.document_store.arc_document import ArcEvent, ArcMetadata
+from middleware.api.document_store.harvest_document import HarvestDocument, HarvestStatistics, HarvestUpdatePayload
+from middleware.api.document_store.task_record import TaskRecord
 from middleware.shared.json_types import RoCrateContent
-
-from .arc_document import ArcEvent, ArcMetadata
-from .harvest_document import HarvestDocument, HarvestStatistics, HarvestUpdatePayload
-from .task_record import TaskRecord
 
 
 class DocumentStoreError(Exception):
@@ -243,7 +242,7 @@ class DocumentStore(ABC):
         raise NotImplementedError
 
     @abstractmethod
-    def iter_arc_contents_by_rdi(self, rdi: str) -> AsyncIterator[tuple[str, RoCrateContent]]:
+    async def iter_arc_contents_by_rdi(self, rdi: str) -> AsyncIterator[tuple[str, RoCrateContent]]:
         """Yield ``(arc_id, arc_content)`` for ARC documents of an RDI.
 
         Implementations MUST stream (paginate) so callers need not hold all
@@ -253,3 +252,9 @@ class DocumentStore(ABC):
             ValueError: If a stored ARC document has an unexpected shape.
         """
         raise NotImplementedError
+        # Unreachable: marks this abstract method as an async generator so callers
+        # can ``async for`` without awaiting a coroutine (matches CouchDB impl).
+        yield (  # pragma: no cover
+            "",
+            {},
+        )
