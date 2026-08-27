@@ -3,11 +3,11 @@
 import logging
 from typing import Literal
 
-from ..arc_store.factory import create_arc_store
-from ..document_store.couchdb import CouchDB
-from .business_logic import BusinessLogic
-from .config import BusinessLogicFactoryConfig
-from .ports import BrokerHealthChecker, BusinessLogicPorts, TaskDispatcher
+from middleware.api.arc_store.factory import create_arc_store
+from middleware.api.business_logic.business_logic import BusinessLogic
+from middleware.api.business_logic.config import BusinessLogicFactoryConfig
+from middleware.api.business_logic.ports import BrokerHealthChecker, BusinessLogicPorts, TaskDispatcher
+from middleware.api.document_store.couchdb import CouchDB
 
 logger = logging.getLogger(__name__)
 

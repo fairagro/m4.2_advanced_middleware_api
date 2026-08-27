@@ -3,7 +3,7 @@
 from dataclasses import dataclass
 from typing import Protocol, runtime_checkable
 
-from .task_payloads import ArcSyncTask, CatalogFinalizeTask
+from middleware.api.business_logic.task_payloads import ArcSyncTask, CatalogFinalizeTask
 
 
 @runtime_checkable

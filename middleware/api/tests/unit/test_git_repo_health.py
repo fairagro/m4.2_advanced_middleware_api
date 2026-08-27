@@ -7,8 +7,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 from pydantic import ValidationError
 
-from middleware.api.arc_store.git_repo import GitRepoConfig
-from middleware.api.arc_store.git_repo import GitRepo
+from middleware.api.arc_store.git_repo import GitRepo, GitRepoConfig
 
 
 def test_validate_url_scheme_valid() -> None:
