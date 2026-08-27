@@ -24,8 +24,9 @@ fi
 # Single source of truth: full Alpine patch pin (e.g. 3.24.1).
 # APKINDEX and python:*-alpine* tags only use major.minor → strip patch.
 ALPINE_VERSION="$(tr -d '[:space:]' < "$ALPINE_VERSION_FILE")"
-if [[ -z "$ALPINE_VERSION" ]]; then
-  echo "❌ .alpine-version is empty" >&2
+if [[ ! "$ALPINE_VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+  echo "❌ .alpine-version must be a patch pin X.Y.Z (got: '${ALPINE_VERSION:-<empty>}')" >&2
+  echo "   major.minor alone (e.g. 3.24) would make ALPINE_MINOR wrong for APKINDEX." >&2
   exit 1
 fi
 ALPINE_MINOR="${ALPINE_VERSION%.*}"
