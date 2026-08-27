@@ -127,17 +127,14 @@ class ArcManager:
                 has_changes = doc_result.has_changes
                 should_trigger_git = is_new or has_changes
 
-                logger.info(
-                    "[%s] Stored ARC %s in CouchDB: is_new=%s, has_changes=%s, trigger_git=%s",
-                    client_id,
-                    arc_id,
-                    is_new,
-                    has_changes,
-                    should_trigger_git,
-                )
-
                 if should_trigger_git and self._store.publishes_per_arc_git:
-                    logger.info("[%s] Enqueueing GitLab sync task for ARC %s", client_id, arc_id)
+                    logger.info(
+                        "[%s] Stored ARC %s in CouchDB (is_new=%s, has_changes=%s); enqueueing Git sync",
+                        client_id,
+                        arc_id,
+                        is_new,
+                        has_changes,
+                    )
                     self._dispatcher.dispatch_sync_arc(
                         ArcSyncTask(
                             rdi=rdi,
@@ -147,12 +144,22 @@ class ArcManager:
                     )
                 elif should_trigger_git:
                     logger.info(
-                        "[%s] Skipping per-ARC Git sync for ARC %s (catalog backend uses harvest finalize)",
+                        "[%s] Stored ARC %s in CouchDB and staged for later Git sync "
+                        "(is_new=%s, has_changes=%s)",
                         client_id,
                         arc_id,
+                        is_new,
+                        has_changes,
                     )
                 else:
-                    logger.info("[%s] Skipping GitLab sync for ARC %s (unchanged)", client_id, arc_id)
+                    logger.info(
+                        "[%s] Stored ARC %s in CouchDB (is_new=%s, has_changes=%s); "
+                        "skipping Git sync (unchanged)",
+                        client_id,
+                        arc_id,
+                        is_new,
+                        has_changes,
+                    )
 
                 status = ArcStatus.CREATED if is_new else ArcStatus.UPDATED
                 result = ArcResponse(
