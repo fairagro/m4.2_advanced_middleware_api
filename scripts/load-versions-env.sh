@@ -2,6 +2,10 @@
 # Load repo-root versions.env, validate runtime pins, derive ALPINE_MINOR,
 # and sync .python-version from PYTHON_VERSION.
 #
+# Alpine stays only in versions.env (no .alpine-version file): nothing outside
+# this loader/Docker build-args consumes a dedicated Alpine pin file. Python
+# still needs .python-version for uv / actions/setup-python.
+#
 # Usage (from any cwd):
 #   source "$(git rev-parse --show-toplevel)/scripts/load-versions-env.sh"
 # or:
