@@ -136,7 +136,7 @@ fastapi run middleware/api/src/middleware/api/api/fastapi_app.py --app app
 
 ### Using a local docker image
 
-We can also build an run the docker image:
+We can also build and run the docker image:
 
 ```bash
 source scripts/load-versions-env.sh
