@@ -35,10 +35,13 @@ services:
     build:
       context: ..
       dockerfile: docker/Dockerfile.api
+      # Optional: set by ./start.sh from .python-version / .alpine-version.
+      # Do not use ${VAR:?…} — Compose interpolates on every command (down/logs/…).
+      # Empty → Dockerfile FROM fallbacks.
       args:
-        PYTHON_VERSION: ${PYTHON_VERSION:?Set PYTHON_VERSION from repo-root .python-version (use ./start.sh)}
-        ALPINE_VERSION: ${ALPINE_VERSION:?Set ALPINE_VERSION from repo-root .alpine-version (use ./start.sh)}
-        ALPINE_MINOR: ${ALPINE_MINOR:?Set ALPINE_MINOR from .alpine-version (use ./start.sh)}
+        PYTHON_VERSION: ${PYTHON_VERSION:-}
+        ALPINE_VERSION: ${ALPINE_VERSION:-}
+        ALPINE_MINOR: ${ALPINE_MINOR:-}
     depends_on:
       rabbitmq:
         condition: service_healthy
@@ -70,9 +73,9 @@ services:
       context: ..
       dockerfile: docker/Dockerfile.api
       args:
-        PYTHON_VERSION: ${PYTHON_VERSION:?Set PYTHON_VERSION from repo-root .python-version (use ./start.sh)}
-        ALPINE_VERSION: ${ALPINE_VERSION:?Set ALPINE_VERSION from repo-root .alpine-version (use ./start.sh)}
-        ALPINE_MINOR: ${ALPINE_MINOR:?Set ALPINE_MINOR from .alpine-version (use ./start.sh)}
+        PYTHON_VERSION: ${PYTHON_VERSION:-}
+        ALPINE_VERSION: ${ALPINE_VERSION:-}
+        ALPINE_MINOR: ${ALPINE_MINOR:-}
     depends_on:
       rabbitmq:
         condition: service_healthy
