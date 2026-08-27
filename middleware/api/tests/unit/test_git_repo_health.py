@@ -24,6 +24,17 @@ def test_validate_url_scheme_invalid() -> None:
     assert "Git URL must start with one of: ('https://', 'file://', 'http://')" in str(excinfo.value)
 
 
+def test_validate_url_rejects_embedded_userinfo() -> None:
+    """Config URLs must not carry credentials; operators use the token field."""
+    with pytest.raises(ValidationError) as excinfo:
+        GitRepoConfig(
+            url="https://oauth2:secret-token@example.com/repo.git",
+            group="group",
+            cache_dir=Path("/tmp"),  # nosec B108
+        )
+    assert "must not embed credentials in userinfo" in str(excinfo.value)
+
+
 def test_check_health_file_scheme() -> None:
     """Test health check for file:// scheme returns True regardless of path existence."""
     config = GitRepoConfig(url="file:///non/existent/path", group="group", cache_dir=Path("/tmp"))  # nosec B108

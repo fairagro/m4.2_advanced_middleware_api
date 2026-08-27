@@ -53,9 +53,16 @@ class GitCliSettings(BaseModel):
 
     @classmethod
     def validate_git_url_scheme(cls, value: str) -> str:
-        """Ensure a git remote URL uses HTTP, HTTPS, or FILE."""
+        """Ensure a git remote URL uses HTTP, HTTPS, or FILE without userinfo.
+
+        Credentials must be supplied via the ``token`` field (``SecretStr``), not
+        embedded in the URL, so config dumps cannot leak secrets as plain strings.
+        """
         if not value.lower().startswith(_GIT_URL_SCHEMES):
             msg = f"Git URL must start with one of: {_GIT_URL_SCHEMES}"
+            raise ValueError(msg)
+        if urlparse(value).username is not None:
+            msg = "Git URL must not embed credentials in userinfo; use the token field instead"
             raise ValueError(msg)
         return value
 
