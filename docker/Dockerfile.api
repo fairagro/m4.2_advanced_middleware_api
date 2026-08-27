@@ -1,19 +1,22 @@
 # ---- Package Build Stage ----
-# Pins from repo root:
-#   PYTHON_VERSION  ← .python-version          (e.g. 3.12.14)
-#   ALPINE_VERSION  ← .alpine-version          (patch, e.g. 3.24.1) → alpine:${ALPINE_VERSION}
-#   ALPINE_MINOR    ← ${ALPINE_VERSION%.*}     (e.g. 3.24)         → python:*-alpine${ALPINE_MINOR}
+# Pins from repo-root versions.env (passed as --build-arg):
+#   PYTHON_VERSION, ALPINE_VERSION (patch), ALPINE_MINOR (${ALPINE_VERSION%.*}),
+#   PIP_VERSION, UV_VERSION
 # Official python images only publish alpine${major.minor}, not patch tags.
 # Fallbacks keep `FROM` valid for BuildKit InvalidDefaultArgInFrom.
 # Declare all FROM-consumed ARGs before the first FROM (global build-arg scope).
 ARG PYTHON_VERSION
 ARG ALPINE_VERSION
 ARG ALPINE_MINOR
+ARG PIP_VERSION
+ARG UV_VERSION
 
 FROM python:${PYTHON_VERSION:-3.12}-alpine${ALPINE_MINOR:-3.24} AS package-builder
 
 # Accept PEP 440 compliant version from CI
 ARG APP_VERSION=0.0.0
+ARG PIP_VERSION
+ARG UV_VERSION
 
 # Set as environment variables for the build process
 # SETUPTOOLS_SCM_PRETEND_VERSION overrides dynamic version discovery from Git
@@ -26,7 +29,7 @@ COPY pyproject.toml uv.lock ./
 COPY middleware ./middleware
 
 # Upgrade pip and install uv
-RUN pip install --no-cache-dir --upgrade pip==26.2.1 uv==0.12.6
+RUN pip install --no-cache-dir --upgrade "pip==${PIP_VERSION}" "uv==${UV_VERSION}"
 
 # Build wheels
 RUN uv build --package fairagro-middleware-shared --wheel && \
@@ -36,8 +39,13 @@ RUN uv build --package fairagro-middleware-shared --wheel && \
 # ---- Binary Build Stage ----
 ARG PYTHON_VERSION
 ARG ALPINE_MINOR
+ARG PIP_VERSION
+ARG UV_VERSION
 
 FROM python:${PYTHON_VERSION:-3.12}-alpine${ALPINE_MINOR:-3.24} AS binary-builder
+
+ARG PIP_VERSION
+ARG UV_VERSION
 
 RUN apk add --no-cache \
     build-base=0.5-r4 \
@@ -50,7 +58,7 @@ RUN apk add --no-cache \
 WORKDIR /build
 
 # Install uv and PyInstaller
-RUN pip install --no-cache-dir --upgrade pip==26.2.1 uv==0.12.6
+RUN pip install --no-cache-dir --upgrade "pip==${PIP_VERSION}" "uv==${UV_VERSION}"
 
 # Copy built wheel from package-builder stage
 COPY --from=package-builder /build/dist/*.whl /tmp/wheels/

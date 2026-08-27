@@ -64,7 +64,11 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v7
 
-      # Setup Python environment for Python analysis (.python-version is SoT)
+      # Setup Python from versions.env (keeps .python-version in sync for tooling)
+      - name: Sync Python pin from versions.env
+        if: matrix.language == 'python'
+        run: source scripts/load-versions-env.sh
+
       - name: Set up Python
         if: matrix.language == 'python'
         uses: actions/setup-python@v5

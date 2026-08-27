@@ -42,10 +42,12 @@ jobs:
         with:
           version: "latest"
 
-      # uv reads the patch pin from repo-root .python-version
-      - name: Install Python from .python-version
+      - name: Install Python from versions.env
         if: ${{ !inputs.skip }}
-        run: uv python install
+        run: |
+          # shellcheck source=scripts/load-versions-env.sh
+          source scripts/load-versions-env.sh
+          uv python install "${PYTHON_VERSION}"
 
       - name: Install dependencies
         if: ${{ !inputs.skip }}

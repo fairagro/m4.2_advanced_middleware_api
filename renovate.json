@@ -40,11 +40,11 @@
 
   "customManagers": [
     {
-      "description": "Python patch pin in .python-version (SoT for runtime)",
+      "description": "Python patch pin in versions.env",
       "customType": "regex",
-      "fileMatch": ["^\\.python-version$"],
+      "fileMatch": ["^versions\\.env$"],
       "matchStrings": [
-        "^(?<currentValue>\\d+\\.\\d+\\.\\d+)\\s*$"
+        "PYTHON_VERSION=(?<currentValue>\\d+\\.\\d+\\.\\d+)"
       ],
       "datasourceTemplate": "docker",
       "depNameTemplate": "python",
@@ -52,22 +52,44 @@
       "versioningTemplate": "loose"
     },
     {
-      "description": "Alpine patch pin in .alpine-version (SoT; minor derived for python/apk)",
+      "description": "Alpine patch pin in versions.env",
       "customType": "regex",
-      "fileMatch": ["^\\.alpine-version$"],
+      "fileMatch": ["^versions\\.env$"],
       "matchStrings": [
-        "^(?<currentValue>\\d+\\.\\d+\\.\\d+)\\s*$"
+        "ALPINE_VERSION=(?<currentValue>\\d+\\.\\d+\\.\\d+)"
       ],
       "datasourceTemplate": "docker",
       "depNameTemplate": "alpine",
       "extractVersionTemplate": "^(?<version>\\d+\\.\\d+\\.\\d+)$",
       "versioningTemplate": "loose"
+    },
+    {
+      "description": "uv pin in versions.env",
+      "customType": "regex",
+      "fileMatch": ["^versions\\.env$"],
+      "matchStrings": [
+        "UV_VERSION=(?<currentValue>[^\\s#]+)"
+      ],
+      "datasourceTemplate": "pypi",
+      "depNameTemplate": "uv",
+      "versioningTemplate": "pep440"
+    },
+    {
+      "description": "pip pin in versions.env",
+      "customType": "regex",
+      "fileMatch": ["^versions\\.env$"],
+      "matchStrings": [
+        "PIP_VERSION=(?<currentValue>[^\\s#]+)"
+      ],
+      "datasourceTemplate": "pypi",
+      "depNameTemplate": "pip",
+      "versioningTemplate": "pep440"
     }
   ],
 
   "packageRules": [
     {
-      "description": "🔒 Python 3.12 global lock (.python-version + Docker alpine tags)",
+      "description": "🔒 Python 3.12 global lock (versions.env)",
       "matchManagers": ["dockerfile", "devcontainer", "github-actions", "custom.regex"],
       "matchPackagePatterns": ["python"],
       "allowedVersions": "/^3\\.12/",

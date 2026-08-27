@@ -139,14 +139,14 @@ fastapi run middleware/api/src/middleware/api/api/fastapi_app.py --app app
 We can also build an run the docker image:
 
 ```bash
-PYTHON_VERSION="$(tr -d '[:space:]' < .python-version)"
-ALPINE_VERSION="$(tr -d '[:space:]' < .alpine-version)"
-ALPINE_MINOR="${ALPINE_VERSION%.*}"
+source scripts/load-versions-env.sh
 docker build -f docker/Dockerfile.api \
   --build-arg PYTHON_VERSION="$PYTHON_VERSION" \
   --build-arg ALPINE_VERSION="$ALPINE_VERSION" \
   --build-arg ALPINE_MINOR="$ALPINE_MINOR" \
-  . -t middleware-api
+  --build-arg PIP_VERSION="$PIP_VERSION" \
+  --build-arg UV_VERSION="$UV_VERSION" \
+  -t middleware-api .
 docker run \
     -v $(pwd)/example_config.yaml:/run/secrets/middleware-api-config \
     -e GITLAB_API_TOKEN \

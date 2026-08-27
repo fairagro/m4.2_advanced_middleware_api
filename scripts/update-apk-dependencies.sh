@@ -4,7 +4,7 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
 DOCKERFILE="${PROJECT_DIR}/docker/Dockerfile.api"
-ALPINE_VERSION_FILE="${PROJECT_DIR}/.alpine-version"
+VERSIONS_ENV="${PROJECT_DIR}/versions.env"
 
 # Allow an optional Dockerfile path override for other repository variants.
 if [[ $# -gt 0 ]]; then
@@ -16,21 +16,19 @@ if [[ ! -f "$DOCKERFILE" ]]; then
   exit 1
 fi
 
-if [[ ! -f "$ALPINE_VERSION_FILE" ]]; then
-  echo "❌ Alpine version file not found: $ALPINE_VERSION_FILE" >&2
-  exit 1
-fi
+# shellcheck source=load-versions-env.sh
+source "${SCRIPT_DIR}/load-versions-env.sh"
+echo "🏔️  Alpine ${ALPINE_VERSION} (minor ${ALPINE_MINOR} for APKINDEX, from versions.env)"
 
-# Single source of truth: full Alpine patch pin (e.g. 3.24.1).
-# APKINDEX and python:*-alpine* tags only use major.minor → strip patch.
-ALPINE_VERSION="$(tr -d '[:space:]' < "$ALPINE_VERSION_FILE")"
-if [[ ! "$ALPINE_VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
-  echo "❌ .alpine-version must be a patch pin X.Y.Z (got: '${ALPINE_VERSION:-<empty>}')" >&2
-  echo "   major.minor alone (e.g. 3.24) would make ALPINE_MINOR wrong for APKINDEX." >&2
-  exit 1
-fi
-ALPINE_MINOR="${ALPINE_VERSION%.*}"
-echo "🏔️  Alpine ${ALPINE_VERSION} (minor ${ALPINE_MINOR} for APKINDEX, from .alpine-version)"
+update_versions_env_pin() {
+  local key="$1"
+  local value="$2"
+  if grep -qE "^${key}=" "${VERSIONS_ENV}"; then
+    sed -i "s#^${key}=.*#${key}=${value}#" "${VERSIONS_ENV}"
+  else
+    echo "${key}=${value}" >> "${VERSIONS_ENV}"
+  fi
+}
 
 TMP_DIR=$(mktemp -d)
 trap 'rm -rf "$TMP_DIR"' EXIT
@@ -108,13 +106,13 @@ while IFS= read -r match; do
 done < <(grep -oE '[a-z0-9][a-z0-9_-]*=[0-9][a-z0-9._]+-r[0-9]+' "$DOCKERFILE" || true)
 
 # --- Update pip-installed Python packages (PEP 440: name==X.Y.Z) ---
-echo "🐍 Updating pip-pinned packages..."
+# Dockerfile uses pip==${PIP_VERSION} / uv==${UV_VERSION}; keep versions.env in sync.
+echo "🐍 Updating pip/uv pins in versions.env..."
 
-while IFS= read -r match; do
-  [[ "$match" =~ ^([a-zA-Z0-9][a-zA-Z0-9_-]*)==([0-9][a-z0-9._]*)$ ]] || continue
-
-  pkg="${BASH_REMATCH[1]}"
-  current="${BASH_REMATCH[2]}"
+for pkg_key in pip:PIP_VERSION uv:UV_VERSION; do
+  pkg="${pkg_key%%:*}"
+  env_key="${pkg_key##*:}"
+  current="${!env_key}"
 
   latest=$(curl -sf "https://pypi.org/pypi/${pkg}/json" | python3 -c "import sys,json; print(json.load(sys.stdin)['info']['version'])" 2>/dev/null || true)
 
@@ -128,12 +126,13 @@ while IFS= read -r match; do
     continue
   fi
 
-  echo "⬆️  $pkg: $current → $latest"
+  echo "⬆️  $pkg: $current → $latest (versions.env ${env_key})"
+  update_versions_env_pin "${env_key}" "${latest}"
+done
 
-  escaped_current="${current//./\\.}"
-  sed -i "s#\(^\|[[:space:]]\)${pkg}==${escaped_current}\([[:space:]]\|$\)#\1${pkg}==${latest}\2#g" "$DOCKERFILE"
-
-done < <(grep -oE '[a-zA-Z0-9][a-zA-Z0-9_-]*==[0-9][a-z0-9._]*' "$DOCKERFILE" || true)
+# Re-sync .python-version after any versions.env edits
+# shellcheck source=load-versions-env.sh
+source "${SCRIPT_DIR}/load-versions-env.sh"
 
 echo "✅ Done. Backup at ${DOCKERFILE}.bak"
 rm -rf "$TMP_DIR"

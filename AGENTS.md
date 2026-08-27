@@ -7,8 +7,9 @@ project for AI assistants (GitHub Copilot, Claude, etc.).
 
 | Component | Version | Details |
 | --------- | ------- | ------- |
-| Python | `.python-version` | Patch pin (SoT); Docker/CI/Devcontainer read it |
-| Alpine | `.alpine-version` | Patch pin (SoT); minor derived for `python:*-alpine*` / apk |
+| Python | `versions.env` → `PYTHON_VERSION` | Patch pin; `.python-version` synced for uv |
+| Alpine | `versions.env` → `ALPINE_VERSION` | Patch pin; minor derived for `python:*-alpine*` / apk |
+| Toolchain | `versions.env` | uv, pip, kubectl, helm, … (see file) |
 | FastAPI | Latest | REST API framework |
 | Pydantic | V2 | Configuration validation |
 | Celery | Latest | Async task queue (GitLab sync worker) |
@@ -409,8 +410,8 @@ Before making changes, consider:
 - Should I use `uv` or another tool? → Always `uv`
 - Are client certificates required? → No, they're optional
 - Should I modify `.git/hooks/` directly? → No, use `scripts/setup-git-lfs.sh`
-- What Python version? → repo-root `.python-version` (single source of truth)
-- What Alpine version? → repo-root `.alpine-version` (patch pin; minor = `${pin%.*}`)
+- What Python version? → `versions.env` (`PYTHON_VERSION`; syncs `.python-version`)
+- What Alpine / tool versions? → repo-root `versions.env`
 - How to run tests? → `uv run pytest ...`
 - Where do specs live? → `openspec/specs/<domain>/` (propose changes via `/opsx-propose`)
 
