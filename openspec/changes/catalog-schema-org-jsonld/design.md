@@ -7,28 +7,27 @@ RO-Crate `@context` onto each Dataset; finalize runs in the Celery worker
 (`finalize_catalog` → `ArcManager.finalize_catalog` → consolidated store
 `finalize`). API ingest only stages CouchDB bodies.
 
-Canonical live `https://schema.org/` / `https://schema.org/docs/jsonldcontext.json`
-is **not** version-immutable. Schema.org publishes release trees under
-`data/releases/<version>/schemaorgcontext.jsonld` (e.g. GitHub
-`schemaorg/schemaorg`), which **can** be pinned. Fetch the pinned URL with
-`httpx.AsyncClient` (already used elsewhere in the project).
+Canonical live `https://schema.org/` is **not** version-immutable. Schema.org
+publishes release trees under `data/releases/<version>/schemaorgcontext.jsonld`.
+We **vendor** a chosen release file in-repo (like RO-Crate contexts) and use it
+only as the pyld compact input. Published Dataset `@context` uses the
+conventional public IRI `https://schema.org` plus ARC/Bioschemas extensions.
 
 ## Goals / Non-Goals
 
 **Goals:**
 
 - Run expand→compact **only on the worker finalize path**.
-- Pin a concrete schema.org context **version via config option**; fetch once
-  per worker process via `httpx.AsyncClient`; reuse for all Datasets.
-- Target context = pinned schema.org document **plus** fixed ARC/Bioschemas map.
-- Exploit concurrency for per-Dataset normalize without races on the shared
-  context cache.
-- Keep catalog byte-stable for fixed ARC set + fixed pin.
+- Compact against a **vendored** schema.org release document plus fixed
+  ARC/Bioschemas map; emit `@context` as `https://schema.org` + that map.
+- Exploit concurrency for per-Dataset normalize without races on shared
+  read-only contexts.
+- Keep catalog byte-stable for fixed ARC set + fixed vendored pin.
 
 **Non-Goals:**
 
 - Expand/compact on API ingest or mutating CouchDB ARC bodies.
-- Relying on the unversioned live schema.org context URL as the SoT pin.
+- Runtime HTTP fetch of schema.org (or a config option for the release version).
 - Changing per-ARC `git_repo` / `gitlab_api` backends.
 - Full RO-Crate graph reshape into one `@graph` catalog document.
 
@@ -39,7 +38,7 @@ is **not** version-immutable. Schema.org publishes release trees under
 **Choice:** Structural Dataset extraction may stay in `catalog_serialize`;
 JSON-LD expand/compact runs as part of **consolidated finalize in the Celery
 worker** (after Dataset extraction, before `serialize_catalog_file` / Git
-write). API mode MUST NOT load schema.org or compact Datasets.
+write). API mode MUST NOT compact Datasets.
 
 **Why:** Finalize already owns catalog rebuild; keeps ingest fast; matches
 operator expectation that Git publish work is worker-side.
@@ -48,40 +47,26 @@ operator expectation that Git publish work is worker-side.
 process); compact only at serialize with no worker distinction (blurs API vs
 worker).
 
-### Decision: Pin schema.org via config option
+### Decision: Vendor schema.org release (no config pin / no fetch)
 
-**Choice:** Add a Pydantic field on consolidated catalog settings (e.g.
-`schema_org_context_version` on `ConsolidatedGitConfig` / nested `arc_store`
-consolidated settings) with a `description` and a default release (e.g.
-`30.0`). ConfigWrapper env/secret overrides apply like other fields. Derive the
-immutable fetch URL from that version, e.g. GitHub raw
-`…/data/releases/<version>/schemaorgcontext.jsonld`. Compact target merges the
-loaded JSON-LD context with the code-constant ARC/Bioschemas extension map. Do
-**not** use bare `https://schema.org/` as the pin, and do **not** bury the
-version only in code constants without a config knob.
+**Choice:** Ship `schemaorg-<version>-context.jsonld` under
+`arc_store/jsonld_contexts/` (initially release `30.0`). Load it offline for
+pyld compact, merged with the code-constant ARC/Bioschemas extension map.
+Published Dataset `@context` MUST be
+`["https://schema.org", <extension map>]` — not the GitHub release URL and not
+an inline dump of the release file. Do **not** add a ConfigWrapper field for the
+schema.org version; bumping the pin is a deliberate file (+ code comment)
+change.
 
-**Why:** Operators must control the pin without a code change; principles require
-configurable values on `Config` with descriptions.
+**Why:** Same offline/deterministic model as RO-Crate expand contexts; no
+worker network dependency; no deploy-time config drift. Emitting
+`https://schema.org` matches common Schema.org JSON-LD practice and avoids N×
+inline context bloat in the catalog array.
 
-**Alternatives:** Vendor full schema.org context in-repo; `@vocab` only; pin
-only in `versions.env` without API config (weaker for deployment overlays).
-
-### Decision: One-shot process-local load via httpx
-
-**Choice:** Before the first compact in a worker process, fetch the pinned URL
-with `httpx.AsyncClient` (timeouts set explicitly). Cache the parsed context
-document in a process-local holder. Subsequent compacts reuse it.
-Initialization MUST use a single-flight pattern (`asyncio.Lock` +
-double-checked load, or `asyncio.Task` memo) so concurrent finalize tasks do
-**not** race into multiple fetches or publish a partially built cache. After
-publish, the cached document is treated as **immutable** (read-only sharing).
-
-**Why:** Matches “load once at start / first use, reuse for every Dataset”;
-avoids per-Dataset network; safe under Celery concurrency / async gather;
-uses the stack already present in the repo.
-
-**Alternatives:** Fetch per Dataset (rejected); blocking sync `requests` on the
-event loop (rejected).
+**Alternatives:** Fetch pinned release via httpx + config version (rejected—
+ops complexity, network); emit release URL or inline map (rejected—uncommon /
+oversized); use live `https://schema.org` as compact input (rejected—
+non-deterministic).
 
 ### Decision: Source expand contexts (RO-Crate)
 
@@ -91,17 +76,16 @@ loader backed by **vendored** RO-Crate 1.1/1.2 context files (fail closed on
 unknown remotes). Do not network-fetch arbitrary ARC context URLs during
 finalize.
 
-**Why:** Expand must be correct and deterministic; RO-Crate contexts are small
-and versioned by the URL already present in ARCs.
+**Why:** Expand must be correct and deterministic; RO-Crate contexts are
+versioned by the URL already present in ARCs.
 
 ### Decision: Concurrent Dataset normalize
 
-**Choice:** After the shared context is ready, expand/compact Datasets with
-bounded concurrency (`asyncio.TaskGroup` / `gather` + semaphore). Each task
-works on its own Dataset dict; no shared mutable JSON-LD state beyond the
-read-only cached contexts. Preserve deterministic catalog ordering by sorting
-on `@id` **after** normalize (existing serialize contract), not by completion
-order.
+**Choice:** Expand/compact Datasets with bounded concurrency
+(`asyncio.TaskGroup` / `gather` + semaphore). Each task works on its own
+Dataset dict; no shared mutable JSON-LD state beyond the read-only vendored
+contexts. Preserve deterministic catalog ordering by sorting on `@id` **after**
+normalize (existing serialize contract), not by completion order.
 
 **Why:** Finalize can touch many ARCs; concurrency helps without races.
 
@@ -112,24 +96,18 @@ rewrites. No migration job.
 
 ## Risks / Trade-offs
 
-- **[Risk] Unversioned schema.org URL drift** → Mitigated by release pin
-  (`data/releases/<ver>/schemaorgcontext.jsonld`), not live site context.
-- **[Risk] Pin bump changes catalog bytes** → Document; operators bump the
-  config field deliberately and restart workers so the process-local cache
-  reloads.
-- **[Risk] Worker start / first finalize needs network to GitHub (or mirror)**
-  → Transient fetch errors → retryable finalize failure; permanent 404/bad pin
-  → permanent failure. Optional later: ship a fallback vendored copy of the
-  same pin.
+- **[Risk] Vendored pin goes stale** → Document bump procedure (replace file +
+  rename/version comment); next finalize rewrites catalogs.
 - **[Risk] Incomplete ARC/Bioschemas map** → Unknown terms stay absolute IRIs.
-- **[Risk] Race on context init** → Single-flight lock/task; immutable cache
-  after load.
-- **[Trade-off] Catalog bytes change on deploy** → Expected after first
-  finalize with the new pin.
+- **[Trade-off] Catalog bytes change on pin bump** → Expected after deploy +
+  finalize.
+- **[Trade-off] Emitted `https://schema.org` vs compact pin** → Readers that
+  re-expand against a different live schema.org may diverge slightly; accepted
+  for Interop. Compact term choice remains pinned by the vendored file.
 
 ## Migration Plan
 
-1. Add pin config + `httpx` fetch + JSON-LD normalize on worker finalize;
-   vendor RO-Crate contexts for expand.
-2. Deploy workers; first finalize per process fetches pinned schema.org once.
-3. Rollback: revert; later finalize restores passthrough for newly built files.
+1. Vendor schema.org + RO-Crate contexts; JSON-LD normalize on worker finalize.
+2. Deploy workers; finalize rewrites `{rdi}.json` offline.
+3. Rollback: revert; later finalize restores prior behaviour for newly built
+   files.

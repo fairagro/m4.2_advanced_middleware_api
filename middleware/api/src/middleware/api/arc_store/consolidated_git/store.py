@@ -24,6 +24,7 @@ from middleware.shared.json_types import CatalogDatasetRecord
 from middleware.shared.security.url_redact import redact_url_userinfo
 
 from . import ArcStore, ArcStoreError, ArcStoreTransientError
+from .catalog_jsonld import normalize_catalog_datasets
 from .catalog_serialize import extract_catalog_dataset, serialize_catalog_file
 from .consolidated_git_config import ConsolidatedGitConfig
 from .git_cli_settings import GitContextConfig
@@ -190,6 +191,15 @@ class ConsolidatedGitArcStore(ArcStore):
                 datasets.append(extract_catalog_dataset(content))
             except ValueError as exc:
                 raise ArcStoreError(f"Catalog extraction failed for ARC {arc_id}: {exc}") from exc
+
+        try:
+            datasets = await normalize_catalog_datasets(datasets)
+        except ArcStoreTransientError:
+            raise
+        except ArcStoreError:
+            raise
+        except Exception as exc:
+            raise ArcStoreError(f"Catalog JSON-LD normalize failed for RDI {rdi}: {exc}") from exc
 
         catalog_bytes = serialize_catalog_file(datasets)
         try:

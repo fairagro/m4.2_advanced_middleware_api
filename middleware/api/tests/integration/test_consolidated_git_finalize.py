@@ -10,6 +10,7 @@ from unittest.mock import MagicMock
 import pytest
 from git import Repo
 
+from middleware.api.arc_store.catalog_jsonld import normalize_catalog_datasets
 from middleware.api.arc_store.catalog_serialize import extract_catalog_dataset, serialize_catalog_file
 from middleware.api.arc_store.consolidated_git import ConsolidatedGitArcStore
 from middleware.api.arc_store.consolidated_git_config import ConsolidatedGitConfig
@@ -93,10 +94,11 @@ def catalog_store(
     yield store
 
 
-def _expected_catalog_bytes(doc_store: MagicMock) -> bytes:
+async def _expected_catalog_bytes(doc_store: MagicMock) -> bytes:
     """Rebuild expected catalog bytes the same way finalize does."""
     datasets = [extract_catalog_dataset(content) for _, content in doc_store._catalog_arcs]
-    return serialize_catalog_file(datasets)
+    normalized = await normalize_catalog_datasets(datasets)
+    return serialize_catalog_file(normalized)
 
 
 def _read_catalog_from_remote(bare_remote: Path, rdi: str, *, branch: str = "main") -> bytes:
@@ -114,7 +116,7 @@ async def test_finalize_pushes_catalog_to_bare_remote(
     doc_store: MagicMock,
 ) -> None:
     """First finalize performs a real commit/push and writes ``{rdi}.json`` to the remote."""
-    expected_bytes = _expected_catalog_bytes(doc_store)
+    expected_bytes = await _expected_catalog_bytes(doc_store)
 
     pushed = await catalog_store.finalize(rdi="edal")
 
@@ -131,7 +133,7 @@ async def test_finalize_skips_push_when_catalog_unchanged(
     doc_store: MagicMock,
 ) -> None:
     """Second finalize with identical ARC bodies does not push again."""
-    expected_bytes = _expected_catalog_bytes(doc_store)
+    expected_bytes = await _expected_catalog_bytes(doc_store)
 
     first_pushed = await catalog_store.finalize(rdi="edal")
     remote_after_first = _read_catalog_from_remote(bare_catalog_remote, "edal")
