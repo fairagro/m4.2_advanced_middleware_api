@@ -94,10 +94,11 @@ class ApiHealthService:
             # Fallback: build a transient store from config (legacy path).
             doc_store = CouchDB(self._config.couchdb)
             store = create_arc_store(self._config, doc_store)
-
-            result = await asyncio.to_thread(store.check_health)
-            await store.shutdown()
-            return result
+            try:
+                return await asyncio.to_thread(store.check_health)
+            finally:
+                await store.shutdown()
+                await doc_store.close()
         except Exception as e:  # noqa: BLE001
             logger.error("Git backend health check failed: %s", e)
             return False
