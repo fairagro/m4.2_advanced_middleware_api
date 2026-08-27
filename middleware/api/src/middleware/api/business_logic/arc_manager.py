@@ -8,6 +8,15 @@ from arctrl import ARC  # type: ignore[import-untyped]
 from opentelemetry import trace
 
 from middleware.api.arc_store import ArcStore, ArcStoreTransientError
+from middleware.api.business_logic.exceptions import (
+    BusinessLogicError,
+    DuplicateArcInHarvestError,
+    InvalidJsonSemanticError,
+    InvalidRequestError,
+    TransientError,
+)
+from middleware.api.business_logic.ports import TaskDispatcher
+from middleware.api.business_logic.task_payloads import ArcSyncTask
 from middleware.api.document_store import DocumentStore, DuplicateArcError
 from middleware.api.document_store.arc_document import ArcEvent, ArcEventType
 from middleware.api.document_store.harvest_document import CatalogPushEventType, HarvestCatalogEvent
@@ -17,16 +26,6 @@ from middleware.shared.api_models.common.models import ArcOperationResult, ArcRe
 from middleware.shared.api_models.common.rocrate import RoCratePayload
 from middleware.shared.json_types import RoCrateContent
 from middleware.shared.security.url_redact import redact_url_userinfo
-
-from .exceptions import (
-    BusinessLogicError,
-    DuplicateArcInHarvestError,
-    InvalidJsonSemanticError,
-    InvalidRequestError,
-    TransientError,
-)
-from .ports import TaskDispatcher
-from .task_payloads import ArcSyncTask
 
 logger = logging.getLogger(__name__)
 
@@ -144,8 +143,7 @@ class ArcManager:
                     )
                 elif should_trigger_git:
                     logger.info(
-                        "[%s] Stored ARC %s in CouchDB and staged for later Git sync "
-                        "(is_new=%s, has_changes=%s)",
+                        "[%s] Stored ARC %s in CouchDB and staged for later Git sync (is_new=%s, has_changes=%s)",
                         client_id,
                         arc_id,
                         is_new,
@@ -153,8 +151,7 @@ class ArcManager:
                     )
                 else:
                     logger.info(
-                        "[%s] Stored ARC %s in CouchDB (is_new=%s, has_changes=%s); "
-                        "skipping Git sync (unchanged)",
+                        "[%s] Stored ARC %s in CouchDB (is_new=%s, has_changes=%s); skipping Git sync (unchanged)",
                         client_id,
                         arc_id,
                         is_new,
