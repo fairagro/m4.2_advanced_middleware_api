@@ -13,10 +13,30 @@ script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$script_dir"
 
 repo_root="$(cd "${script_dir}/.." && pwd)"
+python_version_file="${repo_root}/.python-version"
+alpine_version_file="${repo_root}/.alpine-version"
+
+[[ -f "${python_version_file}" ]] || {
+  echo "ERROR: Python version file not found: ${python_version_file}" >&2
+  exit 1
+}
+[[ -f "${alpine_version_file}" ]] || {
+  echo "ERROR: Alpine version file not found: ${alpine_version_file}" >&2
+  exit 1
+}
+
 # Pins from repo-root version files (docker/Dockerfile.api build-args)
 export PYTHON_VERSION ALPINE_VERSION ALPINE_MINOR
-PYTHON_VERSION="$(tr -d '[:space:]' < "${repo_root}/.python-version")"
-ALPINE_VERSION="$(tr -d '[:space:]' < "${repo_root}/.alpine-version")"
+PYTHON_VERSION="$(tr -d '[:space:]' < "${python_version_file}")"
+ALPINE_VERSION="$(tr -d '[:space:]' < "${alpine_version_file}")"
+[[ "${PYTHON_VERSION}" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || {
+  echo "ERROR: .python-version must be a patch pin X.Y.Z (got: '${PYTHON_VERSION:-<empty>}')" >&2
+  exit 1
+}
+[[ "${ALPINE_VERSION}" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || {
+  echo "ERROR: .alpine-version must be a patch pin X.Y.Z (got: '${ALPINE_VERSION:-<empty>}')" >&2
+  exit 1
+}
 ALPINE_MINOR="${ALPINE_VERSION%.*}"
 
 # Parse arguments
