@@ -13,15 +13,15 @@ from git.exc import GitCommandError
 from opentelemetry import trace
 from opentelemetry.trace import Span
 
+from middleware.api.arc_store import ArcStoreTransientError
+from middleware.api.arc_store.git_cli_settings import GitContextConfig
 from middleware.shared.security.url_redact import redact_url_userinfo
-
-from . import ArcStoreTransientError
-from .git_cli_settings import GitContextConfig
 
 logger = logging.getLogger(__name__)
 
 P = ParamSpec("P")
 _T = TypeVar("_T")
+
 
 def format_git_error_detail(exc: GitCommandError) -> str:
     """Prefer concise stderr for messages (URL credentials are redacted at sinks)."""
@@ -194,7 +194,7 @@ class GitContext:
         elif not self.repo:
             self.repo = Repo(repo_path)
 
-    def __enter__(self) -> "GitContext":
+    def __enter__(self) -> GitContext:
         """Enter context: clone or init repo."""
         repo_path = self._ensure_path()
         url = self.config.repo_url.unredacted()
@@ -257,4 +257,3 @@ class GitContext:
 
             logger.info("Pushing changes to remote branch %s", self.config.branch)
             self._run_git_command("push", self.repo.remotes.origin.push, self.config.branch)
-

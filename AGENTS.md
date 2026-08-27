@@ -332,7 +332,7 @@ Agents (`/opsx-apply` and default Agent mode) use it to locate affected code.
 | Spec domain | Primary source file(s) |
 | ----------- | ---------------------- |
 | `openspec/specs/arc-manager/` | `middleware/api/src/middleware/api/business_logic/arc_manager.py` |
-| `openspec/specs/arc-store/` | `middleware/api/src/middleware/api/arc_store/git_repo.py`, `gitlab_api.py` (deprecated), `consolidated_git.py`, `factory.py`, `resolution.py`, `arc_store_config.py`, `consolidated_git_config.py`, `git_cli_settings.py`, `catalog_serialize.py` |
+| `openspec/specs/arc-store/` | `middleware/api/src/middleware/api/arc_store/git_repo/`, `gitlab_api/` (deprecated), `consolidated_git/`, `factory.py`, `resolution.py`, `arc_store_config.py`, `git_cli_settings.py`, `git_context.py` |
 | `openspec/specs/url-str/` | `middleware/shared/src/middleware/shared/security/url_str.py`, `url_redact.py` |
 | `openspec/specs/document-store/` | `middleware/api/src/middleware/api/document_store/couchdb_client.py`, `couchdb.py` |
 | `openspec/specs/arc-content-hash/` | `middleware/api/src/middleware/api/document_store/content_hash.py` |

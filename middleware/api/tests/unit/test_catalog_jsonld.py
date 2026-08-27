@@ -6,16 +6,16 @@ from typing import cast
 
 import pytest
 
-from middleware.api.arc_store.catalog_jsonld import (
+from middleware.api.arc_store.consolidated_git.catalog_jsonld import (
     SCHEMA_ORG_CONTEXT_IRI,
     build_catalog_compact_context,
     build_catalog_emitted_context,
     compact_catalog_dataset,
     normalize_catalog_datasets,
 )
-from middleware.api.arc_store.catalog_jsonld_extensions import ARC_BIOSCHEMAS_EXTENSION_CONTEXT
-from middleware.api.arc_store.catalog_serialize import extract_catalog_dataset
-from middleware.api.arc_store.schema_org_context import load_schema_org_context
+from middleware.api.arc_store.consolidated_git.catalog_jsonld_extensions import ARC_BIOSCHEMAS_EXTENSION_CONTEXT
+from middleware.api.arc_store.consolidated_git.catalog_serialize import extract_catalog_dataset
+from middleware.api.arc_store.consolidated_git.schema_org_context import load_schema_org_context
 from middleware.shared.json_types import CatalogDatasetRecord, JsonObject, RoCrateContent
 
 

@@ -19,16 +19,20 @@ from git import Repo
 from git.exc import GitCommandError
 from opentelemetry import context
 
+from middleware.api.arc_store import ArcStore, ArcStoreError, ArcStoreTransientError
+from middleware.api.arc_store.consolidated_git.catalog_jsonld import normalize_catalog_datasets
+from middleware.api.arc_store.consolidated_git.catalog_serialize import extract_catalog_dataset, serialize_catalog_file
+from middleware.api.arc_store.consolidated_git.config import ConsolidatedGitConfig
+from middleware.api.arc_store.git_cli_settings import GitContextConfig
+from middleware.api.arc_store.git_context import (
+    GitContext,
+    format_git_error_detail,
+    is_soft_git_error,
+    is_transient_git_error,
+)
 from middleware.api.document_store import DocumentStore
 from middleware.shared.json_types import CatalogDatasetRecord
 from middleware.shared.security.url_redact import redact_url_userinfo
-
-from . import ArcStore, ArcStoreError, ArcStoreTransientError
-from .catalog_jsonld import normalize_catalog_datasets
-from .catalog_serialize import extract_catalog_dataset, serialize_catalog_file
-from .consolidated_git_config import ConsolidatedGitConfig
-from .git_cli_settings import GitContextConfig
-from .git_repo import GitContext, format_git_error_detail, is_soft_git_error, is_transient_git_error
 
 logger = logging.getLogger(__name__)
 

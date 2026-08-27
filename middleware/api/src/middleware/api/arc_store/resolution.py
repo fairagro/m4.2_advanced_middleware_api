@@ -7,18 +7,18 @@ from typing import Protocol
 
 from pydantic import BaseModel
 
-from .arc_store_config import (
+from middleware.api.arc_store.arc_store_config import (
     ArcStoreBackendType,
     ArcStoreConfig,
     ConsolidatedGitArcStoreConfig,
     GitlabApiArcStoreConfig,
     GitRepoArcStoreConfig,
 )
-from .config import GitRepoConfig
-from .consolidated_git_config import ConsolidatedGitConfig
-from .git_cli_settings import GitCliSettings, merge_git_cli_settings
-from .gitlab_api import GitlabApiConfig
-from .legacy_config import (
+from middleware.api.arc_store.consolidated_git import ConsolidatedGitConfig
+from middleware.api.arc_store.git_cli_settings import GitCliSettings, merge_git_cli_settings
+from middleware.api.arc_store.git_repo import GitRepoConfig
+from middleware.api.arc_store.gitlab_api import GitlabApiConfig
+from middleware.api.arc_store.legacy_config import (
     OBSOLETE_TOP_LEVEL_CONSOLIDATED_GIT,
     OBSOLETE_TOP_LEVEL_GIT_REPO,
     OBSOLETE_TOP_LEVEL_GITLAB_API,

@@ -10,10 +10,9 @@ from unittest.mock import MagicMock
 import pytest
 from git import Repo
 
-from middleware.api.arc_store.catalog_jsonld import normalize_catalog_datasets
-from middleware.api.arc_store.catalog_serialize import extract_catalog_dataset, serialize_catalog_file
-from middleware.api.arc_store.consolidated_git import ConsolidatedGitArcStore
-from middleware.api.arc_store.consolidated_git_config import ConsolidatedGitConfig
+from middleware.api.arc_store.consolidated_git import ConsolidatedGitArcStore, ConsolidatedGitConfig
+from middleware.api.arc_store.consolidated_git.catalog_jsonld import normalize_catalog_datasets
+from middleware.api.arc_store.consolidated_git.catalog_serialize import extract_catalog_dataset, serialize_catalog_file
 from middleware.shared.json_types import JsonValue, RoCrateContent, RoCrateGraphNode
 
 

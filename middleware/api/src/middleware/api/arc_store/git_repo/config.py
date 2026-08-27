@@ -5,7 +5,7 @@ from typing import Annotated
 
 from pydantic import Field, field_validator
 
-from .git_cli_settings import GitCliSettings
+from middleware.api.arc_store.git_cli_settings import GitCliSettings
 
 
 class GitRepoConfig(GitCliSettings):

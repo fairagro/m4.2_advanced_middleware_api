@@ -4,7 +4,7 @@
     :class:`GitlabApi` (and its companion :class:`GitlabApiConfig`) are deprecated
     and will be removed in a future release.  Use
     :class:`~middleware.api.arc_store.git_repo.GitRepo` together with
-    :class:`~middleware.api.arc_store.config.GitRepoConfig` instead.
+    :class:`~middleware.api.arc_store.git_repo.GitRepoConfig` instead.
 """
 
 import asyncio
@@ -25,9 +25,8 @@ from opentelemetry import context
 from pydantic import BaseModel, Field, HttpUrl, SecretStr, field_validator
 from typing_extensions import deprecated
 
+from middleware.api.arc_store import ArcStore
 from middleware.shared.json_types import JsonObject
-
-from . import ArcStore
 
 logger = logging.getLogger(__name__)
 
@@ -35,7 +34,7 @@ T = TypeVar("T")
 P = ParamSpec("P")
 
 
-@deprecated("GitlabApiConfig is deprecated. Use GitRepoConfig from middleware.api.arc_store.config instead.")
+@deprecated("GitlabApiConfig is deprecated. Use GitRepoConfig from middleware.api.arc_store.git_repo instead.")
 class GitlabApiConfig(BaseModel):
     """Configuration for Gitlab API ArcStore."""
 

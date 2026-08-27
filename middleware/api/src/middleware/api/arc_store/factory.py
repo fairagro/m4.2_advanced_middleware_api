@@ -2,16 +2,13 @@
 
 from __future__ import annotations
 
+from middleware.api.arc_store import ArcStore
+from middleware.api.arc_store.arc_store_config import ArcStoreBackendType
+from middleware.api.arc_store.consolidated_git import ConsolidatedGitArcStore, ConsolidatedGitConfig
+from middleware.api.arc_store.git_repo import GitRepo, GitRepoConfig
+from middleware.api.arc_store.gitlab_api import GitlabApi, GitlabApiConfig
+from middleware.api.arc_store.resolution import ArcStoreConfigSource, resolve_arc_store_backend
 from middleware.api.document_store import DocumentStore
-
-from . import ArcStore
-from .arc_store_config import ArcStoreBackendType
-from .config import GitRepoConfig
-from .consolidated_git import ConsolidatedGitArcStore
-from .consolidated_git_config import ConsolidatedGitConfig
-from .git_repo import GitRepo
-from .gitlab_api import GitlabApi, GitlabApiConfig
-from .resolution import ArcStoreConfigSource, resolve_arc_store_backend
 
 
 def create_arc_store(config: ArcStoreConfigSource, doc_store: DocumentStore) -> ArcStore:

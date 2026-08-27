@@ -6,9 +6,8 @@ from typing import Annotated
 
 from pydantic import Field, field_validator
 
+from middleware.api.arc_store.git_cli_settings import GitCliSettings
 from middleware.shared.security import UrlStr
-
-from .git_cli_settings import GitCliSettings
 
 
 def _default_catalog_git_cache_dir() -> Path:

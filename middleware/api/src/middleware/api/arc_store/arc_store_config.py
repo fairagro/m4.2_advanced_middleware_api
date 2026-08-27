@@ -5,10 +5,10 @@ from typing import Annotated, Literal
 
 from pydantic import BaseModel, Field
 
-from .config import GitRepoConfig
-from .consolidated_git_config import ConsolidatedGitConfig
-from .git_cli_settings import GitCliSettings
-from .gitlab_api import GitlabApiConfig
+from middleware.api.arc_store.consolidated_git.config import ConsolidatedGitConfig
+from middleware.api.arc_store.git_cli_settings import GitCliSettings
+from middleware.api.arc_store.git_repo.config import GitRepoConfig
+from middleware.api.arc_store.gitlab_api.store import GitlabApiConfig
 
 
 class ArcStoreBackendType(StrEnum):

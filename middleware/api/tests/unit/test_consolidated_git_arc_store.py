@@ -9,8 +9,7 @@ from pydantic import SecretStr
 from rocrate_fixtures import minimal_rocrate_dict
 
 from middleware.api.arc_store import ArcStoreError, ArcStoreTransientError
-from middleware.api.arc_store.consolidated_git import ConsolidatedGitArcStore
-from middleware.api.arc_store.consolidated_git_config import ConsolidatedGitConfig
+from middleware.api.arc_store.consolidated_git import ConsolidatedGitArcStore, ConsolidatedGitConfig
 from middleware.shared.config.logging import install_url_userinfo_redaction
 
 
@@ -49,11 +48,11 @@ def test_publish_catalog_bytes_removes_ephemeral_clone(
     ctx_instance.__enter__.return_value = ctx_instance
 
     with (
-        patch("middleware.api.arc_store.consolidated_git.tempfile.mkdtemp", return_value=str(work_dir)),
-        patch("middleware.api.arc_store.consolidated_git.GitContext", return_value=ctx_instance),
-        patch("middleware.api.arc_store.consolidated_git.shutil.rmtree") as mock_rmtree,
-        patch("middleware.api.arc_store.consolidated_git.Path.exists", return_value=False),
-        patch("middleware.api.arc_store.consolidated_git.Path.write_bytes"),
+        patch("middleware.api.arc_store.consolidated_git.store.tempfile.mkdtemp", return_value=str(work_dir)),
+        patch("middleware.api.arc_store.consolidated_git.store.GitContext", return_value=ctx_instance),
+        patch("middleware.api.arc_store.consolidated_git.store.shutil.rmtree") as mock_rmtree,
+        patch("middleware.api.arc_store.consolidated_git.store.Path.exists", return_value=False),
+        patch("middleware.api.arc_store.consolidated_git.store.Path.write_bytes"),
     ):
         pushed = store._publish_catalog_bytes("edal", b"[]\n")
 
@@ -95,11 +94,11 @@ def test_publish_catalog_bytes_push_conflict_is_transient(
     )
 
     with (
-        patch("middleware.api.arc_store.consolidated_git.tempfile.mkdtemp", return_value=str(work_dir)),
-        patch("middleware.api.arc_store.consolidated_git.GitContext", return_value=ctx_instance),
-        patch("middleware.api.arc_store.consolidated_git.shutil.rmtree"),
-        patch("middleware.api.arc_store.consolidated_git.Path.exists", return_value=False),
-        patch("middleware.api.arc_store.consolidated_git.Path.write_bytes"),
+        patch("middleware.api.arc_store.consolidated_git.store.tempfile.mkdtemp", return_value=str(work_dir)),
+        patch("middleware.api.arc_store.consolidated_git.store.GitContext", return_value=ctx_instance),
+        patch("middleware.api.arc_store.consolidated_git.store.shutil.rmtree"),
+        patch("middleware.api.arc_store.consolidated_git.store.Path.exists", return_value=False),
+        patch("middleware.api.arc_store.consolidated_git.store.Path.write_bytes"),
         pytest.raises(ArcStoreTransientError) as raised,
     ):
         store._publish_catalog_bytes("edal", b"[]\n")
@@ -163,7 +162,7 @@ def test_check_health_https_uses_ls_remote(tmp_path: Path) -> None:
     mock_git = MagicMock()
     mock_git.ls_remote.return_value = "deadbeef\trefs/heads/main\n"
 
-    with patch("middleware.api.arc_store.consolidated_git.git.cmd.Git", return_value=mock_git):
+    with patch("middleware.api.arc_store.consolidated_git.store.git.cmd.Git", return_value=mock_git):
         assert store.check_health() is True
 
     mock_git.ls_remote.assert_called_once_with(
@@ -188,7 +187,7 @@ def test_check_health_https_ls_remote_failure(tmp_path: Path, caplog: pytest.Log
 
     install_url_userinfo_redaction()
     with (
-        patch("middleware.api.arc_store.consolidated_git.git.cmd.Git", return_value=mock_git),
+        patch("middleware.api.arc_store.consolidated_git.store.git.cmd.Git", return_value=mock_git),
         caplog.at_level("WARNING"),
     ):
         assert store.check_health() is False

@@ -6,7 +6,7 @@ import pytest
 from pydantic import TypeAdapter, ValidationError
 
 from middleware.api.arc_store.arc_store_config import ArcStoreBackendType, ArcStoreConfig
-from middleware.api.arc_store.consolidated_git_config import ConsolidatedGitConfig
+from middleware.api.arc_store.consolidated_git import ConsolidatedGitConfig
 from middleware.api.arc_store.resolution import is_consolidated_backend, resolve_arc_store_backend
 from middleware.api.config import Config
 

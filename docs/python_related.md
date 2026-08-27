@@ -168,7 +168,7 @@ uses a strict layering model for config classes.
 
 1. **Sub-component config lives in the sub-component package**
      - Example locations:
-         - `middleware/api/src/middleware/api/arc_store/config.py`
+         - `middleware/api/src/middleware/api/arc_store/git_repo/config.py`
          - `middleware/api/src/middleware/api/document_store/config.py`
          - `middleware/api/src/middleware/api/worker/config.py`
 
@@ -191,7 +191,7 @@ uses a strict layering model for config classes.
 ### Practical import pattern
 
 - Preferred (runtime and tests):
-  - `from middleware.api.arc_store.config import GitRepoConfig`
+  - `from middleware.api.arc_store.git_repo import GitRepoConfig`
   - `from middleware.api.document_store.config import CouchDBConfig`
   - `from middleware.api.worker.config import CeleryConfig`
 

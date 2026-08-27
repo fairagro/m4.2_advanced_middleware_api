@@ -18,9 +18,8 @@ from gitlab.exceptions import GitlabError, GitlabGetError
 from gitlab.v4.objects import Project
 from opentelemetry import trace
 
+from middleware.api.arc_store import ArcStoreError
 from middleware.shared.security import UrlStr
-
-from . import ArcStoreError
 
 logger = logging.getLogger(__name__)
 

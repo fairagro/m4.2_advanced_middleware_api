@@ -4,7 +4,7 @@ from typing import cast
 
 from rocrate_fixtures import minimal_rocrate_dict
 
-from middleware.api.arc_store.catalog_serialize import extract_catalog_dataset, serialize_catalog_file
+from middleware.api.arc_store.consolidated_git.catalog_serialize import extract_catalog_dataset, serialize_catalog_file
 from middleware.shared.json_types import CatalogDatasetRecord, RoCrateContent
 
 

@@ -9,9 +9,11 @@ from pyld.jsonld import CompactOptions, Context, ExpandOptions, compact, expand 
 from pyld.options import ContextObject, DocumentLoaderCallable  # type: ignore[import-untyped]
 
 from middleware.api.arc_store import ArcStoreError
-from middleware.api.arc_store.catalog_jsonld_extensions import ARC_BIOSCHEMAS_EXTENSION_CONTEXT
-from middleware.api.arc_store.jsonld_document_loader import create_offline_document_loader
-from middleware.api.arc_store.schema_org_context import load_schema_org_context
+from middleware.api.arc_store.consolidated_git.catalog_jsonld_extensions import (
+    ARC_BIOSCHEMAS_EXTENSION_CONTEXT,
+)
+from middleware.api.arc_store.consolidated_git.jsonld_document_loader import create_offline_document_loader
+from middleware.api.arc_store.consolidated_git.schema_org_context import load_schema_org_context
 from middleware.shared.json_types import CatalogDatasetRecord, JsonObject, JsonValue
 
 _DEFAULT_NORMALIZE_CONCURRENCY = 8

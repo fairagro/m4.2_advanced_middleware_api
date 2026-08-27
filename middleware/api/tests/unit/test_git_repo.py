@@ -12,18 +12,17 @@ import pytest
 from git.exc import GitCommandError
 from pydantic import SecretStr
 
-from middleware.api.arc_store.config import GitRepoConfig
-from middleware.api.arc_store.consolidated_git_config import ConsolidatedGitConfig
+from middleware.api.arc_store.consolidated_git import ConsolidatedGitConfig
 from middleware.api.arc_store.git_cli_settings import GitCliSettings, GitContextConfig
-from middleware.api.arc_store.git_repo import (
+from middleware.api.arc_store.git_context import (
     GitContext,
-    GitRepo,
     format_git_error_detail,
     is_soft_git_error,
     is_transient_git_error,
     record_git_span_failure,
 )
-from middleware.api.arc_store.remote_git_provider import GitProjectMetadata
+from middleware.api.arc_store.git_repo import GitRepo, GitRepoConfig
+from middleware.api.arc_store.git_repo.remote_git_provider import GitProjectMetadata
 from middleware.shared.security import UrlStr
 
 _TEST_GIT_METADATA = GitProjectMetadata(
@@ -126,7 +125,7 @@ def test_git_context_ensure_path(tmp_path: Path) -> None:
     # The actual leaf dir is created by git clone/init usually, but parent must exist
 
 
-@patch("middleware.api.arc_store.git_repo.Repo")
+@patch("middleware.api.arc_store.git_context.Repo")
 def test_git_context_enter_clone(mock_repo: MagicMock, tmp_path: Path) -> None:
     """Test GitContext cloning behavior."""
     target_path = tmp_path / "repo"
@@ -149,7 +148,7 @@ def test_git_context_enter_clone(mock_repo: MagicMock, tmp_path: Path) -> None:
     mock_repo.clone_from.return_value.close.assert_called_once()
 
 
-@patch("middleware.api.arc_store.git_repo.Repo")
+@patch("middleware.api.arc_store.git_context.Repo")
 def test_git_context_enter_existing(mock_repo: MagicMock, tmp_path: Path) -> None:
     """Test GitContext connecting to existing repo."""
     target_path = tmp_path / "repo"
@@ -204,7 +203,7 @@ async def test_create_or_update(git_repo: GitRepo, tmp_path: Path) -> None:
     # For asyncio tests, we can patch the loop or just rely on the actual loop running the synchronous lambda
 
     # Let's patch GitContext to avoid real git operations and file system
-    with patch("middleware.api.arc_store.git_repo.GitContext") as mock_ctx:
+    with patch("middleware.api.arc_store.git_repo.store.GitContext") as mock_ctx:
         mock_ctx_instance = mock_ctx.return_value
         mock_ctx_instance.__enter__.return_value = mock_ctx_instance
         # Mock repo path
@@ -261,7 +260,7 @@ async def test_create_or_update(git_repo: GitRepo, tmp_path: Path) -> None:
             type(mock_ctx_instance).path = PropertyMock(return_value=str(fake_repo_path))
 
             with patch(
-                "middleware.api.arc_store.git_repo.git_project_metadata_from_arc",
+                "middleware.api.arc_store.git_repo.store.git_project_metadata_from_arc",
                 return_value=_TEST_GIT_METADATA,
             ):
                 await git_repo._create_or_update(arc_id, arc, rdi=_TEST_RDI)
@@ -284,8 +283,8 @@ async def test_get_arc_success(git_repo: GitRepo) -> None:
     arc_id = "test_arc"
 
     with (
-        patch("middleware.api.arc_store.git_repo.GitContext") as mock_ctx,
-        patch("middleware.api.arc_store.git_repo.ARC") as mock_arc,
+        patch("middleware.api.arc_store.git_repo.store.GitContext") as mock_ctx,
+        patch("middleware.api.arc_store.git_repo.store.ARC") as mock_arc,
         patch("asyncio.get_running_loop") as mock_get_loop,
     ):
         mock_loop = MagicMock()
@@ -316,7 +315,7 @@ async def test_get_arc_success(git_repo: GitRepo) -> None:
 async def test_get_arc_repo_fail(git_repo: GitRepo) -> None:
     """Test _get handles repo init failure."""
     with (
-        patch("middleware.api.arc_store.git_repo.GitContext") as mock_ctx,
+        patch("middleware.api.arc_store.git_repo.store.GitContext") as mock_ctx,
         patch("asyncio.get_running_loop") as mock_get_loop,
     ):
         mock_loop = MagicMock()
@@ -343,8 +342,8 @@ async def test_get_arc_repo_fail(git_repo: GitRepo) -> None:
 async def test_get_arc_load_fail(git_repo: GitRepo) -> None:
     """Test _get handles ARC load failure."""
     with (
-        patch("middleware.api.arc_store.git_repo.GitContext") as mock_ctx,
-        patch("middleware.api.arc_store.git_repo.ARC") as mock_arc,
+        patch("middleware.api.arc_store.git_repo.store.GitContext") as mock_ctx,
+        patch("middleware.api.arc_store.git_repo.store.ARC") as mock_arc,
         patch("asyncio.get_running_loop") as mock_get_loop,
     ):
         mock_loop = MagicMock()
@@ -428,8 +427,8 @@ async def test_delete(git_repo: GitRepo) -> None:
 async def test_get_arc_load_os_error(git_repo: GitRepo) -> None:
     """Test _get handles ARC load OSError."""
     with (
-        patch("middleware.api.arc_store.git_repo.GitContext") as mock_ctx,
-        patch("middleware.api.arc_store.git_repo.ARC") as mock_arc,
+        patch("middleware.api.arc_store.git_repo.store.GitContext") as mock_ctx,
+        patch("middleware.api.arc_store.git_repo.store.ARC") as mock_arc,
         patch("asyncio.get_running_loop") as mock_get_loop,
     ):
         mock_loop = MagicMock()
@@ -457,9 +456,9 @@ async def test_get_arc_load_os_error(git_repo: GitRepo) -> None:
 async def test_get_arc_cleanup_os_error(git_repo: GitRepo) -> None:
     """Test _get handles OSError during cleanup."""
     with (
-        patch("middleware.api.arc_store.git_repo.GitContext") as mock_ctx,
-        patch("middleware.api.arc_store.git_repo.ARC") as mock_arc,
-        patch("middleware.api.arc_store.git_repo.shutil.rmtree") as mock_rmtree,
+        patch("middleware.api.arc_store.git_repo.store.GitContext") as mock_ctx,
+        patch("middleware.api.arc_store.git_repo.store.ARC") as mock_arc,
+        patch("middleware.api.arc_store.git_repo.store.shutil.rmtree") as mock_rmtree,
         patch("asyncio.get_running_loop") as mock_get_loop,
     ):
         mock_loop = MagicMock()
@@ -481,7 +480,7 @@ async def test_get_arc_cleanup_os_error(git_repo: GitRepo) -> None:
         mock_rmtree.side_effect = OSError("Cleanup failed")
 
         # We need to make sure the path exists so rmtree is called
-        with patch("middleware.api.arc_store.git_repo.Path.exists", return_value=True):
+        with patch("middleware.api.arc_store.git_repo.store.Path.exists", return_value=True):
             result = await git_repo._get("arc1")
 
         assert result == "MyARC"
@@ -528,7 +527,7 @@ def test_run_git_command_soft_span_status_depends_on_action(
     def _boom() -> None:
         raise soft_err
 
-    with patch("middleware.api.arc_store.git_repo.record_git_span_failure") as record:
+    with patch("middleware.api.arc_store.git_context.record_git_span_failure") as record:
         with pytest.raises(GitCommandError):
             ctx._run_git_command(action, _boom)
         record.assert_called_once()
@@ -625,7 +624,7 @@ def test_record_git_span_failure_redacts_oauth_token() -> None:
     assert status.status_code.name == "OK"
 
 
-@patch("middleware.api.arc_store.git_repo.Repo")
+@patch("middleware.api.arc_store.git_context.Repo")
 def test_git_context_sync_fail(mock_repo: MagicMock, tmp_path: Path) -> None:
     """Test GitContext._sync_existing_repo handles failures."""
     target_path = tmp_path / "repo"

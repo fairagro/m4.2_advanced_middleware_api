@@ -8,8 +8,8 @@ from pydantic import BaseModel, Field
 
 if TYPE_CHECKING:
     from middleware.api.arc_store.arc_store_config import ArcStoreConfig
-    from middleware.api.arc_store.config import GitRepoConfig
-    from middleware.api.arc_store.consolidated_git_config import ConsolidatedGitConfig
+    from middleware.api.arc_store.consolidated_git import ConsolidatedGitConfig
+    from middleware.api.arc_store.git_repo import GitRepoConfig
     from middleware.api.arc_store.gitlab_api import GitlabApiConfig
     from middleware.api.document_store.config import CouchDBConfig
 

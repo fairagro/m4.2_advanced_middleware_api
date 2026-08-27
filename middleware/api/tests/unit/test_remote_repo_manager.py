@@ -14,7 +14,7 @@ import pytest
 from gitlab.exceptions import GitlabAuthenticationError, GitlabGetError
 
 from middleware.api.arc_store import ArcStoreError
-from middleware.api.arc_store.remote_git_provider import (
+from middleware.api.arc_store.git_repo.remote_git_provider import (
     GITLAB_PROJECT_DESCRIPTION_MAX_LEN,
     GITLAB_PROJECT_NAME_MAX_LEN,
     FileSystemGitProvider,
@@ -87,7 +87,7 @@ class TestGitlabGitProvider:
     """Tests for GitlabGitProvider."""
 
     @staticmethod
-    @patch("middleware.api.arc_store.remote_git_provider.gitlab.Gitlab")
+    @patch("middleware.api.arc_store.git_repo.remote_git_provider.gitlab.Gitlab")
     def test_ensure_repo_exists_calls_gitlab_api(mock_gitlab_class: MagicMock) -> None:
         """Test that ensure_repo_exists calls the GitLab API."""
         NAMESPACE_ID = 123  # noqa: N806
@@ -116,7 +116,7 @@ class TestGitlabGitProvider:
         assert args["namespace_id"] == NAMESPACE_ID
 
     @staticmethod
-    @patch("middleware.api.arc_store.remote_git_provider.gitlab.Gitlab")
+    @patch("middleware.api.arc_store.git_repo.remote_git_provider.gitlab.Gitlab")
     def test_ensure_repo_exists_sets_gitlab_metadata(mock_gitlab_class: MagicMock) -> None:
         """Test that human-readable metadata is applied when creating a project."""
         NAMESPACE_ID = 123  # noqa: N806
@@ -149,7 +149,7 @@ class TestGitlabGitProvider:
         assert args["description"] == "Arabidopsis thaliana cold acclimation\nCold stress experiment"
 
     @staticmethod
-    @patch("middleware.api.arc_store.remote_git_provider.gitlab.Gitlab")
+    @patch("middleware.api.arc_store.git_repo.remote_git_provider.gitlab.Gitlab")
     def test_ensure_repo_exists_updates_existing_project_metadata(mock_gitlab_class: MagicMock) -> None:
         """Test that metadata is refreshed when the GitLab project already exists."""
         mock_gl = MagicMock()
@@ -203,7 +203,7 @@ class TestGitlabGitProvider:
         mock_project.save.assert_not_called()
 
     @staticmethod
-    @patch("middleware.api.arc_store.remote_git_provider.gitlab.Gitlab")
+    @patch("middleware.api.arc_store.git_repo.remote_git_provider.gitlab.Gitlab")
     def test_ensure_repo_exists_401(mock_gitlab_class: MagicMock) -> None:
         """Test that ensure_repo_exists handles 401 Unauthorized correctly."""
         mock_gl = MagicMock()
@@ -234,7 +234,7 @@ class TestGitlabGitProvider:
         assert plain_url == "https://gitlab.com/my-group/arc123.git"
 
     @staticmethod
-    @patch("middleware.api.arc_store.remote_git_provider.gitlab.Gitlab")
+    @patch("middleware.api.arc_store.git_repo.remote_git_provider.gitlab.Gitlab")
     def test_check_health(mock_gitlab_class: MagicMock) -> None:
         """Test health check using auth() call."""
         mock_gl = MagicMock()

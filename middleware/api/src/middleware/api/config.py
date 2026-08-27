@@ -7,21 +7,20 @@ from typing import Annotated, ClassVar, Self
 from cryptography import x509
 from pydantic import ConfigDict, Field, field_validator, model_validator
 
-from middleware.shared.config.config_base import ConfigBase
-
-from .arc_store.arc_store_config import ArcStoreConfig, GitRepoArcStoreConfig
-from .arc_store.config import GitRepoConfig
-from .arc_store.consolidated_git_config import ConsolidatedGitConfig
-from .arc_store.gitlab_api import GitlabApiConfig
-from .arc_store.legacy_config import (
+from middleware.api.arc_store.arc_store_config import ArcStoreConfig, GitRepoArcStoreConfig
+from middleware.api.arc_store.consolidated_git import ConsolidatedGitConfig
+from middleware.api.arc_store.git_repo import GitRepoConfig
+from middleware.api.arc_store.gitlab_api import GitlabApiConfig
+from middleware.api.arc_store.legacy_config import (
     OBSOLETE_TOP_LEVEL_CONSOLIDATED_GIT,
     OBSOLETE_TOP_LEVEL_GIT_REPO,
     OBSOLETE_TOP_LEVEL_GITLAB_API,
 )
-from .arc_store.resolution import validate_arc_store_config
-from .business_logic.config import HarvestConfig
-from .document_store.config import CouchDBConfig
-from .worker.config import CeleryConfig
+from middleware.api.arc_store.resolution import validate_arc_store_config
+from middleware.api.business_logic.config import HarvestConfig
+from middleware.api.document_store.config import CouchDBConfig
+from middleware.api.worker.config import CeleryConfig
+from middleware.shared.config.config_base import ConfigBase
 
 
 class HealthCheckConfig(ConfigBase):
