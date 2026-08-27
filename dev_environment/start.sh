@@ -12,6 +12,13 @@ set -euo pipefail
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$script_dir"
 
+repo_root="$(cd "${script_dir}/.." && pwd)"
+# Pins from repo-root version files (docker/Dockerfile.api build-args)
+export PYTHON_VERSION ALPINE_VERSION ALPINE_MINOR
+PYTHON_VERSION="$(tr -d '[:space:]' < "${repo_root}/.python-version")"
+ALPINE_VERSION="$(tr -d '[:space:]' < "${repo_root}/.alpine-version")"
+ALPINE_MINOR="${ALPINE_VERSION%.*}"
+
 # Parse arguments
 BUILD_FLAG=""
 if [[ "${1:-}" == "--build" || "${1:-}" == "--rebuild" ]]; then
@@ -19,6 +26,8 @@ if [[ "${1:-}" == "--build" || "${1:-}" == "--rebuild" ]]; then
 fi
 
 echo "==> Starting development environment..."
+echo "    - Python ${PYTHON_VERSION} (from .python-version)"
+echo "    - Alpine ${ALPINE_VERSION} / minor ${ALPINE_MINOR} (from .alpine-version)"
 echo "    - PostgreSQL will be started"
 echo "    - Database will be initialized with Edaphobase dump"
 echo ""

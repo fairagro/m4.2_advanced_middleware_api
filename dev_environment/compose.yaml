@@ -35,6 +35,10 @@ services:
     build:
       context: ..
       dockerfile: docker/Dockerfile.api
+      args:
+        PYTHON_VERSION: ${PYTHON_VERSION:?Set PYTHON_VERSION from repo-root .python-version (use ./start.sh)}
+        ALPINE_VERSION: ${ALPINE_VERSION:?Set ALPINE_VERSION from repo-root .alpine-version (use ./start.sh)}
+        ALPINE_MINOR: ${ALPINE_MINOR:?Set ALPINE_MINOR from .alpine-version (use ./start.sh)}
     depends_on:
       rabbitmq:
         condition: service_healthy
@@ -65,6 +69,10 @@ services:
     build:
       context: ..
       dockerfile: docker/Dockerfile.api
+      args:
+        PYTHON_VERSION: ${PYTHON_VERSION:?Set PYTHON_VERSION from repo-root .python-version (use ./start.sh)}
+        ALPINE_VERSION: ${ALPINE_VERSION:?Set ALPINE_VERSION from repo-root .alpine-version (use ./start.sh)}
+        ALPINE_MINOR: ${ALPINE_MINOR:?Set ALPINE_MINOR from .alpine-version (use ./start.sh)}
     depends_on:
       rabbitmq:
         condition: service_healthy

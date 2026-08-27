@@ -4,6 +4,7 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
 DOCKERFILE="${PROJECT_DIR}/docker/Dockerfile.api"
+ALPINE_VERSION_FILE="${PROJECT_DIR}/.alpine-version"
 
 # Allow an optional Dockerfile path override for other repository variants.
 if [[ $# -gt 0 ]]; then
@@ -15,14 +16,20 @@ if [[ ! -f "$DOCKERFILE" ]]; then
   exit 1
 fi
 
-# Extract Alpine version dynamically from the base image in the Dockerfile
-# Matches e.g. "FROM python:3.12.12-alpine3.23" → "3.23"
-ALPINE_VERSION=$(grep -m1 '^FROM ' "$DOCKERFILE" | grep -oE 'alpine([0-9]+\.[0-9]+)' | grep -oE '[0-9]+\.[0-9]+')
-if [[ -z "$ALPINE_VERSION" ]]; then
-  echo "❌ Could not extract Alpine version from $DOCKERFILE" >&2
+if [[ ! -f "$ALPINE_VERSION_FILE" ]]; then
+  echo "❌ Alpine version file not found: $ALPINE_VERSION_FILE" >&2
   exit 1
 fi
-echo "🏔️  Detected Alpine version: $ALPINE_VERSION"
+
+# Single source of truth: full Alpine patch pin (e.g. 3.24.1).
+# APKINDEX and python:*-alpine* tags only use major.minor → strip patch.
+ALPINE_VERSION="$(tr -d '[:space:]' < "$ALPINE_VERSION_FILE")"
+if [[ -z "$ALPINE_VERSION" ]]; then
+  echo "❌ .alpine-version is empty" >&2
+  exit 1
+fi
+ALPINE_MINOR="${ALPINE_VERSION%.*}"
+echo "🏔️  Alpine ${ALPINE_VERSION} (minor ${ALPINE_MINOR} for APKINDEX, from .alpine-version)"
 
 TMP_DIR=$(mktemp -d)
 trap 'rm -rf "$TMP_DIR"' EXIT
@@ -53,7 +60,7 @@ parse_apkindex() {
 echo "⬇️ Downloading Alpine package indices..."
 for repo in main community; do
   index_archive="${TMP_DIR}/${repo}.tar.gz"
-  curl -sL "https://dl-cdn.alpinelinux.org/alpine/v${ALPINE_VERSION}/${repo}/x86_64/APKINDEX.tar.gz" \
+  curl -sL "https://dl-cdn.alpinelinux.org/alpine/v${ALPINE_MINOR}/${repo}/x86_64/APKINDEX.tar.gz" \
     -o "$index_archive"
   tar -xzf "$index_archive" -C "$TMP_DIR"
   parse_apkindex "${TMP_DIR}/APKINDEX"

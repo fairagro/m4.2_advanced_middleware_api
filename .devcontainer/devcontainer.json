@@ -1,8 +1,8 @@
 {
 	"name": "Debian (DinD)",
 	"build": {
-		"dockerfile": "Dockerfile",
-		"context": "."
+		"context": "..",
+		"dockerfile": ".devcontainer/Dockerfile"
 	},
 	"features": {
 		"ghcr.io/devcontainers/features/docker-in-docker:4": {

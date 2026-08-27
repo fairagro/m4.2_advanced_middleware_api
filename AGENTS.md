@@ -7,7 +7,8 @@ project for AI assistants (GitHub Copilot, Claude, etc.).
 
 | Component | Version | Details |
 | --------- | ------- | ------- |
-| Python | 3.12.12 | Primary language |
+| Python | `.python-version` | Patch pin (SoT); Docker/CI/Devcontainer read it |
+| Alpine | `.alpine-version` | Patch pin (SoT); minor derived for `python:*-alpine*` / apk |
 | FastAPI | Latest | REST API framework |
 | Pydantic | V2 | Configuration validation |
 | Celery | Latest | Async task queue (GitLab sync worker) |
@@ -408,7 +409,8 @@ Before making changes, consider:
 - Should I use `uv` or another tool? → Always `uv`
 - Are client certificates required? → No, they're optional
 - Should I modify `.git/hooks/` directly? → No, use `scripts/setup-git-lfs.sh`
-- What Python version? → 3.12.12
+- What Python version? → repo-root `.python-version` (single source of truth)
+- What Alpine version? → repo-root `.alpine-version` (patch pin; minor = `${pin%.*}`)
 - How to run tests? → `uv run pytest ...`
 - Where do specs live? → `openspec/specs/<domain>/` (propose changes via `/opsx-propose`)
 
