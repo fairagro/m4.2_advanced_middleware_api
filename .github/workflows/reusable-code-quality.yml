@@ -22,11 +22,10 @@ env:
 
 jobs:
   code-quality:
-    name: Code Quality Check
+    # Branch ruleset "rules for main" requires this exact check name
+    # (legacy matrix suffix). Keep it even without a python-version matrix.
+    name: Code Quality Check (3.12)
     runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        python-version: ['3.12']
     permissions:
       contents: read
 
@@ -45,9 +44,24 @@ jobs:
         with:
           version: "latest"
 
-      - name: Set up Python ${{ matrix.python-version }}
+      # Must run before load-versions-env.sh (which rewrites .python-version).
+      - name: Assert .python-version matches versions.env
         if: ${{ !inputs.skip }}
-        run: uv python install ${{ matrix.python-version }}
+        run: |
+          expected="$(grep -E '^PYTHON_VERSION=' versions.env | cut -d= -f2- | tr -d '[:space:]')"
+          actual="$(tr -d '[:space:]' < .python-version)"
+          if [[ -z "$expected" || "$expected" != "$actual" ]]; then
+            echo "ERROR: .python-version ('${actual}') != PYTHON_VERSION in versions.env ('${expected}')" >&2
+            echo "Keep both in sync (Renovate updates both; or: source scripts/load-versions-env.sh && git add .python-version)." >&2
+            exit 1
+          fi
+
+      - name: Install Python from versions.env
+        if: ${{ !inputs.skip }}
+        run: |
+          # shellcheck source=scripts/load-versions-env.sh
+          source scripts/load-versions-env.sh
+          uv python install "${PYTHON_VERSION}"
 
       - name: Install dependencies
         if: ${{ !inputs.skip }}

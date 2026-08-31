@@ -1,27 +1,27 @@
 # Dev Container Dockerfile for advanced-middleware-api
-# Replaces devcontainer feature-based installation with a reproducible Dockerfile.
-#
-# All tool versions are pinned for reproducibility.
+# Tool versions come from repo-root versions.env (via docker-compose.yml build args).
 
-FROM mcr.microsoft.com/devcontainers/base:2.1.14-trixie
+ARG DEVCONTAINER_BASE_IMAGE
+FROM ${DEVCONTAINER_BASE_IMAGE}
 
 SHELL ["/bin/bash", "-o", "pipefail", "-c"]
 
-ARG KUBECTL_VERSION=v1.36.1
-ARG HELM_VERSION=v4.2.0
-ARG UV_VERSION=0.11.19
-ARG SOPS_VERSION=v3.10.2
-ARG AGE_VERSION=v1.3.1
-ARG STARSHIP_VERSION=v1.25.1
-ARG DIFFTASTIC_VERSION=0.69.0
-ARG PRECOMMIT_VERSION=4.6.0
-ARG YQ_VERSION=v4.48.1
-ARG YAMLFMT_VERSION=v0.14.0
-ARG HADOLINT_VERSION=v2.12.0
-ARG CST_VERSION=v1.19.1
-ARG MINIKUBE_VERSION=v1.37.0
-ARG NODE_VERSION=v20.20.2
-ARG OPENSPEC_VERSION=1.7.0
+ARG PYTHON_VERSION
+ARG UV_VERSION
+ARG KUBECTL_VERSION
+ARG HELM_VERSION
+ARG SOPS_VERSION
+ARG AGE_VERSION
+ARG STARSHIP_VERSION
+ARG DIFFTASTIC_VERSION
+ARG PRECOMMIT_VERSION
+ARG YQ_VERSION
+ARG YAMLFMT_VERSION
+ARG HADOLINT_VERSION
+ARG CST_VERSION
+ARG MINIKUBE_VERSION
+ARG NODE_VERSION
+ARG OPENSPEC_VERSION
 
 ENV DEBIAN_FRONTEND=noninteractive
 
@@ -140,5 +140,5 @@ RUN echo 'export HISTFILE=/commandhistory/.bash_history' >> /etc/bash.bashrc && 
 # ── Switch to non-root user for uv tool installations
 USER vscode
 
-# ── Python (via uv) ──────────────────────────────────────────────────────────
-RUN uv python install 3.12
+# ── Python (via uv; patch pin from versions.env → PYTHON_VERSION build-arg) ───
+RUN uv python install "${PYTHON_VERSION}"

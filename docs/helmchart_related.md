@@ -84,7 +84,14 @@ openssl x509 -req \
 Now we can execute the installation:
 
 ```bash
-docker build -f docker/Dockerfile.api . -t fairagro-advanced-middleware-api:test
+source scripts/load-versions-env.sh
+docker build -f docker/Dockerfile.api \
+  --build-arg PYTHON_VERSION="$PYTHON_VERSION" \
+  --build-arg ALPINE_VERSION="$ALPINE_VERSION" \
+  --build-arg ALPINE_MINOR="$ALPINE_MINOR" \
+  --build-arg PIP_VERSION="$PIP_VERSION" \
+  --build-arg UV_VERSION="$UV_VERSION" \
+  -t fairagro-advanced-middleware-api:test .
 minikube delete --all --purge   # only if we have trouble starting minikube
 minikube start --driver=docker --cni=calico
 minikube addons enable ingress

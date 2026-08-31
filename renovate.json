@@ -11,7 +11,8 @@
     "dockerfile",
     "devcontainer",
     "pep621",
-    "github-actions"
+    "github-actions",
+    "custom.regex"
   ],
 
   "rangeStrategy": "auto",
@@ -37,10 +38,71 @@
     ]
   },
 
+  "customManagers": [
+    {
+      "description": "Python patch pin in versions.env",
+      "customType": "regex",
+      "fileMatch": ["^versions\\.env$"],
+      "matchStrings": [
+        "PYTHON_VERSION=(?<currentValue>\\d+\\.\\d+\\.\\d+)"
+      ],
+      "datasourceTemplate": "docker",
+      "depNameTemplate": "python",
+      "extractVersionTemplate": "^(?<version>\\d+\\.\\d+\\.\\d+)$",
+      "versioningTemplate": "loose"
+    },
+    {
+      "description": "Python patch pin in .python-version (mirror of versions.env)",
+      "customType": "regex",
+      "fileMatch": ["^\\.python-version$"],
+      "matchStrings": [
+        "^(?<currentValue>\\d+\\.\\d+\\.\\d+)\\s*$"
+      ],
+      "datasourceTemplate": "docker",
+      "depNameTemplate": "python",
+      "extractVersionTemplate": "^(?<version>\\d+\\.\\d+\\.\\d+)$",
+      "versioningTemplate": "loose"
+    },
+    {
+      "description": "Alpine patch pin in versions.env",
+      "customType": "regex",
+      "fileMatch": ["^versions\\.env$"],
+      "matchStrings": [
+        "ALPINE_VERSION=(?<currentValue>\\d+\\.\\d+\\.\\d+)"
+      ],
+      "datasourceTemplate": "docker",
+      "depNameTemplate": "alpine",
+      "extractVersionTemplate": "^(?<version>\\d+\\.\\d+\\.\\d+)$",
+      "versioningTemplate": "loose"
+    },
+    {
+      "description": "uv pin in versions.env",
+      "customType": "regex",
+      "fileMatch": ["^versions\\.env$"],
+      "matchStrings": [
+        "UV_VERSION=(?<currentValue>[^\\s#]+)"
+      ],
+      "datasourceTemplate": "pypi",
+      "depNameTemplate": "uv",
+      "versioningTemplate": "pep440"
+    },
+    {
+      "description": "pip pin in versions.env",
+      "customType": "regex",
+      "fileMatch": ["^versions\\.env$"],
+      "matchStrings": [
+        "PIP_VERSION=(?<currentValue>[^\\s#]+)"
+      ],
+      "datasourceTemplate": "pypi",
+      "depNameTemplate": "pip",
+      "versioningTemplate": "pep440"
+    }
+  ],
+
   "packageRules": [
     {
-      "description": "🔒 Python 3.12 global lock (Docker + Devcontainer + GitHub Actions)",
-      "matchManagers": ["dockerfile", "devcontainer", "github-actions"],
+      "description": "🔒 Python 3.12 global lock (versions.env + .python-version)",
+      "matchManagers": ["dockerfile", "devcontainer", "github-actions", "custom.regex"],
       "matchPackagePatterns": ["python"],
       "allowedVersions": "/^3\\.12/",
       "groupName": "Python 3.12 runtime"

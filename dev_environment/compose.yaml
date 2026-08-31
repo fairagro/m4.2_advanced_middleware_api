@@ -35,6 +35,15 @@ services:
     build:
       context: ..
       dockerfile: docker/Dockerfile.api
+      # Optional: set by ./start.sh from versions.env.
+      # Do not use ${VAR:?…} — Compose interpolates on every command (down/logs/…).
+      # Empty strings are ok: Dockerfile uses ${VAR:-default} for FROM and pip/uv installs.
+      args:
+        PYTHON_VERSION: ${PYTHON_VERSION:-}
+        ALPINE_VERSION: ${ALPINE_VERSION:-}
+        ALPINE_MINOR: ${ALPINE_MINOR:-}
+        PIP_VERSION: ${PIP_VERSION:-}
+        UV_VERSION: ${UV_VERSION:-}
     depends_on:
       rabbitmq:
         condition: service_healthy
@@ -65,6 +74,12 @@ services:
     build:
       context: ..
       dockerfile: docker/Dockerfile.api
+      args:
+        PYTHON_VERSION: ${PYTHON_VERSION:-}
+        ALPINE_VERSION: ${ALPINE_VERSION:-}
+        ALPINE_MINOR: ${ALPINE_MINOR:-}
+        PIP_VERSION: ${PIP_VERSION:-}
+        UV_VERSION: ${UV_VERSION:-}
     depends_on:
       rabbitmq:
         condition: service_healthy

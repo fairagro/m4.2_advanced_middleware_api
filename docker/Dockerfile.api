@@ -1,8 +1,23 @@
 # ---- Package Build Stage ----
-FROM python:3.12.13-alpine3.24 AS package-builder
+# Pins from repo-root versions.env (passed as --build-arg):
+#   PYTHON_VERSION, ALPINE_VERSION (patch), ALPINE_MINOR (${ALPINE_VERSION%.*}),
+#   PIP_VERSION, UV_VERSION
+# Official python images only publish alpine${major.minor}, not patch tags.
+# Fallbacks keep `FROM` valid for BuildKit InvalidDefaultArgInFrom.
+# Declare all FROM-consumed ARGs before the first FROM (global build-arg scope).
+ARG PYTHON_VERSION
+ARG ALPINE_VERSION
+ARG ALPINE_MINOR
+ARG PIP_VERSION
+ARG UV_VERSION
+
+FROM python:${PYTHON_VERSION:-3.12}-alpine${ALPINE_MINOR:-3.24} AS package-builder
 
 # Accept PEP 440 compliant version from CI
 ARG APP_VERSION=0.0.0
+# Re-declare for this stage. :- defaults apply when compose passes empty build-args.
+ARG PIP_VERSION
+ARG UV_VERSION
 
 # Set as environment variables for the build process
 # SETUPTOOLS_SCM_PRETEND_VERSION overrides dynamic version discovery from Git
@@ -14,8 +29,10 @@ WORKDIR /build
 COPY pyproject.toml uv.lock ./
 COPY middleware ./middleware
 
-# Upgrade pip and install uv
-RUN pip install --no-cache-dir --upgrade pip==26.2 uv==0.12.0
+# Upgrade pip and install uv (defaults = versions.env; empty build-arg must not yield pip==)
+RUN pip install --no-cache-dir --upgrade \
+    "pip==${PIP_VERSION:-26.2.1}" \
+    "uv==${UV_VERSION:-0.12.6}"
 
 # Build wheels
 RUN uv build --package fairagro-middleware-shared --wheel && \
@@ -23,20 +40,30 @@ RUN uv build --package fairagro-middleware-shared --wheel && \
 
 
 # ---- Binary Build Stage ----
-FROM python:3.12.13-alpine3.24 AS binary-builder
+ARG PYTHON_VERSION
+ARG ALPINE_MINOR
+ARG PIP_VERSION
+ARG UV_VERSION
+
+FROM python:${PYTHON_VERSION:-3.12}-alpine${ALPINE_MINOR:-3.24} AS binary-builder
+
+ARG PIP_VERSION
+ARG UV_VERSION
 
 RUN apk add --no-cache \
     build-base=0.5-r4 \
     libffi-dev=3.5.2-r1 \
-    openssl-dev=3.5.7-r0 \
+    openssl-dev=3.5.8-r0 \
     cargo=1.96.1-r0 \
     musl-utils=1.2.6-r2 \
-    libssl3=3.5.7-r0
+    libssl3=3.5.8-r0
 
 WORKDIR /build
 
 # Install uv and PyInstaller
-RUN pip install --no-cache-dir --upgrade pip==26.2 uv==0.12.0
+RUN pip install --no-cache-dir --upgrade \
+    "pip==${PIP_VERSION:-26.2.1}" \
+    "uv==${UV_VERSION:-0.12.6}"
 
 # Copy built wheel from package-builder stage
 COPY --from=package-builder /build/dist/*.whl /tmp/wheels/
@@ -89,7 +116,9 @@ RUN pyinstaller --onedir \
 
 
 # ---- Runtime Stage ----
-FROM alpine:3.24.1
+ARG ALPINE_VERSION
+
+FROM alpine:${ALPINE_VERSION:-3.24.1}
 
 WORKDIR /api
 
@@ -104,7 +133,7 @@ RUN apk add --no-cache --upgrade \
         zlib=1.3.2-r0 \
         tzdata \
         musl-utils=1.2.6-r2 \
-        libssl3=3.5.7-r0 && \
+        libssl3=3.5.8-r0 && \
     addgroup -S middleware && \
     adduser -S -H -G middleware middleware && \
     chown middleware:middleware /api
