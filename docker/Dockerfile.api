@@ -84,6 +84,7 @@ RUN pyinstaller --onedir \
     --copy-metadata prompt-toolkit \
     --copy-metadata click \
     --copy-metadata api \
+    --collect-data middleware.api.arc_store.consolidated_git \
     $(python -c "import middleware.api; print(middleware.api.__file__.replace('__init__.py', 'main.py'))")
 
 
