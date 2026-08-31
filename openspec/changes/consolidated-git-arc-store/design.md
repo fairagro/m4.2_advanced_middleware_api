@@ -259,11 +259,12 @@ start and Celery retry on transient push failures.
 
 ### Finalize read → push window
 
-- `iter_arc_contents_by_rdi` is a **point-in-time** paginated stream, not a
-  snapshot transaction. Ingest concurrent with finalize can produce a catalog
-  file that omits the last millisecond of writes; the next successful finalize
-  fixes it. Acceptable under eventual-consistency semantics. Peak RAM is one
-  CouchDB page of RO-Crate bodies plus the extracted Dataset list.
+- `iter_arc_contents_by_rdi` is a **point-in-time** bookmark-paged stream
+  (stable `_id` sort; not offset/`skip`), not a snapshot transaction. Ingest
+  concurrent with finalize can produce a catalog file that omits the last
+  millisecond of writes; the next successful finalize fixes it. Acceptable
+  under eventual-consistency semantics. Peak RAM is one CouchDB page of
+  RO-Crate bodies plus the extracted Dataset list.
 
 ### Parallel finalize tasks (same RDI or different RDIs)
 

@@ -278,6 +278,8 @@ class CouchDB(DocumentStore):
         await self._client.create_index(["type", "rdi"], name="idx_type_rdi")
         await self._client.create_index(["doc_type", "metadata.last_harvest_id"], name="idx_doc_type_harvest")
         await self._client.create_index(["doc_type", "rdi"], name="idx_doc_type_rdi")
+        # Supports catalog finalize paging: selector on doc_type+rdi, sort including _id.
+        await self._client.create_index(["doc_type", "rdi", "_id"], name="idx_doc_type_rdi_id")
         logger.info("CouchDB document store indices initialized")
 
     async def connect(self) -> None:
@@ -539,19 +541,30 @@ class CouchDB(DocumentStore):
     async def iter_arc_contents_by_rdi(self, rdi: str) -> AsyncIterator[tuple[str, RoCrateContent]]:
         """Yield ``(arc_id, arc_content)`` for ARC documents of an RDI.
 
-        Fetches CouchDB in pages of ``catalog_list_page_size`` and yields one
-        ARC at a time so only the current page of full RO-Crate bodies is retained
-        (plus whatever the caller accumulates, e.g. extracted Dataset records).
+        Fetches CouchDB in bookmark-paged batches of ``catalog_list_page_size``
+        (sorted by ``_id``) and yields one ARC at a time so only the current page
+        of full RO-Crate bodies is retained (plus whatever the caller accumulates,
+        e.g. extracted Dataset records).
 
         Raises:
             ValueError: If a document with ``doc_type=arc`` has an unexpected shape.
         """
-        selector: JsonObject = {"doc_type": "arc"}
-        selector["rdi"] = rdi
-        skip = 0
+        selector: JsonObject = {"doc_type": "arc", "rdi": rdi}
+        # Sort must match idx_doc_type_rdi_id; keeps page order stable for bookmarks.
+        sort: list[JsonObject] = [
+            {"doc_type": "asc"},
+            {"rdi": "asc"},
+            {"_id": "asc"},
+        ]
         page_size = self._config.catalog_list_page_size
+        bookmark: str | None = None
         while True:
-            docs = await self._client.find(selector, limit=page_size, skip=skip)
+            docs, bookmark = await self._client.find_page(
+                selector,
+                limit=page_size,
+                bookmark=bookmark,
+                sort=sort,
+            )
             for doc in docs:
                 doc_id = doc.get("_id")
                 content = doc.get("arc_content")
@@ -564,6 +577,5 @@ class CouchDB(DocumentStore):
                         f"Malformed ARC document {doc_id!r} for RDI {rdi!r}: arc_content must be an object"
                     )
                 yield doc_id[len("arc_") :], cast(RoCrateContent, content)
-            if len(docs) < page_size:
+            if len(docs) < page_size or bookmark is None:
                 break
-            skip += page_size

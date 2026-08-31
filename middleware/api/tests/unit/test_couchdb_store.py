@@ -135,13 +135,17 @@ async def test_couchdb_store_lifecycle(store: CouchDB, mock_client_instance: Mag
 async def test_couchdb_store_setup(store: CouchDB, mock_client_instance: MagicMock) -> None:
     """Test setup calls client.create_index."""
     await store.setup()
-    assert mock_client_instance.create_index.call_count == 3  # noqa: PLR2004
+    assert mock_client_instance.create_index.call_count == 4  # noqa: PLR2004
     mock_client_instance.create_index.assert_any_call(["type", "rdi"], name="idx_type_rdi")
     mock_client_instance.create_index.assert_any_call(
         ["doc_type", "metadata.last_harvest_id"],
         name="idx_doc_type_harvest",
     )
     mock_client_instance.create_index.assert_any_call(["doc_type", "rdi"], name="idx_doc_type_rdi")
+    mock_client_instance.create_index.assert_any_call(
+        ["doc_type", "rdi", "_id"],
+        name="idx_doc_type_rdi_id",
+    )
 
 
 @pytest.mark.asyncio
@@ -557,17 +561,18 @@ async def test_get_harvest_statistics(  # noqa: PLR0913, PLR0917
 async def test_iter_arc_contents_by_rdi(store: CouchDB, mock_client_instance: MagicMock) -> None:
     """iter_arc_contents_by_rdi streams arc_id and RO-Crate bodies for an RDI."""
     content = {"@context": "https://w3id.org/ro/crate/1.1/context", "@graph": []}
-    mock_client_instance.find = AsyncMock(
-        return_value=[{"_id": "arc_ds-1", "doc_type": "arc", "rdi": "edal", "arc_content": content}],
+    mock_client_instance.find_page = AsyncMock(
+        return_value=([{"_id": "arc_ds-1", "doc_type": "arc", "rdi": "edal", "arc_content": content}], "bm-1"),
     )
 
     results = [item async for item in store.iter_arc_contents_by_rdi("edal")]
 
     assert results == [("ds-1", content)]
-    mock_client_instance.find.assert_awaited_once_with(
+    mock_client_instance.find_page.assert_awaited_once_with(
         {"doc_type": "arc", "rdi": "edal"},
         limit=500,
-        skip=0,
+        bookmark=None,
+        sort=[{"doc_type": "asc"}, {"rdi": "asc"}, {"_id": "asc"}],
     )
 
 
@@ -576,7 +581,7 @@ async def test_iter_arc_contents_by_rdi_pages(
     store: CouchDB,
     mock_client_instance: MagicMock,
 ) -> None:
-    """Streaming walks multiple Mango pages without building a full list in the store."""
+    """Streaming walks multiple Mango bookmark pages without building a full list."""
     page_size = 2
     store._config.catalog_list_page_size = page_size  # noqa: SLF001
     content = {"@context": "https://w3id.org/ro/crate/1.1/context", "@graph": []}
@@ -587,18 +592,20 @@ async def test_iter_arc_contents_by_rdi_pages(
     page2 = [
         {"_id": "arc_ds-3", "doc_type": "arc", "rdi": "edal", "arc_content": content},
     ]
-    mock_client_instance.find = AsyncMock(side_effect=[page1, page2])
+    mock_client_instance.find_page = AsyncMock(
+        side_effect=[(page1, "bm-after-1"), (page2, "bm-after-2")],
+    )
 
     results = [item async for item in store.iter_arc_contents_by_rdi("edal")]
 
     assert [arc_id for arc_id, _ in results] == ["ds-1", "ds-2", "ds-3"]
-    assert mock_client_instance.find.await_count == 2
-    first_call = mock_client_instance.find.await_args_list[0]
-    second_call = mock_client_instance.find.await_args_list[1]
+    assert mock_client_instance.find_page.await_count == 2
+    first_call = mock_client_instance.find_page.await_args_list[0]
+    second_call = mock_client_instance.find_page.await_args_list[1]
     assert first_call.kwargs["limit"] == page_size
-    assert first_call.kwargs["skip"] == 0
+    assert first_call.kwargs["bookmark"] is None
     assert second_call.kwargs["limit"] == page_size
-    assert second_call.kwargs["skip"] == page_size
+    assert second_call.kwargs["bookmark"] == "bm-after-1"
 
 
 @pytest.mark.asyncio
@@ -607,15 +614,15 @@ async def test_iter_arc_contents_by_rdi_rejects_malformed_docs(
     mock_client_instance: MagicMock,
 ) -> None:
     """Malformed ARC documents must fail the catalog stream, not be skipped."""
-    mock_client_instance.find = AsyncMock(
-        return_value=[{"_id": "not_an_arc", "doc_type": "arc", "rdi": "edal", "arc_content": {}}],
+    mock_client_instance.find_page = AsyncMock(
+        return_value=([{"_id": "not_an_arc", "doc_type": "arc", "rdi": "edal", "arc_content": {}}], None),
     )
     with pytest.raises(ValueError, match="expected _id starting with 'arc_'"):
         async for _ in store.iter_arc_contents_by_rdi("edal"):
             pass
 
-    mock_client_instance.find = AsyncMock(
-        return_value=[{"_id": "arc_ds-1", "doc_type": "arc", "rdi": "edal", "arc_content": "oops"}],
+    mock_client_instance.find_page = AsyncMock(
+        return_value=([{"_id": "arc_ds-1", "doc_type": "arc", "rdi": "edal", "arc_content": "oops"}], None),
     )
     with pytest.raises(ValueError, match="arc_content must be an object"):
         async for _ in store.iter_arc_contents_by_rdi("edal"):

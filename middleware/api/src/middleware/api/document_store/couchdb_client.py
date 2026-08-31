@@ -352,6 +352,62 @@ class CouchDBClient:
 
         return docs
 
+    async def find_page(
+        self,
+        selector: JsonObject,
+        *,
+        limit: int,
+        bookmark: str | None = None,
+        sort: list[JsonObject] | None = None,
+    ) -> tuple[list[CouchDbDocument], str | None]:
+        """Fetch one Mango page using bookmark pagination (not ``skip``).
+
+        Offset (``skip``) paging over unordered or mutating result sets can omit
+        or repeat documents. CouchDB bookmarks are the stable cursor for
+        multi-page catalog scans.
+
+        Args:
+            selector: Mango query selector.
+            limit: Maximum documents for this page.
+            bookmark: Opaque cursor from a previous ``find_page`` call.
+            sort: Optional Mango ``sort`` clause (must match an index).
+
+        Returns:
+            ``(docs, next_bookmark)``. ``next_bookmark`` is ``None`` when the
+            response omits a bookmark; callers should stop when ``docs`` is
+            empty or shorter than ``limit``.
+        """
+        if not self._db:
+            raise RuntimeError("Not connected to CouchDB")
+        if not self._db_name:
+            raise RuntimeError("Database name is not set")
+        if limit < 1:
+            msg = "limit must be >= 1"
+            raise ValueError(msg)
+
+        payload: JsonObject = {
+            "selector": selector,
+            "limit": limit,
+        }
+        if bookmark is not None:
+            payload["bookmark"] = bookmark
+        if sort is not None:
+            payload["sort"] = cast(JsonValue, sort)
+
+        url = f"{self._url}/{self._db_name}/_find"
+        session = self._get_session()
+        async with session.post(url, json=payload) as resp:
+            if resp.status != HTTPStatus.OK:
+                text = await resp.text()
+                logger.error("CouchDB _find page failed: %s", text)
+                raise RuntimeError(f"CouchDB _find failed with status {resp.status}: {text}")
+            response_data = await resp.json()
+
+        docs_raw = response_data.get("docs", [])
+        docs: list[CouchDbDocument] = [dict(doc) for doc in docs_raw]
+        next_bookmark = response_data.get("bookmark")
+        return docs, next_bookmark if isinstance(next_bookmark, str) else None
+
     async def find_projected(
         self,
         selector: JsonObject,

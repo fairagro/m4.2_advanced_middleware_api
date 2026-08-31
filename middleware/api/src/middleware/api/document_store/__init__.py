@@ -246,7 +246,8 @@ class DocumentStore(ABC):
         """Yield ``(arc_id, arc_content)`` for ARC documents of an RDI.
 
         Implementations MUST stream (paginate) so callers need not hold all
-        RO-Crate bodies in memory at once.
+        RO-Crate bodies in memory at once. Prefer stable cursors (e.g. CouchDB
+        bookmarks) over offset ``skip`` paging for multi-page scans.
 
         Raises:
             ValueError: If a stored ARC document has an unexpected shape.
