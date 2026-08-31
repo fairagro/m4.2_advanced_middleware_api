@@ -288,7 +288,19 @@ async def test_transition_harvest_client_id_mismatch(manager: HarvestManager) ->
 @pytest.mark.asyncio
 @pytest.mark.parametrize("current_status", [HarvestStatus.COMPLETED, HarvestStatus.CANCELLED, HarvestStatus.FAILED])
 async def test_transition_harvest_conflict(manager: HarvestManager, current_status: HarvestStatus) -> None:
-    """transition_harvest raises ConflictError when harvest is not RUNNING."""
+    """transition_harvest raises ConflictError when changing away from a terminal status."""
     harvest = _make_harvest(client_id="client-a", status=current_status)
     with pytest.raises(ConflictError, match="cannot transition"):
         await manager.transition_harvest(harvest, HarvestStatus.CANCELLED, "client-a")
+
+
+@pytest.mark.asyncio
+async def test_transition_harvest_completed_idempotent_noop(
+    manager: HarvestManager, doc_store: MagicMock
+) -> None:
+    """COMPLETED→COMPLETED is a no-op so finalize can be re-enqueued after dispatch failure."""
+    harvest = _make_harvest(client_id="client-a", status=HarvestStatus.COMPLETED)
+    result = await manager.transition_harvest(harvest, HarvestStatus.COMPLETED, "client-a")
+    assert result is harvest
+    doc_store.update_harvest.assert_not_called()
+    doc_store.get_harvest_statistics.assert_not_called()

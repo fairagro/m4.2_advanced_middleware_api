@@ -52,3 +52,34 @@ ARCs for the RDI”.
 - **THEN** no `CATALOG_PUSH_FAILED` event is appended (matching per-ARC
   `GIT_PUSH_*` handling); a later successful attempt MAY record only
   `CATALOG_PUSH_SUCCESS`
+
+#### Scenario: Re-complete after dispatch failure re-enqueues finalize
+
+- **GIVEN** a harvest already in `COMPLETED` (status persisted) whose Celery
+  finalize dispatch failed
+- **WHEN** the client requests `COMPLETED` again for that harvest
+- **THEN** the harvest document is not rewritten
+- **AND** a finalize task for that RDI is enqueued again
+
+## MODIFIED Requirements
+
+### Requirement: Guard terminal state transitions
+
+The system SHALL transition a harvest through an explicit operation to one of
+`COMPLETED`, `CANCELLED`, or `FAILED`. Only `RUNNING` harvests MAY transition to
+a **different** terminal status. Requesting `COMPLETED` when the harvest is
+already `COMPLETED` MUST succeed as an idempotent no-op (no document rewrite)
+so catalog finalize can be re-enqueued. Any other non-`RUNNING` current status
+MUST raise `ConflictError` with the current status.
+
+#### Scenario: Transition an already terminal harvest to another status
+
+- **GIVEN** a harvest not in `RUNNING` (e.g. `COMPLETED`, `CANCELLED`, `FAILED`)
+- **WHEN** a terminal transition to a different status is requested
+- **THEN** `ConflictError` identifies its current status
+
+#### Scenario: Re-request COMPLETED on an already COMPLETED harvest
+
+- **GIVEN** a harvest already in `COMPLETED`
+- **WHEN** `COMPLETED` is requested again
+- **THEN** the operation succeeds without rewriting the harvest document

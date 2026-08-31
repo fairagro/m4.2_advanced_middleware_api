@@ -200,7 +200,9 @@ class BusinessLogic:
         ``dispatch_finalize_catalog``. Empty/unchanged harvests still enqueue;
         the store skips commit/push when catalog bytes already match the remote
         (needed for bootstrap after switching backends and for retry after a
-        failed finalize).
+        failed finalize). Re-POSTing ``COMPLETED`` on an already-``COMPLETED``
+        harvest is an idempotent no-op on the document and re-enqueues finalize
+        (recovery when the prior Celery dispatch failed after the status write).
 
         Prefer this method from HTTP handlers over calling
         ``harvest_manager.transition_harvest`` directly so finalize enqueue stays

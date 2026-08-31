@@ -132,8 +132,10 @@ async def patch_harvest_status(  # noqa: PLR0913, PLR0917
 ) -> v3_models.HarvestResponse:
     """Transition a harvest run to a terminal status (COMPLETED, CANCELLED, or FAILED).
 
-    Only a ``RUNNING`` harvest may be transitioned; any other current status returns
-    409 Conflict.
+    Only a ``RUNNING`` harvest may transition to a different terminal status.
+    Re-requesting ``COMPLETED`` on an already-``COMPLETED`` harvest is allowed
+    (idempotent; re-enqueues catalog finalize). Any other non-``RUNNING`` current
+    status returns 409 Conflict.
     """
     harvest = await bl.harvest_manager.get_harvest(harvest_id)
     if not harvest:

@@ -138,9 +138,13 @@ class HarvestManager:
     ) -> HarvestDocument:
         """Transition a harvest run to a terminal status (document-store only).
 
-        Only a ``RUNNING`` harvest may transition; any other current status raises
-        ``ConflictError``. Does **not** enqueue catalog finalize — that orchestration
-        lives on ``BusinessLogic.transition_harvest``.
+        Only a ``RUNNING`` harvest may transition to a new terminal status.
+        ``COMPLETED`` → ``COMPLETED`` is an idempotent no-op (no document write)
+        so callers can re-enqueue catalog finalize after a broker dispatch failure.
+        Any other non-``RUNNING`` current status raises ``ConflictError``.
+
+        Does **not** enqueue catalog finalize — that orchestration lives on
+        ``BusinessLogic.transition_harvest``.
 
         Args:
             harvest: Already-fetched harvest document.
@@ -153,6 +157,13 @@ class HarvestManager:
                 "[%s] Client ID mismatch for harvest %s: expected %s", client_id, harvest_id, harvest.client_id
             )
             raise AccessDeniedError(f"Harvest {harvest_id} does not belong to client {client_id}")
+        if harvest.status == HarvestStatus.COMPLETED and target_status == HarvestStatus.COMPLETED:
+            logger.info(
+                "[%s] Harvest %s already COMPLETED; returning without rewrite (finalize may be re-enqueued)",
+                client_id,
+                harvest_id,
+            )
+            return harvest
         if harvest.status != HarvestStatus.RUNNING:
             raise ConflictError(
                 f"Harvest {harvest_id} cannot transition to {target_status}: current status is {harvest.status}"

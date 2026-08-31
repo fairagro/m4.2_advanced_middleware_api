@@ -212,6 +212,32 @@ async def test_transition_harvest_enqueues_finalize_for_unchanged_catalog_harves
 
 
 @pytest.mark.asyncio
+async def test_transition_already_completed_reenqueues_finalize(
+    api_logic: BusinessLogic,
+    mock_task_dispatcher: MagicMock,
+    mock_doc_store: MagicMock,
+) -> None:
+    """Re-completing an already COMPLETED harvest re-enqueues catalog finalize."""
+    harvest = HarvestDocument(
+        doc_id="harvest-1",
+        rdi="edal",
+        client_id="client",
+        started_at=datetime.now(UTC),
+        status=HarvestStatus.COMPLETED,
+        statistics=HarvestStatistics(arcs_submitted=1, arcs_unchanged=1),
+    )
+
+    result = await api_logic.transition_harvest(harvest, HarvestStatus.COMPLETED, "client")
+
+    assert result.status == HarvestStatus.COMPLETED
+    mock_doc_store.update_harvest.assert_not_called()
+    mock_task_dispatcher.dispatch_finalize_catalog.assert_called_once()
+    task = mock_task_dispatcher.dispatch_finalize_catalog.call_args.args[0]
+    assert task.rdi == "edal"
+    assert task.harvest_id == "harvest-1"
+
+
+@pytest.mark.asyncio
 async def test_finalize_catalog_skips_events_for_per_arc_backend(
     worker_logic: BusinessLogic,
     mock_store: MagicMock,
