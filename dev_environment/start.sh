@@ -12,6 +12,10 @@ set -euo pipefail
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$script_dir"
 
+repo_root="$(cd "${script_dir}/.." && pwd)"
+# shellcheck source=../scripts/load-versions-env.sh
+source "${repo_root}/scripts/load-versions-env.sh"
+
 # Parse arguments
 BUILD_FLAG=""
 if [[ "${1:-}" == "--build" || "${1:-}" == "--rebuild" ]]; then
@@ -19,6 +23,7 @@ if [[ "${1:-}" == "--build" || "${1:-}" == "--rebuild" ]]; then
 fi
 
 echo "==> Starting development environment..."
+echo "    - Python ${PYTHON_VERSION} / Alpine ${ALPINE_VERSION} (from versions.env)"
 echo "    - PostgreSQL will be started"
 echo "    - Database will be initialized with Edaphobase dump"
 echo ""

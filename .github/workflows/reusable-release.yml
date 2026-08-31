@@ -272,7 +272,14 @@ jobs:
               if [[ "$DOCKER_SUCCESS" == "true" ]]; then
                 echo "Build the Docker image:"
                 echo '```bash'
-                echo "docker build -f docker/Dockerfile.${COMPONENT} -t ${COMPONENT}:${{ inputs.version }} ."
+                echo "source scripts/load-versions-env.sh"
+                echo "docker build -f docker/Dockerfile.${COMPONENT} \\"
+                echo "  --build-arg PYTHON_VERSION=\$PYTHON_VERSION \\"
+                echo "  --build-arg ALPINE_VERSION=\$ALPINE_VERSION \\"
+                echo "  --build-arg ALPINE_MINOR=\$ALPINE_MINOR \\"
+                echo "  --build-arg PIP_VERSION=\$PIP_VERSION \\"
+                echo "  --build-arg UV_VERSION=\$UV_VERSION \\"
+                echo "  -t ${COMPONENT}:${{ inputs.version }} ."
                 echo '```'
                 echo ""
               fi
