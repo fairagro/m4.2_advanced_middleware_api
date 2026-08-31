@@ -71,7 +71,7 @@ class TestFileSystemGitProvider:
         """Test URL construction."""
         provider = FileSystemGitProvider(base_url=f"file://{temp_remote_dir}", group="my-group")
         url = provider.get_repo_url("test-arc")
-        assert url == f"file://{temp_remote_dir}/my-group/test-arc.git"
+        assert url.unredacted() == f"file://{temp_remote_dir}/my-group/test-arc.git"
 
     @staticmethod
     def test_check_health() -> None:
@@ -227,11 +227,11 @@ class TestGitlabGitProvider:
 
         # Authenticated
         auth_url = provider.get_repo_url("arc123", authenticated=True)
-        assert auth_url == "https://oauth2:secret-token@gitlab.com/my-group/arc123.git"
+        assert auth_url.unredacted() == "https://oauth2:secret-token@gitlab.com/my-group/arc123.git"
 
         # Not authenticated
         plain_url = provider.get_repo_url("arc123", authenticated=False)
-        assert plain_url == "https://gitlab.com/my-group/arc123.git"
+        assert plain_url.unredacted() == "https://gitlab.com/my-group/arc123.git"
 
     @staticmethod
     @patch("middleware.api.arc_store.git_repo.remote_git_provider.gitlab.Gitlab")

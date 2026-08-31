@@ -37,11 +37,9 @@ class UrlStr:
         return f"UrlStr({str(self)!r})"
 
     def __eq__(self, other: object) -> bool:
-        """Compare on the raw URL; also accepts an equal plain ``str``."""
+        """Compare on the raw URL; only another ``UrlStr`` is equal."""
         if isinstance(other, UrlStr):
             return self._url == other._url
-        if isinstance(other, str):
-            return self._url == other
         return NotImplemented
 
     def __hash__(self) -> int:

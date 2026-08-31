@@ -22,12 +22,12 @@ def test_url_str_unredacted_returns_raw() -> None:
 
 
 def test_url_str_equality_and_hash() -> None:
-    """Equality and hashing use the raw URL (including vs plain str)."""
+    """Equality and hashing use the raw URL between UrlStr values only."""
     raw = "https://oauth2:tok@host/r.git"
     a = UrlStr(raw)
     b = UrlStr(raw)
     assert a == b
-    assert a == raw
+    assert a != raw
     assert hash(a) == hash(b)
     assert a != UrlStr("https://other.example/r.git")
 

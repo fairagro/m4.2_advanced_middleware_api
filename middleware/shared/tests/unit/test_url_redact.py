@@ -20,6 +20,22 @@ def test_redacting_formatter_preserves_wrapped_fmt() -> None:
     assert outer._fmt == inner._fmt  # noqa: SLF001
 
 
+def test_redacting_formatter_preserves_wrapped_brace_and_dollar_style() -> None:
+    """Brace and dollar styles must survive wrapping so format() stays valid."""
+    leak = "https://oauth2:secret-token@host/r.git"
+    record = logging.LogRecord("n", logging.ERROR, __file__, 1, leak, (), None)
+
+    brace = logging.Formatter("{message}", style="{")
+    brace_outer = RedactingFormatter(brace)
+    assert type(brace_outer._style) is type(brace._style)  # noqa: SLF001
+    assert "secret-token" not in brace_outer.format(record)
+
+    dollar = logging.Formatter("$message", style="$")
+    dollar_outer = RedactingFormatter(dollar)
+    assert type(dollar_outer._style) is type(dollar._style)  # noqa: SLF001
+    assert "secret-token" not in dollar_outer.format(record)
+
+
 def test_redacting_formatter_covers_message_and_exception_text() -> None:
     """Formatted log lines (including traceback text) are redacted."""
     logger = logging.getLogger("test_url_redact_formatter")

@@ -8,9 +8,22 @@ so oauth2/Git credentials do not appear in formatted log output.
 from __future__ import annotations
 
 import logging
+from typing import Literal
 
 from middleware.shared.config.config_base import LogLevel
 from middleware.shared.security.url_redact import redact_url_userinfo
+
+_FormatterStyle = Literal["%", "{", "$"]
+
+
+def _formatter_style(formatter: logging.Formatter) -> _FormatterStyle:
+    """Return the stdlib style character (``%``, ``{``, or ``$``) of *formatter*."""
+    inner = getattr(formatter, "_style", None)
+    if isinstance(inner, logging.StringTemplateStyle):
+        return "$"
+    if isinstance(inner, logging.StrFormatStyle):
+        return "{"
+    return "%"
 
 
 class RedactingFormatter(logging.Formatter):
@@ -19,13 +32,14 @@ class RedactingFormatter(logging.Formatter):
     def __init__(self, wrapped: logging.Formatter | None = None) -> None:
         """Initialize with an optional underlying formatter.
 
-        Copies the wrapped ``_fmt`` / ``datefmt`` into this instance so
+        Copies the wrapped ``_fmt`` / ``datefmt`` / style into this instance so
         ``handler.formatter._fmt`` still reflects the real log layout.
         """
         self._wrapped = wrapped if wrapped is not None else logging.Formatter()
         super().__init__(
             fmt=getattr(self._wrapped, "_fmt", None),
             datefmt=getattr(self._wrapped, "datefmt", None),
+            style=_formatter_style(self._wrapped),
         )
 
     def format(self, record: logging.LogRecord) -> str:

@@ -59,7 +59,7 @@ def git_repo(repo_config: GitRepoConfig) -> GitRepo:
 def test_git_repo_url_generation(git_repo: GitRepo) -> None:
     """Test standard repo URL generation."""
     url = git_repo._remote_provider.get_repo_url("arc123", authenticated=False)
-    assert url == "https://gitlab.example.com/mygroup/arc123.git"
+    assert url.unredacted() == "https://gitlab.example.com/mygroup/arc123.git"
 
 
 def test_git_repo_context_config_generation(git_repo: GitRepo) -> None:
@@ -90,18 +90,18 @@ def test_authenticated_repo_url_skips_already_embedded_credentials() -> None:
     """Do not double-embed oauth2 when the remote URL already carries userinfo."""
     settings = GitCliSettings(token=SecretStr("secret-token"))
     url = "https://oauth2:existing-token@gitlab.example.com/group/catalog.git"
-    assert settings.authenticated_repo_url(url) == url
+    assert settings.authenticated_repo_url(url).unredacted() == url
 
 
 def test_authenticated_repo_url_case_insensitive_scheme_and_quotes_slash() -> None:
     """Uppercase schemes still get tokens; '/' in tokens must be percent-encoded."""
     settings = GitCliSettings(token=SecretStr("tok/en"))
     assert (
-        settings.authenticated_repo_url("HTTPS://gitlab.example.com/group/catalog.git")
+        settings.authenticated_repo_url("HTTPS://gitlab.example.com/group/catalog.git").unredacted()
         == "https://oauth2:tok%2Fen@gitlab.example.com/group/catalog.git"
     )
     assert (
-        settings.authenticated_repo_url("HTTP://gitlab.example.com/group/catalog.git")
+        settings.authenticated_repo_url("HTTP://gitlab.example.com/group/catalog.git").unredacted()
         == "http://oauth2:tok%2Fen@gitlab.example.com/group/catalog.git"
     )
 
