@@ -64,12 +64,16 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v7
 
-      # Setup Python environment for Python analysis
-      - name: Set up Python 3.12
+      # Setup Python from versions.env (keeps .python-version in sync for tooling)
+      - name: Sync Python pin from versions.env
+        if: matrix.language == 'python'
+        run: source scripts/load-versions-env.sh
+
+      - name: Set up Python
         if: matrix.language == 'python'
         uses: actions/setup-python@v5
         with:
-          python-version: '3.12.14'
+          python-version-file: '.python-version'
 
       - name: Install uv and dependencies
         if: matrix.language == 'python'

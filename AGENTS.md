@@ -7,7 +7,9 @@ project for AI assistants (GitHub Copilot, Claude, etc.).
 
 | Component | Version | Details |
 | --------- | ------- | ------- |
-| Python | 3.12.12 | Primary language |
+| Python | `versions.env` → `PYTHON_VERSION` | Patch pin; `.python-version` mirrored (Renovate + `load-versions-env.sh`) |
+| Alpine | `versions.env` → `ALPINE_VERSION` | Patch pin; minor derived for `python:*-alpine*` / apk |
+| Toolchain | `versions.env` | uv, pip, kubectl, helm, … (see file) |
 | FastAPI | Latest | REST API framework |
 | Pydantic | V2 | Configuration validation |
 | Celery | Latest | Async task queue (GitLab sync worker) |
@@ -87,6 +89,9 @@ uv run ruff check --config pyproject.toml middleware/
 ./scripts/quality-check.sh
 # Autofix hooks only (trailing-whitespace, eof, ruff, ruff-format)
 ./scripts/quality-fix.sh
+
+# Refresh Docker/apk/pip/uv pins (versions.env + Dockerfile.api fallbacks)
+./scripts/update-docker-pins.sh
 
 # Install all dependecies
 uv sync --dev --all-packages
@@ -408,7 +413,8 @@ Before making changes, consider:
 - Should I use `uv` or another tool? → Always `uv`
 - Are client certificates required? → No, they're optional
 - Should I modify `.git/hooks/` directly? → No, use `scripts/setup-git-lfs.sh`
-- What Python version? → 3.12.12
+- What Python version? → `versions.env` (`PYTHON_VERSION`; syncs `.python-version`)
+- What Alpine / tool versions? → repo-root `versions.env`
 - How to run tests? → `uv run pytest ...`
 - Where do specs live? → `openspec/specs/<domain>/` (propose changes via `/opsx-propose`)
 

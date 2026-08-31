@@ -111,6 +111,19 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v7
 
+      - name: Load version pins from versions.env
+        id: versions
+        run: |
+          # shellcheck source=scripts/load-versions-env.sh
+          source scripts/load-versions-env.sh
+          {
+            echo "python=${PYTHON_VERSION}"
+            echo "alpine=${ALPINE_VERSION}"
+            echo "alpine_minor=${ALPINE_MINOR}"
+            echo "pip=${PIP_VERSION}"
+            echo "uv=${UV_VERSION}"
+          } >> "$GITHUB_OUTPUT"
+
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v4
 
@@ -125,6 +138,11 @@ jobs:
           tags: local/${{ env.IMAGE_BASE_NAME }}-${{ matrix.component }}:${{ needs.version.outputs.version }}
           build-args: |
             APP_VERSION=${{ needs.version.outputs.pep440_version }}
+            PYTHON_VERSION=${{ steps.versions.outputs.python }}
+            ALPINE_VERSION=${{ steps.versions.outputs.alpine }}
+            ALPINE_MINOR=${{ steps.versions.outputs.alpine_minor }}
+            PIP_VERSION=${{ steps.versions.outputs.pip }}
+            UV_VERSION=${{ steps.versions.outputs.uv }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
 

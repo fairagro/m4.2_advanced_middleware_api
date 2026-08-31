@@ -146,6 +146,8 @@ venv.bak/
 
 # Allow encrypted .env.integration.enc but ignore any unencrypted .env files
 !.env.integration.enc
+# Dev Container Compose reads .devcontainer/.env for build-arg substitution (symlink → versions.env)
+!.devcontainer/.env
 
 # Spyder project settings
 .spyderproject
