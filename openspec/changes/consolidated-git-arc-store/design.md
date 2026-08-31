@@ -50,7 +50,7 @@ Explicit decisions for the numbered open questions in
 | **1** | Standalone ARC create (`/v1/arcs`, `/v2/arcs`, `/v3/arcs`) when consolidating store is configured? | **Reject with HTTP 400.** No silent staging, no debounce, no eager per-ARC rewrite. Harvest-scoped product cut. Enforced in `ArcManager` (not HTTP-layer only). |
 | **2** | Finalize trigger and HTTP semantics? | Mark harvest **`COMPLETED` first**, then **enqueue** async Celery finalize. HTTP MUST NOT wait for Git push. On **permanent** catalog push failure: harvest stays `COMPLETED`; record `CATALOG_PUSH_FAILED`. On **transient** failure: do **not** append `CATALOG_PUSH_FAILED` before Celery retry (same as per-ARC `GIT_PUSH_*`); finalize MAY be retried without re-opening the harvest. |
 | **3** | Finalize scope: `rdi` vs `harvest_id` vs both? Overlapping harvests? | **`finalize(rdi=…)` only.** CouchDB stores the **latest** ARC body per `arc_id`, not a harvest-scoped snapshot, so `harvest_id` cannot select “ARCs of that harvest” for a rebuild. Rebuild from **all** current ARC documents for the RDI. Overlapping harvests converge on CouchDB; **last successful push** wins on the remote. A Celery task MAY still *carry* `harvest_id` for logging/correlation; it is not an ArcStore finalize argument. |
-| **4** | Staging model vs CouchDB / content-hash? | **No dirty-marker documents.** Staging = normal CouchDB ARC documents. Content-hash still gates CouchDB writes (unchanged ARC → no doc update). Optional: skip finalize **enqueue** when harvest stats show `arcs_new + arcs_updated == 0`. When finalize runs, **byte equality** vs remote file skips commit/push. |
+| **4** | Staging model vs CouchDB / content-hash? | **No dirty-marker documents.** Staging = normal CouchDB ARC documents. Content-hash still gates CouchDB writes (unchanged ARC → no doc update). Always enqueue finalize on harvest `COMPLETED`; when finalize runs, **byte equality** vs remote file skips commit/push. |
 | **5** | Extraction contract for Basic-like output? *(clarified below)* | Prefer root Dataset (`@id` `./`); else first `@graph` node typed as Schema.org `Dataset`. Emit a **JSON array** of those objects; each MAY keep its own `@context`. Order Datasets by `@id`; serialize with sorted object keys and stable separators (**byte-stable**). No finalize-/build-time timestamps injected into the payload. |
 | **6** | Basic special cases (`openagrar` / `publisso`)? | **Deferred.** v1 writes `{rdi}.json` only (one file per configured RDI name). |
 | **7** | Target repository & coexistence with Basic? | Catalog remote **MUST be configurable**. Advanced **will not** use Basic’s `middleware_repo` as the production target. Coexistence/locking against Basic writers is out of scope for v1. |
@@ -95,9 +95,10 @@ only when content-hash says new/changed). `finalize` always rebuilds
 
 **Why:** Finalize must write the full catalog anyway. Change detection already
 happens at CouchDB ingest. Extra markers duplicate that signal and add failure
-modes. Skip useless Git work via **byte equality** against the remote file
-(and optionally skip enqueue when harvest stats show `arcs_new + arcs_updated
-== 0`).
+modes. Skip useless Git work via **byte equality** against the remote file.
+Do **not** skip finalize enqueue when harvest stats show zero new/updated ARCs:
+unchanged harvests must still enqueue so catalog bootstrap (backend switch) and
+retry after a failed finalize remain possible.
 
 **Alternatives considered:**
 
@@ -328,8 +329,5 @@ catalog tasks share one remote (not one path per `arc_id`).
 
 - Exact Dataset node selector details beyond root/`Dataset` (finalize during
   implementation against real OpenAgrar/e!DAL crates).
-- Whether to skip finalize enqueue when harvest stats show zero new/updated
-  ARCs (optional optimization; byte compare remains mandatory when finalize
-  runs).
 - Deprecation UX details for legacy top-level keys (warning log vs config
   validation message vs both).

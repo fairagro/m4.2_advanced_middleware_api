@@ -9,9 +9,10 @@ When a harvest transitions to `COMPLETED`, the system SHALL request ArcStore
 Harvest status transition to `COMPLETED` MUST NOT wait for the Git push to
 finish. The system MUST record distinct catalog events for publish success and
 failure so operators can distinguish “harvest complete” from “RDI catalog
-flushed”. The system MAY skip enqueueing finalize when harvest statistics show
-no new or updated ARCs; when finalize runs, byte-stable comparison still
-governs whether a Git push occurs. Worker task payloads MAY include
+flushed”. The system MUST enqueue finalize on harvest ``COMPLETED`` even when
+statistics show no new or updated ARCs (bootstrap after switching backends and
+retry after a failed finalize). When finalize runs, byte-stable comparison
+still governs whether a Git push occurs. Worker task payloads MAY include
 `harvest_id` for correlation only; catalog membership is always “all current
 ARCs for the RDI”.
 
@@ -22,6 +23,13 @@ ARCs for the RDI”.
 - **WHEN** the harvest is completed
 - **THEN** the harvest status becomes `COMPLETED` and a finalize task for
   `edal` is enqueued
+
+#### Scenario: Unchanged harvest still enqueues catalog finalize
+
+- **GIVEN** a consolidating harvest whose statistics show only unchanged ARCs
+- **WHEN** the harvest is completed
+- **THEN** a finalize task for that RDI is still enqueued
+- **AND** the worker MAY skip commit/push when catalog bytes already match the remote
 
 #### Scenario: Finalize no-op on per-ARC backends
 

@@ -32,8 +32,8 @@
 ## 3. Orchestration and HTTP guards
 
 - [x] 3.1 When consolidated backend is configured, do **not** dispatch per-ARC
-      Git sync on ARC ingest; on harvest `COMPLETED`, enqueue Celery finalize
-      for `rdi` (optional skip when stats show zero new/updated)
+      Git sync on ARC ingest; on harvest `COMPLETED`, always enqueue Celery
+      finalize for `rdi` (byte equality in finalize may still skip commit/push)
 - [x] 3.2 Add catalog flush success/failure events (distinct from
       `GIT_PUSH_SUCCESS`); never emit false per-ARC push success for this
       backend

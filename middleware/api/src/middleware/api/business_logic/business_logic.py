@@ -196,8 +196,11 @@ class BusinessLogic:
 
         Delegates status/ownership/statistics updates to
         ``HarvestManager.transition_harvest``. When ``target_status`` is
-        ``COMPLETED`` and a task dispatcher is configured, additionally enqueues
-        ``dispatch_finalize_catalog`` (skipped for empty consolidating harvests).
+        ``COMPLETED`` and a task dispatcher is configured, always enqueues
+        ``dispatch_finalize_catalog``. Empty/unchanged harvests still enqueue;
+        the store skips commit/push when catalog bytes already match the remote
+        (needed for bootstrap after switching backends and for retry after a
+        failed finalize).
 
         Prefer this method from HTTP handlers over calling
         ``harvest_manager.transition_harvest`` directly so finalize enqueue stays
@@ -205,23 +208,13 @@ class BusinessLogic:
         """
         updated = await self._harvest_manager.transition_harvest(harvest, target_status, client_id)
         if target_status == HarvestStatus.COMPLETED and self._ports.task_dispatcher is not None:
-            stats = updated.statistics
-            skip_empty_harvest = (
-                not self._arc_manager.store.publishes_per_arc_git and stats.arcs_new + stats.arcs_updated == 0
+            self._ports.task_dispatcher.dispatch_finalize_catalog(
+                CatalogFinalizeTask(
+                    rdi=updated.rdi,
+                    harvest_id=updated.doc_id,
+                    client_id=client_id,
+                )
             )
-            if skip_empty_harvest:
-                logger.info(
-                    "Skipping catalog finalize enqueue for harvest %s (no new or updated ARCs)",
-                    updated.doc_id,
-                )
-            else:
-                self._ports.task_dispatcher.dispatch_finalize_catalog(
-                    CatalogFinalizeTask(
-                        rdi=updated.rdi,
-                        harvest_id=updated.doc_id,
-                        client_id=client_id,
-                    )
-                )
         return updated
 
     async def complete_harvest(

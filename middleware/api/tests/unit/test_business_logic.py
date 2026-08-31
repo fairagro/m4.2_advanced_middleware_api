@@ -185,12 +185,12 @@ async def test_transition_harvest_enqueues_finalize_for_per_arc_backend(
 
 
 @pytest.mark.asyncio
-async def test_transition_harvest_skips_empty_finalize_for_catalog_backend(
+async def test_transition_harvest_enqueues_finalize_for_unchanged_catalog_harvest(
     api_logic: BusinessLogic,
     mock_task_dispatcher: MagicMock,
     mock_store: MagicMock,
 ) -> None:
-    """Consolidated backend may skip finalize enqueue when no ARCs changed."""
+    """Unchanged consolidating harvests still enqueue finalize (bootstrap/retry)."""
     mock_store.publishes_per_arc_git = False
     harvest = HarvestDocument(
         doc_id="harvest-1",
@@ -198,6 +198,7 @@ async def test_transition_harvest_skips_empty_finalize_for_catalog_backend(
         client_id="client",
         started_at=datetime.now(UTC),
         status=HarvestStatus.RUNNING,
+        statistics=HarvestStatistics(arcs_submitted=3, arcs_unchanged=3),
     )
     completed = harvest.model_copy(update={"status": HarvestStatus.COMPLETED})
     with patch.object(
@@ -207,7 +208,7 @@ async def test_transition_harvest_skips_empty_finalize_for_catalog_backend(
     ):
         await api_logic.transition_harvest(harvest, HarvestStatus.COMPLETED, "client")
 
-    mock_task_dispatcher.dispatch_finalize_catalog.assert_not_called()
+    mock_task_dispatcher.dispatch_finalize_catalog.assert_called_once()
 
 
 @pytest.mark.asyncio
