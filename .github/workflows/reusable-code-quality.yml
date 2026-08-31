@@ -22,7 +22,9 @@ env:
 
 jobs:
   code-quality:
-    name: Code Quality Check
+    # Branch ruleset "rules for main" requires this exact check name
+    # (legacy matrix suffix). Keep it even without a python-version matrix.
+    name: Code Quality Check (3.12)
     runs-on: ubuntu-latest
     permissions:
       contents: read
