@@ -20,7 +20,7 @@ from git.exc import GitCommandError
 from opentelemetry import context
 
 from middleware.api.arc_store import ArcStore, ArcStoreError, ArcStoreTransientError
-from middleware.api.arc_store.consolidated_git.catalog_jsonld import normalize_catalog_datasets
+from middleware.api.arc_store.consolidated_git.catalog_jsonld import normalize_catalog_datasets_best_effort
 from middleware.api.arc_store.consolidated_git.catalog_serialize import extract_catalog_dataset, serialize_catalog_file
 from middleware.api.arc_store.consolidated_git.config import ConsolidatedGitConfig
 from middleware.api.arc_store.git_cli_settings import GitContextConfig
@@ -186,24 +186,71 @@ class ConsolidatedGitArcStore(ArcStore):
         finally:
             shutil.rmtree(temp_dir, ignore_errors=True)
 
-    @override
-    async def _finalize(self, *, rdi: str) -> bool:
-        """Rebuild ``{rdi}.json`` from CouchDB ARC bodies (streamed, Dataset-only retained)."""
-        datasets: list[CatalogDatasetRecord] = []
+    async def _collect_catalog_datasets(
+        self,
+        rdi: str,
+    ) -> tuple[list[CatalogDatasetRecord], list[tuple[str, str]], int]:
+        """Extract and JSON-LD-normalize Datasets with interim partial-push skips.
+
+        Returns:
+            ``(datasets, skipped, seen_count)`` where ``skipped`` is
+            ``(arc_id, reason)`` and ``seen_count`` is CouchDB ARC documents visited.
+        """
+        extracted: list[tuple[str, CatalogDatasetRecord]] = []
+        skipped: list[tuple[str, str]] = []
+        seen = 0
         async for arc_id, content in self._doc_store.iter_arc_contents_by_rdi(rdi):
+            seen += 1
             try:
-                datasets.append(extract_catalog_dataset(content))
+                extracted.append((arc_id, extract_catalog_dataset(content)))
             except ValueError as exc:
-                raise ArcStoreError(f"Catalog extraction failed for ARC {arc_id}: {exc}") from exc
+                reason = f"Catalog extraction failed for ARC {arc_id}: {exc}"
+                logger.warning("%s", reason)
+                skipped.append((arc_id, reason))
 
         try:
-            datasets = await normalize_catalog_datasets(datasets)
+            outcome = await normalize_catalog_datasets_best_effort(extracted)
         except ArcStoreTransientError:
             raise
         except ArcStoreError:
             raise
         except Exception as exc:
             raise ArcStoreError(f"Catalog JSON-LD normalize failed for RDI {rdi}: {exc}") from exc
+
+        skipped.extend(outcome.skipped)
+        for _arc_id, reason in outcome.skipped:
+            logger.warning("%s", reason)
+        return outcome.datasets, skipped, seen
+
+    @override
+    async def _finalize(self, *, rdi: str) -> bool:
+        """Rebuild ``{rdi}.json`` from CouchDB ARC bodies (streamed, Dataset-only retained).
+
+        Interim partial push (#356): ARCs that fail extract/JSON-LD are skipped so
+        other Datasets still publish. There is no last-good retention yet — a
+        previously published Dataset may disappear until the ARC is repaired.
+        If every ARC for a non-empty RDI fails, refuse to push an empty catalog
+        (avoids wiping the remote).
+        """
+        datasets, skipped, seen = await self._collect_catalog_datasets(rdi)
+
+        if seen > 0 and not datasets:
+            skipped_ids = [arc_id for arc_id, _ in skipped]
+            raise ArcStoreError(
+                f"Catalog finalize for RDI {rdi}: all {seen} ARC(s) failed extract/normalize; "
+                "refusing to publish an empty catalog that would wipe the remote "
+                f"(skipped={skipped_ids})"
+            )
+
+        if skipped:
+            skipped_ids = [arc_id for arc_id, _ in skipped]
+            logger.warning(
+                "Catalog finalize for RDI %s skipping %d of %d ARC(s) (partial push, no last-good): %s",
+                rdi,
+                len(skipped),
+                seen,
+                skipped_ids,
+            )
 
         catalog_bytes = serialize_catalog_file(datasets)
         try:
@@ -215,5 +262,11 @@ class ConsolidatedGitArcStore(ArcStore):
         except Exception as exc:
             raise ArcStoreError(f"Failed to publish catalog for RDI {rdi}: {exc}") from exc
 
-        logger.info("Finalized catalog for RDI %s (%d datasets, pushed=%s)", rdi, len(datasets), pushed)
+        logger.info(
+            "Finalized catalog for RDI %s (%d datasets, %d skipped, pushed=%s)",
+            rdi,
+            len(datasets),
+            len(skipped),
+            pushed,
+        )
         return pushed

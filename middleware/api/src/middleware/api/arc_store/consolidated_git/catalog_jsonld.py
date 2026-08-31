@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+from dataclasses import dataclass
 from typing import cast
 
 from pyld.jsonld import CompactOptions, Context, ExpandOptions, compact, expand  # type: ignore[import-untyped]
@@ -78,9 +79,48 @@ async def normalize_catalog_datasets(
 
     Ordering of the returned list matches ``datasets`` input order; callers that
     need ``@id`` sort should serialize via ``serialize_catalog_file``.
+
+    Raises:
+        ArcStoreError: If any Dataset fails expand/compact (fail-closed).
     """
     if not datasets:
         return []
+
+    labeled = [(str(index), dataset) for index, dataset in enumerate(datasets)]
+    outcome = await normalize_catalog_datasets_best_effort(
+        labeled,
+        concurrency=concurrency,
+        schema_org_document=schema_org_document,
+    )
+    if outcome.skipped:
+        # First failure reason; strict callers expect a single exception.
+        _arc_id, reason = outcome.skipped[0]
+        raise ArcStoreError(reason)
+    return outcome.datasets
+
+
+@dataclass(frozen=True, slots=True)
+class CatalogNormalizeOutcome:
+    """Result of best-effort catalog Dataset normalize (partial push)."""
+
+    datasets: list[CatalogDatasetRecord]
+    skipped: list[tuple[str, str]]
+    """``(arc_id, error_message)`` for Datasets that failed extract-independent normalize."""
+
+
+async def normalize_catalog_datasets_best_effort(
+    items: list[tuple[str, CatalogDatasetRecord]],
+    *,
+    concurrency: int = _DEFAULT_NORMALIZE_CONCURRENCY,
+    schema_org_document: JsonObject | None = None,
+) -> CatalogNormalizeOutcome:
+    """Expand/compact Datasets concurrently; skip failures instead of aborting.
+
+    Successful Datasets keep input order. Used by consolidated finalize for
+    interim partial push (no last-good retention yet — see issue #356).
+    """
+    if not items:
+        return CatalogNormalizeOutcome(datasets=[], skipped=[])
 
     document = schema_org_document if schema_org_document is not None else load_schema_org_context()
     compact_context = build_catalog_compact_context(document)
@@ -89,16 +129,27 @@ async def normalize_catalog_datasets(
     semaphore = asyncio.Semaphore(max(1, concurrency))
     loop = asyncio.get_running_loop()
 
-    async def _one(dataset: CatalogDatasetRecord) -> CatalogDatasetRecord:
+    async def _one(arc_id: str, dataset: CatalogDatasetRecord) -> CatalogDatasetRecord | tuple[str, str]:
         async with semaphore:
-            return await loop.run_in_executor(
-                None,
-                lambda: compact_catalog_dataset(
-                    dataset,
-                    compact_context,
-                    emitted_context=emitted_context,
-                    document_loader=loader,
-                ),
-            )
+            try:
+                return await loop.run_in_executor(
+                    None,
+                    lambda: compact_catalog_dataset(
+                        dataset,
+                        compact_context,
+                        emitted_context=emitted_context,
+                        document_loader=loader,
+                    ),
+                )
+            except Exception as exc:  # noqa: BLE001 — per-ARC isolate for partial push
+                return (arc_id, f"JSON-LD expand/compact failed for ARC {arc_id}: {exc}")
 
-    return list(await asyncio.gather(*(_one(dataset) for dataset in datasets)))
+    results = await asyncio.gather(*(_one(arc_id, dataset) for arc_id, dataset in items))
+    datasets: list[CatalogDatasetRecord] = []
+    skipped: list[tuple[str, str]] = []
+    for result in results:
+        if isinstance(result, tuple):
+            skipped.append(result)
+        else:
+            datasets.append(result)
+    return CatalogNormalizeOutcome(datasets=datasets, skipped=skipped)

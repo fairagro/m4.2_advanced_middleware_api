@@ -34,25 +34,51 @@ synchronization tasks. Catalog publication happens exclusively via `finalize`.
 
 On `finalize` for an RDI, the consolidated Git backend SHALL rebuild the
 catalog file `{rdi}.json` as a top-level JSON array of Schema.org `Dataset`
-objects extracted from **all** current document-store ARC RO-Crate bodies for
-that RDI, write the file into the configured shared Git repository, commit, and
-push when the remote blob differs. Each finalize Git operation MUST use a
-**dedicated ephemeral local clone** (unique temporary directory, deleted after
-the operation completes or fails) — MUST NOT reuse a stable shared working copy
-across concurrent finalize tasks. The file bytes MUST be deterministic: for
-the same set of ARC contents, two rebuilds MUST produce identical bytes
-(stable Dataset order by `@id`, canonical JSON serialization with sorted
-object keys, no finalize-/build-time timestamps or other volatile fields
-injected into the payload). Overlapping finalizes for the same RDI MUST
-converge on the document store as the source of truth for current ARC bodies
-(last successful push wins on the remote).
+objects extracted from current document-store ARC RO-Crate bodies for that RDI
+(see partial-push rules below), write the file into the configured shared Git
+repository, commit, and push when the remote blob differs. Each finalize Git
+operation MUST use a **dedicated ephemeral local clone** (unique temporary
+directory, deleted after the operation completes or fails) — MUST NOT reuse a
+stable shared working copy across concurrent finalize tasks. The file bytes
+MUST be deterministic: for the same set of successfully included ARC contents,
+two rebuilds MUST produce identical bytes (stable Dataset order by `@id`,
+canonical JSON serialization with sorted object keys, no finalize-/build-time
+timestamps or other volatile fields injected into the payload). Overlapping
+finalizes for the same RDI MUST converge on the document store as the source of
+truth for current ARC bodies (last successful push wins on the remote).
+
+**Interim partial push (no last-good; issue #356):** If Dataset extraction or
+JSON-LD expand/compact fails for an individual ARC, finalize MUST skip that ARC,
+continue with the remaining ARCs, and still publish when at least one Dataset
+succeeds. Skips MUST be logged. Until last-good retention exists, a previously
+published Dataset MAY disappear from `{rdi}.json` when its current CouchDB body
+fails. If the RDI had one or more ARC documents and **all** of them fail,
+finalize MUST raise a permanent store error and MUST NOT push an empty catalog
+that would wipe the remote. An RDI with zero ARC documents MAY publish an empty
+array.
 
 #### Scenario: Finalize publishes full RDI catalog
 
-- **GIVEN** CouchDB holds one or more ARCs for RDI `edal`
+- **GIVEN** CouchDB holds one or more ARCs for RDI `edal` that all extract and
+  normalize successfully
 - **WHEN** `finalize` runs for that RDI
 - **THEN** `edal.json` contains the extracted Dataset array for all those ARCs
   and is pushed to the shared remote when bytes differ from the remote file
+
+#### Scenario: Partial push skips a failing ARC
+
+- **GIVEN** CouchDB holds a good ARC and a bad ARC (extract or JSON-LD failure)
+  for the same RDI
+- **WHEN** `finalize` runs
+- **THEN** the catalog contains the good Dataset only and is eligible to push
+- **AND** the bad ARC is skipped (logged), not aborting the whole finalize
+
+#### Scenario: All ARCs fail — refuse empty wipe
+
+- **GIVEN** CouchDB holds one or more ARCs for an RDI and every ARC fails
+  extract or JSON-LD normalize
+- **WHEN** `finalize` runs
+- **THEN** a permanent store error is raised and no empty catalog is pushed
 
 #### Scenario: Unchanged ARC set yields identical catalog bytes
 
@@ -67,8 +93,10 @@ converge on the document store as the source of truth for current ARC bodies
 For each ARC included in a catalog rebuild, the consolidated backend SHALL
 extract the Schema.org `Dataset` payload from the ARC’s stored RO-Crate JSON
 (using the documented root/`@type` Dataset rule). It MUST NOT require a
-separate Schema.org upload API. Missing extractable Dataset content MUST be
-treated as a permanent persistence error for that ARC during finalize.
+separate Schema.org upload API. Missing extractable Dataset content MUST skip
+that ARC under interim partial-push rules (logged); it MUST NOT by itself abort
+finalize when other ARCs succeed. When every ARC fails extraction/normalize,
+see the empty-wipe refusal under the publish requirement.
 
 #### Scenario: Extract root Dataset
 
@@ -104,8 +132,11 @@ files in one deployment is out of scope.
 
 The consolidated backend SHALL raise a retryable store error for transient
 network, remote, or lock-like Git failures during finalize push. It MUST raise
-a permanent store error for invalid credentials, malformed extraction input, or
-misconfiguration discovered before Git activity.
+a permanent store error for invalid credentials, misconfiguration discovered
+before Git activity, or when every ARC for a non-empty RDI fails
+extract/normalize (refusing an empty catalog wipe). Individual malformed ARC
+bodies during interim partial push MUST be skipped (logged), not abort the
+whole finalize when other ARCs succeed.
 
 #### Scenario: Transient push failure
 

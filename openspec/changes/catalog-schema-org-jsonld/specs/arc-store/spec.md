@@ -44,6 +44,14 @@ canonical JSON serialization rules.
 - **THEN** that property remains as an absolute IRI key or value in the
   catalog record
 
+#### Scenario: Per-ARC JSON-LD failure does not abort finalize (interim)
+
+- **GIVEN** multiple ARCs for an RDI and one Dataset fails expand/compact
+  (e.g. unknown `@context` URL under the offline loader)
+- **WHEN** finalize normalizes catalog Datasets
+- **THEN** that ARC is skipped (logged) and remaining Datasets are still
+  compacted and eligible for catalog publish (partial push; no last-good yet)
+
 ### Requirement: Vendor schema.org context offline (no runtime fetch)
 
 The schema.org portion of the compact **processing** context MUST come from a

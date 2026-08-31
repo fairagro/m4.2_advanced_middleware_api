@@ -128,6 +128,79 @@ async def test_finalize_loads_arcs_from_couchdb(
 
 
 @pytest.mark.asyncio
+async def test_finalize_partial_push_skips_bad_arc_keeps_good(
+    consolidated_config: ConsolidatedGitConfig,
+) -> None:
+    """Interim partial push: one bad ARC must not block publishing good Datasets."""
+    doc_store = MagicMock()
+    bad_arc = {
+        "@context": "https://example.invalid/unknown-context",
+        "@graph": [
+            {"@id": "./", "@type": "Dataset", "identifier": "BAD", "name": "Broken context"},
+        ],
+    }
+
+    async def _iter_arcs(_rdi: str):
+        yield ("good-arc", minimal_rocrate_dict("DS-GOOD"))
+        yield ("bad-arc", bad_arc)
+
+    doc_store.iter_arc_contents_by_rdi = MagicMock(side_effect=_iter_arcs)
+    store = ConsolidatedGitArcStore(consolidated_config, doc_store)
+
+    with patch.object(store, "_publish_catalog_bytes", return_value=True) as mock_publish:
+        pushed = await store.finalize(rdi="edal")
+
+    assert pushed is True
+    catalog_bytes = mock_publish.call_args[0][1]
+    assert b"DS-GOOD" in catalog_bytes
+    assert b"Broken context" not in catalog_bytes
+
+
+@pytest.mark.asyncio
+async def test_finalize_all_arcs_fail_refuses_empty_wipe(
+    consolidated_config: ConsolidatedGitConfig,
+) -> None:
+    """When every ARC fails, do not publish [] over an existing remote catalog."""
+    doc_store = MagicMock()
+
+    async def _iter_arcs(_rdi: str):
+        yield ("bad-1", {"not": "an ro-crate"})
+        yield ("bad-2", {"@graph": "nope"})
+
+    doc_store.iter_arc_contents_by_rdi = MagicMock(side_effect=_iter_arcs)
+    store = ConsolidatedGitArcStore(consolidated_config, doc_store)
+
+    with (
+        patch.object(store, "_publish_catalog_bytes") as mock_publish,
+        pytest.raises(ArcStoreError, match="refusing to publish an empty catalog"),
+    ):
+        await store.finalize(rdi="edal")
+
+    mock_publish.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_finalize_empty_rdi_still_publishes_empty_catalog(
+    consolidated_config: ConsolidatedGitConfig,
+) -> None:
+    """No CouchDB ARCs → empty catalog is allowed (legitimate empty RDI)."""
+    doc_store = MagicMock()
+
+    async def _iter_arcs(_rdi: str):
+        return
+        yield  # pragma: no cover — async generator with no items
+
+    doc_store.iter_arc_contents_by_rdi = MagicMock(side_effect=_iter_arcs)
+    store = ConsolidatedGitArcStore(consolidated_config, doc_store)
+
+    with patch.object(store, "_publish_catalog_bytes", return_value=True) as mock_publish:
+        pushed = await store.finalize(rdi="edal")
+
+    assert pushed is True
+    assert mock_publish.call_args[0][1].strip() == b"[]"
+
+
+@pytest.mark.asyncio
 async def test_finalize_catalog_backend_flags(
     consolidated_config: ConsolidatedGitConfig,
     doc_store: MagicMock,
