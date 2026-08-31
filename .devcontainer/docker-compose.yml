@@ -1,0 +1,28 @@
+# Build-arg substitution (${UV_VERSION}, etc.) reads .env in this directory —
+# a symlink to ../versions.env (single source of truth).
+services:
+  devcontainer:
+    build:
+      context: ..
+      dockerfile: .devcontainer/Dockerfile
+      args:
+        DEVCONTAINER_BASE_IMAGE: ${DEVCONTAINER_BASE_IMAGE}
+        PYTHON_VERSION: ${PYTHON_VERSION}
+        UV_VERSION: ${UV_VERSION}
+        KUBECTL_VERSION: ${KUBECTL_VERSION}
+        HELM_VERSION: ${HELM_VERSION}
+        SOPS_VERSION: ${SOPS_VERSION}
+        AGE_VERSION: ${AGE_VERSION}
+        STARSHIP_VERSION: ${STARSHIP_VERSION}
+        DIFFTASTIC_VERSION: ${DIFFTASTIC_VERSION}
+        PRECOMMIT_VERSION: ${PRECOMMIT_VERSION}
+        YQ_VERSION: ${YQ_VERSION}
+        YAMLFMT_VERSION: ${YAMLFMT_VERSION}
+        HADOLINT_VERSION: ${HADOLINT_VERSION}
+        CST_VERSION: ${CST_VERSION}
+        MINIKUBE_VERSION: ${MINIKUBE_VERSION}
+        NODE_VERSION: ${NODE_VERSION}
+        OPENSPEC_VERSION: ${OPENSPEC_VERSION}
+    volumes:
+      - ..:/workspaces/m4.2_advanced_middleware_api:cached
+    command: sleep infinity

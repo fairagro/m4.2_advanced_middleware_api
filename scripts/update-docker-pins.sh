@@ -1,9 +1,18 @@
 #!/usr/bin/env bash
+# Update pinned versions in docker/Dockerfile.api and versions.env:
+#   - Alpine apk package pins (from Alpine APKINDEX)
+#   - pip / uv pins in versions.env (from PyPI)
+#   - Dockerfile ${VAR:-fallback} defaults (kept aligned with versions.env)
+#
+# Usage:
+#   ./scripts/update-docker-pins.sh
+#   ./scripts/update-docker-pins.sh path/to/Dockerfile
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
 DOCKERFILE="${PROJECT_DIR}/docker/Dockerfile.api"
+VERSIONS_ENV="${PROJECT_DIR}/versions.env"
 
 # Allow an optional Dockerfile path override for other repository variants.
 if [[ $# -gt 0 ]]; then
@@ -15,14 +24,44 @@ if [[ ! -f "$DOCKERFILE" ]]; then
   exit 1
 fi
 
-# Extract Alpine version dynamically from the base image in the Dockerfile
-# Matches e.g. "FROM python:3.12.12-alpine3.23" → "3.23"
-ALPINE_VERSION=$(grep -m1 '^FROM ' "$DOCKERFILE" | grep -oE 'alpine([0-9]+\.[0-9]+)' | grep -oE '[0-9]+\.[0-9]+')
-if [[ -z "$ALPINE_VERSION" ]]; then
-  echo "❌ Could not extract Alpine version from $DOCKERFILE" >&2
-  exit 1
-fi
-echo "🏔️  Detected Alpine version: $ALPINE_VERSION"
+# shellcheck source=load-versions-env.sh
+source "${SCRIPT_DIR}/load-versions-env.sh"
+echo "🏔️  Alpine ${ALPINE_VERSION} (minor ${ALPINE_MINOR} for APKINDEX, from versions.env)"
+
+update_versions_env_pin() {
+  local key="$1"
+  local value="$2"
+  if grep -qE "^${key}=" "${VERSIONS_ENV}"; then
+    sed -i "s#^${key}=.*#${key}=${value}#" "${VERSIONS_ENV}"
+  else
+    echo "${key}=${value}" >> "${VERSIONS_ENV}"
+  fi
+}
+
+# Sync Dockerfile ${NAME:-fallback} defaults to match versions.env (SoT).
+# Quoting is pieced so bash never treats :- as its own parameter-expansion operator.
+sync_dockerfile_arg_fallback() {
+  local arg_name="$1"
+  local fallback="$2"
+  local pattern='\$\{'"${arg_name}"':-[^}]+\}'
+  local replacement='${'"${arg_name}"':-'"${fallback}"'}'
+  if grep -qE "${pattern}" "$DOCKERFILE"; then
+    sed -i -E "s#${pattern}#${replacement}#g" "$DOCKERFILE"
+    echo "✔ Dockerfile \${${arg_name}:-…} → ${fallback}"
+  else
+    echo "⚠️  No \${${arg_name}:-…} fallback found in Dockerfile"
+  fi
+}
+
+sync_all_dockerfile_fallbacks() {
+  echo "📌 Syncing Dockerfile :-fallbacks from versions.env..."
+  sync_dockerfile_arg_fallback "PIP_VERSION" "${PIP_VERSION}"
+  sync_dockerfile_arg_fallback "UV_VERSION" "${UV_VERSION}"
+  # FROM python:${PYTHON_VERSION:-X.Y} uses major.minor only
+  sync_dockerfile_arg_fallback "PYTHON_VERSION" "${PYTHON_VERSION%.*}"
+  sync_dockerfile_arg_fallback "ALPINE_VERSION" "${ALPINE_VERSION}"
+  sync_dockerfile_arg_fallback "ALPINE_MINOR" "${ALPINE_MINOR}"
+}
 
 TMP_DIR=$(mktemp -d)
 trap 'rm -rf "$TMP_DIR"' EXIT
@@ -53,7 +92,7 @@ parse_apkindex() {
 echo "⬇️ Downloading Alpine package indices..."
 for repo in main community; do
   index_archive="${TMP_DIR}/${repo}.tar.gz"
-  curl -sL "https://dl-cdn.alpinelinux.org/alpine/v${ALPINE_VERSION}/${repo}/x86_64/APKINDEX.tar.gz" \
+  curl -sL "https://dl-cdn.alpinelinux.org/alpine/v${ALPINE_MINOR}/${repo}/x86_64/APKINDEX.tar.gz" \
     -o "$index_archive"
   tar -xzf "$index_archive" -C "$TMP_DIR"
   parse_apkindex "${TMP_DIR}/APKINDEX"
@@ -68,7 +107,7 @@ latest_apk_version() {
   printf '%s\n' "$versions" | sed '/^$/d' | sort -V | tail -1
 }
 
-echo "🔍 Updating Dockerfile..."
+echo "🔍 Updating Alpine apk pins in Dockerfile..."
 
 cp "$DOCKERFILE" "${DOCKERFILE}.bak"
 
@@ -99,14 +138,13 @@ while IFS= read -r match; do
 
 done < <(grep -oE '[a-z0-9][a-z0-9_-]*=[0-9][a-z0-9._]+-r[0-9]+' "$DOCKERFILE" || true)
 
-# --- Update pip-installed Python packages (PEP 440: name==X.Y.Z) ---
-echo "🐍 Updating pip-pinned packages..."
+# --- Update pip / uv in versions.env (PyPI), then mirror into Dockerfile :-fallbacks ---
+echo "🐍 Updating pip/uv pins in versions.env..."
 
-while IFS= read -r match; do
-  [[ "$match" =~ ^([a-zA-Z0-9][a-zA-Z0-9_-]*)==([0-9][a-z0-9._]*)$ ]] || continue
-
-  pkg="${BASH_REMATCH[1]}"
-  current="${BASH_REMATCH[2]}"
+for pkg_key in pip:PIP_VERSION uv:UV_VERSION; do
+  pkg="${pkg_key%%:*}"
+  env_key="${pkg_key##*:}"
+  current="${!env_key}"
 
   latest=$(curl -sf "https://pypi.org/pypi/${pkg}/json" | python3 -c "import sys,json; print(json.load(sys.stdin)['info']['version'])" 2>/dev/null || true)
 
@@ -120,12 +158,14 @@ while IFS= read -r match; do
     continue
   fi
 
-  echo "⬆️  $pkg: $current → $latest"
+  echo "⬆️  $pkg: $current → $latest (versions.env ${env_key})"
+  update_versions_env_pin "${env_key}" "${latest}"
+done
 
-  escaped_current="${current//./\\.}"
-  sed -i "s#\(^\|[[:space:]]\)${pkg}==${escaped_current}\([[:space:]]\|$\)#\1${pkg}==${latest}\2#g" "$DOCKERFILE"
-
-done < <(grep -oE '[a-zA-Z0-9][a-zA-Z0-9_-]*==[0-9][a-z0-9._]*' "$DOCKERFILE" || true)
+# Re-load pins after versions.env edits, sync .python-version + Dockerfile fallbacks
+# shellcheck source=load-versions-env.sh
+source "${SCRIPT_DIR}/load-versions-env.sh"
+sync_all_dockerfile_fallbacks
 
 echo "✅ Done. Backup at ${DOCKERFILE}.bak"
 rm -rf "$TMP_DIR"

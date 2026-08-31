@@ -1,9 +1,8 @@
 {
 	"name": "Debian (DinD)",
-	"build": {
-		"dockerfile": "Dockerfile",
-		"context": "."
-	},
+	"dockerComposeFile": "docker-compose.yml",
+	"service": "devcontainer",
+	"workspaceFolder": "/workspaces/m4.2_advanced_middleware_api",
 	"features": {
 		"ghcr.io/devcontainers/features/docker-in-docker:4": {
 			"moby": false,
