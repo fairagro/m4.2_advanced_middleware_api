@@ -60,6 +60,7 @@ def test_redacting_formatter_covers_message_and_exception_text() -> None:
 def test_install_url_userinfo_redaction_is_idempotent() -> None:
     """Wrapping handlers twice must not nest forever."""
     root = logging.getLogger()
+    previous_filters = list(root.filters)
     handler = logging.StreamHandler()
     handler.setFormatter(logging.Formatter("%(message)s"))
     root.addHandler(handler)
@@ -70,11 +71,13 @@ def test_install_url_userinfo_redaction_is_idempotent() -> None:
         assert not isinstance(handler.formatter._wrapped, RedactingFormatter)  # noqa: SLF001
     finally:
         root.removeHandler(handler)
+        root.filters = previous_filters
 
 
 def test_install_url_userinfo_redaction_rewraps_replaced_formatter() -> None:
     """If a handler formatter is replaced after install, the next install re-wraps."""
     root = logging.getLogger()
+    previous_filters = list(root.filters)
     handler = logging.StreamHandler()
     handler.setFormatter(logging.Formatter("%(message)s"))
     root.addHandler(handler)
@@ -98,3 +101,4 @@ def test_install_url_userinfo_redaction_rewraps_replaced_formatter() -> None:
         )
     finally:
         root.removeHandler(handler)
+        root.filters = previous_filters
