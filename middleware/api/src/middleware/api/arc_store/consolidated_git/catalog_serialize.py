@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import json
+from collections import Counter
 
+from middleware.shared.api_models.common.rocrate import _extract_identifier
 from middleware.shared.json_types import CatalogDatasetRecord, JsonValue, RoCrateContent
 
 
@@ -51,18 +53,43 @@ def extract_catalog_dataset(arc_content: RoCrateContent) -> CatalogDatasetRecord
     return record
 
 
-def _dataset_sort_key(dataset: CatalogDatasetRecord) -> tuple[str, str]:
-    """Primary ``@id``, then canonical JSON for missing/duplicate-``@id`` tie-breaks.
+def catalog_dataset_identifier(dataset: CatalogDatasetRecord) -> str:
+    """Return normalized Dataset ``identifier`` (same rules as RO-Crate root entity)."""
+    try:
+        return _extract_identifier(dataset)
+    except ValueError:
+        return ""
 
-    ``sorted(..., key=...)`` evaluates this once per element (not per comparison).
-    """
-    node_id = dataset.get("@id")
-    id_part = node_id if isinstance(node_id, str) else ""
-    return (id_part, json.dumps(dataset, sort_keys=True, separators=(",", ":"), ensure_ascii=False))
+
+def _dataset_sort_key(
+    dataset: CatalogDatasetRecord,
+    *,
+    identifier: str,
+    identifier_counts: Counter[str],
+) -> tuple[str, str]:
+    """Primary ``identifier``; canonical JSON only for missing/duplicate identifiers."""
+    if not identifier or identifier_counts[identifier] > 1:
+        tie = json.dumps(dataset, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
+    else:
+        tie = ""
+    return (identifier, tie)
 
 
 def serialize_catalog_file(datasets: list[CatalogDatasetRecord]) -> bytes:
     """Serialize Dataset list to byte-stable JSON (UTF-8, sorted keys, stable separators)."""
-    ordered = sorted(datasets, key=_dataset_sort_key)
+    identifiers = [catalog_dataset_identifier(dataset) for dataset in datasets]
+    identifier_counts = Counter(identifiers)
+    indexed = list(zip(datasets, identifiers, strict=True))
+    ordered = [
+        dataset
+        for dataset, _identifier in sorted(
+            indexed,
+            key=lambda item: _dataset_sort_key(
+                item[0],
+                identifier=item[1],
+                identifier_counts=identifier_counts,
+            ),
+        )
+    ]
     text = json.dumps(ordered, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
     return (text + "\n").encode("utf-8")

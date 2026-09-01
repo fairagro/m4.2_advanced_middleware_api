@@ -8,6 +8,9 @@ set -euo pipefail
 
 REAL_GIT="${CURSOR_REAL_GIT:-}"
 if [[ -z "${REAL_GIT}" ]]; then
+  REAL_GIT="$(command -v -p git 2>/dev/null || true)"
+fi
+if [[ -z "${REAL_GIT}" ]]; then
   for candidate in /usr/bin/git /usr/local/bin/git; do
     if [[ -x "${candidate}" ]]; then
       REAL_GIT="${candidate}"
