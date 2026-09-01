@@ -114,7 +114,8 @@ combine-as-imports = true
 
 [tool.ruff.lint.per-file-ignores]
 # Pytest injects fixtures as function arguments; argument-count rules are noise there.
-"middleware/*/tests/**/*.py" = ["SLF001", "PLR0913", "PLR0917"]
+# Magic numbers in asserts/fixtures are normal test data, not production constants.
+"middleware/*/tests/**/*.py" = ["SLF001", "PLR0913", "PLR0917", "PLR2004"]
 
 # Black and isort replaced by ruff format - configurations removed to avoid conflicts
 
@@ -174,6 +175,11 @@ python_functions = ["test_*"]
 filterwarnings = [
     "ignore:GitlabApi.*is deprecated:DeprecationWarning",
     "ignore:GitlabApiConfig.*is deprecated:DeprecationWarning",
+    # Pydantic Field(deprecated=...) on legacy top-level ArcStore keys.
+    # Assert with pytest.warns where needed.
+    "ignore:Top-level git_repo is obsolete:DeprecationWarning",
+    "ignore:Top-level gitlab_api is obsolete:DeprecationWarning",
+    "ignore:Top-level consolidated_git is obsolete:DeprecationWarning",
     # Pydantic emits a bare 'deprecated' warning whenever a deprecated field
     # is *accessed* on a model instance.  In tests we intentionally exercise
     # paths that touch the deprecated gitlab_api field; suppress the noise.
@@ -183,7 +189,7 @@ filterwarnings = [
 # Output and behavior
 addopts = [
     "-v",                        # Verbose output
-  "-ra",                       # Show summary for skipped/xfail/etc. with reasons
+    "-ra",                       # Show summary for skipped/xfail/etc. with reasons
     "--strict-markers",          # Treat unregistered markers as errors
     "--tb=short",                # Shorter traceback format
     "--cov=middleware",          # Enable coverage for middleware packages

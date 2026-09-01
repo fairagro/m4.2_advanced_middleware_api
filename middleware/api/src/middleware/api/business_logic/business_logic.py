@@ -12,24 +12,27 @@ For the two-phase operation:
 """
 
 import logging
-from typing import Any, Self
+from types import TracebackType
+from typing import Self
 
 from middleware.api.arc_store import ArcStore
-from middleware.api.document_store import DocumentStore
-from middleware.api.document_store.arc_document import ArcMetadata
-from middleware.shared.api_models.common.models import ArcOperationResult
-from middleware.shared.api_models.common.rocrate import RoCratePayload
-
-from .arc_manager import ArcManager
-from .config import BusinessLogicConfig
-from .exceptions import (
+from middleware.api.business_logic.arc_manager import ArcManager
+from middleware.api.business_logic.config import BusinessLogicConfig
+from middleware.api.business_logic.exceptions import (
     BusinessLogicError,
     InvalidJsonSemanticError,
     SetupError,
     TransientError,
 )
-from .harvest_manager import HarvestManager
-from .ports import BusinessLogicPorts
+from middleware.api.business_logic.harvest_manager import HarvestManager
+from middleware.api.business_logic.ports import BusinessLogicPorts
+from middleware.api.business_logic.task_payloads import CatalogFinalizeTask
+from middleware.api.document_store import DocumentStore
+from middleware.api.document_store.arc_document import ArcMetadata
+from middleware.api.document_store.harvest_document import HarvestDocument
+from middleware.shared.api_models.common.models import ArcOperationResult, HarvestStatus
+from middleware.shared.api_models.common.rocrate import RoCratePayload
+from middleware.shared.json_types import RoCrateContent
 
 logger = logging.getLogger(__name__)
 
@@ -71,6 +74,7 @@ class BusinessLogic:
         resolved_ports = ports or BusinessLogicPorts()
         self._config = config
         self._doc_store = doc_store
+        self._ports = resolved_ports
         self._broker_health_checker = resolved_ports.broker_health_checker
         self._harvest_manager = HarvestManager.from_config(config.harvest, doc_store)
         self._arc_manager = ArcManager(
@@ -150,13 +154,13 @@ class BusinessLogic:
         return self
 
     async def __aexit__(
-        self, exc_type: type[BaseException] | None, exc_val: BaseException | None, exc_tb: Any | None
+        self, exc_type: type[BaseException] | None, exc_val: BaseException | None, exc_tb: TracebackType | None
     ) -> None:
         """Exit async context, ensuring shutdown is performed."""
         await self.shutdown()
 
     async def create_or_update_arc(
-        self, rdi: str, arc: RoCratePayload | dict[str, Any], client_id: str | None, harvest_id: str | None = None
+        self, rdi: str, arc: RoCratePayload | RoCrateContent, client_id: str | None, harvest_id: str | None = None
     ) -> ArcOperationResult:
         """Create or update an ARC with fast CouchDB storage and async GitLab sync.
 
@@ -182,7 +186,52 @@ class BusinessLogic:
 
         return await self._arc_manager.create_or_update_arc(rdi, arc, client_id, harvest_id)
 
-    async def sync_to_gitlab(self, rdi: str, arc: RoCratePayload | dict[str, Any]) -> None:
+    async def transition_harvest(
+        self,
+        harvest: HarvestDocument,
+        target_status: HarvestStatus,
+        client_id: str | None,
+    ) -> HarvestDocument:
+        """Transition a harvest via :class:`HarvestManager`, then enqueue catalog finalize.
+
+        Delegates status/ownership/statistics updates to
+        ``HarvestManager.transition_harvest``. When ``target_status`` is
+        ``COMPLETED`` and a task dispatcher is configured, always enqueues
+        ``dispatch_finalize_catalog``. Empty/unchanged harvests still enqueue;
+        the store skips commit/push when catalog bytes already match the remote
+        (needed for bootstrap after switching backends and for retry after a
+        failed finalize). Re-POSTing ``COMPLETED`` on an already-``COMPLETED``
+        harvest is an idempotent no-op on the document and re-enqueues finalize
+        (recovery when the prior Celery dispatch failed after the status write).
+
+        Prefer this method from HTTP handlers over calling
+        ``harvest_manager.transition_harvest`` directly so finalize enqueue stays
+        consistent.
+        """
+        updated = await self._harvest_manager.transition_harvest(harvest, target_status, client_id)
+        if target_status == HarvestStatus.COMPLETED and self._ports.task_dispatcher is not None:
+            self._ports.task_dispatcher.dispatch_finalize_catalog(
+                CatalogFinalizeTask(
+                    rdi=updated.rdi,
+                    harvest_id=updated.doc_id,
+                    client_id=client_id,
+                )
+            )
+        return updated
+
+    async def complete_harvest(
+        self,
+        harvest: HarvestDocument,
+        client_id: str | None,
+    ) -> HarvestDocument:
+        """Mark a harvest completed (via :meth:`transition_harvest`, including finalize enqueue)."""
+        return await self.transition_harvest(harvest, HarvestStatus.COMPLETED, client_id)
+
+    async def finalize_catalog(self, rdi: str, *, harvest_id: str | None = None) -> bool:
+        """Publish consolidated catalog for an RDI (worker mode)."""
+        return await self._arc_manager.finalize_catalog(rdi, harvest_id=harvest_id)
+
+    async def sync_to_gitlab(self, rdi: str, arc: RoCratePayload | RoCrateContent) -> None:
         """Synchronize ARC to GitLab storage.
 
         This method performs the slow GitLab sync operation. It must only be

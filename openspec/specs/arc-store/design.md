@@ -2,9 +2,9 @@
 
 ## Module Overview
 
-`ArcStore` (`arc_store/__init__.py`) defines Git persistence. `GitRepo` (`arc_store/git_repo.py`) is the primary,
+`ArcStore` (`arc_store/__init__.py`) defines Git persistence. `GitRepo` (`arc_store/git_repo/`) is the primary,
 Git-server-agnostic implementation: it clones through SSH or HTTPS, writes arctrl ISA files, and pushes. `GitlabApi`
-(`arc_store/gitlab_api.py`) is deprecated and retained only for compatibility.
+(`arc_store/gitlab_api/`) is deprecated and retained only for compatibility.
 
 `ArcManager.sync_to_gitlab` parses queued JSON, selects the backend, and records CouchDB events. The store only handles
 Git.

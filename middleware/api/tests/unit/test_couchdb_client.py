@@ -15,6 +15,7 @@ from middleware.api.document_store.couchdb_client import (
     DocumentConflictError,
     _patch_aiocouch_aiohttp_auth,
 )
+from middleware.shared.json_types import JsonObject
 
 
 @pytest.fixture
@@ -63,6 +64,20 @@ async def test_aiocouch_remote_server_avoids_basicauth_deprecation() -> None:
         and ("BasicAuth" in str(w.message) or "auth' parameter is deprecated" in str(w.message))
     ]
     assert auth_warnings == []
+
+
+@pytest.mark.asyncio
+async def test_aiocouch_remote_server_forwards_client_session_kwargs() -> None:
+    """Patched aiocouch must pass through ClientSession kwargs from upstream callers."""
+    _patch_aiocouch_aiohttp_auth()
+
+    with patch("middleware.api.document_store.couchdb_client.aiohttp.ClientSession") as mock_session:
+        RemoteServer("http://localhost:5984", user="admin", password="secret", timeout=42)
+        mock_session.assert_called_once()
+        _, kwargs = mock_session.call_args
+        assert kwargs["timeout"] == 42  # noqa: PLR2004
+        assert "auth" not in kwargs
+        assert kwargs["headers"]["Authorization"].startswith("Basic ")
 
 
 @pytest.mark.asyncio
@@ -403,7 +418,7 @@ async def test_couchdb_client_find(couchdb_client: CouchDBClient) -> None:
     mock_db.find.return_value = mock_result
     couchdb_client._db = mock_db  # noqa: SLF001
 
-    selector = {"type": "arc"}
+    selector: JsonObject = {"type": "arc"}
     result = await couchdb_client.find(selector, limit=10)
 
     assert result == docs
@@ -416,7 +431,7 @@ async def test_couchdb_client_find_projected(couchdb_client: CouchDBClient) -> N
     couchdb_client._db = MagicMock()  # noqa: SLF001
     couchdb_client._db_name = "test_db"  # noqa: SLF001
 
-    selector = {"type": "arc"}
+    selector: JsonObject = {"type": "arc"}
     fields = ["metadata.events"]
     expected_docs = [{"metadata": {"events": [{"type": "arc_created"}]}}]
 
@@ -440,6 +455,44 @@ async def test_couchdb_client_find_projected(couchdb_client: CouchDBClient) -> N
             "fields": fields,
             "limit": 10,
             "skip": 2,
+        },
+    )
+
+
+@pytest.mark.asyncio
+async def test_couchdb_client_find_page_uses_bookmark_and_sort(couchdb_client: CouchDBClient) -> None:
+    """find_page posts bookmark/sort and returns the next bookmark."""
+    couchdb_client._db = MagicMock()  # noqa: SLF001
+    couchdb_client._db_name = "test_db"  # noqa: SLF001
+
+    expected_docs = [{"_id": "arc_1"}, {"_id": "arc_2"}]
+    mock_response = AsyncMock()
+    mock_response.status = 200
+    mock_response.json = AsyncMock(return_value={"docs": expected_docs, "bookmark": "next-bm"})
+
+    mock_session = MagicMock()
+    mock_session.post.return_value.__aenter__.return_value = mock_response
+    mock_session.post.return_value.__aexit__.return_value = None
+    couchdb_client._session = mock_session  # noqa: SLF001
+
+    selector: JsonObject = {"doc_type": "arc", "rdi": "edal"}
+    sort: list[JsonObject] = [{"doc_type": "asc"}, {"rdi": "asc"}, {"_id": "asc"}]
+    docs, bookmark = await couchdb_client.find_page(
+        selector,
+        limit=2,
+        bookmark="prev-bm",
+        sort=sort,
+    )
+
+    assert docs == expected_docs
+    assert bookmark == "next-bm"
+    mock_session.post.assert_called_once_with(
+        "http://localhost:5984/test_db/_find",
+        json={
+            "selector": selector,
+            "limit": 2,
+            "bookmark": "prev-bm",
+            "sort": sort,
         },
     )
 

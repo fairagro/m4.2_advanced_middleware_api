@@ -18,7 +18,8 @@ from gitlab.exceptions import GitlabError, GitlabGetError
 from gitlab.v4.objects import Project
 from opentelemetry import trace
 
-from . import ArcStoreError
+from middleware.api.arc_store import ArcStoreError
+from middleware.shared.security import UrlStr
 
 logger = logging.getLogger(__name__)
 
@@ -192,7 +193,7 @@ class RemoteGitProvider(ABC):
         pass
 
     @abstractmethod
-    def get_repo_url(self, arc_id: str, authenticated: bool = True) -> str:
+    def get_repo_url(self, arc_id: str, authenticated: bool = True) -> UrlStr:
         """Construct the URL for the remote repository."""
         pass
 
@@ -263,9 +264,9 @@ class FileSystemGitProvider(RemoteGitProvider):
             remote_path.parent.mkdir(parents=True, exist_ok=True)
             Repo.init(remote_path, bare=True)
 
-    def get_repo_url(self, arc_id: str, authenticated: bool = True) -> str:  # noqa: ARG002
+    def get_repo_url(self, arc_id: str, authenticated: bool = True) -> UrlStr:  # noqa: ARG002
         """Return the file:// URL for the repository."""
-        return f"{self.base_url}/{self.group}/{arc_id}.git"
+        return UrlStr(f"{self.base_url}/{self.group}/{arc_id}.git")
 
     def check_health(self) -> bool:
         """FileSystem 'remote' is always considered healthy if base URL starts with file://."""
@@ -327,18 +328,19 @@ class GitlabGitProvider(RemoteGitProvider):
                 logger.error("Failed to ensure GitLab project exists: %s", msg)
                 raise ArcStoreError(msg) from e
 
-    def get_repo_url(self, arc_id: str, authenticated: bool = True) -> str:
+    def get_repo_url(self, arc_id: str, authenticated: bool = True) -> UrlStr:
         """Construct the GitLab repository URL, optionally with auth token."""
         repo_url = f"{self.url}/{self.group_name}/{arc_id}.git"
         if not authenticated or not self.token:
-            return repo_url
+            return UrlStr(repo_url)
 
-        safe_token = quote(self.token)
+        # Escape the full userinfo token (default quote() leaves "/" unescaped).
+        safe_token = quote(self.token, safe="")
         if repo_url.startswith("https://"):
-            return f"https://oauth2:{safe_token}@{repo_url[8:]}"
+            return UrlStr(f"https://oauth2:{safe_token}@{repo_url[8:]}")
         if repo_url.startswith("http://"):
-            return f"http://oauth2:{safe_token}@{repo_url[7:]}"
-        return repo_url
+            return UrlStr(f"http://oauth2:{safe_token}@{repo_url[7:]}")
+        return UrlStr(repo_url)
 
     def check_health(self) -> bool:
         """Check if the GitLab server is reachable."""

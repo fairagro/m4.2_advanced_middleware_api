@@ -1,11 +1,14 @@
 """ARC document schema for CouchDB."""
 
+from __future__ import annotations
+
 from datetime import datetime
-from typing import Annotated, Any
+from typing import Annotated
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from middleware.shared.api_models.common.models import ArcEventType, ArcLifecycleStatus
+from middleware.shared.json_types import JsonObject, RoCrateContent
 
 
 class ArcEvent(BaseModel):
@@ -15,7 +18,7 @@ class ArcEvent(BaseModel):
     type: Annotated[ArcEventType, Field(description="Event type")]
     message: Annotated[str, Field(description="Human-readable event description")]
     harvest_id: Annotated[str | None, Field(description="Associated harvest ID")] = None
-    metadata: Annotated[dict[str, Any], Field(description="Additional event metadata")] = Field(default_factory=dict)
+    metadata: Annotated[JsonObject, Field(description="Additional event metadata")] = Field(default_factory=dict)
 
 
 class GitMetadata(BaseModel):
@@ -43,7 +46,7 @@ class ArcMetadata(BaseModel):
 
     @model_validator(mode="before")
     @classmethod
-    def _backfill_last_changed(cls, data: Any) -> Any:
+    def _backfill_last_changed(cls, data: JsonObject | ArcMetadata) -> JsonObject | ArcMetadata:
         """Backward compat: old documents without last_changed default to last_seen."""
         if isinstance(data, dict) and not data.get("last_changed"):
             data = dict(data)
@@ -67,7 +70,7 @@ class ArcDocument(BaseModel):
     # ARC data
     schema_version: Annotated[int, Field(description="Schema version of the document")] = 1
     rdi: Annotated[str, Field(description="Research Data Infrastructure identifier")]
-    arc_content: Annotated[dict[str, Any], Field(description="RO-Crate JSON content")]
+    arc_content: Annotated[RoCrateContent, Field(description="RO-Crate JSON content")]
     metadata: Annotated[ArcMetadata, Field(description="ARC metadata")]
 
     model_config = ConfigDict(populate_by_name=True)

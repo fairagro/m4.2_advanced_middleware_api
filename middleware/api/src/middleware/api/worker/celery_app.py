@@ -12,11 +12,23 @@ import sys
 from pathlib import Path
 
 from celery import Celery
+from celery.signals import after_setup_logger, after_setup_task_logger
+
+from middleware.shared.config.logging import install_url_userinfo_redaction
 
 from .config import WorkerConfig
 from .tracing import setup_worker_tracing
 
 logger = logging.getLogger(__name__)
+
+
+@after_setup_logger.connect
+@after_setup_task_logger.connect
+def _install_url_redaction_on_celery_logging(logger: logging.Logger, **_kwargs: object) -> None:
+    """Celery replaces log handlers at worker start; re-wrap them for credential redaction."""
+    install_url_userinfo_redaction(logger)
+    install_url_userinfo_redaction()
+
 
 # Load config from YAML file
 config_path = Path(os.environ.get("MIDDLEWARE_API_CONFIG", "/run/secrets/middleware-api-config"))

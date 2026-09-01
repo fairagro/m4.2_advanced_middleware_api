@@ -12,9 +12,18 @@ import pytest
 from git.exc import GitCommandError
 from pydantic import SecretStr
 
-from middleware.api.arc_store.config import GitRepoConfig
-from middleware.api.arc_store.git_repo import GitContext, GitContextConfig, GitRepo, is_soft_git_error
-from middleware.api.arc_store.remote_git_provider import GitProjectMetadata
+from middleware.api.arc_store.consolidated_git import ConsolidatedGitConfig
+from middleware.api.arc_store.git_cli_settings import GitCliSettings, GitContextConfig
+from middleware.api.arc_store.git_context import (
+    GitContext,
+    format_git_error_detail,
+    is_soft_git_error,
+    is_transient_git_error,
+    record_git_span_failure,
+)
+from middleware.api.arc_store.git_repo import GitRepo, GitRepoConfig
+from middleware.api.arc_store.git_repo.remote_git_provider import GitProjectMetadata
+from middleware.shared.security import UrlStr
 
 _TEST_GIT_METADATA = GitProjectMetadata(
     rdi="test-rdi",
@@ -50,7 +59,7 @@ def git_repo(repo_config: GitRepoConfig) -> GitRepo:
 def test_git_repo_url_generation(git_repo: GitRepo) -> None:
     """Test standard repo URL generation."""
     url = git_repo._remote_provider.get_repo_url("arc123", authenticated=False)
-    assert url == "https://gitlab.example.com/mygroup/arc123.git"
+    assert url.unredacted() == "https://gitlab.example.com/mygroup/arc123.git"
 
 
 def test_git_repo_context_config_generation(git_repo: GitRepo) -> None:
@@ -58,14 +67,50 @@ def test_git_repo_context_config_generation(git_repo: GitRepo) -> None:
     config = git_repo._get_context_config("arc123")
     assert config.local_path is not None
     assert config.local_path == git_repo._config.cache_dir / "arc123"
-    assert config.repo_url.get_secret_value() == "https://gitlab.example.com/mygroup/arc123.git"
+    assert config.repo_url.unredacted() == "https://gitlab.example.com/mygroup/arc123.git"
+
+
+def test_git_repo_context_config_embeds_token_once() -> None:
+    """HTTPS repo URLs must not double-embed oauth2 credentials."""
+    config = GitRepoConfig(
+        url="https://gitlab.example.com",
+        group="mygroup",
+        token=SecretStr("secret-token"),
+        cache_dir=Path(tempfile.gettempdir()),
+    )
+    repo = GitRepo(config)
+    ctx_config = repo._get_context_config("arc123")
+    repo_url = ctx_config.repo_url.unredacted()
+    assert repo_url == "https://oauth2:secret-token@gitlab.example.com/mygroup/arc123.git"
+    assert "secret-token" not in str(ctx_config.repo_url)
+    assert repo_url.count("oauth2:") == 1
+
+
+def test_authenticated_repo_url_skips_already_embedded_credentials() -> None:
+    """Do not double-embed oauth2 when the remote URL already carries userinfo."""
+    settings = GitCliSettings(token=SecretStr("secret-token"))
+    url = "https://oauth2:existing-token@gitlab.example.com/group/catalog.git"
+    assert settings.authenticated_repo_url(url).unredacted() == url
+
+
+def test_authenticated_repo_url_case_insensitive_scheme_and_quotes_slash() -> None:
+    """Uppercase schemes still get tokens; '/' in tokens must be percent-encoded."""
+    settings = GitCliSettings(token=SecretStr("tok/en"))
+    assert (
+        settings.authenticated_repo_url("HTTPS://gitlab.example.com/group/catalog.git").unredacted()
+        == "https://oauth2:tok%2Fen@gitlab.example.com/group/catalog.git"
+    )
+    assert (
+        settings.authenticated_repo_url("HTTP://gitlab.example.com/group/catalog.git").unredacted()
+        == "http://oauth2:tok%2Fen@gitlab.example.com/group/catalog.git"
+    )
 
 
 def test_git_context_ensure_path(tmp_path: Path) -> None:
     """Test that GitContext creates local directories."""
     target_path = tmp_path / "deep" / "nested" / "repo"
     config = GitContextConfig(
-        repo_url=SecretStr("https://example.com/repo.git"),
+        repo_url=UrlStr("https://example.com/repo.git"),
         branch="main",
         user_name=None,
         user_email=None,
@@ -80,14 +125,14 @@ def test_git_context_ensure_path(tmp_path: Path) -> None:
     # The actual leaf dir is created by git clone/init usually, but parent must exist
 
 
-@patch("middleware.api.arc_store.git_repo.Repo")
+@patch("middleware.api.arc_store.git_context.Repo")
 def test_git_context_enter_clone(mock_repo: MagicMock, tmp_path: Path) -> None:
     """Test GitContext cloning behavior."""
     target_path = tmp_path / "repo"
     target_path.mkdir()
 
     config = GitContextConfig(
-        repo_url=SecretStr("https://example.com/repo.git"),
+        repo_url=UrlStr("https://example.com/repo.git"),
         branch="main",
         user_name=None,
         user_email=None,
@@ -103,7 +148,7 @@ def test_git_context_enter_clone(mock_repo: MagicMock, tmp_path: Path) -> None:
     mock_repo.clone_from.return_value.close.assert_called_once()
 
 
-@patch("middleware.api.arc_store.git_repo.Repo")
+@patch("middleware.api.arc_store.git_context.Repo")
 def test_git_context_enter_existing(mock_repo: MagicMock, tmp_path: Path) -> None:
     """Test GitContext connecting to existing repo."""
     target_path = tmp_path / "repo"
@@ -111,7 +156,7 @@ def test_git_context_enter_existing(mock_repo: MagicMock, tmp_path: Path) -> Non
     (target_path / ".git").mkdir()
 
     config = GitContextConfig(
-        repo_url=SecretStr("https://example.com/repo.git"),
+        repo_url=UrlStr("https://example.com/repo.git"),
         branch="main",
         user_name=None,
         user_email=None,
@@ -134,7 +179,16 @@ def test_default_cache_dir_validator() -> None:
         group="b",
         cache_dir=None,  # type: ignore[arg-type]
     )
-    assert config.cache_dir is not None
+    assert config.cache_dir == Path(tempfile.gettempdir()) / "middleware_git_cache"
+
+
+def test_consolidated_null_cache_dir_uses_catalog_default() -> None:
+    """Explicit null must use ConsolidatedGitConfig's default_factory, not GitRepo's."""
+    config = ConsolidatedGitConfig.model_validate({
+        "repo_url": "file:///tmp/catalog.git",
+        "cache_dir": None,
+    })
+    assert config.cache_dir == Path(tempfile.gettempdir()) / "middleware_catalog_git_cache"
 
 
 @pytest.mark.asyncio
@@ -149,7 +203,7 @@ async def test_create_or_update(git_repo: GitRepo, tmp_path: Path) -> None:
     # For asyncio tests, we can patch the loop or just rely on the actual loop running the synchronous lambda
 
     # Let's patch GitContext to avoid real git operations and file system
-    with patch("middleware.api.arc_store.git_repo.GitContext") as mock_ctx:
+    with patch("middleware.api.arc_store.git_repo.store.GitContext") as mock_ctx:
         mock_ctx_instance = mock_ctx.return_value
         mock_ctx_instance.__enter__.return_value = mock_ctx_instance
         # Mock repo path
@@ -206,7 +260,7 @@ async def test_create_or_update(git_repo: GitRepo, tmp_path: Path) -> None:
             type(mock_ctx_instance).path = PropertyMock(return_value=str(fake_repo_path))
 
             with patch(
-                "middleware.api.arc_store.git_repo.git_project_metadata_from_arc",
+                "middleware.api.arc_store.git_repo.store.git_project_metadata_from_arc",
                 return_value=_TEST_GIT_METADATA,
             ):
                 await git_repo._create_or_update(arc_id, arc, rdi=_TEST_RDI)
@@ -229,8 +283,8 @@ async def test_get_arc_success(git_repo: GitRepo) -> None:
     arc_id = "test_arc"
 
     with (
-        patch("middleware.api.arc_store.git_repo.GitContext") as mock_ctx,
-        patch("middleware.api.arc_store.git_repo.ARC") as mock_arc,
+        patch("middleware.api.arc_store.git_repo.store.GitContext") as mock_ctx,
+        patch("middleware.api.arc_store.git_repo.store.ARC") as mock_arc,
         patch("asyncio.get_running_loop") as mock_get_loop,
     ):
         mock_loop = MagicMock()
@@ -261,7 +315,7 @@ async def test_get_arc_success(git_repo: GitRepo) -> None:
 async def test_get_arc_repo_fail(git_repo: GitRepo) -> None:
     """Test _get handles repo init failure."""
     with (
-        patch("middleware.api.arc_store.git_repo.GitContext") as mock_ctx,
+        patch("middleware.api.arc_store.git_repo.store.GitContext") as mock_ctx,
         patch("asyncio.get_running_loop") as mock_get_loop,
     ):
         mock_loop = MagicMock()
@@ -288,8 +342,8 @@ async def test_get_arc_repo_fail(git_repo: GitRepo) -> None:
 async def test_get_arc_load_fail(git_repo: GitRepo) -> None:
     """Test _get handles ARC load failure."""
     with (
-        patch("middleware.api.arc_store.git_repo.GitContext") as mock_ctx,
-        patch("middleware.api.arc_store.git_repo.ARC") as mock_arc,
+        patch("middleware.api.arc_store.git_repo.store.GitContext") as mock_ctx,
+        patch("middleware.api.arc_store.git_repo.store.ARC") as mock_arc,
         patch("asyncio.get_running_loop") as mock_get_loop,
     ):
         mock_loop = MagicMock()
@@ -373,8 +427,8 @@ async def test_delete(git_repo: GitRepo) -> None:
 async def test_get_arc_load_os_error(git_repo: GitRepo) -> None:
     """Test _get handles ARC load OSError."""
     with (
-        patch("middleware.api.arc_store.git_repo.GitContext") as mock_ctx,
-        patch("middleware.api.arc_store.git_repo.ARC") as mock_arc,
+        patch("middleware.api.arc_store.git_repo.store.GitContext") as mock_ctx,
+        patch("middleware.api.arc_store.git_repo.store.ARC") as mock_arc,
         patch("asyncio.get_running_loop") as mock_get_loop,
     ):
         mock_loop = MagicMock()
@@ -402,9 +456,9 @@ async def test_get_arc_load_os_error(git_repo: GitRepo) -> None:
 async def test_get_arc_cleanup_os_error(git_repo: GitRepo) -> None:
     """Test _get handles OSError during cleanup."""
     with (
-        patch("middleware.api.arc_store.git_repo.GitContext") as mock_ctx,
-        patch("middleware.api.arc_store.git_repo.ARC") as mock_arc,
-        patch("middleware.api.arc_store.git_repo.shutil.rmtree") as mock_rmtree,
+        patch("middleware.api.arc_store.git_repo.store.GitContext") as mock_ctx,
+        patch("middleware.api.arc_store.git_repo.store.ARC") as mock_arc,
+        patch("middleware.api.arc_store.git_repo.store.shutil.rmtree") as mock_rmtree,
         patch("asyncio.get_running_loop") as mock_get_loop,
     ):
         mock_loop = MagicMock()
@@ -426,7 +480,7 @@ async def test_get_arc_cleanup_os_error(git_repo: GitRepo) -> None:
         mock_rmtree.side_effect = OSError("Cleanup failed")
 
         # We need to make sure the path exists so rmtree is called
-        with patch("middleware.api.arc_store.git_repo.Path.exists", return_value=True):
+        with patch("middleware.api.arc_store.git_repo.store.Path.exists", return_value=True):
             result = await git_repo._get("arc1")
 
         assert result == "MyARC"
@@ -444,7 +498,133 @@ def test_is_soft_git_error() -> None:
     assert is_soft_git_error(err) is False
 
 
-@patch("middleware.api.arc_store.git_repo.Repo")
+@pytest.mark.parametrize(
+    ("action", "expected_soft"),
+    [
+        ("ls-remote", True),
+        ("clone", True),
+        ("push", False),
+        ("fetch", False),
+        ("reset", False),
+    ],
+)
+def test_run_git_command_soft_span_status_depends_on_action(
+    action: str,
+    expected_soft: bool,
+    tmp_path: Path,
+) -> None:
+    """Soft 'not found' is expected only for probe/init actions, not push/fetch/reset."""
+    config = GitContextConfig(
+        repo_url=UrlStr("https://example.com/repo.git"),
+        branch="main",
+        user_name=None,
+        user_email=None,
+        local_path=tmp_path / "repo",
+    )
+    ctx = GitContext(config)
+    soft_err = GitCommandError(action, 1, stderr="repository not found")
+
+    def _boom() -> None:
+        raise soft_err
+
+    with patch("middleware.api.arc_store.git_context.record_git_span_failure") as record:
+        with pytest.raises(GitCommandError):
+            ctx._run_git_command(action, _boom)
+        record.assert_called_once()
+        assert record.call_args.kwargs.get("expected", False) is expected_soft
+
+
+def test_is_transient_git_error_network_and_push_conflict() -> None:
+    """Network failures and concurrent non-fast-forward pushes are retryable."""
+    network = GitCommandError("fetch", 1, "Could not resolve host: gitlab.example.com")
+    assert is_transient_git_error(network) is True
+
+    push_conflict = GitCommandError(
+        "push",
+        1,
+        stderr="! [rejected] main -> main (non-fast-forward)\nerror: failed to push some refs to 'origin'",
+    )
+    assert is_transient_git_error(push_conflict) is True
+
+    fetch_first = GitCommandError(
+        "push",
+        1,
+        stderr=(
+            "! [rejected] main -> main (fetch first)\n"
+            "error: failed to push some refs to 'origin'\n"
+            "hint: Updates were rejected because the remote contains work"
+        ),
+    )
+    assert is_transient_git_error(fetch_first) is True
+
+    permanent = GitCommandError("push", 1, stderr="remote: HTTP Basic: Access denied")
+    assert is_transient_git_error(permanent) is False
+
+
+@pytest.mark.parametrize(
+    "stderr",
+    [
+        (
+            "remote: GitLab: You are not allowed to push code to protected branches "
+            "on this project.\n"
+            "! [remote rejected] main -> main (pre-receive hook declined)\n"
+            "error: failed to push some refs to 'https://gitlab.example.com/g/c.git'"
+        ),
+        (
+            "! [remote rejected] main -> main (hook declined)\n"
+            "error: failed to push some refs to 'origin'\n"
+            "hint: Updates were rejected because a hook declined the push"
+        ),
+        (
+            "remote: GitLab: The project you were looking for could not be found "
+            "or you don't have permission to view it.\n"
+            "fatal: unable to access '...': The requested URL returned error: 403\n"
+            "error: failed to push some refs to 'origin'"
+        ),
+    ],
+)
+def test_is_transient_git_error_rejects_permanent_push_failures(stderr: str) -> None:
+    """Generic push-rejection wrappers must not be treated as retryable."""
+    exc = GitCommandError("push", 1, stderr=stderr)
+    assert is_transient_git_error(exc) is False
+
+
+def test_format_git_error_detail_prefers_stderr() -> None:
+    """Error details prefer concise stderr over the full GitCommandError string."""
+    exc = GitCommandError(
+        "push",
+        1,
+        stderr="error: failed to push some refs to 'https://example.com/repo.git'",
+    )
+    detail = format_git_error_detail(exc)
+    assert "failed to push some refs" in detail
+    assert "https://example.com/repo.git" in detail
+    assert "Cmd('push')" not in detail
+
+
+def test_record_git_span_failure_redacts_oauth_token() -> None:
+    """OTEL span events/status must not receive raw oauth2 userinfo."""
+    span = MagicMock()
+    detail = "failed to push to 'https://oauth2:secret-token@gitlab.example.com/g/c.git'"
+
+    record_git_span_failure(span, detail)
+
+    span.add_event.assert_called_once()
+    event_attrs = span.add_event.call_args.kwargs["attributes"]
+    assert "secret-token" not in event_attrs["stderr"]
+    assert "https://***@gitlab.example.com/g/c.git" in event_attrs["stderr"]
+    status = span.set_status.call_args.args[0]
+    assert "secret-token" not in status.description
+    span.record_exception.assert_not_called()
+
+    span.reset_mock()
+    record_git_span_failure(span, detail, expected=True)
+    assert span.add_event.call_args.args[0] == "git.expected_failure"
+    status = span.set_status.call_args.args[0]
+    assert status.status_code.name == "OK"
+
+
+@patch("middleware.api.arc_store.git_context.Repo")
 def test_git_context_sync_fail(mock_repo: MagicMock, tmp_path: Path) -> None:
     """Test GitContext._sync_existing_repo handles failures."""
     target_path = tmp_path / "repo"
@@ -452,7 +632,7 @@ def test_git_context_sync_fail(mock_repo: MagicMock, tmp_path: Path) -> None:
     (target_path / ".git").mkdir()
 
     config = GitContextConfig(
-        repo_url=SecretStr("https://example.com/repo.git"),
+        repo_url=UrlStr("https://example.com/repo.git"),
         branch="main",
         user_name=None,
         user_email=None,

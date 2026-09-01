@@ -16,6 +16,9 @@
 	"containerEnv": {
 		"UV_LINK_MODE": "copy"
 	},
+	"remoteEnv": {
+		"PATH": "/workspaces/m4.2_advanced_middleware_api/scripts/bin:${containerEnv:PATH}"
+	},
 	"customizations": {
 		"vscode": {
 			"extensions": [

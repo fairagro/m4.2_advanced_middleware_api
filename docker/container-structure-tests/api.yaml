@@ -23,6 +23,10 @@ fileExistenceTests:
     path: '/middleware'
     shouldExist: false  # Source code should not be in runtime
 
+  - name: 'JSON-LD context files bundled by PyInstaller'
+    path: '/api/middleware-api/_internal/middleware/api/arc_store/consolidated_git/jsonld_contexts/schemaorg-30.0-context.jsonld'
+    shouldExist: true
+
 # File content tests
 fileContentTests:
   - name: 'Non-root user created'

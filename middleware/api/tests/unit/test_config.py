@@ -139,7 +139,7 @@ def test_config_mutual_exclusivity_none() -> None:
     }
     with pytest.raises(ValidationError) as exc:
         Config.model_validate(config_data)
-    assert "Either git_repo or gitlab_api must be configured" in str(exc.value)
+    assert "One of arc_store or git_repo, gitlab_api, consolidated_git must be configured" in str(exc.value)
 
 
 def test_config_mutual_exclusivity_both(tmp_path: Path) -> None:
@@ -152,7 +152,7 @@ def test_config_mutual_exclusivity_both(tmp_path: Path) -> None:
     }
     with pytest.raises(ValidationError) as exc:
         Config.model_validate(config_data)
-    assert "Only one of git_repo or gitlab_api can be configured" in str(exc.value)
+    assert "Only one ArcStore backend can be configured" in str(exc.value)
 
 
 def test_config_from_yaml_file_not_found() -> None:

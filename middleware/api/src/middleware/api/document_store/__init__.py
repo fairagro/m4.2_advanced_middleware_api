@@ -1,11 +1,12 @@
 """Contains the DocumentStore interface and its implementations."""
 
 from abc import ABC, abstractmethod
-from typing import Any
+from collections.abc import AsyncIterator
 
-from .arc_document import ArcEvent, ArcMetadata
-from .harvest_document import HarvestDocument, HarvestStatistics
-from .task_record import TaskRecord
+from middleware.api.document_store.arc_document import ArcEvent, ArcMetadata
+from middleware.api.document_store.harvest_document import HarvestDocument, HarvestStatistics, HarvestUpdatePayload
+from middleware.api.document_store.task_record import TaskRecord
+from middleware.shared.json_types import RoCrateContent
 
 
 class DocumentStoreError(Exception):
@@ -52,7 +53,7 @@ class DocumentStore(ABC):
     async def store_arc(
         self,
         rdi: str,
-        arc_content: dict[str, Any],
+        arc_content: RoCrateContent,
         identifier: str,
         harvest_id: str | None = None,
     ) -> ArcStoreResult:
@@ -70,7 +71,7 @@ class DocumentStore(ABC):
         raise NotImplementedError
 
     @abstractmethod
-    async def get_arc_content(self, arc_id: str) -> dict[str, Any] | None:
+    async def get_arc_content(self, arc_id: str) -> RoCrateContent | None:
         """Get raw ARC RO-Crate JSON.
 
         Args:
@@ -179,7 +180,7 @@ class DocumentStore(ABC):
         raise NotImplementedError
 
     @abstractmethod
-    async def update_harvest(self, harvest_id: str, updates: dict[str, Any]) -> HarvestDocument:
+    async def update_harvest(self, harvest_id: str, updates: HarvestUpdatePayload) -> HarvestDocument:
         """Update a harvest record.
 
         Args:
@@ -238,4 +239,19 @@ class DocumentStore(ABC):
         Args:
             task_record: Task record model to persist
         """
+        raise NotImplementedError
+
+    @abstractmethod
+    async def iter_arc_contents_by_rdi(self, rdi: str) -> AsyncIterator[tuple[str, RoCrateContent]]:
+        """Yield ``(arc_id, arc_content)`` for ARC documents of an RDI.
+
+        Implementations MUST stream (paginate) so callers need not hold all
+        RO-Crate bodies in memory at once. Prefer stable cursors (e.g. CouchDB
+        bookmarks) over offset ``skip`` paging for multi-page scans.
+
+        Raises:
+            ValueError: If a stored ARC document has an unexpected shape.
+        """
+        if False:  # pragma: no cover — async generator stub for abstract method
+            yield ("", {})
         raise NotImplementedError

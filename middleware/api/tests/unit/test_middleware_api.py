@@ -19,6 +19,7 @@ from middleware.shared.api_models import (
     ArcResponse,
     ArcStatus,
 )
+from middleware.shared.config.logging import RedactingFormatter
 
 pytestmark = pytest.mark.filterwarnings("ignore:gitlab_api configuration is deprecated.*:DeprecationWarning")
 
@@ -30,7 +31,12 @@ def test_uvicorn_access_logger_uses_api_format() -> None:
     assert access_logger.handlers, "uvicorn.access logger must have a handler"
     formatter = access_logger.handlers[0].formatter
     assert formatter is not None
-    assert formatter._fmt == "%(asctime)s %(levelname)s %(name)s: %(message)s"
+    # RedactingFormatter wraps the real layout; assert on the effective format.
+    effective = formatter._wrapped if isinstance(formatter, RedactingFormatter) else formatter  # noqa: SLF001
+    assert effective is not None
+    assert effective._fmt == "%(asctime)s %(levelname)s %(name)s: %(message)s"  # noqa: SLF001
+    # Outer wrapper must expose the same layout for formatter._fmt introspection.
+    assert formatter._fmt == effective._fmt  # noqa: SLF001
 
 
 def test_whoami_success(client: TestClient, middleware_api: Api, cert: str) -> None:

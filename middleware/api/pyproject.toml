@@ -21,6 +21,7 @@ dependencies = [
   "uvicorn>=0.35.0",
   "celery-types>=0.24.0",
   "aiocouch>=2.0.0",
+  "pyld>=2.0.4",
 ]
 
 [project.scripts]

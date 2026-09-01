@@ -7,8 +7,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 from pydantic import ValidationError
 
-from middleware.api.arc_store.config import GitRepoConfig
-from middleware.api.arc_store.git_repo import GitRepo
+from middleware.api.arc_store.git_repo import GitRepo, GitRepoConfig
 
 
 def test_validate_url_scheme_valid() -> None:
@@ -23,6 +22,17 @@ def test_validate_url_scheme_invalid() -> None:
     with pytest.raises(ValidationError) as excinfo:
         GitRepoConfig(url="ftp://example.com/repo.git", group="group", cache_dir=Path("/tmp"))  # nosec B108
     assert "Git URL must start with one of: ('https://', 'file://', 'http://')" in str(excinfo.value)
+
+
+def test_validate_url_rejects_embedded_userinfo() -> None:
+    """Config URLs must not carry credentials; operators use the token field."""
+    with pytest.raises(ValidationError) as excinfo:
+        GitRepoConfig(
+            url="https://oauth2:secret-token@example.com/repo.git",
+            group="group",
+            cache_dir=Path("/tmp"),  # nosec B108
+        )
+    assert "must not embed credentials in userinfo" in str(excinfo.value)
 
 
 def test_check_health_file_scheme() -> None:

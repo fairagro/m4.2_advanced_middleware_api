@@ -19,6 +19,8 @@ from fastapi.responses import JSONResponse
 from opentelemetry.sdk._logs import LoggerProvider
 from opentelemetry.sdk.trace import TracerProvider
 
+from middleware.shared.config.logging import install_url_userinfo_redaction
+
 from ..business_logic import BusinessLogicFactory
 from ..business_logic.exceptions import (
     AccessDeniedError,
@@ -93,6 +95,7 @@ logging.basicConfig(
     format="%(asctime)s %(levelname)s %(name)s: %(message)s",
     force=True,
 )
+install_url_userinfo_redaction()
 
 
 def _configure_uvicorn_loggers(log_level: str) -> None:
@@ -106,6 +109,8 @@ def _configure_uvicorn_loggers(log_level: str) -> None:
         uvicorn_logger.handlers = root_handlers[:]
         uvicorn_logger.setLevel(getattr(logging, log_level))
         uvicorn_logger.propagate = False
+
+    install_url_userinfo_redaction()
 
 
 _configure_uvicorn_loggers(loaded_config.log_level)
@@ -165,8 +170,8 @@ class Api:
         )
         self.common_deps = CommonApiDependencies(self._config)
 
-        self._tracer_provider: TracerProvider | None = None
-        self._logger_provider: LoggerProvider | None = None
+        # Bundled so Api stays under pylint's instance-attribute limit.
+        self._otel: tuple[TracerProvider | None, LoggerProvider | None] = (None, None)
 
         logger.debug("API configuration: %s", self._config.model_dump())
 
@@ -190,14 +195,15 @@ class Api:
                     raise
             finally:
                 # Cleanup OTEL
-                if self._tracer_provider is not None:
+                tracer_provider, logger_provider = self._otel
+                if tracer_provider is not None:
                     try:
-                        self._tracer_provider.shutdown()
+                        tracer_provider.shutdown()
                     except (RuntimeError, ValueError, OSError) as exc:
                         logger.warning("Failed to shutdown tracer provider: %s", exc)
-                if self._logger_provider is not None:
+                if logger_provider is not None:
                     try:
-                        self._logger_provider.shutdown()
+                        logger_provider.shutdown()
                     except (RuntimeError, ValueError, OSError) as exc:
                         logger.warning("Failed to shutdown logger provider: %s", exc)
 
@@ -223,8 +229,7 @@ class Api:
 
         # Initialize OpenTelemetry tracing and logging
         _tracing = setup_api_tracing(self._app, self._config)
-        self._tracer_provider = _tracing.tracer_provider
-        self._logger_provider = _tracing.logger_provider
+        self._otel = (_tracing.tracer_provider, _tracing.logger_provider)
 
         # Map state for routers to access
         self._app.state.business_logic = self.business_logic

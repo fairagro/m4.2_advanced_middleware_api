@@ -118,12 +118,10 @@ async def test_create_harvest_idempotent_expected_datasets_conflict(
 
 
 @pytest.mark.asyncio
-async def test_create_harvest_idempotent_pending_timeout(
-    couchdb: CouchDB, couchdb_client: MagicMock, monkeypatch: pytest.MonkeyPatch
-) -> None:
+async def test_create_harvest_idempotent_pending_timeout(couchdb: CouchDB, couchdb_client: MagicMock) -> None:
     """Stuck pending claim eventually raises IdempotencyPendingError."""
-    monkeypatch.setattr("middleware.api.document_store.couchdb._PENDING_POLL_ATTEMPTS", 2)
-    monkeypatch.setattr("middleware.api.document_store.couchdb._PENDING_POLL_DELAY_S", 0)
+    couchdb._config.pending_poll_attempts = 2  # noqa: SLF001
+    couchdb._config.pending_poll_delay_s = 0.0  # noqa: SLF001
     doc_id = CouchDB._idempotency_doc_id("client-a", "key-1")  # noqa: SLF001
     index = HarvestIdempotencyDocument(
         doc_id=doc_id,

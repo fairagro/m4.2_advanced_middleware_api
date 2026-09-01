@@ -6,7 +6,7 @@ Provides async access to CouchDB for ARC and Harvest document storage.
 import logging
 from collections.abc import Callable
 from http import HTTPStatus
-from typing import Any, Self
+from typing import Any, Self, cast
 from urllib.parse import quote
 
 import aiohttp
@@ -15,6 +15,7 @@ from aiocouch.exception import ConflictError, NotFoundError, PreconditionFailedE
 from aiocouch.remote import RemoteServer
 
 from middleware.api.document_store.config import CouchDBConfig
+from middleware.shared.json_types import CouchDbDocument, JsonObject, JsonValue
 
 logger = logging.getLogger(__name__)
 
@@ -32,28 +33,34 @@ def _patch_aiocouch_aiohttp_auth() -> None:
     if getattr(RemoteServer.__init__, _PATCH_MARKER, False):
         return
 
-    def patched_init(
+    def patched_init(  # noqa: PLR0913 — extends upstream RemoteServer.__init__ with explicit session headers
         self: RemoteServer,
         server: str,
         *,
         user: str | None = None,
         password: str | None = None,
         cookie: str | None = None,
-        **kwargs: Any,
+        headers: dict[str, str] | None = None,
+        **client_session_kwargs: Any,
     ) -> None:
         self._server = server
-        headers: dict[str, str] = dict(kwargs.pop("headers", None) or {})
+        session_headers: dict[str, str] = dict(headers or {})
+        extra_headers = client_session_kwargs.pop("headers", None)
+        if isinstance(extra_headers, dict):
+            session_headers.update(extra_headers)
         if cookie:
-            headers["Cookie"] = "AuthSession=" + cookie
+            session_headers["Cookie"] = "AuthSession=" + cookie
         if user is not None and password is not None:
-            headers["Authorization"] = aiohttp.encode_basic_auth(user, password)
+            session_headers["Authorization"] = aiohttp.encode_basic_auth(user, password)
+        # Upstream aiocouch still passes deprecated auth=; never forward it.
+        client_session_kwargs.pop("auth", None)
         self._http_session = aiohttp.ClientSession(
-            headers=headers if headers else None,
-            **kwargs,
+            headers=session_headers if session_headers else None,
+            **client_session_kwargs,
         )
 
     setattr(patched_init, _PATCH_MARKER, True)
-    RemoteServer.__init__ = patched_init  # type: ignore[method-assign]
+    RemoteServer.__init__ = patched_init  # type: ignore[method-assign, assignment]
 
 
 class DocumentConflictError(RuntimeError):
@@ -180,7 +187,7 @@ class CouchDBClient:
             logger.error("CouchDB health check failed: %s", e)
             return False
 
-    async def get_document(self, doc_id: str) -> dict[str, Any] | None:
+    async def get_document(self, doc_id: str) -> CouchDbDocument | None:
         """Get a document by ID.
 
         Args:
@@ -198,7 +205,7 @@ class CouchDBClient:
         except NotFoundError:
             return None
 
-    async def create_document_exclusive(self, doc_id: str, data: dict[str, Any]) -> dict[str, Any]:
+    async def create_document_exclusive(self, doc_id: str, data: CouchDbDocument) -> CouchDbDocument:
         """Create a document only if it does not already exist.
 
         Unlike :meth:`save_document`, a conflict does not fall through to an update
@@ -222,9 +229,9 @@ class CouchDBClient:
     async def save_document(
         self,
         doc_id: str,
-        data: dict[str, Any],
-        pre_save_validator: Callable[[dict[str, Any]], None] | None = None,
-    ) -> dict[str, Any]:
+        data: CouchDbDocument,
+        pre_save_validator: Callable[[CouchDbDocument], None] | None = None,
+    ) -> CouchDbDocument:
         """Save or update a document with optimistic-concurrency retry.
 
         ``_id`` and ``_rev`` are stripped from *data* before writing: the
@@ -313,10 +320,10 @@ class CouchDBClient:
 
     async def find(
         self,
-        selector: dict[str, Any],
+        selector: JsonObject,
         limit: int | None = None,
         skip: int = 0,
-    ) -> list[dict[str, Any]]:
+    ) -> list[CouchDbDocument]:
         """Find documents using a Mango query selector.
 
         Args:
@@ -335,7 +342,7 @@ class CouchDBClient:
         result = self._db.find(selector, limit=effective_limit, skip=skip)
         docs = [dict(doc) async for doc in result]
 
-        if len(docs) == effective_limit:
+        if limit is None and len(docs) == effective_limit:
             logger.warning(
                 "CouchDB find() returned exactly %d documents for selector %s — "
                 "results may be silently truncated. Use skip/limit for pagination.",
@@ -345,13 +352,69 @@ class CouchDBClient:
 
         return docs
 
+    async def find_page(
+        self,
+        selector: JsonObject,
+        *,
+        limit: int,
+        bookmark: str | None = None,
+        sort: list[JsonObject] | None = None,
+    ) -> tuple[list[CouchDbDocument], str | None]:
+        """Fetch one Mango page using bookmark pagination (not ``skip``).
+
+        Offset (``skip``) paging over unordered or mutating result sets can omit
+        or repeat documents. CouchDB bookmarks are the stable cursor for
+        multi-page catalog scans.
+
+        Args:
+            selector: Mango query selector.
+            limit: Maximum documents for this page.
+            bookmark: Opaque cursor from a previous ``find_page`` call.
+            sort: Optional Mango ``sort`` clause (must match an index).
+
+        Returns:
+            ``(docs, next_bookmark)``. ``next_bookmark`` is ``None`` when the
+            response omits a bookmark; callers should stop when ``docs`` is
+            empty or shorter than ``limit``.
+        """
+        if not self._db:
+            raise RuntimeError("Not connected to CouchDB")
+        if not self._db_name:
+            raise RuntimeError("Database name is not set")
+        if limit < 1:
+            msg = "limit must be >= 1"
+            raise ValueError(msg)
+
+        payload: JsonObject = {
+            "selector": selector,
+            "limit": limit,
+        }
+        if bookmark is not None:
+            payload["bookmark"] = bookmark
+        if sort is not None:
+            payload["sort"] = cast(JsonValue, sort)
+
+        url = f"{self._url}/{self._db_name}/_find"
+        session = self._get_session()
+        async with session.post(url, json=payload) as resp:
+            if resp.status != HTTPStatus.OK:
+                text = await resp.text()
+                logger.error("CouchDB _find page failed: %s", text)
+                raise RuntimeError(f"CouchDB _find failed with status {resp.status}: {text}")
+            response_data = await resp.json()
+
+        docs_raw = response_data.get("docs", [])
+        docs: list[CouchDbDocument] = [dict(doc) for doc in docs_raw]
+        next_bookmark = response_data.get("bookmark")
+        return docs, next_bookmark if isinstance(next_bookmark, str) else None
+
     async def find_projected(
         self,
-        selector: dict[str, Any],
+        selector: JsonObject,
         fields: list[str],
         limit: int | None = None,
         skip: int = 0,
-    ) -> list[dict[str, Any]]:
+    ) -> list[CouchDbDocument]:
         """Find documents using CouchDB _find with explicit field projection.
 
         This method uses the raw HTTP endpoint because aiocouch's ``Database.find``
@@ -375,9 +438,9 @@ class CouchDBClient:
 
         effective_limit = limit if limit is not None else self._default_query_limit
 
-        payload: dict[str, Any] = {
+        payload: JsonObject = {
             "selector": selector,
-            "fields": fields,
+            "fields": cast(JsonValue, fields),
             "limit": effective_limit,
             "skip": skip,
         }
@@ -393,9 +456,9 @@ class CouchDBClient:
             response_data = await resp.json()
 
         docs_raw = response_data.get("docs", [])
-        docs: list[dict[str, Any]] = [dict(doc) for doc in docs_raw]
+        docs: list[CouchDbDocument] = [dict(doc) for doc in docs_raw]
 
-        if len(docs) == effective_limit:
+        if limit is None and len(docs) == effective_limit:
             logger.warning(
                 "CouchDB find_projected() returned exactly %d documents for selector %s — "
                 "results may be silently truncated. Use skip/limit for pagination.",
@@ -408,10 +471,10 @@ class CouchDBClient:
     async def save_document_if_revision_matches(
         self,
         doc_id: str,
-        data: dict[str, Any],
+        data: CouchDbDocument,
         *,
         expected_rev: str,
-    ) -> dict[str, Any]:
+    ) -> CouchDbDocument:
         """Save a document only if the expected revision still matches.
 
         Uses raw ``PUT /{db}/{docid}`` to allow optimistic-concurrency handling
@@ -475,8 +538,8 @@ class CouchDBClient:
         if not self._db:
             raise RuntimeError("Not connected to CouchDB")
 
-        index_def: dict[str, Any] = {
-            "index": {"fields": fields},
+        index_def: JsonObject = {
+            "index": cast(JsonValue, {"fields": fields}),
             "type": "json",
         }
         if name:

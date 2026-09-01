@@ -2,7 +2,7 @@
 
 import logging
 from dataclasses import dataclass
-from typing import Any, Self
+from typing import Self, cast
 
 from middleware.api.business_logic.config import HarvestConfig
 from middleware.api.business_logic.exceptions import (
@@ -17,8 +17,9 @@ from middleware.api.document_store import (
     IdempotencyBodyConflictError,
     IdempotencyPendingError,
 )
-from middleware.api.document_store.harvest_document import HarvestDocument
+from middleware.api.document_store.harvest_document import HarvestDocument, HarvestUpdatePayload
 from middleware.shared.api_models.common.models import HarvestStatus
+from middleware.shared.json_types import JsonObject
 
 logger = logging.getLogger(__name__)
 
@@ -135,10 +136,15 @@ class HarvestManager:
         target_status: HarvestStatus,
         client_id: str | None,
     ) -> HarvestDocument:
-        """Transition a harvest run to a terminal status.
+        """Transition a harvest run to a terminal status (document-store only).
 
-        Only a ``RUNNING`` harvest may transition; any other current status raises
-        ``ConflictError``.
+        Only a ``RUNNING`` harvest may transition to a new terminal status.
+        ``COMPLETED`` → ``COMPLETED`` is an idempotent no-op (no document write)
+        so callers can re-enqueue catalog finalize after a broker dispatch failure.
+        Any other non-``RUNNING`` current status raises ``ConflictError``.
+
+        Does **not** enqueue catalog finalize — that orchestration lives on
+        ``BusinessLogic.transition_harvest``.
 
         Args:
             harvest: Already-fetched harvest document.
@@ -151,17 +157,24 @@ class HarvestManager:
                 "[%s] Client ID mismatch for harvest %s: expected %s", client_id, harvest_id, harvest.client_id
             )
             raise AccessDeniedError(f"Harvest {harvest_id} does not belong to client {client_id}")
+        if harvest.status == HarvestStatus.COMPLETED and target_status == HarvestStatus.COMPLETED:
+            logger.info(
+                "[%s] Harvest %s already COMPLETED; returning without rewrite (finalize may be re-enqueued)",
+                client_id,
+                harvest_id,
+            )
+            return harvest
         if harvest.status != HarvestStatus.RUNNING:
             raise ConflictError(
                 f"Harvest {harvest_id} cannot transition to {target_status}: current status is {harvest.status}"
             )
 
-        updates: dict[str, Any] = {"status": target_status}
+        updates: HarvestUpdatePayload = {"status": target_status}
         # Compute statistics from ARC documents once at finalization.
         statistics = await self._doc_store.get_harvest_statistics(harvest_id)
         if harvest.statistics and harvest.statistics.expected_datasets is not None:
             statistics.expected_datasets = harvest.statistics.expected_datasets
-        updates["statistics"] = statistics.model_dump()
+        updates["statistics"] = cast(JsonObject, statistics.model_dump())
 
         updated = await self._doc_store.update_harvest(harvest_id, updates)
         logger.info("[%s] Transitioned harvest %s to %s", client_id, harvest_id, target_status)

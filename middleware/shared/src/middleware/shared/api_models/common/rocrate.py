@@ -1,20 +1,22 @@
 """RO-Crate payload validation for ARC upload requests."""
 
 from functools import cached_property
-from typing import Annotated, Any, Self
+from typing import Annotated, Self, cast
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
+from middleware.shared.json_types import JsonValue, RoCrateContent, RoCrateGraphNode
 
-def _root_dataset_entity(graph: list[dict[str, Any]]) -> dict[str, Any] | None:
+
+def _root_dataset_entity(graph: list[RoCrateGraphNode]) -> RoCrateGraphNode | None:
     """Return the RO-Crate root data entity (``@id``: ``./``) from ``@graph``."""
     for item in graph:
-        if isinstance(item, dict) and item.get("@id") == "./":
+        if item.get("@id") == "./":
             return item
     return None
 
 
-def _normalize_text_field(value: object) -> str | None:
+def _normalize_text_field(value: JsonValue | None) -> str | None:
     if isinstance(value, list):
         value = value[0] if value else None
     if isinstance(value, dict):
@@ -25,27 +27,27 @@ def _normalize_text_field(value: object) -> str | None:
     return text or None
 
 
-def _extract_identifier(root: dict[str, Any]) -> str:
-    """Extract and normalize the required ``identifier`` from the root data entity."""
-    identifier = _normalize_text_field(root.get("identifier"))
+def extract_identifier(dataset: RoCrateGraphNode) -> str:
+    """Extract and normalize a non-empty ``identifier`` from a RO-Crate Dataset node."""
+    identifier = _normalize_text_field(dataset.get("identifier"))
     if not identifier:
-        msg = "RO-Crate root data entity must contain a non-empty identifier"
+        msg = "RO-Crate Dataset must contain a non-empty identifier"
         raise ValueError(msg)
     return identifier
 
 
-def _extract_optional_text(root: dict[str, Any], field: str) -> str | None:
+def _extract_optional_text(root: RoCrateGraphNode, field: str) -> str | None:
     """Extract an optional text field from the root data entity."""
     return _normalize_text_field(root.get(field))
 
 
-def validate_root_dataset(graph: list[dict[str, Any]]) -> dict[str, Any]:
+def validate_root_dataset(graph: list[RoCrateGraphNode]) -> RoCrateGraphNode:
     """Validate ``@graph`` contains a root data entity with a non-empty ``identifier``."""
     root = _root_dataset_entity(graph)
     if root is None:
         msg = "RO-Crate must contain a root data entity with @id './'"
         raise ValueError(msg)
-    _extract_identifier(root)
+    extract_identifier(root)
     return root
 
 
@@ -54,8 +56,8 @@ class RoCratePayload(BaseModel):
 
     model_config = ConfigDict(populate_by_name=True, extra="forbid")
 
-    context: Annotated[Any, Field(alias="@context")]
-    graph: Annotated[list[dict[str, Any]], Field(alias="@graph", min_length=1)]
+    context: Annotated[JsonValue, Field(alias="@context")]
+    graph: Annotated[list[RoCrateGraphNode], Field(alias="@graph", min_length=1)]
 
     @model_validator(mode="after")
     def validate_root_dataset_fields(self) -> Self:
@@ -64,7 +66,7 @@ class RoCratePayload(BaseModel):
         return self
 
     @cached_property
-    def _root(self) -> dict[str, Any]:
+    def _root(self) -> RoCrateGraphNode:
         """Root data entity dict (validated during model construction)."""
         root = _root_dataset_entity(self.graph)
         if root is None:
@@ -75,7 +77,7 @@ class RoCratePayload(BaseModel):
     @cached_property
     def identifier(self) -> str:
         """Non-empty ``identifier`` from the root data entity (``@graph`` → ``@id`` ``./``)."""
-        return _extract_identifier(self._root)
+        return extract_identifier(self._root)
 
     @cached_property
     def name(self) -> str | None:
@@ -86,3 +88,10 @@ class RoCratePayload(BaseModel):
     def description(self) -> str | None:
         """Optional RO-Crate ``description`` from the root data entity."""
         return _extract_optional_text(self._root, "description")
+
+    def to_content(self) -> RoCrateContent:
+        """Return the wire-format RO-Crate document."""
+        return {
+            "@context": self.context,
+            "@graph": cast(JsonValue, self.graph),
+        }

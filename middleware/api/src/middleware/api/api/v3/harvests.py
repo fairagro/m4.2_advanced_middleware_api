@@ -116,7 +116,7 @@ async def complete_harvest(  # noqa: PLR0913, PLR0917
 
     await deps.validate_rdi_authorized(harvest.rdi, request)
 
-    harvest = await bl.harvest_manager.complete_harvest(harvest, client_id=client_id)
+    harvest = await bl.complete_harvest(harvest, client_id=client_id)
     return _map_harvest(harvest)
 
 
@@ -132,8 +132,10 @@ async def patch_harvest_status(  # noqa: PLR0913, PLR0917
 ) -> v3_models.HarvestResponse:
     """Transition a harvest run to a terminal status (COMPLETED, CANCELLED, or FAILED).
 
-    Only a ``RUNNING`` harvest may be transitioned; any other current status returns
-    409 Conflict.
+    Only a ``RUNNING`` harvest may transition to a different terminal status.
+    Re-requesting ``COMPLETED`` on an already-``COMPLETED`` harvest is allowed
+    (idempotent; re-enqueues catalog finalize). Any other non-``RUNNING`` current
+    status returns 409 Conflict.
     """
     harvest = await bl.harvest_manager.get_harvest(harvest_id)
     if not harvest:
@@ -142,7 +144,7 @@ async def patch_harvest_status(  # noqa: PLR0913, PLR0917
     await deps.validate_rdi_authorized(harvest.rdi, request)
 
     try:
-        harvest = await bl.harvest_manager.transition_harvest(harvest, request_body.status, client_id=client_id)
+        harvest = await bl.transition_harvest(harvest, request_body.status, client_id=client_id)
     except ConflictError as exc:
         raise HTTPException(status_code=HTTPStatus.CONFLICT, detail=str(exc)) from exc
 

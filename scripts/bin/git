@@ -1,0 +1,3 @@
+#!/usr/bin/env bash
+# PATH entry for Cursor SCM (see .devcontainer/devcontainer.json remoteEnv).
+exec "$(cd "$(dirname "$0")" && pwd)/../cursor-git.sh" "$@"

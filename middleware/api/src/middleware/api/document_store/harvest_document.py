@@ -1,11 +1,15 @@
 """Harvest document schema for CouchDB."""
 
+from __future__ import annotations
+
 from datetime import datetime
-from typing import Annotated
+from enum import StrEnum
+from typing import Annotated, TypedDict
 
 from pydantic import BaseModel, ConfigDict, Field
 
 from middleware.shared.api_models.common.models import HarvestStatus
+from middleware.shared.json_types import JsonObject
 
 
 class HarvestStatistics(BaseModel):
@@ -21,6 +25,21 @@ class HarvestStatistics(BaseModel):
     arcs_unchanged: Annotated[int, Field(description="ARCs with no changes")] = 0
     arcs_missing: Annotated[int, Field(description="ARCs marked as missing")] = 0
     errors: Annotated[int, Field(description="Number of errors encountered")] = 0
+
+
+class CatalogPushEventType(StrEnum):
+    """Outcome of a consolidated catalog flush for a harvest."""
+
+    CATALOG_PUSH_SUCCESS = "CATALOG_PUSH_SUCCESS"
+    CATALOG_PUSH_FAILED = "CATALOG_PUSH_FAILED"
+
+
+class HarvestCatalogEvent(BaseModel):
+    """Catalog flush outcome for a completed harvest (consolidated Git backend)."""
+
+    timestamp: Annotated[datetime, Field(description="When the catalog flush was recorded")]
+    type: Annotated[CatalogPushEventType, Field(description="CATALOG_PUSH_SUCCESS or CATALOG_PUSH_FAILED")]
+    message: Annotated[str, Field(description="Human-readable outcome message")]
 
 
 class HarvestDocument(BaseModel):
@@ -47,6 +66,22 @@ class HarvestDocument(BaseModel):
     started_at: Annotated[datetime, Field(description="Harvest start timestamp")]
     completed_at: Annotated[datetime | None, Field(description="Harvest completion timestamp")] = None
     status: Annotated[HarvestStatus, Field(description="Harvest status")]
-    statistics: Annotated[HarvestStatistics, Field(default_factory=HarvestStatistics, description="Harvest statistics")]
+    statistics: Annotated[
+        HarvestStatistics,
+        Field(description="Harvest statistics"),
+    ] = Field(default_factory=HarvestStatistics)
+    catalog_events: Annotated[
+        list[HarvestCatalogEvent],
+        Field(description="Consolidated catalog flush events"),
+    ] = Field(default_factory=list)
 
     model_config = ConfigDict(populate_by_name=True, extra="ignore")
+
+
+class HarvestUpdatePayload(TypedDict, total=False):
+    """Partial harvest document updates applied by ``DocumentStore.update_harvest``."""
+
+    status: HarvestStatus
+    statistics: JsonObject
+    completed_at: datetime | None
+    append_catalog_event: JsonObject

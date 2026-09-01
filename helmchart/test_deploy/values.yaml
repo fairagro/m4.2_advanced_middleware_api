@@ -1,3 +1,18 @@
+# Local chart smoke-test overlay (see docs/helmchart_related.md).
+# Supplies an ArcStore backend — chart defaults intentionally omit one.
+config:
+  git_repo:
+    url: https://datahub-dev.ipk-gatersleben.de
+    group: FAIRagro-advanced-middleware-dev
+    max_workers: 10
+    rdi_gitlab_topics:
+      bonares: bonares
+      edal: "e!DAL"
+      edaphobase: edaphobase
+      openagrar: "OpenAgrar Repository"
+      publisso: Publisso
+      thunen_atlas: "Thunen Atlas"
+
 api:
   tls:
     serverCrtFile: server.crt

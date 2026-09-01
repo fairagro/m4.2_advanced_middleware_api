@@ -244,8 +244,10 @@ by the project's configured tools: **Ruff, Pylance, MyPy, Pylint, and Bandit**.
   terminal `git commit`. CI quality steps live in
   `.github/workflows/reusable-code-quality.yml` and may differ slightly
   (read-only ruff, full-tree pylint/bandit severity gate).
-  Note: Cursor Source Control Commit may skip git hooks (Cursor ≥3.15.6 bug);
-  prefer terminal commits until that is fixed.
+  Note: Cursor Source Control may skip git hooks (≥3.15.6: forces
+  `core.hooksPath=/dev/null`). Dev Container `remoteEnv` prepends
+  `scripts/bin` so SCM uses `scripts/cursor-git.sh`, which strips that pin.
+  Terminal `git` is unaffected. Remove once Cursor fixes #167719.
 - Avoid partially staging a Python file (`MM` in `git status`): pre-commit may
   auto-format the index, then roll back when the stash conflicts with unstaged
   edits — leaving format failures invisible in the editor.
@@ -335,7 +337,8 @@ Agents (`/opsx-apply` and default Agent mode) use it to locate affected code.
 | Spec domain | Primary source file(s) |
 | ----------- | ---------------------- |
 | `openspec/specs/arc-manager/` | `middleware/api/src/middleware/api/business_logic/arc_manager.py` |
-| `openspec/specs/arc-store/` | `middleware/api/src/middleware/api/arc_store/git_repo.py`, `gitlab_api.py` (deprecated) |
+| `openspec/specs/arc-store/` | `middleware/api/src/middleware/api/arc_store/git_repo/`, `gitlab_api/` (deprecated), `consolidated_git/`, `factory.py`, `resolution.py`, `arc_store_config.py`, `git_cli_settings.py`, `git_context.py` |
+| `openspec/specs/url-str/` | `middleware/shared/src/middleware/shared/security/url_str.py`, `url_redact.py` |
 | `openspec/specs/document-store/` | `middleware/api/src/middleware/api/document_store/couchdb_client.py`, `couchdb.py` |
 | `openspec/specs/arc-content-hash/` | `middleware/api/src/middleware/api/document_store/content_hash.py` |
 | `openspec/specs/harvest-manager/` | `middleware/api/src/middleware/api/business_logic/harvest_manager.py` |

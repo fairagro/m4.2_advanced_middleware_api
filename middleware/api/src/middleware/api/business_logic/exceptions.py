@@ -1,8 +1,14 @@
 """Business logic exception hierarchy."""
 
+from middleware.shared.security.url_redact import redact_url_userinfo
+
 
 class BusinessLogicError(Exception):
     """Base exception class for all business logic errors."""
+
+    def __str__(self) -> str:
+        """Hide URL userinfo (e.g. oauth2 tokens) in messages and events."""
+        return redact_url_userinfo(super().__str__())
 
 
 class ResourceNotFoundError(BusinessLogicError):

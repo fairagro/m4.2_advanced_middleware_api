@@ -4,12 +4,14 @@ from __future__ import annotations
 
 import logging
 from abc import ABC, abstractmethod
+from typing import NoReturn
 
 from arctrl import ARC  # type: ignore[import-untyped]
 from opentelemetry import trace
 
 from middleware.api.arc_store.arctrl_compat import patch_fable_int32_for_openpyxl
 from middleware.api.utils import calculate_arc_id
+from middleware.shared.security.url_redact import redact_url_userinfo
 
 patch_fable_int32_for_openpyxl()
 
@@ -17,7 +19,11 @@ logger = logging.getLogger(__name__)
 
 
 class ArcStoreError(Exception):
-    """Excpetion base class for all ArcStore errors."""
+    """Exception base class for all ArcStore errors."""
+
+    def __str__(self) -> str:
+        """Hide URL userinfo (e.g. oauth2 tokens) in messages and events."""
+        return redact_url_userinfo(super().__str__())
 
 
 class ArcStoreTransientError(ArcStoreError):
@@ -25,6 +31,17 @@ class ArcStoreTransientError(ArcStoreError):
 
     This indicates that a retry might be successful.
     """
+
+
+def _record_and_raise_arc_store_error(span: trace.Span, exc: BaseException, message: str) -> NoReturn:
+    """Record a redacted ArcStoreError on the span, then raise it.
+
+    Never call ``span.record_exception`` with a raw ``GitCommandError``: tracing
+    backends would export oauth2 userinfo embedded in HTTPS remotes.
+    """
+    wrapped = ArcStoreError(redact_url_userinfo(f"{message}: {exc}"))
+    span.record_exception(wrapped)
+    raise wrapped from exc
 
 
 # ----------- Interface -----------
@@ -73,6 +90,28 @@ class ArcStore(ABC):
         """Check connection to the storage backend."""
         raise NotImplementedError("`ArcStore._check_health` is not implemented")
 
+    @property
+    def publishes_per_arc_git(self) -> bool:
+        """Whether ``create_or_update`` pushes one Git project per ARC.
+
+        Consolidated catalog backends return False so callers skip per-ARC
+        ``GIT_PUSH_*`` events.
+        """
+        return True
+
+    @property
+    def supports_standalone_upload(self) -> bool:
+        """Whether standalone ARC create (``/v1/arcs``, ``/v2/arcs``, ``/v3/arcs``) is allowed."""
+        return True
+
+    async def _finalize(self, *, rdi: str) -> bool:  # noqa: PLR6301, ARG002
+        """Publish pending catalog state for an RDI.
+
+        Default is a successful no-op returning False (nothing pushed) so
+        orchestrators can call finalize for every backend without branching.
+        """
+        return False
+
     async def shutdown(self) -> None:  # noqa: PLR6301
         """Release resources held by the store (e.g. thread-pool executors).
 
@@ -115,10 +154,42 @@ class ArcStore(ABC):
                 logger.exception(
                     "Caught exception when trying to create or update ARC '%s': %s",
                     arc_id,
-                    str(e),
+                    redact_url_userinfo(str(e)),
                 )
+                _record_and_raise_arc_store_error(
+                    span,
+                    e,
+                    "General exception caught in `ArcStore.create_or_update`",
+                )
+
+    async def finalize(self, *, rdi: str) -> bool:
+        """Publish pending catalog state for an RDI.
+
+        Raises:
+            ArcStoreError: If an error occurs during the operation.
+        """
+        with self._tracer.start_as_current_span(
+            "api.ArcStore.finalize",
+            attributes={"rdi": rdi},
+        ) as span:
+            try:
+                pushed = await self._finalize(rdi=rdi)
+                span.set_attribute("pushed", pushed)
+                return pushed
+            except ArcStoreError as e:
                 span.record_exception(e)
-                raise ArcStoreError(f"General exception caught in `ArcStore.create_or_update`: {str(e)}") from e
+                raise
+            except Exception as e:
+                logger.exception(
+                    "Caught exception when finalizing catalog for RDI '%s': %s",
+                    rdi,
+                    redact_url_userinfo(str(e)),
+                )
+                _record_and_raise_arc_store_error(
+                    span,
+                    e,
+                    "General exception caught in `ArcStore.finalize`",
+                )
 
     async def get(self, arc_id: str) -> ARC | None:
         """_Get an ARC by its ID.
@@ -142,9 +213,16 @@ class ArcStore(ABC):
                 span.record_exception(e)
                 raise
             except Exception as e:
-                logger.exception("Caught exception when trying to retrieve ARC '%s'", arc_id)
-                span.record_exception(e)
-                raise ArcStoreError(f"General exception caught in `ArcStore.get`: {e!r}") from e
+                logger.exception(
+                    "Caught exception when trying to retrieve ARC '%s': %s",
+                    arc_id,
+                    redact_url_userinfo(str(e)),
+                )
+                _record_and_raise_arc_store_error(
+                    span,
+                    e,
+                    "General exception caught in `ArcStore.get`",
+                )
 
     async def delete(self, arc_id: str) -> None:
         """_Delete an ARC by its ID.
@@ -169,9 +247,16 @@ class ArcStore(ABC):
                 span.record_exception(e)
                 raise
             except Exception as e:
-                logger.exception("Caught exception when trying to delete ARC '%s'", arc_id)
-                span.record_exception(e)
-                raise ArcStoreError(f"General exception caught in `ArcStore.delete`: {e!r}") from e
+                logger.exception(
+                    "Caught exception when trying to delete ARC '%s': %s",
+                    arc_id,
+                    redact_url_userinfo(str(e)),
+                )
+                _record_and_raise_arc_store_error(
+                    span,
+                    e,
+                    "General exception caught in `ArcStore.delete`",
+                )
 
     async def exists(self, arc_id: str) -> bool:
         """_Check if an ARC exists by its ID.
@@ -198,9 +283,16 @@ class ArcStore(ABC):
                 span.record_exception(e)
                 raise
             except Exception as e:
-                logger.exception("Caught exception when trying to check if ARC '%s' exists", arc_id)
-                span.record_exception(e)
-                raise ArcStoreError(f"Caught exception when trying to check if ARC '{arc_id}' exists: {e!r}") from e
+                logger.exception(
+                    "Caught exception when trying to check if ARC '%s' exists: %s",
+                    arc_id,
+                    redact_url_userinfo(str(e)),
+                )
+                _record_and_raise_arc_store_error(
+                    span,
+                    e,
+                    f"Caught exception when trying to check if ARC '{arc_id}' exists",
+                )
 
     def check_health(self) -> bool:
         """Check connection to the storage backend.

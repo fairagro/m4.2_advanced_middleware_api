@@ -3,6 +3,7 @@
 from unittest.mock import MagicMock, patch
 
 import pytest
+from arctrl import ARC  # type: ignore[import-untyped]
 
 from middleware.api.arc_store import ArcStore, ArcStoreError
 
@@ -22,8 +23,8 @@ def create_mock_arc_store() -> ArcStore:
         async def _exists(self, *_args: object, **_kwargs: object) -> bool:  # noqa: PLR6301
             return False
 
-        async def _get(self, *_args: object, **_kwargs: object) -> object:
-            pass
+        async def _get(self, *_args: object, **_kwargs: object) -> ARC | None:  # noqa: PLR6301
+            return None
 
         def _check_health(self) -> bool:  # noqa: PLR6301
             return True
@@ -50,6 +51,39 @@ class TestArcStoreError:
 
 class TestArcStoreWrapperMethods:
     """Test suite for ArcStore wrapper methods that handle errors."""
+
+    @pytest.mark.asyncio
+    @staticmethod
+    async def test_finalize_default_no_op() -> None:
+        """Default finalize succeeds without pushing."""
+        store = create_mock_arc_store()
+        pushed = await store.finalize(rdi="edal")
+        assert pushed is False
+
+    @pytest.mark.asyncio
+    @staticmethod
+    async def test_finalize_generic_exception_records_redacted_error() -> None:
+        """OTEL must record a redacted ArcStoreError, not a raw token-bearing exception."""
+        store = create_mock_arc_store()
+        leak = RuntimeError("push https://oauth2:secret-token@gitlab.example.com/g/c.git")
+        mock_span = MagicMock()
+        mock_cm = MagicMock()
+        mock_cm.__enter__.return_value = mock_span
+        mock_cm.__exit__.return_value = None
+
+        with (
+            patch.object(store, "_finalize", side_effect=leak),
+            patch.object(store._tracer, "start_as_current_span", return_value=mock_cm),  # noqa: SLF001
+            pytest.raises(ArcStoreError) as raised,
+        ):
+            await store.finalize(rdi="edal")
+
+        assert "secret-token" not in str(raised.value)
+        assert "secret-token" not in raised.value.args[0]
+        recorded = mock_span.record_exception.call_args.args[0]
+        assert isinstance(recorded, ArcStoreError)
+        assert "secret-token" not in str(recorded)
+        assert recorded is raised.value
 
     @pytest.mark.asyncio
     @staticmethod

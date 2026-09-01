@@ -14,7 +14,7 @@ from pydantic import HttpUrl, SecretStr
 
 from middleware.api.api.fastapi_app import Api
 from middleware.api.api.legacy.task_types import SyncTaskResult, SyncTaskStatus
-from middleware.api.arc_store.config import GitRepoConfig
+from middleware.api.arc_store.git_repo import GitRepoConfig
 from middleware.api.arc_store.gitlab_api import GitlabApi, GitlabApiConfig
 from middleware.api.business_logic import BusinessLogic
 from middleware.api.business_logic.ports import BusinessLogicPorts
@@ -116,6 +116,8 @@ def service(config: Config) -> BusinessLogic:
     store.delete = AsyncMock()
     store.create_or_update = AsyncMock()
     store.shutdown = AsyncMock()
+    store.publishes_per_arc_git = True
+    store.supports_standalone_upload = True
 
     doc_store = MagicMock()
 
