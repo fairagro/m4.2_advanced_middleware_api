@@ -179,6 +179,43 @@ def test_materialize_citation_without_nested_comment() -> None:
     assert "creativeWorkStatus" not in citation
 
 
+def test_materialize_citation_array_resolves_each_publication() -> None:
+    """Citation arrays materialize each ScholarlyArticle; missing refs are skipped."""
+    arc = cast(
+        RoCrateContent,
+        {
+            "@context": "https://w3id.org/ro/crate/1.1/context",
+            "@graph": [
+                {
+                    "@id": "#pub-a",
+                    "@type": "ScholarlyArticle",
+                    "headline": "Paper A",
+                },
+                {
+                    "@id": "#pub-b",
+                    "@type": "ScholarlyArticle",
+                    "headline": "Paper B",
+                },
+                {
+                    "@id": "./",
+                    "@type": "Dataset",
+                    "identifier": "DS-CITES",
+                    "citation": [
+                        {"@id": "#pub-a"},
+                        {"@id": "#pub-b"},
+                        {"@id": "#pub-missing"},
+                    ],
+                },
+            ],
+        },
+    )
+    record = materialize_catalog_dataset(extract_catalog_dataset(arc), arc)
+    citations = record.get("citation")
+    assert isinstance(citations, list)
+    headlines = [item.get("headline") for item in citations if isinstance(item, dict)]
+    assert headlines == ["Paper A", "Paper B"]
+
+
 def test_materialize_missing_reference_is_omitted() -> None:
     """Missing @graph targets drop the property instead of failing."""
     arc = cast(

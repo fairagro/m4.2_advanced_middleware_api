@@ -329,6 +329,23 @@ def _materialize_citation(
     value: JsonValue,
     graph_index: dict[str, JsonObject],
     warn: Callable[[str], None],
+) -> JsonValue | None:
+    if isinstance(value, list):
+        citations = [
+            citation
+            for item in value
+            if (citation := _materialize_single_citation(item, graph_index, warn)) is not None
+        ]
+        if not citations:
+            return None
+        return cast(JsonValue, citations if len(citations) > 1 else citations[0])
+    return cast(JsonValue | None, _materialize_single_citation(value, graph_index, warn))
+
+
+def _materialize_single_citation(
+    value: JsonValue,
+    graph_index: dict[str, JsonObject],
+    warn: Callable[[str], None],
 ) -> JsonObject | None:
     ref_id = _extract_ref_id(value)
     if ref_id is None:
