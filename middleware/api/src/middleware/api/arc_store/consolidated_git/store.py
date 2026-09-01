@@ -21,6 +21,7 @@ from opentelemetry import context
 
 from middleware.api.arc_store import ArcStore, ArcStoreError, ArcStoreTransientError
 from middleware.api.arc_store.consolidated_git.catalog_jsonld import normalize_catalog_datasets_best_effort
+from middleware.api.arc_store.consolidated_git.catalog_materialize import materialize_catalog_dataset
 from middleware.api.arc_store.consolidated_git.catalog_serialize import extract_catalog_dataset, serialize_catalog_file
 from middleware.api.arc_store.consolidated_git.config import ConsolidatedGitConfig
 from middleware.api.arc_store.git_cli_settings import GitContextConfig
@@ -202,7 +203,8 @@ class ConsolidatedGitArcStore(ArcStore):
         async for arc_id, content in self._doc_store.iter_arc_contents_by_rdi(rdi):
             seen += 1
             try:
-                extracted.append((arc_id, extract_catalog_dataset(content)))
+                dataset = extract_catalog_dataset(content)
+                extracted.append((arc_id, materialize_catalog_dataset(dataset, content, arc_id=arc_id)))
             except ValueError as exc:
                 reason = f"Catalog extraction failed for ARC {arc_id}: {exc}"
                 logger.warning("%s", reason)

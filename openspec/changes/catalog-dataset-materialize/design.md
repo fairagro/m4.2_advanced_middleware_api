@@ -54,7 +54,7 @@ single Dataset); post-compact patch (rejected—duplicate logic).
 **Choice:** Materialize only:
 
 | Source property | Target | Max depth |
-|-----------------|--------|-----------|
+| ----------------- | -------- | ----------- |
 | `creator`, `author`, `contributor` | inline `Person` | 1 hop from root or Study |
 | `comment` (root) | map to `keywords` / `inLanguage` or inline `Comment` | 1 hop |
 | `license` | URL string, text string, or omit `#LICENSE` | 1 hop (`#LICENSE` node) |

@@ -16,6 +16,7 @@ from middleware.api.arc_store.consolidated_git.catalog_jsonld import (
     normalize_catalog_datasets_best_effort,
 )
 from middleware.api.arc_store.consolidated_git.catalog_jsonld_extensions import ARC_BIOSCHEMAS_EXTENSION_CONTEXT
+from middleware.api.arc_store.consolidated_git.catalog_materialize import materialize_catalog_dataset
 from middleware.api.arc_store.consolidated_git.catalog_serialize import extract_catalog_dataset
 from middleware.api.arc_store.consolidated_git.schema_org_context import load_schema_org_context
 from middleware.shared.json_types import CatalogDatasetRecord, JsonObject, RoCrateContent
@@ -61,29 +62,63 @@ def _json_contains_compact_base(value: object) -> bool:
     return False
 
 
-def _arctrl_shaped_dataset() -> CatalogDatasetRecord:
-    """Relative IDs as ARCtrl RO-Crate Dataset nodes (root ``./``, fragments, assay path)."""
+def _arctrl_shaped_arc() -> RoCrateContent:
+    """RO-Crate with graph nodes backing ARCtrl-shaped root references."""
     return cast(
-        CatalogDatasetRecord,
+        RoCrateContent,
         {
             "@context": "https://w3id.org/ro/crate/1.1/context",
-            "@id": "./",
-            "@type": "Dataset",
-            "identifier": "DS-ARCTRL",
-            "name": "ARCtrl-shaped dataset",
-            "license": {"@id": "#LICENSE"},
-            "creator": {
-                "@id": "#Person_1",
-                "@type": "Person",
-                "name": "Ada",
-                "sameAs": {"@id": "https://orcid.org/0000-0002-1825-0097"},
-            },
-            "hasPart": {"@id": "assays/assay-a/", "@type": "Dataset"},
-            "comment": {"@id": "#LDComment_1", "text": "note"},
-            "citation": {"@id": "#citation_1"},
-            "url": {"@id": "https://doi.org/10.1234/example"},
+            "@graph": [
+                {
+                    "@id": "#LICENSE",
+                    "@type": "CreativeWork",
+                    "text": "ALL RIGHTS RESERVED",
+                },
+                {
+                    "@id": "#Person_1",
+                    "@type": "Person",
+                    "givenName": "Ada",
+                    "name": "Ada",
+                    "sameAs": {"@id": "https://orcid.org/0000-0002-1825-0097"},
+                },
+                {
+                    "@id": "#LDComment_1",
+                    "@type": "Comment",
+                    "name": "Notes",
+                    "text": "note",
+                },
+                {
+                    "@id": "#citation_1",
+                    "@type": "ScholarlyArticle",
+                    "headline": "Paper",
+                },
+                {
+                    "@id": "assays/assay-a/",
+                    "@type": "Dataset",
+                    "additionalType": "Assay",
+                    "identifier": "assay-a",
+                },
+                {
+                    "@id": "./",
+                    "@type": "Dataset",
+                    "identifier": "DS-ARCTRL",
+                    "name": "ARCtrl-shaped dataset",
+                    "license": {"@id": "#LICENSE"},
+                    "creator": {"@id": "#Person_1"},
+                    "hasPart": {"@id": "assays/assay-a/", "@type": "Dataset"},
+                    "comment": {"@id": "#LDComment_1", "text": "note"},
+                    "citation": {"@id": "#citation_1"},
+                    "url": {"@id": "https://doi.org/10.1234/example"},
+                },
+            ],
         },
     )
+
+
+def _arctrl_shaped_dataset() -> CatalogDatasetRecord:
+    """Materialized ARCtrl-shaped catalog Dataset (post graph resolution)."""
+    arc = _arctrl_shaped_arc()
+    return materialize_catalog_dataset(extract_catalog_dataset(arc), arc)
 
 
 def test_extract_preserves_source_context_for_ingest_semantics() -> None:
@@ -171,7 +206,7 @@ def _compact_arctrl_shaped() -> CatalogDatasetRecord:
 
 
 def test_compact_restores_arctrl_relative_ids() -> None:
-    """B1: expand/compact re-relativizes ARCtrl ``./``, fragments, and path @ids."""
+    """B1: path @ids stay relative; inlined Person/Comment omit fragment ids."""
     compacted = _compact_arctrl_shaped()
     creator = compacted.get("creator")
     has_part = compacted.get("hasPart")
@@ -179,15 +214,18 @@ def test_compact_restores_arctrl_relative_ids() -> None:
     citation = compacted.get("citation")
     assert compacted.get("id") == "./"
     assert compacted.get("@id", "./") == "./"
-    assert compacted.get("license") == "#LICENSE"
+    assert compacted.get("license") == {"type": "CreativeWork", "text": "ALL RIGHTS RESERVED"}
     assert isinstance(creator, dict)
-    assert creator.get("id") == "#Person_1"
+    assert creator.get("givenName") == "Ada"
+    assert "id" not in creator
     assert isinstance(has_part, dict)
     assert has_part.get("id") == "assays/assay-a/"
     assert isinstance(comment, dict)
-    assert comment.get("id") == "#LDComment_1"
+    assert comment.get("name") == "Notes"
+    assert "id" not in comment
     assert isinstance(citation, dict)
-    assert citation.get("id") == "#citation_1"
+    assert citation.get("headline") == "Paper"
+    assert "id" not in citation
     data_without_context = {key: value for key, value in compacted.items() if key != "@context"}
     assert not _json_contains_compact_base(data_without_context)
 

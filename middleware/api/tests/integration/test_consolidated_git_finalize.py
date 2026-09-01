@@ -2,9 +2,11 @@
 
 from __future__ import annotations
 
+import json
 import tempfile
-from collections.abc import Generator
+from collections.abc import AsyncIterator, Generator
 from pathlib import Path
+from typing import cast
 from unittest.mock import MagicMock
 
 import pytest
@@ -12,6 +14,7 @@ from git import Repo
 
 from middleware.api.arc_store.consolidated_git import ConsolidatedGitArcStore, ConsolidatedGitConfig
 from middleware.api.arc_store.consolidated_git.catalog_jsonld import normalize_catalog_datasets
+from middleware.api.arc_store.consolidated_git.catalog_materialize import materialize_catalog_dataset
 from middleware.api.arc_store.consolidated_git.catalog_serialize import extract_catalog_dataset, serialize_catalog_file
 from middleware.shared.json_types import JsonValue, RoCrateContent, RoCrateGraphNode
 
@@ -25,18 +28,32 @@ def _minimal_rocrate_dict(identifier: str, **root_fields: JsonValue) -> RoCrateC
         "identifier": identifier,
         **root_fields,
     }
-    return {
-        "@context": "https://w3id.org/ro/crate/1.1/context",
-        "@graph": [
-            root,
+    graph: list[RoCrateGraphNode] = [
+        root,
+        {
+            "@id": "ro-crate-metadata.json",
+            "@type": "CreativeWork",
+            "conformsTo": {"@id": "https://w3id.org/ro/crate/1.1"},
+            "about": {"@id": "./"},
+        },
+    ]
+    if "creator" in root_fields:
+        graph.insert(
+            0,
             {
-                "@id": "ro-crate-metadata.json",
-                "@type": "CreativeWork",
-                "conformsTo": {"@id": "https://w3id.org/ro/crate/1.1"},
-                "about": {"@id": "./"},
+                "@id": "#Person_Test_Author",
+                "@type": "Person",
+                "givenName": "Test",
+                "familyName": "Author",
             },
-        ],
-    }
+        )
+    return cast(
+        RoCrateContent,
+        {
+            "@context": "https://w3id.org/ro/crate/1.1/context",
+            "@graph": graph,
+        },
+    )
 
 
 @pytest.fixture
@@ -70,11 +87,18 @@ def doc_store() -> MagicMock:
     """Document store returning two ARC bodies for catalog rebuild."""
     arcs = [
         ("arc-b", _minimal_rocrate_dict("DS-B", name="Dataset B")),
-        ("arc-a", _minimal_rocrate_dict("DS-A", name="Dataset A")),
+        (
+            "arc-a",
+            _minimal_rocrate_dict(
+                "DS-A",
+                name="Dataset A",
+                creator={"@id": "#Person_Test_Author"},
+            ),
+        ),
     ]
     store = MagicMock()
 
-    async def _iter_arcs(_rdi: str):
+    async def _iter_arcs(_rdi: str) -> AsyncIterator[tuple[str, RoCrateContent]]:
         for item in arcs:
             yield item
 
@@ -95,7 +119,10 @@ def catalog_store(
 
 async def _expected_catalog_bytes(doc_store: MagicMock) -> bytes:
     """Rebuild expected catalog bytes the same way finalize does."""
-    datasets = [extract_catalog_dataset(content) for _, content in doc_store._catalog_arcs]
+    datasets = [
+        materialize_catalog_dataset(extract_catalog_dataset(content), content, arc_id=arc_id)
+        for arc_id, content in doc_store._catalog_arcs
+    ]
     normalized = await normalize_catalog_datasets(datasets)
     return serialize_catalog_file(normalized)
 
@@ -121,7 +148,15 @@ async def test_finalize_pushes_catalog_to_bare_remote(
 
     assert pushed is True
     assert bare_catalog_remote.exists()
-    assert _read_catalog_from_remote(bare_catalog_remote, "edal") == expected_bytes
+    catalog_bytes = _read_catalog_from_remote(bare_catalog_remote, "edal")
+    assert catalog_bytes == expected_bytes
+    catalog = json.loads(catalog_bytes.decode("utf-8"))
+    ds_a = next(item for item in catalog if item.get("identifier") == "DS-A")
+    creator = ds_a.get("creator")
+    assert isinstance(creator, dict)
+    assert creator.get("givenName") == "Test"
+    assert creator.get("familyName") == "Author"
+    assert "id" not in creator
 
 
 @pytest.mark.asyncio
