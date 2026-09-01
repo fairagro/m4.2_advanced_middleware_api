@@ -13,6 +13,7 @@ from middleware.api.arc_store.consolidated_git.catalog_jsonld import (
     build_catalog_emitted_context,
     compact_catalog_dataset,
     normalize_catalog_datasets,
+    normalize_catalog_datasets_best_effort,
 )
 from middleware.api.arc_store.consolidated_git.catalog_jsonld_extensions import ARC_BIOSCHEMAS_EXTENSION_CONTEXT
 from middleware.api.arc_store.consolidated_git.catalog_serialize import extract_catalog_dataset
@@ -130,6 +131,19 @@ async def test_normalize_byte_stable_with_vendored_context() -> None:
     first = await normalize_catalog_datasets([dataset])
     second = await normalize_catalog_datasets([dataset])
     assert first == second
+
+
+@pytest.mark.asyncio
+async def test_normalize_best_effort_preserves_order_with_batched_concurrency() -> None:
+    """Batched gather keeps successful Dataset order when concurrency < item count."""
+    datasets = [
+        cast(CatalogDatasetRecord, extract_catalog_dataset(_arc_with_rocrate_and_extension(f"DS-{index}")))
+        for index in range(5)
+    ]
+    labeled = [(f"arc-{index}", dataset) for index, dataset in enumerate(datasets)]
+    outcome = await normalize_catalog_datasets_best_effort(labeled, concurrency=2)
+    assert outcome.skipped == []
+    assert [item.get("identifier") for item in outcome.datasets] == [f"DS-{index}" for index in range(5)]
 
 
 @pytest.mark.asyncio

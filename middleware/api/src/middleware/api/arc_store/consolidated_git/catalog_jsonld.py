@@ -143,25 +143,27 @@ async def normalize_catalog_datasets_best_effort(
     compact_context = build_catalog_compact_context(document)
     emitted_context = build_catalog_emitted_context()
     loader = create_offline_document_loader()
-    semaphore = asyncio.Semaphore(max(1, concurrency))
+    batch_size = max(1, concurrency)
     loop = asyncio.get_running_loop()
 
     async def _one(arc_id: str, dataset: CatalogDatasetRecord) -> CatalogDatasetRecord | tuple[str, str]:
-        async with semaphore:
-            try:
-                return await loop.run_in_executor(
-                    None,
-                    lambda: compact_catalog_dataset(
-                        dataset,
-                        compact_context,
-                        emitted_context=emitted_context,
-                        document_loader=loader,
-                    ),
-                )
-            except Exception as exc:  # noqa: BLE001 — per-ARC isolate for partial push
-                return (arc_id, f"JSON-LD expand/compact failed for ARC {arc_id}: {exc}")
+        try:
+            return await loop.run_in_executor(
+                None,
+                lambda: compact_catalog_dataset(
+                    dataset,
+                    compact_context,
+                    emitted_context=emitted_context,
+                    document_loader=loader,
+                ),
+            )
+        except Exception as exc:  # noqa: BLE001 — per-ARC isolate for partial push
+            return (arc_id, f"JSON-LD expand/compact failed for ARC {arc_id}: {exc}")
 
-    results = await asyncio.gather(*(_one(arc_id, dataset) for arc_id, dataset in items))
+    results: list[CatalogDatasetRecord | tuple[str, str]] = []
+    for start in range(0, len(items), batch_size):
+        chunk = items[start : start + batch_size]
+        results.extend(await asyncio.gather(*(_one(arc_id, dataset) for arc_id, dataset in chunk)))
     datasets: list[CatalogDatasetRecord] = []
     skipped: list[tuple[str, str]] = []
     for result in results:
