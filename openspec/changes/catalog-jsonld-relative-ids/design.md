@@ -1,3 +1,5 @@
+# Catalog JSON-LD relative IDs — Design
+
 ## Context
 
 See `proposal.md` for why dummy `http://example.org/base/` URLs appear after

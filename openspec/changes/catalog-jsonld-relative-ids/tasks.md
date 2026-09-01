@@ -1,3 +1,5 @@
+# Catalog JSON-LD relative IDs — Tasks
+
 ## 1. Compact processing @base
 
 - [ ] 1.1 Add a named constant for the internal compact `@base` equal to pyld

@@ -1,3 +1,5 @@
+# Catalog JSON-LD relative IDs — Proposal
+
 ## Why
 
 Worker catalog finalize JSON-LD-expands and compacts Dataset records. pyld then
