@@ -2,6 +2,7 @@
 
 from typing import cast
 
+import pytest
 from rocrate_fixtures import minimal_rocrate_dict
 
 from middleware.api.arc_store.consolidated_git.catalog_serialize import (
@@ -29,12 +30,33 @@ def test_extract_first_dataset_when_no_root() -> None:
             "@context": "https://w3id.org/ro/crate/1.1/context",
             "@graph": [
                 {"@id": "./", "@type": "CreativeWork", "name": "not a dataset"},
-                {"@id": "https://example.org/ds/1", "@type": "Dataset", "name": "Catalog record"},
+                {
+                    "@id": "https://example.org/ds/1",
+                    "@type": "Dataset",
+                    "identifier": "https://example.org/ds/1",
+                    "name": "Catalog record",
+                },
             ],
         },
     )
     dataset = extract_catalog_dataset(arc)
     assert dataset["@id"] == "https://example.org/ds/1"
+
+
+def test_extract_rejects_dataset_without_identifier() -> None:
+    """Catalog extraction fails when the chosen Dataset has no identifier."""
+    arc = cast(
+        RoCrateContent,
+        {
+            "@context": "https://w3id.org/ro/crate/1.1/context",
+            "@graph": [
+                {"@id": "./", "@type": "CreativeWork", "name": "not a dataset"},
+                {"@id": "https://example.org/ds/1", "@type": "Dataset", "name": "No id"},
+            ],
+        },
+    )
+    with pytest.raises(ValueError, match="non-empty identifier"):
+        extract_catalog_dataset(arc)
 
 
 def test_serialize_catalog_file_byte_stable_order() -> None:

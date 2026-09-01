@@ -27,11 +27,11 @@ def _normalize_text_field(value: JsonValue | None) -> str | None:
     return text or None
 
 
-def _extract_identifier(root: RoCrateGraphNode) -> str:
-    """Extract and normalize the required ``identifier`` from the root data entity."""
-    identifier = _normalize_text_field(root.get("identifier"))
+def extract_identifier(dataset: RoCrateGraphNode) -> str:
+    """Extract and normalize a non-empty ``identifier`` from a RO-Crate Dataset node."""
+    identifier = _normalize_text_field(dataset.get("identifier"))
     if not identifier:
-        msg = "RO-Crate root data entity must contain a non-empty identifier"
+        msg = "RO-Crate Dataset must contain a non-empty identifier"
         raise ValueError(msg)
     return identifier
 
@@ -47,7 +47,7 @@ def validate_root_dataset(graph: list[RoCrateGraphNode]) -> RoCrateGraphNode:
     if root is None:
         msg = "RO-Crate must contain a root data entity with @id './'"
         raise ValueError(msg)
-    _extract_identifier(root)
+    extract_identifier(root)
     return root
 
 
@@ -77,7 +77,7 @@ class RoCratePayload(BaseModel):
     @cached_property
     def identifier(self) -> str:
         """Non-empty ``identifier`` from the root data entity (``@graph`` → ``@id`` ``./``)."""
-        return _extract_identifier(self._root)
+        return extract_identifier(self._root)
 
     @cached_property
     def name(self) -> str | None:

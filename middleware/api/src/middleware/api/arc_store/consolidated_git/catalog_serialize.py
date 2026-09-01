@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 from collections import Counter
 
-from middleware.shared.api_models.common.rocrate import _extract_identifier
+from middleware.shared.api_models.common.rocrate import extract_identifier
 from middleware.shared.json_types import CatalogDatasetRecord, JsonValue, RoCrateContent
 
 
@@ -45,6 +45,8 @@ def extract_catalog_dataset(arc_content: RoCrateContent) -> CatalogDatasetRecord
         msg = "RO-Crate @graph has no Dataset node for catalog extraction"
         raise ValueError(msg)
 
+    extract_identifier(chosen)
+
     # Keep a self-contained record: copy node and attach top-level @context when present.
     record = chosen.copy()
     context = arc_content.get("@context")
@@ -56,7 +58,7 @@ def extract_catalog_dataset(arc_content: RoCrateContent) -> CatalogDatasetRecord
 def catalog_dataset_identifier(dataset: CatalogDatasetRecord) -> str:
     """Return normalized Dataset ``identifier`` (same rules as RO-Crate root entity)."""
     try:
-        return _extract_identifier(dataset)
+        return extract_identifier(dataset)
     except ValueError:
         return ""
 

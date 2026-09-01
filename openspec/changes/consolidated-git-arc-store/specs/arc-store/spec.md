@@ -41,9 +41,11 @@ operation MUST use a **dedicated ephemeral local clone** (unique temporary
 directory, deleted after the operation completes or fails) — MUST NOT reuse a
 stable shared working copy across concurrent finalize tasks. The file bytes
 MUST be deterministic: for the same set of successfully included ARC contents,
-two rebuilds MUST produce identical bytes (stable Dataset order by `@id`,
-canonical JSON serialization with sorted object keys, no finalize-/build-time
-timestamps or other volatile fields injected into the payload). Overlapping
+two rebuilds MUST produce identical bytes (stable Dataset order by normalized
+`identifier`, with canonical JSON tie-break when `identifier` is missing or
+duplicated among included Datasets; canonical JSON serialization with sorted
+object keys, no finalize-/build-time timestamps or other volatile fields
+injected into the payload). Overlapping
 finalizes for the same RDI MUST converge on the document store as the source of
 truth for current ARC bodies (last successful push wins on the remote).
 
@@ -92,11 +94,13 @@ array.
 
 For each ARC included in a catalog rebuild, the consolidated backend SHALL
 extract the Schema.org `Dataset` payload from the ARC’s stored RO-Crate JSON
-(using the documented root/`@type` Dataset rule). It MUST NOT require a
-separate Schema.org upload API. Missing extractable Dataset content MUST skip
-that ARC under interim partial-push rules (logged); it MUST NOT by itself abort
-finalize when other ARCs succeed. When every ARC fails extraction/normalize,
-see the empty-wipe refusal under the publish requirement.
+(using the documented root/`@type` Dataset rule). The extracted Dataset MUST
+have a non-empty normalized `identifier` (same rules as the API root entity);
+otherwise extraction MUST fail for that ARC. It MUST NOT require a separate
+Schema.org upload API. Missing extractable Dataset content MUST skip that ARC
+under interim partial-push rules (logged); it MUST NOT by itself abort finalize
+when other ARCs succeed. When every ARC fails extraction/normalize, see the
+empty-wipe refusal under the publish requirement.
 
 #### Scenario: Extract root Dataset
 
@@ -104,6 +108,14 @@ see the empty-wipe refusal under the publish requirement.
   catalog record
 - **WHEN** the catalog is rebuilt
 - **THEN** that Dataset object appears in `{rdi}.json`
+
+#### Scenario: Skip Dataset without identifier
+
+- **GIVEN** an ARC whose chosen catalog Dataset node has no non-empty
+  `identifier`
+- **WHEN** finalize rebuilds the catalog
+- **THEN** that ARC is skipped (logged) under partial-push rules
+- **AND** other valid ARCs may still publish
 
 ### Requirement: Select exactly one ArcStore backend
 
