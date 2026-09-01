@@ -6,7 +6,14 @@ import asyncio
 from dataclasses import dataclass
 from typing import cast
 
-from pyld.jsonld import CompactOptions, Context, ExpandOptions, compact, expand  # type: ignore[import-untyped]
+from pyld.jsonld import (  # type: ignore[import-untyped]
+    DEFAULT_BASE_IRI,
+    CompactOptions,
+    Context,
+    ExpandOptions,
+    compact,
+    expand,
+)
 from pyld.options import ContextObject, DocumentLoaderCallable  # type: ignore[import-untyped]
 
 from middleware.api.arc_store import ArcStoreError
@@ -22,6 +29,10 @@ _DEFAULT_NORMALIZE_CONCURRENCY = 8
 # Published catalog @context uses the conventional schema.org IRI (not an inline
 # dump of the vendored release). Compact still uses the vendored document.
 SCHEMA_ORG_CONTEXT_IRI = "https://schema.org"
+
+# Internal compact/expand base only (B1). Same IRI pyld uses when none is set,
+# so ARCtrl-relative IDs re-relativize. Must not appear in emitted @context.
+CATALOG_JSONLD_COMPACT_BASE_IRI = DEFAULT_BASE_IRI
 
 
 def build_catalog_emitted_context() -> Context:
@@ -53,8 +64,14 @@ def compact_catalog_dataset(
 ) -> CatalogDatasetRecord:
     """JSON-LD expand then compact a single Dataset record (sync; run off event loop)."""
     loader = document_loader or create_offline_document_loader()
-    expand_options: ExpandOptions = {"documentLoader": loader}
-    compact_options: CompactOptions = {"documentLoader": loader}
+    expand_options: ExpandOptions = {
+        "documentLoader": loader,
+        "base": CATALOG_JSONLD_COMPACT_BASE_IRI,
+    }
+    compact_options: CompactOptions = {
+        "documentLoader": loader,
+        "base": CATALOG_JSONLD_COMPACT_BASE_IRI,
+    }
     try:
         expanded = expand(dataset, expand_options)
         compacted: object = compact(expanded, compact_context, compact_options)
