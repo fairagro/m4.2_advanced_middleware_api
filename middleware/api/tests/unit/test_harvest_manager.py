@@ -295,9 +295,7 @@ async def test_transition_harvest_conflict(manager: HarvestManager, current_stat
 
 
 @pytest.mark.asyncio
-async def test_transition_harvest_completed_idempotent_noop(
-    manager: HarvestManager, doc_store: MagicMock
-) -> None:
+async def test_transition_harvest_completed_idempotent_noop(manager: HarvestManager, doc_store: MagicMock) -> None:
     """COMPLETED→COMPLETED is a no-op so finalize can be re-enqueued after dispatch failure."""
     harvest = _make_harvest(client_id="client-a", status=HarvestStatus.COMPLETED)
     result = await manager.transition_harvest(harvest, HarvestStatus.COMPLETED, "client-a")
