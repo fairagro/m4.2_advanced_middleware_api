@@ -51,7 +51,7 @@ Explicit decisions for the numbered open questions in
 | **2** | Finalize trigger and HTTP semantics? | Mark harvest **`COMPLETED` first**, then **enqueue** async Celery finalize. HTTP MUST NOT wait for Git push. If broker dispatch fails after the status write, clients MAY retry `COMPLETED` on the already-`COMPLETED` harvest: document write is a no-op and finalize is re-enqueued. On **permanent** catalog push failure: harvest stays `COMPLETED`; record `CATALOG_PUSH_FAILED`. On **transient** failure: do **not** append `CATALOG_PUSH_FAILED` before Celery retry (same as per-ARC `GIT_PUSH_*`); finalize MAY be retried without re-opening the harvest. |
 | **3** | Finalize scope: `rdi` vs `harvest_id` vs both? Overlapping harvests? | **`finalize(rdi=…)` only.** CouchDB stores the **latest** ARC body per `arc_id`, not a harvest-scoped snapshot, so `harvest_id` cannot select “ARCs of that harvest” for a rebuild. Rebuild from **all** current ARC documents for the RDI. Overlapping harvests converge on CouchDB; **last successful push** wins on the remote. A Celery task MAY still *carry* `harvest_id` for logging/correlation; it is not an ArcStore finalize argument. |
 | **4** | Staging model vs CouchDB / content-hash? | **No dirty-marker documents.** Staging = normal CouchDB ARC documents. Content-hash still gates CouchDB writes (unchanged ARC → no doc update). Always enqueue finalize on harvest `COMPLETED`; when finalize runs, **byte equality** vs remote file skips commit/push. |
-| **5** | Extraction contract for Basic-like output? *(clarified below)* | Prefer root Dataset (`@id` `./`); else first `@graph` node typed as Schema.org `Dataset`. Emit a **JSON array** of those objects; each MAY keep its own `@context`. Order Datasets by `@id`; serialize with sorted object keys and stable separators (**byte-stable**). No finalize-/build-time timestamps injected into the payload. |
+| **5** | Extraction contract for Basic-like output? *(clarified below)* | Prefer root Dataset (`@id` `./`); else first `@graph` node typed as Schema.org `Dataset`. Emit a **JSON array** of those objects; each MAY keep its own `@context`. Order Datasets by normalized `identifier` (canonical JSON tie-break when `identifier` is missing or duplicated); serialize with sorted object keys and stable separators (**byte-stable**). No finalize-/build-time timestamps injected into the payload. |
 | **6** | Basic special cases (`openagrar` / `publisso`)? | **Deferred.** v1 writes `{rdi}.json` only (one file per configured RDI name). |
 | **7** | Target repository & coexistence with Basic? | Catalog remote **MUST be configurable**. Advanced **will not** use Basic’s `middleware_repo` as the production target. Coexistence/locking against Basic writers is out of scope for v1. |
 | **8** | Config shape / naming? | Prefer **`arc_store.type`** discriminator (`git_repo` \| `gitlab_api` \| `consolidated_git`) with nested settings. **Legacy top-level** `git_repo` / `gitlab_api` (and any transitional `consolidated_git` top-level) MUST keep working and be marked **obsolete/deprecated** with a migration path to `arc_store`. Naming stays under ArcStore (no second product noun). |
@@ -69,7 +69,9 @@ Concrete sub-questions:
 2. Is the file a JSON **array of objects** (Basic style, possibly each with
    `@context`) or a reshaped single graph?
 3. How do we order the array so two harvests with the same ARC set do not
-   produce noisy Git diffs?
+   produce noisy Git diffs? (Primary key: normalized `identifier`; tie-break
+   via canonical JSON when `identifier` is missing or duplicated — many
+   compacted Datasets share `@id` `./`.)
 
 The table row for #5 locks those choices for v1. Fine-tuning the Dataset
 selector against real OpenAgrar/e!DAL crates MAY adjust the extractor behind
@@ -173,10 +175,11 @@ include `harvest_id` solely for observability.
 ### Decision: Byte-stable consolidated JSON-LD
 
 **Choice:** For a fixed set of ARC contents for an RDI, two catalog rebuilds
-MUST produce **identical file bytes**: Dataset array sorted by `@id`;
-canonical JSON (sorted object keys, stable separators); no finalize-/build-time
-timestamps in the payload. If remote blob already equals freshly built bytes,
-skip commit/push.
+MUST produce **identical file bytes**: Dataset array sorted by normalized
+`identifier` (canonical JSON tie-break when `identifier` is missing or
+duplicated); canonical JSON (sorted object keys, stable separators); no
+finalize-/build-time timestamps in the payload. If remote blob already equals
+freshly built bytes, skip commit/push.
 
 ### Decision: Extraction contract (v1)
 

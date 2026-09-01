@@ -116,9 +116,11 @@ def merge_git_cli_settings[TGitCli: GitCliSettings](backend: TGitCli, shared: Gi
     """Apply ``arc_store.git`` defaults without overriding backend-specific fields."""
     if shared is None:
         return backend
-    unset_fields = backend.model_fields_set
+    backend_set_fields = backend.model_fields_set
     shared_updates = {
-        field: value for field, value in shared.model_dump(exclude_unset=True).items() if field not in unset_fields
+        field: value
+        for field, value in shared.model_dump(exclude_unset=True).items()
+        if field not in backend_set_fields
     }
     if not shared_updates:
         return backend

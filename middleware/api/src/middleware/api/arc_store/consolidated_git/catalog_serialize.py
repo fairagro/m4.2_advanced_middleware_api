@@ -78,7 +78,11 @@ def _dataset_sort_key(
 
 
 def serialize_catalog_file(datasets: list[CatalogDatasetRecord]) -> bytes:
-    """Serialize Dataset list to byte-stable JSON (UTF-8, sorted keys, stable separators)."""
+    """Serialize Dataset list to byte-stable JSON (UTF-8, sorted keys, stable separators).
+
+    Datasets are ordered by normalized ``identifier``; canonical JSON tie-break
+    applies when ``identifier`` is missing or duplicated among entries.
+    """
     identifiers = [catalog_dataset_identifier(dataset) for dataset in datasets]
     identifier_counts = Counter(identifiers)
     indexed = list(zip(datasets, identifiers, strict=True))

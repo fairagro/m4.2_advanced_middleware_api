@@ -19,7 +19,8 @@
 - [x] 2.2 Implement Schema.org `Dataset` extraction from RO-Crate `@graph`
       (root/`Dataset` rule) with unit fixtures
 - [x] 2.3 Implement `finalize`: rebuild `{rdi}.json` with **byte-stable**
-      serialization (sort Datasets by `@id`, sorted JSON keys, no build-time
+      serialization (sort Datasets by normalized `identifier`, canonical JSON
+      tie-break when missing or duplicated; sorted JSON keys, no build-time
       timestamps) from all CouchDB ARCs for that RDI; skip commit/push when
       bytes match remote
 - [x] 2.4 Git publish via **ephemeral per-operation clone** (unique temp dir
