@@ -252,10 +252,6 @@ class DocumentStore(ABC):
         Raises:
             ValueError: If a stored ARC document has an unexpected shape.
         """
+        if False:  # pragma: no cover — async generator stub for abstract method
+            yield ("", {})
         raise NotImplementedError
-        # Unreachable: marks this abstract method as an async generator so callers
-        # can ``async for`` without awaiting a coroutine (matches CouchDB impl).
-        yield (  # pragma: no cover
-            "",
-            {},
-        )
