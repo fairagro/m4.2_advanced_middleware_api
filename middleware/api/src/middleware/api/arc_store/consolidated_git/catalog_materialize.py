@@ -390,6 +390,8 @@ def _materialize_has_part(
         if not parts:
             return None
         return cast(JsonValue, parts)
+    if isinstance(value, str):
+        return _materialize_has_part_item(value, graph_index, depth=depth, warn=warn)
     if isinstance(value, dict):
         return _materialize_has_part_item(value, graph_index, depth=depth, warn=warn)
     return None
