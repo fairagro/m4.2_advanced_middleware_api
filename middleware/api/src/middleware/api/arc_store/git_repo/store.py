@@ -6,6 +6,7 @@ import asyncio
 import concurrent.futures
 import logging
 import shutil
+import tempfile
 from collections.abc import Callable
 from pathlib import Path
 from typing import ParamSpec, TypeVar
@@ -16,6 +17,7 @@ from git.exc import GitCommandError
 from opentelemetry import context, trace
 
 from middleware.api.arc_store import ArcStore
+from middleware.api.arc_store.git_cache_cleanup import GIT_REPO_SYNC_PREFIX, reclaim_stale_git_cache_dirs
 from middleware.api.arc_store.git_cli_settings import GitContextConfig
 from middleware.api.arc_store.git_context import (
     GitContext,
@@ -35,6 +37,15 @@ T = TypeVar("T")
 P = ParamSpec("P")
 
 
+def _cleanup_workdir(local_path: Path) -> None:
+    if not local_path.exists():
+        return
+    try:
+        shutil.rmtree(local_path)
+    except OSError as e:
+        logger.warning("Failed to clean up local path %s: %s", local_path, e)
+
+
 class GitRepo(ArcStore):
     """Implements an ArcStore using Git CLI (GitPython) as backend."""
 
@@ -51,6 +62,7 @@ class GitRepo(ArcStore):
             group=self._config.group,
             token=token,
         )
+        reclaim_stale_git_cache_dirs(self._config.cache_dir)
 
     async def _run_in_executor(self, func: Callable[P, T], *args: P.args, **kwargs: P.kwargs) -> T:
         loop = asyncio.get_running_loop()
@@ -74,9 +86,13 @@ class GitRepo(ArcStore):
         """Check connection to the storage backend."""
         return self._remote_provider.check_health()
 
-    def _get_context_config(self, arc_id: str) -> GitContextConfig:
+    def _allocate_workdir(self) -> Path:
+        """Create a unique ephemeral working directory under ``cache_dir``."""
+        self._config.cache_dir.mkdir(parents=True, exist_ok=True)
+        return Path(tempfile.mkdtemp(prefix=GIT_REPO_SYNC_PREFIX, dir=self._config.cache_dir))
+
+    def _get_context_config(self, arc_id: str, local_path: Path) -> GitContextConfig:
         repo_url = self._remote_provider.get_repo_url(arc_id, authenticated=False)
-        local_path = self._config.cache_dir / arc_id
         return self._config.git_context_config(
             repo_url=repo_url.unredacted(),
             local_path=local_path,
@@ -98,6 +114,7 @@ class GitRepo(ArcStore):
                 attributes={"arc_id": arc_id, "rdi": rdi},
                 set_status_on_exception=False,
             ) as span:
+                reclaim_stale_git_cache_dirs(self._config.cache_dir)
                 # Ensure remote exists before doing anything else (if manager is configured)
                 git_metadata = git_project_metadata_from_arc(
                     arc,
@@ -107,7 +124,8 @@ class GitRepo(ArcStore):
                 )
                 self._remote_provider.ensure_repo_exists(arc_id, metadata=git_metadata)
 
-                ctx_config = self._get_context_config(arc_id)
+                local_path = self._allocate_workdir()
+                ctx_config = self._get_context_config(arc_id, local_path)
                 try:
                     with GitContext(ctx_config) as ctx:
                         if not ctx.repo:
@@ -141,12 +159,7 @@ class GitRepo(ArcStore):
                     self._check_health()
                     raise
                 finally:
-                    # Clean up local repository to prevent inode exhaustion
-                    if ctx_config.local_path.exists():
-                        try:
-                            shutil.rmtree(ctx_config.local_path)
-                        except OSError as e:
-                            logger.warning("Failed to clean up local path %s: %s", ctx_config.local_path, e)
+                    _cleanup_workdir(local_path)
 
         await self._run_in_executor(_task)
 
@@ -159,7 +172,9 @@ class GitRepo(ArcStore):
                 attributes={"arc_id": arc_id},
                 set_status_on_exception=False,
             ) as span:
-                ctx_config = self._get_context_config(arc_id)
+                reclaim_stale_git_cache_dirs(self._config.cache_dir)
+                local_path = self._allocate_workdir()
+                ctx_config = self._get_context_config(arc_id, local_path)
                 try:
                     with GitContext(ctx_config) as ctx:
                         if not ctx.repo:
@@ -193,12 +208,7 @@ class GitRepo(ArcStore):
                     span.record_exception(e)
                     return None
                 finally:
-                    # Clean up local repository to prevent inode exhaustion
-                    if ctx_config.local_path.exists():
-                        try:
-                            shutil.rmtree(ctx_config.local_path)
-                        except OSError as e:
-                            logger.warning("Failed to clean up local path %s: %s", ctx_config.local_path, e)
+                    _cleanup_workdir(local_path)
 
         return await self._run_in_executor(_task)
 

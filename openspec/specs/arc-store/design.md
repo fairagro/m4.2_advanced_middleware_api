@@ -45,7 +45,11 @@ values. Non-GitLab providers accept metadata for a uniform interface and ignore 
    and availability failures; other exceptions are permanent.
 2. **Prefer `GitRepo` to `GitlabApi`** — Clone-and-push avoids REST commit action limits, is simpler, and works across
    Git servers. The REST implementation remains temporarily compatible.
-3. **Use fresh temporary clones** — This avoids stale state after concurrent workers or prior failed operations.
+3. **Use unique ephemeral local clones** — Each create-or-update or get that
+   needs a working tree allocates a dedicated temporary directory under
+   `cache_dir` (not a stable `cache_dir / arc_id` path). This avoids filesystem
+   races across Celery worker processes and thread-pool workers. Directories are
+   removed after each operation; stale orphans are reclaimed best-effort.
 4. **Isolate credential injection** — `RemoteGitProvider` hides SSH and HTTPS authentication details from `GitRepo`.
 5. **Use hashed paths and readable titles** — `arc_id` keeps clone URLs stable, while title and topic make GitLab
    browsing practical without duplicating RDI in descriptions.

@@ -35,13 +35,13 @@ _TEST_RDI = "test-rdi"
 
 
 @pytest.fixture
-def repo_config() -> GitRepoConfig:
+def repo_config(tmp_path: Path) -> GitRepoConfig:
     """Fixture for GitRepoConfig."""
     return GitRepoConfig(
         url="https://gitlab.example.com",
         group="mygroup",
         token=None,  # Updated to avoid SecretStr validation issue in test
-        cache_dir=Path(tempfile.gettempdir()),
+        cache_dir=tmp_path / "git_cache",
     )
 
 
@@ -62,24 +62,41 @@ def test_git_repo_url_generation(git_repo: GitRepo) -> None:
     assert url.unredacted() == "https://gitlab.example.com/mygroup/arc123.git"
 
 
-def test_git_repo_context_config_generation(git_repo: GitRepo) -> None:
-    """Test context config generation with cache dir."""
-    config = git_repo._get_context_config("arc123")
-    assert config.local_path is not None
-    assert config.local_path == git_repo._config.cache_dir / "arc123"
+def test_git_repo_context_config_generation(git_repo: GitRepo, tmp_path: Path) -> None:
+    """Test context config generation with an ephemeral local path."""
+    local_path = tmp_path / "git_repo_sync_test"
+    config = git_repo._get_context_config("arc123", local_path)
+    assert config.local_path == local_path
     assert config.repo_url.unredacted() == "https://gitlab.example.com/mygroup/arc123.git"
 
 
-def test_git_repo_context_config_embeds_token_once() -> None:
+def test_allocate_workdir_unique_under_cache_dir(git_repo: GitRepo) -> None:
+    """Concurrent allocations for the same ARC use distinct workdirs."""
+    first = git_repo._allocate_workdir()
+    second = git_repo._allocate_workdir()
+    try:
+        assert first != second
+        assert first.parent == git_repo._config.cache_dir
+        assert second.parent == git_repo._config.cache_dir
+        assert first.name.startswith("git_repo_sync_")
+        assert second.name.startswith("git_repo_sync_")
+        assert first.is_dir()
+        assert second.is_dir()
+    finally:
+        first.rmdir()
+        second.rmdir()
+
+
+def test_git_repo_context_config_embeds_token_once(tmp_path: Path) -> None:
     """HTTPS repo URLs must not double-embed oauth2 credentials."""
     config = GitRepoConfig(
         url="https://gitlab.example.com",
         group="mygroup",
         token=SecretStr("secret-token"),
-        cache_dir=Path(tempfile.gettempdir()),
+        cache_dir=tmp_path / "git_cache",
     )
     repo = GitRepo(config)
-    ctx_config = repo._get_context_config("arc123")
+    ctx_config = repo._get_context_config("arc123", tmp_path / "workdir")
     repo_url = ctx_config.repo_url.unredacted()
     assert repo_url == "https://oauth2:secret-token@gitlab.example.com/mygroup/arc123.git"
     assert "secret-token" not in str(ctx_config.repo_url)
@@ -479,12 +496,10 @@ async def test_get_arc_cleanup_os_error(git_repo: GitRepo) -> None:
         mock_arc.load.return_value = "MyARC"
         mock_rmtree.side_effect = OSError("Cleanup failed")
 
-        # We need to make sure the path exists so rmtree is called
-        with patch("middleware.api.arc_store.git_repo.store.Path.exists", return_value=True):
-            result = await git_repo._get("arc1")
+        result = await git_repo._get("arc1")
 
         assert result == "MyARC"
-        mock_rmtree.assert_called_once()
+        mock_rmtree.assert_called()
 
 
 def test_is_soft_git_error() -> None:
