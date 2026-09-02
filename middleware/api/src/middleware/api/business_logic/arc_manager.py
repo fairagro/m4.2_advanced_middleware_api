@@ -43,13 +43,14 @@ def _catalog_push_success_message(rdi: str, outcome: CatalogFinalizeResult) -> s
     base = f"Published catalog for RDI {rdi}" if outcome.pushed else f"Catalog for RDI {rdi} unchanged on remote"
     if not outcome.skipped:
         return base
+    dataset_label = "dataset" if outcome.dataset_count == 1 else "datasets"
     skipped_ids = [arc_id for arc_id, _reason in outcome.skipped]
     shown = skipped_ids[:_CATALOG_SKIP_IDS_IN_MESSAGE]
     remainder = len(skipped_ids) - len(shown)
     id_part = ", ".join(shown)
     if remainder > 0:
         id_part = f"{id_part}, +{remainder} more"
-    return f"{base} ({outcome.dataset_count} datasets, {len(skipped_ids)} skipped: {id_part})"
+    return f"{base} ({outcome.dataset_count} {dataset_label}, {len(skipped_ids)} skipped: {id_part})"
 
 
 class ArcManager:
