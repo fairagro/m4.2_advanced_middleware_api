@@ -24,6 +24,7 @@ from middleware.api.arc_store.consolidated_git.catalog_jsonld import normalize_c
 from middleware.api.arc_store.consolidated_git.catalog_materialize import materialize_catalog_dataset
 from middleware.api.arc_store.consolidated_git.catalog_serialize import extract_catalog_dataset, serialize_catalog_file
 from middleware.api.arc_store.consolidated_git.config import ConsolidatedGitConfig
+from middleware.api.arc_store.git_cache_cleanup import reclaim_stale_git_cache_dirs
 from middleware.api.arc_store.git_cli_settings import GitContextConfig
 from middleware.api.arc_store.git_context import (
     GitContext,
@@ -164,6 +165,7 @@ class ConsolidatedGitArcStore(ArcStore):
         """Clone into a temp dir, write catalog file, push if bytes differ. Returns True if pushed."""
         _require_safe_catalog_rdi(rdi)
         self._config.cache_dir.mkdir(parents=True, exist_ok=True)
+        reclaim_stale_git_cache_dirs(self._config.cache_dir)
         temp_dir = Path(tempfile.mkdtemp(prefix="catalog_finalize_", dir=self._config.cache_dir))
         try:
             self._ensure_remote_bare_repo()
