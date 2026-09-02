@@ -210,6 +210,7 @@ class GitContext:
                     url,
                     repo_path,
                     branch=self.config.branch,
+                    depth=1,
                 )
         except GitCommandError:
             self._handle_repo_init_error(repo_path, url)

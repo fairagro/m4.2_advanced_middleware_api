@@ -159,7 +159,12 @@ def test_git_context_enter_clone(mock_repo: MagicMock, tmp_path: Path) -> None:
     with GitContext(config) as ctx:
         assert ctx.path == str(target_path)
         # Verify clone called because .git doesn't exist
-        mock_repo.clone_from.assert_called_once()
+        mock_repo.clone_from.assert_called_once_with(
+            "https://example.com/repo.git",
+            target_path,
+            branch="main",
+            depth=1,
+        )
 
     # Verify close called
     mock_repo.clone_from.return_value.close.assert_called_once()
