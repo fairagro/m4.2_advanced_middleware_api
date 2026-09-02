@@ -7,7 +7,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 from rocrate_fixtures import minimal_rocrate_dict
 
-from middleware.api.arc_store import ArcStoreError, ArcStoreTransientError
+from middleware.api.arc_store import ArcStoreError, ArcStoreTransientError, CatalogFinalizeResult
 from middleware.api.business_logic import (
     BusinessLogic,
     BusinessLogicError,
@@ -35,7 +35,7 @@ def mock_store() -> MagicMock:
     store.shutdown = AsyncMock()
     store.publishes_per_arc_git = True
     store.supports_standalone_upload = True
-    store.finalize = AsyncMock(return_value=False)
+    store.finalize = AsyncMock(return_value=CatalogFinalizeResult(pushed=False))
     return store
 
 
@@ -245,7 +245,7 @@ async def test_finalize_catalog_skips_events_for_per_arc_backend(
 ) -> None:
     """Per-ARC backends must not record misleading CATALOG_PUSH_* harvest events."""
     mock_store.publishes_per_arc_git = True
-    mock_store.finalize = AsyncMock(return_value=False)
+    mock_store.finalize = AsyncMock(return_value=CatalogFinalizeResult(pushed=False))
     mock_doc_store.update_harvest = AsyncMock()
 
     pushed = await worker_logic.finalize_catalog("test-rdi", harvest_id="harvest-1")
@@ -262,7 +262,7 @@ async def test_finalize_catalog_records_success_event_for_catalog_backend(
 ) -> None:
     """Consolidated catalog finalize records CATALOG_PUSH_SUCCESS on the harvest."""
     mock_store.publishes_per_arc_git = False
-    mock_store.finalize = AsyncMock(return_value=True)
+    mock_store.finalize = AsyncMock(return_value=CatalogFinalizeResult(pushed=True, dataset_count=3))
     mock_doc_store.update_harvest = AsyncMock()
 
     pushed = await worker_logic.finalize_catalog("test-rdi", harvest_id="harvest-1")
@@ -271,6 +271,59 @@ async def test_finalize_catalog_records_success_event_for_catalog_backend(
     mock_doc_store.update_harvest.assert_called_once()
     patch = mock_doc_store.update_harvest.call_args.args[1]
     assert patch["append_catalog_event"]["type"] == "CATALOG_PUSH_SUCCESS"
+    assert "Published catalog for RDI test-rdi" in patch["append_catalog_event"]["message"]
+    assert "skipped" not in patch["append_catalog_event"]["message"]
+
+
+@pytest.mark.asyncio
+async def test_finalize_catalog_success_message_includes_skip_summary(
+    worker_logic: BusinessLogic,
+    mock_store: MagicMock,
+    mock_doc_store: MagicMock,
+) -> None:
+    """Partial-push skips must appear on CATALOG_PUSH_SUCCESS for harvest visibility."""
+    mock_store.publishes_per_arc_git = False
+    mock_store.finalize = AsyncMock(
+        return_value=CatalogFinalizeResult(
+            pushed=True,
+            dataset_count=2,
+            skipped=(("bad-arc", "JSON-LD expand/compact failed"),),
+        )
+    )
+    mock_doc_store.update_harvest = AsyncMock()
+
+    pushed = await worker_logic.finalize_catalog("test-rdi", harvest_id="harvest-1")
+
+    assert pushed is True
+    message = mock_doc_store.update_harvest.call_args.args[1]["append_catalog_event"]["message"]
+    assert "2 datasets" in message
+    assert "1 skipped" in message
+    assert "bad-arc" in message
+
+
+@pytest.mark.asyncio
+async def test_finalize_catalog_success_message_uses_singular_dataset(
+    worker_logic: BusinessLogic,
+    mock_store: MagicMock,
+    mock_doc_store: MagicMock,
+) -> None:
+    """Single published dataset should use singular wording in the success event."""
+    mock_store.publishes_per_arc_git = False
+    mock_store.finalize = AsyncMock(
+        return_value=CatalogFinalizeResult(
+            pushed=True,
+            dataset_count=1,
+            skipped=(("bad-arc", "JSON-LD expand/compact failed"),),
+        )
+    )
+    mock_doc_store.update_harvest = AsyncMock()
+
+    pushed = await worker_logic.finalize_catalog("test-rdi", harvest_id="harvest-1")
+
+    assert pushed is True
+    message = mock_doc_store.update_harvest.call_args.args[1]["append_catalog_event"]["message"]
+    assert "1 dataset" in message
+    assert "1 datasets" not in message
 
 
 @pytest.mark.asyncio

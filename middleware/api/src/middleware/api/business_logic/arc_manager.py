@@ -7,7 +7,7 @@ from datetime import UTC, datetime
 from arctrl import ARC  # type: ignore[import-untyped]
 from opentelemetry import trace
 
-from middleware.api.arc_store import ArcStore, ArcStoreTransientError
+from middleware.api.arc_store import ArcStore, ArcStoreTransientError, CatalogFinalizeResult
 from middleware.api.business_logic.exceptions import (
     BusinessLogicError,
     DuplicateArcInHarvestError,
@@ -33,6 +33,24 @@ _STANDALONE_UPLOAD_UNSUPPORTED = (
     "Standalone ARC upload is not supported with the consolidated Git catalog backend. "
     "Submit ARCs via POST /v3/harvests/{harvest_id}/arcs and complete the harvest."
 )
+
+# Cap skipped arc_ids embedded in CATALOG_PUSH_SUCCESS messages (CouchDB size).
+_CATALOG_SKIP_IDS_IN_MESSAGE = 20
+
+
+def _catalog_push_success_message(rdi: str, outcome: CatalogFinalizeResult) -> str:
+    """Build operator-facing SUCCESS text, including a bounded skip summary when needed."""
+    base = f"Published catalog for RDI {rdi}" if outcome.pushed else f"Catalog for RDI {rdi} unchanged on remote"
+    if not outcome.skipped:
+        return base
+    dataset_label = "dataset" if outcome.dataset_count == 1 else "datasets"
+    skipped_ids = [arc_id for arc_id, _reason in outcome.skipped]
+    shown = skipped_ids[:_CATALOG_SKIP_IDS_IN_MESSAGE]
+    remainder = len(skipped_ids) - len(shown)
+    id_part = ", ".join(shown)
+    if remainder > 0:
+        id_part = f"{id_part}, +{remainder} more"
+    return f"{base} ({outcome.dataset_count} {dataset_label}, {len(skipped_ids)} skipped: {id_part})"
 
 
 class ArcManager:
@@ -195,18 +213,17 @@ class ArcManager:
             attributes={"rdi": rdi, "harvest_id": harvest_id or ""},
         ) as span:
             try:
-                pushed = await self._store.finalize(rdi=rdi)
-                span.set_attribute("pushed", pushed)
+                outcome = await self._store.finalize(rdi=rdi)
+                span.set_attribute("pushed", outcome.pushed)
+                span.set_attribute("dataset_count", outcome.dataset_count)
+                span.set_attribute("skipped_count", len(outcome.skipped))
                 if harvest_id is not None:
-                    message = (
-                        f"Published catalog for RDI {rdi}" if pushed else f"Catalog for RDI {rdi} unchanged on remote"
-                    )
                     await self._append_harvest_catalog_event(
                         harvest_id,
                         CatalogPushEventType.CATALOG_PUSH_SUCCESS,
-                        message,
+                        _catalog_push_success_message(rdi, outcome),
                     )
-                return pushed
+                return outcome.pushed
             except ArcStoreTransientError as exc:
                 # Do not append CATALOG_PUSH_FAILED: Celery will retry, and
                 # recording here would bloat catalog_events / leave false
