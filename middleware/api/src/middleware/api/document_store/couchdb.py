@@ -506,25 +506,31 @@ class CouchDB(DocumentStore):
         """Calculate and return statistics for a specific harvest run."""
         selector: JsonObject = {"doc_type": "arc"}
         selector["metadata.last_harvest_id"] = harvest_id
-        docs = await self._client.find_projected(
-            selector,
-            fields=["metadata.first_harvest_id", "metadata.last_changed_harvest_id"],
-        )
-
+        fields = ["metadata.first_harvest_id", "metadata.last_changed_harvest_id"]
+        page_size = self._config.default_query_limit
         stats = HarvestStatistics()
-        stats.arcs_submitted = len(docs)
-
-        for doc_dict in docs:
-            meta_raw = doc_dict.get("metadata")
-            if not isinstance(meta_raw, dict):
-                continue
-            if meta_raw.get("first_harvest_id") == harvest_id:
-                stats.arcs_new += 1
-            elif meta_raw.get("last_changed_harvest_id") == harvest_id:
-                stats.arcs_updated += 1
-            else:
-                stats.arcs_unchanged += 1
-
+        skip = 0
+        while True:
+            docs = await self._client.find_projected(
+                selector,
+                fields=fields,
+                limit=page_size,
+                skip=skip,
+            )
+            stats.arcs_submitted += len(docs)
+            for doc_dict in docs:
+                meta_raw = doc_dict.get("metadata")
+                if not isinstance(meta_raw, dict):
+                    continue
+                if meta_raw.get("first_harvest_id") == harvest_id:
+                    stats.arcs_new += 1
+                elif meta_raw.get("last_changed_harvest_id") == harvest_id:
+                    stats.arcs_updated += 1
+                else:
+                    stats.arcs_unchanged += 1
+            if len(docs) < page_size:
+                break
+            skip += page_size
         return stats
 
     async def get_task_record(self, task_id: str) -> TaskRecord | None:

@@ -549,12 +549,66 @@ async def test_get_harvest_statistics(  # noqa: PLR0913, PLR0917
     mock_client_instance.find_projected.assert_awaited_once_with(
         {"doc_type": "arc", "metadata.last_harvest_id": harvest_id},
         fields=["metadata.first_harvest_id", "metadata.last_changed_harvest_id"],
+        limit=100,
+        skip=0,
     )
 
     assert stats.arcs_submitted == 1
     assert stats.arcs_new == expected_new
     assert stats.arcs_updated == expected_updated
     assert stats.arcs_unchanged == expected_unchanged
+
+
+@pytest.mark.asyncio
+async def test_get_harvest_statistics_paginates_beyond_default_query_limit(
+    mock_client_instance: MagicMock,
+) -> None:
+    """Statistics scan all Mango pages, not only the first default_query_limit rows."""
+    page_size = 3
+    page_config = CouchDBConfig(
+        url="http://test:5984",
+        user="user",
+        password=SecretStr("pass"),
+        default_query_limit=page_size,
+    )
+    with patch(
+        "middleware.api.document_store.couchdb.CouchDBClient.from_config",
+        return_value=mock_client_instance,
+    ):
+        store = CouchDB(page_config)
+
+    harvest_id = "h1"
+    page_one = [
+        {"metadata": {"first_harvest_id": harvest_id, "last_changed_harvest_id": harvest_id}} for _ in range(page_size)
+    ]
+    page_two = [{"metadata": {"first_harvest_id": "h0", "last_changed_harvest_id": harvest_id}}]
+    expected_submitted = page_size + len(page_two)
+    expected_pages = 2
+
+    async def _find_projected(
+        _selector: dict,
+        *,
+        fields: list[str],
+        limit: int | None = None,
+        skip: int = 0,
+    ) -> list[dict]:
+        assert fields == ["metadata.first_harvest_id", "metadata.last_changed_harvest_id"]
+        assert limit == page_size
+        if skip == 0:
+            return page_one
+        if skip == page_size:
+            return page_two
+        return []
+
+    mock_client_instance.find_projected = AsyncMock(side_effect=_find_projected)
+
+    stats = await store.get_harvest_statistics(harvest_id)
+
+    assert mock_client_instance.find_projected.await_count == expected_pages
+    assert stats.arcs_submitted == expected_submitted
+    assert stats.arcs_new == page_size
+    assert stats.arcs_updated == len(page_two)
+    assert stats.arcs_unchanged == 0
 
 
 @pytest.mark.asyncio
