@@ -40,8 +40,8 @@ class CatalogFinalizeResult:
 
     pushed: bool
     dataset_count: int = 0
+    # ``(arc_id, reason)`` for ARCs omitted under interim partial push.
     skipped: tuple[tuple[str, str], ...] = ()
-    """``(arc_id, reason)`` for ARCs omitted under interim partial push."""
 
 
 def _record_and_raise_arc_store_error(span: trace.Span, exc: BaseException, message: str) -> NoReturn:

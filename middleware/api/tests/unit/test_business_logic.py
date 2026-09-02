@@ -302,6 +302,31 @@ async def test_finalize_catalog_success_message_includes_skip_summary(
 
 
 @pytest.mark.asyncio
+async def test_finalize_catalog_success_message_uses_singular_dataset(
+    worker_logic: BusinessLogic,
+    mock_store: MagicMock,
+    mock_doc_store: MagicMock,
+) -> None:
+    """Single published dataset should use singular wording in the success event."""
+    mock_store.publishes_per_arc_git = False
+    mock_store.finalize = AsyncMock(
+        return_value=CatalogFinalizeResult(
+            pushed=True,
+            dataset_count=1,
+            skipped=(("bad-arc", "JSON-LD expand/compact failed"),),
+        )
+    )
+    mock_doc_store.update_harvest = AsyncMock()
+
+    pushed = await worker_logic.finalize_catalog("test-rdi", harvest_id="harvest-1")
+
+    assert pushed is True
+    message = mock_doc_store.update_harvest.call_args.args[1]["append_catalog_event"]["message"]
+    assert "1 dataset" in message
+    assert "1 datasets" not in message
+
+
+@pytest.mark.asyncio
 async def test_finalize_catalog_transient_error_skips_failure_event(
     worker_logic: BusinessLogic,
     mock_store: MagicMock,
