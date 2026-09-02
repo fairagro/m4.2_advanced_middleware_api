@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 from abc import ABC, abstractmethod
+from dataclasses import dataclass
 from typing import NoReturn
 
 from arctrl import ARC  # type: ignore[import-untyped]
@@ -31,6 +32,16 @@ class ArcStoreTransientError(ArcStoreError):
 
     This indicates that a retry might be successful.
     """
+
+
+@dataclass(frozen=True, slots=True)
+class CatalogFinalizeResult:
+    """Outcome of ``ArcStore.finalize`` (push flag plus partial-push skips)."""
+
+    pushed: bool
+    dataset_count: int = 0
+    skipped: tuple[tuple[str, str], ...] = ()
+    """``(arc_id, reason)`` for ARCs omitted under interim partial push."""
 
 
 def _record_and_raise_arc_store_error(span: trace.Span, exc: BaseException, message: str) -> NoReturn:
@@ -104,13 +115,13 @@ class ArcStore(ABC):
         """Whether standalone ARC create (``/v1/arcs``, ``/v2/arcs``, ``/v3/arcs``) is allowed."""
         return True
 
-    async def _finalize(self, *, rdi: str) -> bool:  # noqa: PLR6301, ARG002
+    async def _finalize(self, *, rdi: str) -> CatalogFinalizeResult:  # noqa: PLR6301, ARG002
         """Publish pending catalog state for an RDI.
 
-        Default is a successful no-op returning False (nothing pushed) so
+        Default is a successful no-op (nothing pushed, no skips) so
         orchestrators can call finalize for every backend without branching.
         """
-        return False
+        return CatalogFinalizeResult(pushed=False)
 
     async def shutdown(self) -> None:  # noqa: PLR6301
         """Release resources held by the store (e.g. thread-pool executors).
@@ -162,7 +173,7 @@ class ArcStore(ABC):
                     "General exception caught in `ArcStore.create_or_update`",
                 )
 
-    async def finalize(self, *, rdi: str) -> bool:
+    async def finalize(self, *, rdi: str) -> CatalogFinalizeResult:
         """Publish pending catalog state for an RDI.
 
         Raises:
@@ -173,9 +184,11 @@ class ArcStore(ABC):
             attributes={"rdi": rdi},
         ) as span:
             try:
-                pushed = await self._finalize(rdi=rdi)
-                span.set_attribute("pushed", pushed)
-                return pushed
+                outcome = await self._finalize(rdi=rdi)
+                span.set_attribute("pushed", outcome.pushed)
+                span.set_attribute("dataset_count", outcome.dataset_count)
+                span.set_attribute("skipped_count", len(outcome.skipped))
+                return outcome
             except ArcStoreError as e:
                 span.record_exception(e)
                 raise

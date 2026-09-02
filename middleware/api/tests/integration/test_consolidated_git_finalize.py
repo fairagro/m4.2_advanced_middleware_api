@@ -144,9 +144,9 @@ async def test_finalize_pushes_catalog_to_bare_remote(
     """First finalize performs a real commit/push and writes ``{rdi}.json`` to the remote."""
     expected_bytes = await _expected_catalog_bytes(doc_store)
 
-    pushed = await catalog_store.finalize(rdi="edal")
+    outcome = await catalog_store.finalize(rdi="edal")
 
-    assert pushed is True
+    assert outcome.pushed is True
     assert bare_catalog_remote.exists()
     catalog_bytes = _read_catalog_from_remote(bare_catalog_remote, "edal")
     assert catalog_bytes == expected_bytes
@@ -169,14 +169,14 @@ async def test_finalize_skips_push_when_catalog_unchanged(
     """Second finalize with identical ARC bodies does not push again."""
     expected_bytes = await _expected_catalog_bytes(doc_store)
 
-    first_pushed = await catalog_store.finalize(rdi="edal")
+    first = await catalog_store.finalize(rdi="edal")
     remote_after_first = _read_catalog_from_remote(bare_catalog_remote, "edal")
 
-    second_pushed = await catalog_store.finalize(rdi="edal")
+    second = await catalog_store.finalize(rdi="edal")
     remote_after_second = _read_catalog_from_remote(bare_catalog_remote, "edal")
 
-    assert first_pushed is True
-    assert second_pushed is False
+    assert first.pushed is True
+    assert second.pushed is False
     assert remote_after_first == expected_bytes
     assert remote_after_second == remote_after_first
 

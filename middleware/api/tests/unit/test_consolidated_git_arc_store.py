@@ -118,9 +118,11 @@ async def test_finalize_loads_arcs_from_couchdb(
     store = ConsolidatedGitArcStore(consolidated_config, doc_store)
 
     with patch.object(store, "_publish_catalog_bytes", return_value=False) as mock_publish:
-        pushed = await store.finalize(rdi="edal")
+        outcome = await store.finalize(rdi="edal")
 
-    assert pushed is False
+    assert outcome.pushed is False
+    assert outcome.dataset_count >= 1
+    assert outcome.skipped == ()
     doc_store.iter_arc_contents_by_rdi.assert_called_once_with("edal")
     mock_publish.assert_called_once()
     catalog_bytes = mock_publish.call_args[0][1]
@@ -148,9 +150,12 @@ async def test_finalize_partial_push_skips_bad_arc_keeps_good(
     store = ConsolidatedGitArcStore(consolidated_config, doc_store)
 
     with patch.object(store, "_publish_catalog_bytes", return_value=True) as mock_publish:
-        pushed = await store.finalize(rdi="edal")
+        outcome = await store.finalize(rdi="edal")
 
-    assert pushed is True
+    assert outcome.pushed is True
+    assert outcome.dataset_count == 1
+    assert len(outcome.skipped) == 1
+    assert outcome.skipped[0][0] == "bad-arc"
     catalog_bytes = mock_publish.call_args[0][1]
     assert b"DS-GOOD" in catalog_bytes
     assert b"Broken context" not in catalog_bytes
@@ -194,9 +199,11 @@ async def test_finalize_empty_rdi_still_publishes_empty_catalog(
     store = ConsolidatedGitArcStore(consolidated_config, doc_store)
 
     with patch.object(store, "_publish_catalog_bytes", return_value=True) as mock_publish:
-        pushed = await store.finalize(rdi="edal")
+        outcome = await store.finalize(rdi="edal")
 
-    assert pushed is True
+    assert outcome.pushed is True
+    assert outcome.dataset_count == 0
+    assert outcome.skipped == ()
     assert mock_publish.call_args[0][1].strip() == b"[]"
 
 

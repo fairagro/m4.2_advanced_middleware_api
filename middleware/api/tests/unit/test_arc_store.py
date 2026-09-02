@@ -57,8 +57,10 @@ class TestArcStoreWrapperMethods:
     async def test_finalize_default_no_op() -> None:
         """Default finalize succeeds without pushing."""
         store = create_mock_arc_store()
-        pushed = await store.finalize(rdi="edal")
-        assert pushed is False
+        outcome = await store.finalize(rdi="edal")
+        assert outcome.pushed is False
+        assert outcome.dataset_count == 0
+        assert outcome.skipped == ()
 
     @pytest.mark.asyncio
     @staticmethod

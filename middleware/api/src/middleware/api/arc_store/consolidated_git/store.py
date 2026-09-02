@@ -19,7 +19,7 @@ from git import Repo
 from git.exc import GitCommandError
 from opentelemetry import context
 
-from middleware.api.arc_store import ArcStore, ArcStoreError, ArcStoreTransientError
+from middleware.api.arc_store import ArcStore, ArcStoreError, ArcStoreTransientError, CatalogFinalizeResult
 from middleware.api.arc_store.consolidated_git.catalog_jsonld import normalize_catalog_datasets_best_effort
 from middleware.api.arc_store.consolidated_git.catalog_materialize import materialize_catalog_dataset
 from middleware.api.arc_store.consolidated_git.catalog_serialize import extract_catalog_dataset, serialize_catalog_file
@@ -227,7 +227,7 @@ class ConsolidatedGitArcStore(ArcStore):
         return outcome.datasets, skipped, seen
 
     @override
-    async def _finalize(self, *, rdi: str) -> bool:
+    async def _finalize(self, *, rdi: str) -> CatalogFinalizeResult:
         """Rebuild ``{rdi}.json`` from CouchDB ARC bodies (streamed, Dataset-only retained).
 
         Interim partial push (#356): ARCs that fail extract/JSON-LD are skipped so
@@ -237,6 +237,7 @@ class ConsolidatedGitArcStore(ArcStore):
         (avoids wiping the remote).
         """
         datasets, skipped, seen = await self._collect_catalog_datasets(rdi)
+        skipped_tuple = tuple(skipped)
 
         if seen > 0 and not datasets:
             skipped_ids = [arc_id for arc_id, _ in skipped]
@@ -273,4 +274,8 @@ class ConsolidatedGitArcStore(ArcStore):
             len(skipped),
             pushed,
         )
-        return pushed
+        return CatalogFinalizeResult(
+            pushed=pushed,
+            dataset_count=len(datasets),
+            skipped=skipped_tuple,
+        )
