@@ -9,7 +9,7 @@ When a harvest transitions to `COMPLETED`, the system SHALL request ArcStore
 Harvest status transition to `COMPLETED` MUST NOT wait for the Git push to
 finish. The system MUST record distinct catalog events for publish success and
 failure so operators can distinguish “harvest complete” from “RDI catalog
-flushed”. The system MUST enqueue finalize on harvest ``COMPLETED`` even when
+flushed”. The system MUST enqueue finalize on harvest `COMPLETED` even when
 statistics show no new or updated ARCs (bootstrap after switching backends and
 retry after a failed finalize). When finalize runs, byte-stable comparison
 still governs whether a Git push occurs. Worker task payloads MAY include
