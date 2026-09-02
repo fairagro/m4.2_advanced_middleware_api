@@ -18,4 +18,4 @@
 
 - [x] 3.1 Run `uv run pytest middleware/api/tests/unit/test_couchdb_store.py -q` and related harvest-manager
       tests.
-- [ ] 3.2 Close [#345](https://github.com/fairagro/m4.2_advanced_middleware_api/issues/345) when merged.
+- [x] 3.2 Close [#345](https://github.com/fairagro/m4.2_advanced_middleware_api/issues/345) when merged.
