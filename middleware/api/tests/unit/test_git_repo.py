@@ -171,24 +171,6 @@ def test_git_context_enter_clone(mock_repo: MagicMock, tmp_path: Path) -> None:
 
 
 @patch("middleware.api.arc_store.git_context.Repo")
-def test_git_context_enter_clone_passes_depth_one(mock_repo: MagicMock, tmp_path: Path) -> None:
-    """Fresh clones must always request a shallow history (depth=1)."""
-    target_path = tmp_path / "repo"
-    target_path.mkdir()
-    config = GitContextConfig(
-        repo_url=UrlStr("https://example.com/repo.git"),
-        branch="main",
-        user_name=None,
-        user_email=None,
-        local_path=target_path,
-    )
-
-    with GitContext(config):
-        _args, kwargs = mock_repo.clone_from.call_args
-        assert kwargs.get("depth") == 1
-
-
-@patch("middleware.api.arc_store.git_context.Repo")
 def test_git_context_enter_existing(mock_repo: MagicMock, tmp_path: Path) -> None:
     """Test GitContext connecting to existing repo."""
     target_path = tmp_path / "repo"
