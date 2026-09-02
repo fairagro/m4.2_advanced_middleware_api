@@ -17,5 +17,3 @@
 
 - [x] 3.1 Run focused `uv run pytest` for GitContext / GitRepo / consolidated git
       tests.
-- [ ] 3.2 Close [#346](https://github.com/fairagro/m4.2_advanced_middleware_api/issues/346)
-      when merged (note GitRepo included in scope).
