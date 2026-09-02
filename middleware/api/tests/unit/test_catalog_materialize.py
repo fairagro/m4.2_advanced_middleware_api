@@ -168,6 +168,37 @@ def test_materialize_has_part_study_and_assay_from_sample() -> None:
     assert assay.get("identifier") == "Proteomics_MS"
 
 
+def test_materialize_has_part_scalar_string_ref() -> None:
+    """Scalar string hasPart refs (pyld compactArrays) resolve like dict @id refs."""
+    arc = cast(
+        RoCrateContent,
+        {
+            "@context": "https://w3id.org/ro/crate/1.1/context",
+            "@graph": [
+                {
+                    "@id": "assays/assay-a/",
+                    "@type": "Dataset",
+                    "additionalType": "Assay",
+                    "identifier": "assay-a",
+                    "name": "Assay A",
+                },
+                {
+                    "@id": "./",
+                    "@type": "Dataset",
+                    "identifier": "DS-HAS-PART-STR",
+                    "hasPart": "assays/assay-a/",
+                },
+            ],
+        },
+    )
+    record = materialize_catalog_dataset(extract_catalog_dataset(arc), arc)
+    has_part = record.get("hasPart")
+    assert isinstance(has_part, dict)
+    assert has_part.get("@id") == "assays/assay-a/"
+    assert has_part.get("additionalType") == "Assay"
+    assert has_part.get("identifier") == "assay-a"
+
+
 def test_materialize_citation_without_nested_comment() -> None:
     """Citation resolves ScholarlyArticle fields; nested Comment is omitted."""
     arc = _load_rocrate("sample.json")
