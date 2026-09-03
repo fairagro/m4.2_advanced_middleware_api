@@ -73,29 +73,37 @@ When you create an issue:
 - Use the current repo from context (or ask the user if the target repo is
   unclear).
 - Title: concise, user-facing.
-- Body: include the triage block at the top, then a clear description.
+- Body: GitHub **Markdown** (not a plain-text dump). Include the triage
+  block at the top, then a clear description.
 
 ### Issue body template
 
-```text
-Type: Bug|Security|Feature|Task|Discussion|Refactoring
+```markdown
+## Type
 
-Triage
-- severity: ...
-- practicality: ... (path or “seen-in-the-wild” evidence)
-- cost: ... (cheap|medium|expensive)
+Bug | Security | Feature | Task | Discussion | Refactoring
 
-Problem
+## Triage
+
+- **severity:** …
+- **practicality:** … (path or “seen-in-the-wild” evidence)
+- **cost:** … (cheap | medium | expensive)
+
+## Problem
+
 <what is wrong / what we observed>
 
-Why not now?
+## Why not now?
+
 <what prevents this from being handled in the original PR/dialogue>
 
-Acceptance criteria (suggested)
-<what “done” looks like>
+## Acceptance criteria (suggested)
 
-Links
-- PR: ...
+- <what “done” looks like>
+
+## Links
+
+- PR: …
 ```
 
 ## Output to the user

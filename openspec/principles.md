@@ -12,6 +12,11 @@ the constraints stated here.
 - **Explicit over implicit** — configuration comes from `Config`, not `os.environ`.
 - **Simplicity** — remove abstractions that serve no purpose; add them only when
   duplication becomes a real problem.
+- **Supported environment first** — the Linux Dev Container is the supported
+  way to run this repo. Do not design or review for macOS, Windows, Homebrew,
+  or other host package layouts. Running scripts on a bare Linux workstation without
+  the Dev Container is possible but unofficial; GitHub Actions Linux is
+  supported for CI.
 
 ---
 
@@ -114,6 +119,32 @@ a last resort. A real fix is always preferred.
 - Integration tests: `middleware/api/tests/integration/` — mock at wrapper boundary.
 - Tests are run with `uv run pytest middleware/ -v`.
 - Every public behaviour that can fail must have at least one test.
+
+---
+
+## Supported development environment
+
+The **supported** way to develop and run repo scripts (`scripts/`, `gh`
+wrapper, quality hooks, token helpers) is the **Linux Dev Container**
+defined in this repository. GitHub Actions Linux runners are supported
+for CI.
+
+The following are **out of scope** for product code, scripts, and AI
+reviews:
+
+- macOS, Homebrew, Windows, or other host package layouts
+- `gh` / tools installed only on a custom host `PATH` (e.g. Homebrew
+  prefixes) that the Dev Container does not use
+- Making wrappers portable to unofficial bare-metal Linux installs
+
+A Linux workstation without the Dev Container may still run some
+scripts; that path is **not** officially supported. Do not add
+complexity to accommodate it. The Dev Container exists to remove
+host-environment differences.
+
+Finders must not comment on “Homebrew / local install / macOS / Windows
+PATH” breakage. Fixers must **dismiss** those findings (practicality
+**None** — quote this section).
 
 ---
 

@@ -62,6 +62,9 @@ Each comment **must** include:
 - Theoretical weaknesses with no reachable path in this API/worker
 - Suggested `T | None`, `Any`, `object`, or `if x is None` when the type
   already excludes `None`
+- macOS, Homebrew, Windows, or host `PATH` layouts that the Linux Dev
+  Container does not use (`openspec/principles.md` Supported development
+  environment)
 
 If nothing in **Report** applies, leave no comment. Prefer fewer,
 higher-severity comments.
@@ -74,7 +77,9 @@ Stop at the first matching step.
 
 1. **Correct?** If the diagnosis is wrong, already covered by types/Pydantic/
    `ConfigWrapper`/a spec invariant, or Ruff/MyPy/Pylint/Bandit already gate
-   it → `dismiss`.
+   it → `dismiss`. If the path is only macOS, Homebrew, Windows, or an
+   unofficial host install — quote `openspec/principles.md` Supported
+   development environment → `dismiss` (practicality **None**).
 2. **This PR?** If it is drive-by on unchanged code, another module, or
    speculative hardening the change does not need → `dismiss` or `follow-up`
    (only if Medium+).
@@ -116,7 +121,7 @@ exists in *this* system”.
 | **High** | Cite entry → function → bad state. Entry is a public route (`/v3/...`), a Celery task, or a config field set by default / `dev_environment/config.yaml`. |
 | **Medium** | Only with non-default config, an internal caller, or admin. |
 | **Low** | State is excluded by Pydantic, `ConfigWrapper`, annotations, or a spec invariant — **quote the invariant**. |
-| **None** | False positive; the alleged path does not exist. |
+| **None** | False positive; the alleged path does not exist. Unsupported host (macOS, Windows, Homebrew, unofficial workstation) — quote `openspec/principles.md` Supported development environment. |
 
 If the fixer cannot write a path sentence, practicality is **Low**, not High.
 

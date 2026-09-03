@@ -116,7 +116,9 @@ budget: nit-round1|nit-round2-regression|nit-exhausted|n/a-risk
 
 Decision order (stop at first match) — same as the policy:
 
-1. Incorrect / already gated / no path → `dismiss`
+1. Incorrect / already gated / no path / unsupported host environment
+   (macOS, Windows, Homebrew, unofficial bare Linux — quote principles
+   “Supported development environment”) → `dismiss`
 2. Not this PR → `dismiss`, or `follow-up` if Medium+
 3. Choose the **cheapest correct** fix. Widening a type is forbidden.
    `if x is None` is forbidden when the type already excludes `None`.
@@ -192,11 +194,12 @@ At most **one** per PR, and only if at least one `follow-up` item is
 Medium+. Low nits never become issues.
 
 ```bash
-gh issue create --title "Follow-up from PR #<n> AI review" --body "..."
+gh issue create --title "Follow-up from PR #<n> AI review" --body-file ...
 ```
 
-Body: bullets with path, severity, practicality, why not this PR. Link the
-PR.
+Body **must** be GitHub Markdown (headings, lists, fenced paths). Follow
+`.agents/skills/create-issue/SKILL.md` (Markdown template). Include
+bullets with path, severity, practicality, why not this PR. Link the PR.
 
 ## Output to the user
 

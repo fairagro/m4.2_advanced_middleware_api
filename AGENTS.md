@@ -377,6 +377,10 @@ Do not widen types (`T | None`, `Any`, `object`) or add `if x is None` when the
 type already excludes `None`. Prefer a narrower type over the finder’s patch.
 Do not hide `Any`/`object` behind a type alias.
 
+Supported environment: Linux Dev Container (and GitHub Actions Linux). Dismiss
+macOS / Windows / Homebrew / unofficial host-PATH review findings
+(`openspec/principles.md`).
+
 ---
 
 ## 🚀 Recent Work Sessions
