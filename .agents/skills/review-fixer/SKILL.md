@@ -22,15 +22,20 @@ Do not loop until comments are gone. Stop when no **risk** finding remains.
 
 Accept any of:
 
-- A PR number or URL
+- A PR number or URL (default: process **open** work only — see below)
+- A review URL (`/pull/N#pullrequestreview-ID` or a discussion permalink)
 - Pasted review comments / a review conversation
 - “Fix the Copilot/Bugbot comments on this PR”
 
-If a PR is identifiable, fetch unresolved AI threads with `gh` (below).
-**When a PR is known, reply on every triaged thread and resolve it when
-possible** (see [GitHub replies](#github-replies-pr-known)). If the user
-only pasted text, triage that text and **do not** reply on GitHub unless
-they also gave a PR.
+If the user gives a **review URL**, triage **that submission only**
+(inline threads from that review + its summary body, including Copilot
+“Suppressed comments”). Do not re-triage older reviews.
+
+If they give only a **PR number/URL**, discover open work yourself. Do
+**not** re-read or reply on already-resolved threads.
+
+If they only pasted text, triage that text and **do not** reply on GitHub
+unless they also gave a PR.
 
 Do **not** commit unless the user asks. Do **not** push.
 
@@ -44,7 +49,9 @@ Do not read tokens from the git worktree; do not invent them. If there is no
 TTY, skip GitHub writes, print the intended replies, and tell the user to
 open a terminal or run `./scripts/set-dev-tokens.sh`.
 
-## Fetch threads (when a PR is known)
+## Fetch open work (when a PR is known)
+
+Be fast. One GraphQL query. Then **filter in memory**.
 
 ```bash
 gh api graphql -f query='
@@ -53,7 +60,7 @@ query($owner:String!,$name:String!,$n:Int!) {
     pullRequest(number:$n) {
       url
       reviews(first: 50) {
-        nodes { author { login } submittedAt state }
+        nodes { databaseId author { login } submittedAt state body }
       }
       reviewThreads(first: 100) {
         nodes {
@@ -69,13 +76,26 @@ query($owner:String!,$name:String!,$n:Int!) {
 }' -F owner=OWNER -F name=REPO -F n=PR
 ```
 
-Keep threads that are **unresolved** and whose first comment author is
-Copilot or Bugbot (`copilot-pull-request-reviewer`, `copilot[bot]`,
-`cursor[bot]`, `bugbot`, or similar). Skip human threads unless the user
-asked to include them.
+**Open work** (this is the only set you triage unless the user pasted a
+specific review URL):
 
-**Round** = count of Copilot + Bugbot **review submissions** (not comment
-count). Round 1 vs 2+ drives nit-budget.
+1. **Unresolved** review threads whose first comment author is Copilot or
+   Bugbot (`copilot-pull-request-reviewer`, `copilot[bot]`, `cursor[bot]`,
+   `bugbot`, or similar). Skip human threads unless the user asked.
+2. The **latest** Copilot or Bugbot **review submission** `body`, if it
+   contains findings that are **not** already an unresolved thread.
+   Copilot Lite often puts “Needs a closer look” and **Suppressed
+   comments** only in that summary. Suppressed comments have **no**
+   resolve button and **no** thread id — still triage them; reply on the
+   PR conversation (`issues/PR/comments`), not via `resolveReviewThread`.
+
+Ignore resolved threads completely (do not reply on them again).
+
+If open work is empty, say so in one sentence and stop.
+
+**Round** = count of Copilot + Bugbot **review submissions** on the PR
+(not comment count). Round 1 vs 2+ drives nit-budget. You still need
+that count even when you only triage the latest open items.
 
 ## Per-thread procedure
 
@@ -123,14 +143,18 @@ run**, not the whole PR.
 
 ## GitHub replies (PR known)
 
-This step is **required** when a PR number/URL is known and `gh` can
-write. Do not finish after local code changes alone.
+Required for **open work only**, when `gh` can write. Do not finish after
+local code changes alone. Do not reply on resolved threads.
 
-For every triaged thread (`fix`, `dismiss`, and `follow-up`):
+**Unresolved threads** (`fix`, `dismiss`, `follow-up`):
 
-1. Post a reply on the first review comment (`in_reply_to`).
+1. Reply on the first review comment (`in_reply_to`).
 2. Then resolve the thread if the mutation succeeds.
 3. Do **not** resolve without a reply.
+
+**Summary-only / suppressed comments** (no thread, no resolve button):
+post one PR conversation comment covering those items. Do not invent a
+thread resolve.
 
 If `gh` lacks auth or `resolveReviewThread` fails (permissions), leave
 the reply if you posted one, print the remaining reply/resolve text for
