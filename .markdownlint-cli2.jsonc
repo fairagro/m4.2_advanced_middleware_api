@@ -6,6 +6,9 @@
     // OpenSpec regenerates these on `openspec update` — do not hand-lint/edit.
     ".cursor/**",
     ".github/skills/**",
-    ".github/prompts/**"
+    ".github/prompts/**",
+    // Vendor agent skills (`gh skill install`; do not hand-edit).
+    ".agents/skills/gh/**",
+    ".agents/skills/scan-secrets/**"
   ]
 }

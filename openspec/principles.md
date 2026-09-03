@@ -12,6 +12,11 @@ the constraints stated here.
 - **Explicit over implicit** — configuration comes from `Config`, not `os.environ`.
 - **Simplicity** — remove abstractions that serve no purpose; add them only when
   duplication becomes a real problem.
+- **Supported environment first** — the Linux Dev Container is the supported
+  way to run this repo. Do not design or review for macOS, Windows, Homebrew,
+  or other host package layouts. Running scripts on a bare Linux workstation without
+  the Dev Container is possible but unofficial; GitHub Actions Linux is
+  supported for CI.
 
 ---
 
@@ -59,7 +64,13 @@ middleware/api_client/   ← optional client library for API consumers
 ## Type Safety
 
 - All public functions and methods must have full type annotations.
-- `dict[str, Any]` and bare `Any` fields are forbidden in `Config` subclasses.
+- Use the most precise type that is actually true (`list[str]`, a concrete
+  class, `TypedDict` / Pydantic model — not `list[Any]` or `Sequence[object]`).
+- `Any` and `object` only when the value is genuinely unconstrained and cannot
+  be narrowed. `dict[str, Any]` and bare `Any` fields are forbidden in
+  `Config` subclasses.
+- Do not introduce a type alias whose meaning is `Any`, `object`, or another
+  equally wide type so the annotation looks precise.
 - Concrete Pydantic types for nested configs.
 - `SecretStr` for passwords and tokens — call `.get_secret_value()` only at
   the point of use (never log or cast to `str`).
@@ -67,6 +78,11 @@ middleware/api_client/   ← optional client library for API consumers
   userinfo) — `str(url)` redacts userinfo while keeping host/path; call
   `.unredacted()` only when passing the URL to Git CLI / GitPython. Keep
   `redact_url_userinfo` on free-form text (Git stderr, logs, persisted events).
+- Do **not** widen a type to silence a checker or review (`T` → `T | None`,
+  `Any`, `dict[str, Any]`). Narrow at the source.
+- Do **not** add `if x is None` when the annotation, Pydantic model, or
+  `ConfigWrapper` already excludes `None`. If `None` is required, change the
+  producing API and every caller — no mid-pipeline guards.
 
 ### Function signatures and `**kwargs`
 
@@ -103,6 +119,32 @@ a last resort. A real fix is always preferred.
 - Integration tests: `middleware/api/tests/integration/` — mock at wrapper boundary.
 - Tests are run with `uv run pytest middleware/ -v`.
 - Every public behaviour that can fail must have at least one test.
+
+---
+
+## Supported development environment
+
+The **supported** way to develop and run repo scripts (`scripts/`, `gh`
+wrapper, quality hooks, token helpers) is the **Linux Dev Container**
+defined in this repository. GitHub Actions Linux runners are supported
+for CI.
+
+The following are **out of scope** for product code, scripts, and AI
+reviews:
+
+- macOS, Homebrew, Windows, or other host package layouts
+- `gh` / tools installed only on a custom host `PATH` (e.g. Homebrew
+  prefixes) that the Dev Container does not use
+- Making wrappers portable to unofficial bare-metal Linux installs
+
+A Linux workstation without the Dev Container may still run some
+scripts; that path is **not** officially supported. Do not add
+complexity to accommodate it. The Dev Container exists to remove
+host-environment differences.
+
+Finders must not comment on “Homebrew / local install / macOS / Windows
+PATH” breakage. Fixers must **dismiss** those findings (practicality
+**None** — quote this section).
 
 ---
 

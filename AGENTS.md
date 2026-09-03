@@ -25,13 +25,19 @@ project for AI assistants (GitHub Copilot, Claude, etc.).
 .agents/
 └── skills/                # Project Agent Skills (agentskills.io)
     ├── arctrl/            # arctrl Python library reference
-    └── config-wrapper/    # ConfigWrapper / ConfigBase pattern
+    ├── config-wrapper/    # ConfigWrapper / ConfigBase pattern
+    ├── gh/                # Official GitHub CLI patterns (`gh skill install cli/cli gh`)
+    ├── review-fixer/      # Triage Copilot/Bugbot PR comments (`/review-fixer`)
+    └── scan-secrets/      # Official ggshield (`gh skill install GitGuardian/agent-skills scan-secrets`)
 
 .cursor/skills/            # OpenSpec-generated Cursor skills (openspec update)
+.cursor/BUGBOT.md          # Bugbot entry point → docs/ai_review_policy.md
 .github/skills/            # OpenSpec-generated Copilot skills (openspec update)
+.github/copilot-instructions.md  # Copilot entry point → AGENTS.md + review policy
 
 docs/
-└── ai_workflow.md         # AI agent workflow documentation
+├── ai_workflow.md         # AI agent workflow documentation
+└── ai_review_policy.md    # Copilot/Bugbot policy (finder + fixer)
 
 openspec/                  # OpenSpec source of truth + change proposals
 ├── principles.md          # Foundation contract, project values
@@ -328,6 +334,8 @@ Before generating or modifying code, read the relevant specs:
   `RepositoryReport`, `HarvestIssue`.
 
 For the AI agent workflow documentation, see [`docs/ai_workflow.md`](docs/ai_workflow.md).
+For Copilot/Bugbot review triage, see [`docs/ai_review_policy.md`](docs/ai_review_policy.md)
+and `/review-fixer`.
 
 ### Spec-to-Code Mapping
 
@@ -348,6 +356,30 @@ Agents (`/opsx-apply` and default Agent mode) use it to locate affected code.
 | `openspec/specs/harvest-client/` | `middleware/api_client/src/middleware/api_client/api_client.py`, `models.py` |
 | `openspec/specs/harvest-report/` | `middleware/shared/src/middleware/shared/report/`, `ns/harvest-report/` |
 | `openspec/specs/ci-cd/` | `.github/workflows/` (see domain design for workflow files) |
+
+---
+
+## AI code review (Copilot + Bugbot)
+
+Finders (GitHub Copilot code review, Cursor Bugbot) may re-review every push.
+That is intentional: real bugs sometimes appear only on a later pass.
+
+They are **not** a merge gate. Merge when **risk** findings are gone, not when
+the PR has zero AI comments.
+
+| Layer | Artifact | Job |
+| ----- | -------- | --- |
+| Finder | `.github/copilot-instructions.md`, `.cursor/BUGBOT.md` | Load `docs/ai_review_policy.md`; report reachable bugs |
+| Policy | `docs/ai_review_policy.md` | Severity, practicality, cost, nit-budget, types |
+| Fixer | `/review-fixer` (`.agents/skills/review-fixer/`) | Re-evaluate each thread → fix, dismiss, or one follow-up issue |
+
+Do not widen types (`T | None`, `Any`, `object`) or add `if x is None` when the
+type already excludes `None`. Prefer a narrower type over the finder’s patch.
+Do not hide `Any`/`object` behind a type alias.
+
+Supported environment: Linux Dev Container (and GitHub Actions Linux). Dismiss
+macOS / Windows / Homebrew / unofficial host-PATH review findings
+(`openspec/principles.md`).
 
 ---
 
@@ -420,9 +452,14 @@ Before making changes, consider:
 - What Alpine / tool versions? → repo-root `versions.env`
 - How to run tests? → `uv run pytest ...`
 - Where do specs live? → `openspec/specs/<domain>/` (propose changes via `/opsx-propose`)
+- Copilot/Bugbot comments? → `/review-fixer` (policy in `docs/ai_review_policy.md`); do not loop until 0 comments
+- Personal `GH_TOKEN` / `GITGUARDIAN_API_KEY`? → TTY prompt (empty = skip);
+  `./scripts/set-dev-tokens.sh` to set later; stored in `/commandhistory/tokens.env`
+  or `~/.config/middleware-api/tokens.env`, not `.env.integration.enc`
+- Vendor `gh` / `scan-secrets` skills? → `.agents/skills/{gh,scan-secrets}` (`gh skill update`); do not hand-edit
 
 ---
 
-**Last Updated**: 2026-07-29
+**Last Updated**: 2026-09-03
 **Current Branch**: feature/going_sdd
 **Maintainer Notes**: Keep this file updated when architectural decisions change

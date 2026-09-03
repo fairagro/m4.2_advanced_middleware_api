@@ -12,7 +12,10 @@ repos:
     rev: v6.0.0
     hooks:
       - id: trailing-whitespace
+        # Vendor skills from `gh skill install` — keep upstream whitespace.
+        exclude: ^\.agents/skills/(gh|scan-secrets)/
       - id: end-of-file-fixer
+        exclude: ^\.agents/skills/(gh|scan-secrets)/
       - id: check-yaml
         exclude: ^helmchart/[^/]+/templates/.*\.ya?ml$
       - id: check-added-large-files

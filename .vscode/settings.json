@@ -1,6 +1,6 @@
 {
   // GitHub Copilot Configuration
-  // For AI assistant instructions, see: copilot-instructions.md
+  // For AI assistant instructions, see: .github/copilot-instructions.md
   // For detailed project context, see: AGENTS.md
   //
   // Code-quality parity: editor Ruff/Pylint/Mypy must use the same project
