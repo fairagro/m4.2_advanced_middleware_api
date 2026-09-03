@@ -2,16 +2,18 @@
 # PATH wrapper: prompt/load GH_TOKEN, then exec real gh.
 set -euo pipefail
 # shellcheck source=scripts/dev-tokens.sh
-source "$(cd "$(dirname "$0")" && pwd)/../dev-tokens.sh"
+_gh_self="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/$(basename "${BASH_SOURCE[0]}")"
+source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/../dev-tokens.sh"
 export GH_TOKEN="${GH_TOKEN:-${GITHUB_TOKEN:-}}"
 if [ -z "${GH_TOKEN}" ]; then
     echo "gh: no GH_TOKEN — run ./scripts/set-dev-tokens.sh (or open a terminal if never asked)" >&2
     exit 1
 fi
 for g in /usr/bin/gh /bin/gh; do
-    if [ -x "${g}" ] && [ ! "${g}" -ef "$0" ]; then
+    if [ -x "${g}" ] && [ ! "${g}" -ef "${_gh_self}" ]; then
         exec "${g}" "$@"
     fi
 done
+unset _gh_self
 echo "gh wrapper: real gh not found" >&2
 exit 127
