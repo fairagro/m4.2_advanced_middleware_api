@@ -67,6 +67,11 @@ middleware/api_client/   ← optional client library for API consumers
   userinfo) — `str(url)` redacts userinfo while keeping host/path; call
   `.unredacted()` only when passing the URL to Git CLI / GitPython. Keep
   `redact_url_userinfo` on free-form text (Git stderr, logs, persisted events).
+- Do **not** widen a type to silence a checker or review (`T` → `T | None`,
+  `Any`, `dict[str, Any]`). Narrow at the source.
+- Do **not** add `if x is None` when the annotation, Pydantic model, or
+  `ConfigWrapper` already excludes `None`. If `None` is required, change the
+  producing API and every caller — no mid-pipeline guards.
 
 ### Function signatures and `**kwargs`
 

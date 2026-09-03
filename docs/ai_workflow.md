@@ -23,10 +23,13 @@ The workflow is built on these open standards and tools:
 | Artifact | Mechanism |
 | -------- | --------- |
 | `AGENTS.md` | Loaded as an instructions file. |
-| `.agents/skills/*/SKILL.md` | Project skills (arctrl, config-wrapper); loaded on demand. |
+| `.agents/skills/*/SKILL.md` | Project skills (arctrl, config-wrapper, review-fixer); loaded on demand. |
 | `.cursor/skills/openspec-*/` | OpenSpec skills for Cursor (`openspec update`). |
 | `.github/skills/openspec-*/` | OpenSpec skills for GitHub Copilot. |
 | `.cursor/commands/opsx-*.md` / `.github/prompts/opsx-*.prompt.md` | OpenSpec slash commands (`/opsx-propose`, …). |
+| `.cursor/commands/review-fixer.md` / `.github/prompts/review-fixer.prompt.md` | Triage Copilot/Bugbot PR comments. |
+| `.github/copilot-instructions.md` / `.cursor/BUGBOT.md` | Entry points → `docs/ai_review_policy.md`. |
+| `docs/ai_review_policy.md` | Finder + fixer policy (single source). |
 | `openspec/specs/**/*.md` | Not auto-loaded — agents follow links from `AGENTS.md`. |
 
 Restart the IDE after `openspec init` / `openspec update` so new commands appear.
@@ -116,9 +119,25 @@ lives in `AGENTS.md`.
 ## Agent Skills
 
 ```text
-.agents/skills/          # Project skills (arctrl, config-wrapper)
+.agents/skills/          # Project skills (arctrl, config-wrapper, review-fixer)
 .cursor/skills/          # OpenSpec → Cursor (do not hand-edit; openspec update)
 .github/skills/          # OpenSpec → Copilot (do not hand-edit; openspec update)
+```
+
+### AI pull-request reviews
+
+Copilot and Bugbot are **finders** (high recall). `/review-fixer` is the
+**fixer** (policy). Re-reviews stay enabled so late risk findings are not
+dropped; nits are capped by the nit-budget in
+[`docs/ai_review_policy.md`](ai_review_policy.md). Merge when risk threads
+are gone, not when AI comments are zero.
+
+```text
+Finder comments on the PR
+        ↓
+/review-fixer  →  fix | dismiss | one follow-up issue
+        ↓
+push, allow another finder pass (risk channel only must be clean)
 ```
 
 ---
@@ -130,6 +149,7 @@ lives in `AGENTS.md`.
 3. For new behaviour: `/opsx-propose` → review → `/opsx-apply` → `/opsx-archive`.
 4. After editing code: `uv run ruff format middleware/` and focused
    `uv run pytest`.
+5. After Copilot/Bugbot comments: `/review-fixer` (do not implement every nit).
 
 ### Example: Modifying ARC ingestion
 
