@@ -21,17 +21,19 @@ fi
 
 _dev_tokens_write() {
     local var=$1 val=$2
-    umask 077
-    touch "${_DEV_TOKENS_FILE}"
-    chmod 600 "${_DEV_TOKENS_FILE}"
-    grep -v "^${var}=" "${_DEV_TOKENS_FILE}" > "${_DEV_TOKENS_FILE}.tmp" 2>/dev/null || true
-    printf '%s=%q\n' "${var}" "${val}" >> "${_DEV_TOKENS_FILE}.tmp"
-    mv "${_DEV_TOKENS_FILE}.tmp" "${_DEV_TOKENS_FILE}"
+    (
+        umask 077
+        touch "${_DEV_TOKENS_FILE}"
+        chmod 600 "${_DEV_TOKENS_FILE}"
+        grep -v "^${var}=" "${_DEV_TOKENS_FILE}" > "${_DEV_TOKENS_FILE}.tmp" 2>/dev/null || true
+        printf '%s=%q\n' "${var}" "${val}" >> "${_DEV_TOKENS_FILE}.tmp"
+        mv "${_DEV_TOKENS_FILE}.tmp" "${_DEV_TOKENS_FILE}"
+    )
 }
 
 _dev_tokens_ask() {
     local var=$1 hint=$2 val cur
-    eval "cur=\${${var}-}"
+    cur="${!var-}"
     if [ -z "${DEV_TOKENS_FORCE:-}" ]; then
         [ -n "${cur}" ] && return 0
         grep -q "^${var}=" "${_DEV_TOKENS_FILE}" 2>/dev/null && return 0
