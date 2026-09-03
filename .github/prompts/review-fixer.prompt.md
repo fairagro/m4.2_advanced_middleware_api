@@ -6,6 +6,9 @@ Triage GitHub Copilot and Cursor Bugbot review comments using the project
 AI review policy. Fix high-risk findings and in-budget nits; dismiss the
 rest; at most one follow-up issue.
 
+When a PR is known, reply on each triaged review thread and resolve it
+when possible (reply first; never resolve without a reply).
+
 **Input:** PR number or URL, or pasted review comments.
 
 Read and follow `.agents/skills/review-fixer/SKILL.md`. Use

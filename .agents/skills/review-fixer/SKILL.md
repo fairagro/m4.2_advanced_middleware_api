@@ -26,9 +26,11 @@ Accept any of:
 - Pasted review comments / a review conversation
 - “Fix the Copilot/Bugbot comments on this PR”
 
-If a PR is identifiable, fetch unresolved AI threads with `gh` (below). If
-the user only pasted text, triage that text and **do not** reply on GitHub
-unless they also gave a PR.
+If a PR is identifiable, fetch unresolved AI threads with `gh` (below).
+**When a PR is known, reply on every triaged thread and resolve it when
+possible** (see [GitHub replies](#github-replies-pr-known)). If the user
+only pasted text, triage that text and **do not** reply on GitHub unless
+they also gave a PR.
 
 Do **not** commit unless the user asks. Do **not** push.
 
@@ -121,7 +123,18 @@ run**, not the whole PR.
 
 ## GitHub replies (PR known)
 
-Reply, then resolve. Do not resolve without a reply.
+This step is **required** when a PR number/URL is known and `gh` can
+write. Do not finish after local code changes alone.
+
+For every triaged thread (`fix`, `dismiss`, and `follow-up`):
+
+1. Post a reply on the first review comment (`in_reply_to`).
+2. Then resolve the thread if the mutation succeeds.
+3. Do **not** resolve without a reply.
+
+If `gh` lacks auth or `resolveReviewThread` fails (permissions), leave
+the reply if you posted one, print the remaining reply/resolve text for
+the user, and still apply local code fixes.
 
 ```text
 fix | dismiss | follow-up
@@ -148,9 +161,6 @@ mutation($id:ID!) {
   resolveReviewThread(input:{threadId:$id}) { thread { isResolved } }
 }' -F id=THREAD_NODE_ID
 ```
-
-If `gh` fails (auth, permissions), print the reply text for the user to
-paste. Still apply local code fixes.
 
 ## Follow-up issue
 
