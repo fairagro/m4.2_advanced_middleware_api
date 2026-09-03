@@ -371,8 +371,9 @@ the PR has zero AI comments.
 | Policy | `docs/ai_review_policy.md` | Severity, practicality, cost, nit-budget, types |
 | Fixer | `/review-fixer` (`.agents/skills/review-fixer/`) | Re-evaluate each thread → fix, dismiss, or one follow-up issue |
 
-Do not widen types (`T \| None`, `Any`) or add `if x is None` when the type
-already excludes `None`. Prefer a narrower type over the finder’s patch.
+Do not widen types (`T | None`, `Any`, `object`) or add `if x is None` when the
+type already excludes `None`. Prefer a narrower type over the finder’s patch.
+Do not hide `Any`/`object` behind a type alias.
 
 ---
 

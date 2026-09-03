@@ -60,8 +60,8 @@ Each comment **must** include:
 - Extra abstractions, wrappers, or DRY for a single call site
 - Drive-by issues in files/hunks this PR did not change, unless Blocker
 - Theoretical weaknesses with no reachable path in this API/worker
-- Suggested `T | None`, `Any`, or `if x is None` when the type already
-  excludes `None`
+- Suggested `T | None`, `Any`, `object`, or `if x is None` when the type
+  already excludes `None`
 
 If nothing in **Report** applies, leave no comment. Prefer fewer,
 higher-severity comments.
@@ -179,7 +179,8 @@ These rules apply to writing code and to reviewing it
 (`openspec/principles.md` Type Safety).
 
 - Do **not** widen a type to silence a finding (`T` → `T | None`, `Any`,
-  `dict[str, Any]`). That is a new defect, not a fix.
+  `object`, `dict[str, Any]`). That is a new defect, not a fix. Do not hide
+  `Any`/`object` behind a type alias.
 - Do **not** add `if x is None` / `x or default` when the annotation,
   Pydantic model, or `ConfigWrapper` already excludes `None`.
 - If `None` is genuinely required, make the **source** optional and update

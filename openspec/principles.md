@@ -59,7 +59,13 @@ middleware/api_client/   ← optional client library for API consumers
 ## Type Safety
 
 - All public functions and methods must have full type annotations.
-- `dict[str, Any]` and bare `Any` fields are forbidden in `Config` subclasses.
+- Use the most precise type that is actually true (`list[str]`, a concrete
+  class, `TypedDict` / Pydantic model — not `list[Any]` or `Sequence[object]`).
+- `Any` and `object` only when the value is genuinely unconstrained and cannot
+  be narrowed. `dict[str, Any]` and bare `Any` fields are forbidden in
+  `Config` subclasses.
+- Do not introduce a type alias whose meaning is `Any`, `object`, or another
+  equally wide type so the annotation looks precise.
 - Concrete Pydantic types for nested configs.
 - `SecretStr` for passwords and tokens — call `.get_secret_value()` only at
   the point of use (never log or cast to `str`).
