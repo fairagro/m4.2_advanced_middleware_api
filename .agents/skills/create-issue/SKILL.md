@@ -11,7 +11,7 @@ Accept any of:
 
 1. A PR number or URL plus a finding summary.
    The user may additionally include triage fields in plain text:
-   - `type: Bug|Security|Feature|Task|Discussion`
+   - `type: Bug|Security|Feature|Task|Discussion|Refactoring`
    - `severity: Blocker|High|Medium|Low`
    - `practicality: High|Medium|Low|None|Seen in the wild`
    - `cost: cheap|medium|expensive`
@@ -41,6 +41,8 @@ Pick exactly one org issue type:
 - `Feature`: intended new behavior / capability addition
 - `Task`: refactor/tech-debt/cleanup/docs improvements needed to implement the
   above
+- `Refactoring`: major internal architecture/structure change (multiple
+  modules, new abstractions, or contract-preserving restructuring)
 - `Discussion`: question, proposal, or ambiguous trade-off without a clear
   actionable change
 
@@ -76,7 +78,7 @@ When you create an issue:
 ### Issue body template
 
 ```text
-Type: Bug|Security|Feature|Task|Discussion
+Type: Bug|Security|Feature|Task|Discussion|Refactoring
 
 Triage
 - severity: ...
