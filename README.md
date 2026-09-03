@@ -18,3 +18,16 @@ before the CI/CD pipelines can publish artefacts.
 | `TEST_PYPI_TOKEN` | `reusable-release.yml` | Optional | TestPyPI API token for pre-release publishes from feature branches. If absent, TestPyPI publish is skipped. |
 
 > `GITHUB_TOKEN` is provided automatically by GitHub Actions and does not need to be configured.
+
+### Local personal tokens (not committed)
+
+`GH_TOKEN` and `GITGUARDIAN_API_KEY` are prompted on a TTY when missing
+(new terminal via `scripts/load-env.sh`, `gh` via `scripts/bin/gh`,
+`./scripts/quality-check.sh`). Empty input skips and is remembered. Re-prompt
+with `./scripts/set-dev-tokens.sh` (or `source` it to export in the current
+shell). They are stored in `/commandhistory/tokens.env`
+in the Dev Container (named volume `middleware-api-bashhistory`, same as shell
+history — survives rebuilds) or `~/.config/middleware-api/tokens.env` on a
+local clone.
+
+Do not put personal PATs in `.env.integration.enc` — that file is team-shared.

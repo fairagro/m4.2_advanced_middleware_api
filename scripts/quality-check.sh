@@ -14,6 +14,9 @@ if [ -d "${repo_root}/.venv/bin" ]; then
     export PATH="${repo_root}/.venv/bin:${PATH}"
 fi
 
+# shellcheck source=scripts/dev-tokens.sh
+source "${repo_root}/scripts/dev-tokens.sh"
+
 GREEN='\033[0;32m'
 RED='\033[0;31m'
 YELLOW='\033[1;33m'

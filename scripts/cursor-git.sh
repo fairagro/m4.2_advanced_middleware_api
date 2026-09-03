@@ -75,4 +75,7 @@ while ((i < ${#args[@]})); do
   i=$((i + 1))
 done
 
+# shellcheck source=scripts/dev-tokens.sh
+source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/dev-tokens.sh"
+
 exec "${REAL_GIT}" "${filtered_args[@]}"

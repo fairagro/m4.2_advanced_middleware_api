@@ -5,7 +5,8 @@ if [ $sourced -eq 0 ]; then
 fi
 
 # Load Environment Script
-# Decrypts .env.integration.enc and generates .env for tests
+# Decrypts shared `.env.integration.enc` → `.env`, then personal tokens
+# (scripts/dev-tokens.sh: TTY prompt, /commandhistory/tokens.env).
 
 # figure out some paths
 mydir=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" &> /dev/null && pwd)
@@ -30,20 +31,6 @@ alias ksn="kubectl config set-context --current --namespace"
 declare -F __start_kubectl &>/dev/null && complete -o default -F __start_kubectl k
 declare -F __start_docker &>/dev/null && complete -o default -F __start_docker d
 
-# ggshield (dev dependency in .venv; same PATH as pre-commit above)
-if command -v ggshield &> /dev/null; then
-    if [ -n "${GITGUARDIAN_API_KEY:-}" ]; then
-        echo "✅ ggshield: using GITGUARDIAN_API_KEY from environment"
-    elif [ -f ~/.config/ggshield/auth_config.yaml ] && grep -q "token:" ~/.config/ggshield/auth_config.yaml 2>/dev/null; then
-        echo "✅ ggshield: authenticated (~/.config/ggshield/auth_config.yaml)"
-    else
-        echo "🔐 ggshield not authenticated — run: ggshield auth login --method token"
-        echo "   Or set GITGUARDIAN_API_KEY (non-interactive)"
-    fi
-else
-    echo "⚠️ ggshield not available - run: uv sync --dev --all-packages"
-fi
-
 ENCRYPTED_FILE="${mydir}/../.env.integration.enc"
 DECRYPTED_FILE="${mydir}/../.env"
 
@@ -61,43 +48,32 @@ if [ -f "$DECRYPTED_FILE" ] && [ -s "$DECRYPTED_FILE" ]; then
     else
         echo "✅ Environment variables already loaded"
     fi
-    return 0
-fi
-
-# Check if SOPS is available
-if ! command -v sops &> /dev/null; then
-    echo "⚠️ SOPS not available - skipping secrets loading"
-    return 0
-fi
-
-# Check if encrypted file exists
-if [ ! -f "$ENCRYPTED_FILE" ]; then
-    echo "⚠️ $ENCRYPTED_FILE not found - skipping secrets loading"
-    return 0
-fi
-
-# Decrypt the encrypted file and write to .env
-if grep -q '"sops"' "$ENCRYPTED_FILE" 2>/dev/null; then
-    # Decrypt encrypted file and write to .env
-    sops -d "$ENCRYPTED_FILE" > "$DECRYPTED_FILE" 2>/dev/null
-    if [ $? -eq 0 ]; then
-        echo "✅ Encrypted secrets decrypted to $DECRYPTED_FILE"
-
-        # Also load for current shell
-        set -a
-        source "$DECRYPTED_FILE"
-        set +a
-    else
-        echo "❌ Error decrypting $ENCRYPTED_FILE"
-        echo "💡 Possible causes:"
-        echo "   - Wrong GPG password"
-        echo "   - GPG key not available"
-        echo "   - SOPS configuration error"
-        echo "📝 Tests may fail without valid GITLAB_API_TOKEN"
-        return 0  # Graceful return so sourcing continues
-    fi
 else
-    echo "⚠️ $ENCRYPTED_FILE is not encrypted or not in SOPS format"
-    echo "📝 Tests may fail without valid GITLAB_API_TOKEN"
-    return 0  # Graceful return so sourcing continues
+    # Check if SOPS is available
+    if ! command -v sops &> /dev/null; then
+        echo "⚠️ SOPS not available - skipping secrets loading"
+    elif [ ! -f "$ENCRYPTED_FILE" ]; then
+        echo "⚠️ $ENCRYPTED_FILE not found - skipping secrets loading"
+    elif grep -q '"sops"' "$ENCRYPTED_FILE" 2>/dev/null; then
+        sops -d "$ENCRYPTED_FILE" > "$DECRYPTED_FILE" 2>/dev/null
+        if [ $? -eq 0 ]; then
+            echo "✅ Encrypted secrets decrypted to $DECRYPTED_FILE"
+            set -a
+            source "$DECRYPTED_FILE"
+            set +a
+        else
+            echo "❌ Error decrypting $ENCRYPTED_FILE"
+            echo "💡 Possible causes:"
+            echo "   - Wrong GPG password"
+            echo "   - GPG key not available"
+            echo "   - SOPS configuration error"
+            echo "📝 Tests may fail without valid GITLAB_API_TOKEN"
+        fi
+    else
+        echo "⚠️ $ENCRYPTED_FILE is not encrypted or not in SOPS format"
+        echo "📝 Tests may fail without valid GITLAB_API_TOKEN"
+    fi
 fi
+
+# shellcheck source=scripts/dev-tokens.sh
+source "${mydir}/dev-tokens.sh"

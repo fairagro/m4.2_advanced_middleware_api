@@ -26,7 +26,9 @@ project for AI assistants (GitHub Copilot, Claude, etc.).
 └── skills/                # Project Agent Skills (agentskills.io)
     ├── arctrl/            # arctrl Python library reference
     ├── config-wrapper/    # ConfigWrapper / ConfigBase pattern
-    └── review-fixer/      # Triage Copilot/Bugbot PR comments (`/review-fixer`)
+    ├── gh/                # Official GitHub CLI patterns (`gh skill install cli/cli gh`)
+    ├── review-fixer/      # Triage Copilot/Bugbot PR comments (`/review-fixer`)
+    └── scan-secrets/      # Official ggshield (`gh skill install GitGuardian/agent-skills scan-secrets`)
 
 .cursor/skills/            # OpenSpec-generated Cursor skills (openspec update)
 .cursor/BUGBOT.md          # Bugbot entry point → docs/ai_review_policy.md
@@ -447,6 +449,10 @@ Before making changes, consider:
 - How to run tests? → `uv run pytest ...`
 - Where do specs live? → `openspec/specs/<domain>/` (propose changes via `/opsx-propose`)
 - Copilot/Bugbot comments? → `/review-fixer` (policy in `docs/ai_review_policy.md`); do not loop until 0 comments
+- Personal `GH_TOKEN` / `GITGUARDIAN_API_KEY`? → TTY prompt (empty = skip);
+  `./scripts/set-dev-tokens.sh` to set later; stored in `/commandhistory/tokens.env`
+  or `~/.config/middleware-api/tokens.env`, not `.env.integration.enc`
+- Vendor `gh` / `scan-secrets` skills? → `.agents/skills/{gh,scan-secrets}` (`gh skill update`); do not hand-edit
 
 ---
 

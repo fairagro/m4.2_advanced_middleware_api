@@ -4,6 +4,10 @@
 .github/skills/**
 .github/prompts/**
 
+# Vendor agent skills (`gh skill install`; do not hand-edit).
+.agents/skills/gh/**
+.agents/skills/scan-secrets/**
+
 # Third-party / local environments
 .venv/**
 node_modules/**

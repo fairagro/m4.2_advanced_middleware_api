@@ -32,7 +32,11 @@ openspec update
 
 | Mount | Source | Platforms |
 | ----- | ------ | --------- |
-| Shell history | named volume `middleware-api-bashhistory` | all |
+| Shell history + personal tokens | named volume `middleware-api-bashhistory` (`/commandhistory`) | all |
+
+Personal `GH_TOKEN` / `GITGUARDIAN_API_KEY` are prompted on a TTY when missing
+and written to `/commandhistory/tokens.env` on that volume (chmod 600). Empty
+input skips until `./scripts/set-dev-tokens.sh`.
 
 Host `~/.gitconfig` is copied/synced by the Dev Containers tooling (no manual mount).
 

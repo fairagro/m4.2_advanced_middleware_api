@@ -23,7 +23,7 @@ The workflow is built on these open standards and tools:
 | Artifact | Mechanism |
 | -------- | --------- |
 | `AGENTS.md` | Loaded as an instructions file. |
-| `.agents/skills/*/SKILL.md` | Project skills (arctrl, config-wrapper, review-fixer); loaded on demand. |
+| `.agents/skills/*/SKILL.md` | Project skills (arctrl, config-wrapper, review-fixer, gh, scan-secrets); loaded on demand. |
 | `.cursor/skills/openspec-*/` | OpenSpec skills for Cursor (`openspec update`). |
 | `.github/skills/openspec-*/` | OpenSpec skills for GitHub Copilot. |
 | `.cursor/commands/opsx-*.md` / `.github/prompts/opsx-*.prompt.md` | OpenSpec slash commands (`/opsx-propose`, …). |
@@ -119,10 +119,17 @@ lives in `AGENTS.md`.
 ## Agent Skills
 
 ```text
-.agents/skills/          # Project skills (arctrl, config-wrapper, review-fixer)
+.agents/skills/          # Project skills (arctrl, config-wrapper, review-fixer,
+                         # plus vendor gh + scan-secrets via `gh skill install`)
 .cursor/skills/          # OpenSpec → Cursor (do not hand-edit; openspec update)
 .github/skills/          # OpenSpec → Copilot (do not hand-edit; openspec update)
 ```
+
+Vendor skills (`gh`, `scan-secrets`) are installed at **project** scope into
+`.agents/skills/` (shared by Cursor and Copilot). Refresh with
+`gh skill update`. Do not hand-edit them. CLI auth still uses the TTY prompt
+and `/commandhistory/tokens.env` — not `gh auth login` / `ggshield auth login`
+into ephemeral `~/.config` inside the Dev Container.
 
 ### AI pull-request reviews
 

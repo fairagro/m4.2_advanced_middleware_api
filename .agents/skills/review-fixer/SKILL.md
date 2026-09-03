@@ -32,6 +32,16 @@ unless they also gave a PR.
 
 Do **not** commit unless the user asks. Do **not** push.
 
+## Auth (`gh`)
+
+`gh` is wrapped (`scripts/bin/gh`, on `PATH` in the Dev Container). Missing
+`GH_TOKEN` prompts on `/dev/tty` and is saved to
+`/commandhistory/tokens.env` (Dev Container volume `middleware-api-bashhistory`;
+survives rebuilds) or `~/.config/middleware-api/tokens.env` on a local clone.
+Do not read tokens from the git worktree; do not invent them. If there is no
+TTY, skip GitHub writes, print the intended replies, and tell the user to
+open a terminal or run `./scripts/set-dev-tokens.sh`.
+
 ## Fetch threads (when a PR is known)
 
 ```bash
