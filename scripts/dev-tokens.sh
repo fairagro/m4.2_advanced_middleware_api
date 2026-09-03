@@ -12,11 +12,25 @@ _dev_tokens_file() {
 }
 
 _DEV_TOKENS_FILE="$(_dev_tokens_file)"
+# Apply stored tokens without clobbering a caller-set value, and without
+# exporting empty "skip" markers (GH_TOKEN='') over a live environment.
 if [ -f "${_DEV_TOKENS_FILE}" ]; then
-    set -a
-    # shellcheck disable=SC1090
-    source "${_DEV_TOKENS_FILE}"
-    set +a
+    for _dev_tokens_var in GH_TOKEN GITGUARDIAN_API_KEY; do
+        if [ -n "${!_dev_tokens_var-}" ]; then
+            continue
+        fi
+        _dev_tokens_val="$(
+            set -a
+            # shellcheck disable=SC1090
+            source "${_DEV_TOKENS_FILE}"
+            set +a
+            printf '%s' "${!_dev_tokens_var-}"
+        )"
+        if [ -n "${_dev_tokens_val}" ]; then
+            export "${_dev_tokens_var}=${_dev_tokens_val}"
+        fi
+    done
+    unset _dev_tokens_var _dev_tokens_val
 fi
 
 _dev_tokens_write() {
