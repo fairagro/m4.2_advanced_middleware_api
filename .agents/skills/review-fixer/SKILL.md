@@ -124,12 +124,15 @@ Decision order (stop at first match) — same as the policy:
    `if x is None` is forbidden when the type already excludes `None`.
 4. High risk (Blocker/High **and** practicality not Low/None) → `fix`
    (or split/`follow-up` if the fix is its own feature)
-5. Else nit:
+5. Cheap + High practicality + severity Medium or higher, and **no** new
+   abstraction → `fix` (any round; not deferred by nit-budget)
+6. Else nit:
    - Round 1 + cheap + running nit prod-line growth still ≤ ~25 and **no**
      new abstraction → `fix`
    - Round 2+ **and** the nit is on code the previous fixer pass introduced
      → `fix` if cheap
-   - Else → `dismiss` (Low) or `follow-up` (Medium+)
+   - Else → `dismiss` (Low) or `follow-up` (Medium+ only when expensive or
+     practicality is not High)
 
 Running nit growth is the sum of production lines you add for nits **this
 run**, not the whole PR.

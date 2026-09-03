@@ -89,9 +89,16 @@ Stop at the first matching step.
 4. **Risk.** Severity Blocker/High **and** practicality not Low → `fix`.
    Nit-budget does not apply. If the fix itself is a separate feature, split
    or `follow-up` instead of bloating this PR.
-5. **Nit.** Otherwise treat as a nit:
-   - cost **cheap** and nit-budget remaining → `fix`
-   - else → `dismiss` (Low) or `follow-up` (Medium+ only)
+5. **Cheap + high practicality + Medium+.** Cost **cheap**, practicality
+   **High**, severity **Medium or higher**, and **no** new abstraction →
+   `fix` in any round. Round/nit-budget does not defer these.
+6. **Nit.** Otherwise treat as a nit:
+   - Round 1 + cheap + running nit prod-line growth still ≤ ~25 and **no**
+     new abstraction → `fix`
+   - Round 2+ **and** the nit is on code the previous fixer pass introduced
+     → `fix` if cheap
+   - Else → `dismiss` (Low) or `follow-up` (Medium+ only, typically when
+     expensive or practicality is not High)
 
 If the cheaper fix is unclear, default to `dismiss` rather than adding a
 layer.
@@ -160,18 +167,22 @@ lines.
 
 ## Nit-budget
 
-A **nit** is a correct (or plausible) finding that is **not** high risk.
+A **nit** is a correct (or plausible) finding that is **not** high risk and
+does **not** already qualify as step 5 (cheap + High practicality +
+Medium+).
 
 Budget (fixer only):
 
 1. **Round 1** (first Copilot/Bugbot review on this PR): cheap nits may be
    fixed until **~25 new production lines** from nit-fixes, and **never** a
    new abstraction.
-2. **Round 2+**: nits only on surface **introduced by the previous fixer
-   pass** (regression of those fixes). Nits on already-reviewed surface →
-   `dismiss` (`nit-budget`).
-3. Risk findings are **never** budgeted. A Blocker/High with a real path in
-   round 3 is still a must-fix.
+2. **Round 2+**: remaining nits only on surface **introduced by the previous
+   fixer pass** (regression of those fixes). Other Low / lower-practicality
+   nits on already-reviewed surface → `dismiss` or `follow-up` per the
+   decision order.
+3. Risk findings and step-5 (cheap + High practicality + Medium+) findings
+   are **never** budgeted away. A Blocker/High with a real path in round 3
+   is still a must-fix.
 
 Round count = number of Copilot and/or Bugbot review submissions on the PR,
 not “how many comments”.
