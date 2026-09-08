@@ -40,7 +40,9 @@ docs/
 ├── ai_workflow.md         # AI agent workflow documentation
 ├── ai_review_policy.md    # Copilot/Bugbot policy (synced)
 ├── surface-quality-bar.global.md  # Default path→surface map (synced)
-└── surface-quality-bar.md # Product path rows / typical entries (local)
+├── surface-quality-bar.md # Product path rows / typical entries (local)
+├── synced-paths.global.md # Synced-path allowlist (synced — do not hand-edit)
+└── review/create/issue-fixer.md   # Thin skill indexes (synced)
 
 openspec/                  # OpenSpec source of truth + change proposals
 ├── principles.global.md   # Shared foundation (synced — do not hand-edit)

@@ -1,10 +1,10 @@
 ---
 name: issue-fixer
 description: >-
-  Triages a GitHub issue, explores Feature/Refactoring decisions with the user,
-  implements via OpenSpec cadence, and opens a draft PR only after real commits
-  exist — without auto-committing fix commits. Use when the user asks to
-  /issue-fixer, fix an issue, or start work from an issue URL/number.
+  Triages a GitHub issue, explores Feature/Refactoring when needed, implements
+  on an issue branch, and opens a draft PR only after real commits exist —
+  without auto-committing fix commits and without OpenSpec. Use when the user
+  asks to /issue-fixer, fix an issue, or start work from an issue URL/number.
 ---
 
 # Issue fixer
@@ -17,6 +17,9 @@ the issue automatically on merge, the PR body must include: `Fixes #<issue_numbe
 
 **Do not** auto-commit or auto-push **fix** commits. **Do not** create empty bootstrap commits. The user commits and
 pushes; the agent opens the draft PR only when the tip already differs from `main` with that real history.
+
+**Do not** run OpenSpec (`/opsx-explore`, `/opsx-propose`, `/opsx-apply`, `/opsx-archive`, `/opsx-update`) as part of
+this skill. OpenSpec slash commands remain available when the user invokes them explicitly outside `/issue-fixer`.
 
 ## Input
 
@@ -69,9 +72,9 @@ do not invent them. Never ask the user to paste a PAT into chat.
    - Type `Security` → may implement, but require clear acceptance criteria and a realistic path; prefer the smallest
      correct fix; no speculative hardening with no path.
 
-## Explore (when required): `/opsx-explore`
+## Explore (when required)
 
-After triage, **before** `/opsx-propose` / branch / commit / PR, decide whether explore runs:
+After triage, **before** branch / implement / PR, decide whether explore runs:
 
 | Type                      | Explore?                                                         |
 | ------------------------- | ---------------------------------------------------------------- |
@@ -79,23 +82,17 @@ After triage, **before** `/opsx-propose` / branch / commit / PR, decide whether 
 | `Discussion`              | Explore is the whole response (no implement by default)          |
 | `Bug`, `Security`, `Task` | Only if criteria missing, multiple plausible fixes, or user asks |
 
-When explore **is** required (or the user asked for it): read and follow
-[`.cursor/skills/openspec-explore/SKILL.md`](../../../.cursor/skills/openspec-explore/SKILL.md) (same as
-`/opsx-explore`). Do **not** substitute a parallel in-skill explore procedure. **Do not** create branches, commits, or
-PRs during explore. Wait for user lock-in, `go`, or `skip explore`.
+When explore **is** required (or the user asked for it): explore **in this skill** — clarify scope, compare options,
+surface risks, and wait for user lock-in, `go`, or `skip explore`. **Do not** invoke `/opsx-explore` or other OpenSpec
+commands. **Do not** create branches, commits, or PRs during explore.
 
-When explore is **not** required, skip `/opsx-explore` and continue to the OpenSpec cadence (propose → …).
+When explore is **not** required, skip it and continue to implement.
 
-**Scope:** OpenSpec (`/opsx-explore`, `/opsx-propose`, `/opsx-apply`, `/opsx-archive`, `/opsx-update`) is **only** for
-`/issue-fixer`. `/review-fixer` and `/create-issue` MUST NOT invoke OpenSpec commands.
-
-## OpenSpec cadence (required when implementing)
+## Implement cadence
 
 On every run that will implement, after explore (when it ran) or immediately when explore was skipped:
 
-### 1. Issue branch → `/opsx-propose` → pause
-
-1. **Create the issue branch first** from `main` via CLI when possible:
+1. **Create the issue branch** from `main` via CLI when possible:
 
    ```bash
    uv run m42-ai issue-branch --issue <issue_number> [--slug <slug>]
@@ -103,53 +100,23 @@ On every run that will implement, after explore (when it ran) or immediately whe
 
    Do **not** commit, push, or open a draft PR yet. If already on the correct issue branch, skip creating it again.
 
-2. Require a local `openspec/` tree. If it is missing, stop and tell the user — do not skip propose and implement
-   anyway.
-3. Read and follow [`.cursor/skills/openspec-propose/SKILL.md`](../../../.cursor/skills/openspec-propose/SKILL.md) (same
-   as invoking `/opsx-propose`): create a change name from the issue, generate proposal / specs / design / tasks on that
-   branch.
-4. Name the change from the issue (kebab-case slug + issue context). Fold explore lock-ins into design/tasks.
-5. **Pause (spec review):** **Stop**. Show the change name/path and branch name; ask the user to review proposal / specs
-   / design / tasks and to **commit** (and optionally push) as they wish. Do **not** open a draft PR, run apply, or
-   archive until they confirm (e.g. `go`, `approved`, or an `/opsx-update` pass then `go`). If they request changes, run
-   `/opsx-update` (or edit artifacts) and pause again.
+2. **Implement** in the working tree on that branch (update main specs only if the real contract changes). Do **not**
+   create an OpenSpec change for process.
 
-**`/opsx-propose` is mandatory** before implementation (always after the issue branch exists).
+3. **Pause:** summarize the diff; ask the user to review / **commit** / **push**. Do **not** open a draft PR here.
 
-Early exits that never implement (missing info, already resolved, `Discussion` without an explicit implement request)
-skip this cadence. Once the user asks to implement a `Discussion`, start at branch + propose.
+4. On continue: ensure a **draft** PR when the tip is ahead of `main` (next section).
 
-### 2. On continue: `/opsx-apply` → pause
-
-After the user confirms the propose pause:
-
-1. Read and follow
-   [`.cursor/skills/openspec-apply-change/SKILL.md`](../../../.cursor/skills/openspec-apply-change/SKILL.md)
-   (`/opsx-apply`) against that change’s `tasks.md`. Implement in the working tree only — do **not** commit or push fix
-   commits. Do **not** open a draft PR in this step.
-2. **Pause (apply review):** When apply tasks for this slice are done (or blocked on the user), **stop**. Summarize what
-   changed, remind them to review / **commit** / **push**, and wait for `go` (or equivalent). Do **not** run
-   `/opsx-archive` or open a draft PR during this pause.
-
-### 3. On continue: draft PR (if needed) + `/opsx-archive`
-
-After the user confirms the apply pause:
-
-1. Ensure a **draft** PR exists for the issue branch (next section) **only if** the branch tip already has real commits
-   ahead of `main` (`m42-ai branch-ahead` / `issue-start`). Never use `--allow-empty`. If tip still equals `main`, stop
-   and ask the user to commit/push first. After create (or if a PR already exists), run
-   `m42-ai pr-strip-footer --pr <n>` when a Cursor footer may have been injected.
-2. Read and follow
-   [`.cursor/skills/openspec-archive-change/SKILL.md`](../../../.cursor/skills/openspec-archive-change/SKILL.md)
-   (`/opsx-archive`) for the change. Do **not** archive before that confirmation.
+Early exits that never implement skip this cadence. Once the user asks to implement a `Discussion`, start at branch +
+implement.
 
 ## Branch + draft PR (real commits only)
 
-**Branch early:** create `issue-<issue_number>-<slug>` from `main` **before** `/opsx-propose`, so propose artifacts land
-on the issue branch and the user can commit during the spec-review pause. That step does **not** open the PR yet.
+**Branch early:** create `issue-<issue_number>-<slug>` from `main` **before** implementing. That step does **not** open
+the PR yet.
 
-**Draft PR late:** after the apply-pause confirmation (before or as part of `/opsx-archive`). Assumptions: base branch
-is `main`. Prefer the plumbing CLI when the tree is clean and the tip is already ahead of `main`:
+**Draft PR late:** after the implement-pause confirmation. Assumptions: base branch is `main`. Prefer the plumbing CLI
+when the tree is clean and the tip is already ahead of `main`:
 
 ```bash
 uv run m42-ai issue-start --issue <issue_number> [--slug <slug>]
@@ -190,8 +157,6 @@ Manual equivalent if the CLI is unavailable:
 
 ## Implement fixes (locally)
 
-Covered by **`/opsx-apply`** in the OpenSpec cadence above (after the propose pause). Same rules:
-
 - Implement in the working tree on the issue branch.
 - Do **not** commit or push fix commits.
 - If too large: split (below) and implement only the MVP slice here.
@@ -199,8 +164,7 @@ Covered by **`/opsx-apply`** in the OpenSpec cadence above (after the propose pa
   `uv run ruff format --config pyproject.toml` / `ruff check` on touched files (same bar as `/review-fixer`). This
   Devinfra repo has no product `middleware/` tree — skip those commands here.
 
-After apply: **pause** for the user (see OpenSpec cadence §2). After their next `go`: draft PR (if needed) +
-**`/opsx-archive`** (§3).
+After implement: **pause** for the user. After their next `go`: draft PR (if needed).
 
 ## Split / deferred work (via create-issue)
 
@@ -230,25 +194,24 @@ create-issue inputs — do not invent an off-allowlist create path.
   `object`, unnecessary `T | None`).
 - Update specs only when the real contract changes.
 
-## Surface quality bar (`scripts/` — implement / propose)
+## Surface quality bar (`scripts/` — implement)
 
 Match the **rules** in [`docs/ai_review_policy.md`](../../../docs/ai_review_policy.md#surface-quality-bar-fixer-triage)
 and the **path map** in [`docs/surface-quality-bar.global.md`](../../../docs/surface-quality-bar.global.md) (plus
 optional product [`docs/surface-quality-bar.md`](../../../docs/surface-quality-bar.md)), and the supported environment
-in [`openspec/principles.global.md`](../../../openspec/principles.global.md). This applies to explore lock-ins, OpenSpec
-design/tasks, and `/opsx-apply` — not only to review triage.
+in [`openspec/principles.global.md`](../../../openspec/principles.global.md). This applies to explore lock-ins and
+implementation — not only to review triage.
 
 **Hard rule:** for shared Devinfra `scripts/` (except `scripts/ai/`) and agent plumbing, prefer the **simplest**
-happy-path contract. Do not expand design/tasks with “also support worktrees / host X / legacy Y”. If that work is real
-but out of done-when, split via `/create-issue` (`relation: linked`) — do not sneak it into the MVP slice.
+happy-path contract. Do not expand the MVP with “also support worktrees / host X / legacy Y”. If that work is real but
+out of done-when, split via `/create-issue` (`relation: linked`) — do not sneak it into the MVP slice.
 
 ## Output to the user
 
 Provide:
 
 - Issue URL + number + org issue type
-- Whether `/opsx-explore` ran and what was locked
-- OpenSpec change name / path; which cadence pause is next (`propose` / `apply` / `archive` done or pending)
+- Whether explore ran and what was locked
 - Branch name
 - Draft PR URL when opened (or “PR deferred until real commits” / “skipped PR creation”)
 - Created sub-issue / linked-issue URLs (or none)

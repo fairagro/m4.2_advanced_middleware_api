@@ -14,8 +14,12 @@ asks to adopt the shared stack without local drift on synced paths, as the
 fleet pilot before sql_to_arc / harvester. Wave A prereqs on Devinfra are
 **done** (2026-09-08); sync automation (#13) remains optional.
 
-**Pinned Devinfra SHA for this adopt:** `906870bd18fa7fef3c5593f75440291e04ceb43e`
-(document the same value in the adopt PR description).
+**Pinned Devinfra SHA for this adopt:** `d8a22b90babf766fc15cdac5f41ad6b26326fa27`
+(document the same value in the adopt PR description). Includes Wave A base plus
+closed Devinfra follow-ups [#45](https://github.com/fairagro/m4.2_middleware_devinfra/issues/45)
+(synced-path guard / README / atomic tokens) and
+[#46](https://github.com/fairagro/m4.2_middleware_devinfra/issues/46)
+(`m42-ai` parent-fail `relation=linked`).
 
 ## What Changes
 

@@ -1,23 +1,21 @@
 # Issue-fixer conventions
 
-Shared `/issue-fixer` triages a GitHub issue, explores when needed, then runs the OpenSpec cadence and opens a draft PR
-only after real commits exist — without auto-committing fix commits. Canonical skill:
+Shared `/issue-fixer` triages a GitHub issue, explores when needed, implements on an issue branch, and opens a draft PR
+only after real commits exist — without auto-committing fix commits and **without** OpenSpec. Canonical skill:
 [`.agents/skills/issue-fixer/SKILL.md`](../.agents/skills/issue-fixer/SKILL.md).
 
 Issue: [#15](https://github.com/fairagro/m4.2_middleware_devinfra/issues/15).
 
-OpenSpec (`/opsx-*`) is **only** for `/issue-fixer` — not `/review-fixer` or `/create-issue`.
+`/issue-fixer`, `/review-fixer`, and `/create-issue` do **not** run `/opsx-*`. Standalone OpenSpec slash commands remain
+available when invoked explicitly.
 
 ## Workflow (summary)
 
 1. Fetch + triage (type, labels, done-when).
 2. When explore is required (`Feature` / `Refactoring`, or Bug/Security/Task when criteria are unclear / user asks):
-   **`/opsx-explore`** (no parallel in-skill explore). Wait for lock-in / `go` / `skip explore`.
-3. **OpenSpec cadence** (mandatory when this run will implement):
-   1. Create issue branch → `/opsx-propose` → **pause** (review specs; you may commit on that branch)
-   2. On continue: `/opsx-apply` → **pause** (review / commit / push) — no draft PR yet
-   3. On continue: draft PR (`m42-ai issue-start` / `gh pr create --draft` when tip is ahead of `main`) +
-      `/opsx-archive` — never empty bootstrap commits
+   explore **in-skill** (no `/opsx-explore`). Wait for lock-in / `go` / `skip explore`.
+3. Create issue branch → implement in the working tree → **pause** (review / commit / push) → on continue: draft PR
+   (`m42-ai issue-start` / `gh pr create --draft` when tip is ahead of `main`) — never empty bootstrap commits.
 4. No `Made with Cursor` (or similar) footers in PR bodies — strip if injected.
 5. For `scripts/` (shared Devinfra + agent plumbing): implement only the documented Dev Container / CI happy path — no
    exotic edges (worktrees, host brew, legacy parsers, …) unless done-when says so; see skill **Surface quality bar**

@@ -2,11 +2,22 @@
 
 Small Python CLI for deterministic GitHub/git work used by `/review-fixer`, `/create-issue`, and `/issue-fixer`.
 
-Workspace member of the repo-root [`pyproject.toml`](../../pyproject.toml) (`tool.uv.workspace` → `scripts/ai`). After
-`uv sync` at the repo root, `m42_ai` is editable in `.venv` so the IDE can resolve imports when that interpreter is
-selected.
+## Layouts
+
+### Devinfra (workspace member)
+
+In [m4.2_middleware_devinfra](https://github.com/fairagro/m4.2_middleware_devinfra), `scripts/ai` is a
+`tool.uv.workspace` member of the repo-root [`pyproject.toml`](../../pyproject.toml). After `uv sync` at the repo root,
+`m42_ai` is editable in `.venv` so the IDE can resolve imports when that interpreter is selected.
+
+### Product consumers
+
+Product repos sync `scripts/ai/` but **do not** add it to the root `tool.uv.workspace`. Invoke with
+`--project scripts/ai` (see below). Do not expect root-workspace membership solely because Devinfra has it.
 
 ## Run
+
+### Devinfra — invoke
 
 From the **repo root** (preferred):
 
@@ -16,7 +27,16 @@ uv run m42-ai --help
 uv run m42-ai review-open --pr 22
 ```
 
-Equivalent (still supported): `uv run --project scripts/ai m42-ai …`.
+Equivalent: `uv run --project scripts/ai m42-ai …`.
+
+### Product consumers — invoke
+
+From the **repo root**:
+
+```bash
+uv run --project scripts/ai m42-ai --help
+uv run --project scripts/ai m42-ai review-open --pr 22
+```
 
 Works on a **host** or in the Dev Container. Auth is whatever `gh` on your `PATH` uses (`GH_TOKEN` / `gh auth`) — the
 Dev Container token store and `scripts/bin/gh` wrapper are optional and DC-only. GitHub commands need a repo context
@@ -39,10 +59,18 @@ Dev Container token store and `scripts/bin/gh` wrapper are optional and DC-only.
 
 ## Tests
 
+### Devinfra — tests
+
 From the repo root (pytest configured in root `pyproject.toml`):
 
 ```bash
 uv run pytest
+```
+
+### Product consumers — tests
+
+```bash
+uv run --project scripts/ai pytest
 ```
 
 Fixtures only — no live GitHub in CI.

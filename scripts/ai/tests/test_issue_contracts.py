@@ -71,6 +71,7 @@ def test_create_issue_parent_error_with_url_on_stdout_does_not_fallback() -> Non
     assert out["url"] == url
     assert out["partial_failure"] is True
     assert out["parent_fallback"] is False
+    assert out["relation"] == "linked"
     assert sum(1 for c in calls if c[:2] == ["issue", "create"]) == 1
 
 

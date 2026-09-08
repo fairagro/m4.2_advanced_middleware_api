@@ -131,7 +131,7 @@ def create_issue(
             if maybe:
                 return _result(
                     url=maybe,
-                    relation_out=relation,
+                    relation_out="linked",
                     parent_fallback=False,
                     parent_error=exc.stderr.strip() or str(exc),
                     partial_failure=True,
