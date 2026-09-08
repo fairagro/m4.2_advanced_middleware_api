@@ -9,6 +9,8 @@
     ".github/prompts/**",
     // Vendor agent skills (`gh skill install`; do not hand-edit).
     ".agents/skills/gh/**",
-    ".agents/skills/scan-secrets/**"
+    ".agents/skills/docker/**",
+    ".agents/skills/hadolint/**",
+    ".agents/skills/uv/**"
   ]
 }

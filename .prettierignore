@@ -1,0 +1,9 @@
+# Vendor / local — OpenSpec opsx Markdown is NOT ignored (format + lint + AI fix).
+.venv/
+node_modules/
+LICENSE
+.agents/skills/gh/
+.agents/skills/docker/
+.agents/skills/hadolint/
+.agents/skills/uv/
+package-lock.json

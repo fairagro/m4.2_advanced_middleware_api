@@ -2,7 +2,7 @@
 description: Patterns for invoking the GitHub CLI (gh) from agents. Covers structured output, pagination, repo targeting, search vs list, gh api fallback.
 metadata:
     github-path: skills/gh
-    github-ref: refs/tags/v2.99.0
+    github-ref: refs/tags/v2.100.0
     github-repo: https://github.com/cli/cli
     github-tree-sha: 5cf8c343d459cc0fdd839100c02b6fbb1ddda8e1
 name: gh
@@ -44,7 +44,7 @@ List commands cap results.
 
 ## Repo targeting
 
-`gh` infers the repo from the cwd's git remotes.
+`gh` infers the repo from the cwd's git remotes. 
 
 Pass `--repo OWNER/REPO` (`-R`) to override the resolved CWD repo.
 

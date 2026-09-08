@@ -1,22 +1,16 @@
 # Project Principles
 
-This document is the authoritative foundation contract for the FAIRagro Advanced
-Middleware API. All component specs and design decisions must be consistent with
-the constraints stated here.
+This repository extends the shared foundation in
+[`principles.global.md`](principles.global.md). Read that file first for Values,
+Supported development environment, Type Safety, Configuration, Code Quality,
+Testing, Security, Spec/Code naming, Python tooling, and Branch strategy.
 
----
+Do **not** redefine or weaken Supported development environment or Type Safety
+here — those sections are owned by `principles.global.md`.
 
-## Values
-
-- **Correctness over speed** — a slow correct ARC is better than a fast broken one.
-- **Explicit over implicit** — configuration comes from `Config`, not `os.environ`.
-- **Simplicity** — remove abstractions that serve no purpose; add them only when
-  duplication becomes a real problem.
-- **Supported environment first** — the Linux Dev Container is the supported
-  way to run this repo. Do not design or review for macOS, Windows, Homebrew,
-  or other host package layouts. Running scripts on a bare Linux workstation without
-  the Dev Container is possible but unofficial; GitHub Actions Linux is
-  supported for CI.
+Product stack, module graph, and scaling notes for the Advanced Middleware API
+live below. Surface-bar path rows for this product belong in
+[`docs/surface-quality-bar.md`](../docs/surface-quality-bar.md) (not here).
 
 ---
 
@@ -32,6 +26,9 @@ without a project-level decision recorded here.
 | **Celery** | Async task queue — background GitLab sync runs as Celery tasks. |
 | **CouchDB** | Document store — ARC documents, harvest metadata, and event logs are persisted in CouchDB. |
 | **RabbitMQ** | Message broker — Celery uses RabbitMQ to queue and deliver tasks. |
+
+Package manager: always `uv` (never pip/poetry directly). See also Python
+tooling in `principles.global.md`.
 
 ---
 
@@ -49,102 +46,29 @@ middleware/api_client/   ← optional client library for API consumers
 
 ---
 
-## Configuration
+## Configuration (product)
 
-- All runtime configuration is read from a YAML file via `ConfigWrapper`.
+Shared rules are in `principles.global.md`. In this repo:
+
+- Runtime configuration is read from YAML via `ConfigWrapper`
+  (`middleware.shared.config.config_wrapper`).
 - **No `os.environ` calls in application code.** Environment variables are
   resolved by `ConfigWrapper` only.
-
 - Every configurable value must have a Pydantic field with a `description`.
 - Defaults belong in `Config`, not in application code.
 - See the `config-wrapper` skill for the full pattern.
 
 ---
 
-## Type Safety
+## Testing (product layout)
 
-- All public functions and methods must have full type annotations.
-- Use the most precise type that is actually true (`list[str]`, a concrete
-  class, `TypedDict` / Pydantic model — not `list[Any]` or `Sequence[object]`).
-- `Any` and `object` only when the value is genuinely unconstrained and cannot
-  be narrowed. `dict[str, Any]` and bare `Any` fields are forbidden in
-  `Config` subclasses.
-- Do not introduce a type alias whose meaning is `Any`, `object`, or another
-  equally wide type so the annotation looks precise.
-- Concrete Pydantic types for nested configs.
-- `SecretStr` for passwords and tokens — call `.get_secret_value()` only at
-  the point of use (never log or cast to `str`).
-- `UrlStr` for credential-bearing HTTP(S) URLs (e.g. Git remotes with oauth2
-  userinfo) — `str(url)` redacts userinfo while keeping host/path; call
-  `.unredacted()` only when passing the URL to Git CLI / GitPython. Keep
-  `redact_url_userinfo` on free-form text (Git stderr, logs, persisted events).
-- Do **not** widen a type to silence a checker or review (`T` → `T | None`,
-  `Any`, `dict[str, Any]`). Narrow at the source.
-- Do **not** add `if x is None` when the annotation, Pydantic model, or
-  `ConfigWrapper` already excludes `None`. If `None` is required, change the
-  producing API and every caller — no mid-pipeline guards.
-
-### Function signatures and `**kwargs`
-
-- Name every parameter the caller is expected to pass — in tests, production code,
-  and monkey-patches that mirror upstream APIs.
-- Do **not** replace known parameters with `**kwargs` just to satisfy linters or
-  shorten signatures.
-- `**kwargs` / `**_ignored` is allowed only for genuinely open-ended extension
-  points (e.g. forwarding extras from a third-party library whose future keyword
-  arguments are not fixed at compile time).
-- When a signature must match an upstream definition, mirror its explicit
-  parameters and reserve `**kwargs` for the same passthrough role upstream uses.
-
----
-
-## Code Quality
-
-All code must pass:
-
-- `uv run ruff format --check --config pyproject.toml middleware/` — formatting
-- `uv run ruff check --config pyproject.toml middleware/` — linting
-- `uv run mypy --config-file pyproject.toml middleware/` — static type checking
-- `uv run pylint --rcfile pyproject.toml middleware/` — style and code smells
-- `uv run bandit -r middleware/ -c .bandit` — security (low findings logged, medium/high fail)
-
-**Suppression comments** (`# noqa`, `# type: ignore`, `# pylint: disable`) are
-a last resort. A real fix is always preferred.
-
----
-
-## Testing
+Shared testing expectations are in `principles.global.md`. Layout here:
 
 - Unit tests: `middleware/api/tests/unit/` — instantiate `Config` directly.
-- Integration tests: `middleware/api/tests/integration/` — mock at wrapper boundary.
-- Tests are run with `uv run pytest middleware/ -v`.
-- Every public behaviour that can fail must have at least one test.
-
----
-
-## Supported development environment
-
-The **supported** way to develop and run repo scripts (`scripts/`, `gh`
-wrapper, quality hooks, token helpers) is the **Linux Dev Container**
-defined in this repository. GitHub Actions Linux runners are supported
-for CI.
-
-The following are **out of scope** for product code, scripts, and AI
-reviews:
-
-- macOS, Homebrew, Windows, or other host package layouts
-- `gh` / tools installed only on a custom host `PATH` (e.g. Homebrew
-  prefixes) that the Dev Container does not use
-- Making wrappers portable to unofficial bare-metal Linux installs
-
-A Linux workstation without the Dev Container may still run some
-scripts; that path is **not** officially supported. Do not add
-complexity to accommodate it. The Dev Container exists to remove
-host-environment differences.
-
-Finders must not comment on “Homebrew / local install / macOS / Windows
-PATH” breakage. Fixers must **dismiss** those findings (practicality
-**None** — quote this section).
+- Integration tests: `middleware/api/tests/integration/` — mock at wrapper
+  boundary.
+- Also: `middleware/shared/tests/`, `middleware/api_client/tests/`.
+- Run with `uv run pytest` (scoped paths as needed).
 
 ---
 
@@ -157,27 +81,20 @@ PATH” breakage. Fixers must **dismiss** those findings (practicality
 
 ---
 
-## Spec / Code Naming
+## Spec / Code Naming (product)
 
 - Capability specs live under `openspec/specs/<domain>/` with kebab-case domain
-  names that mirror the primary code artifact they describe. A spec for
-  `ArcManager` lives in `openspec/specs/arc-manager/`; a spec for
-  `HarvestManager` lives in `openspec/specs/harvest-manager/`.
-
-- When a spec covers a behaviour rather than a single class (e.g. `arc-store/`),
-  the folder name describes that behaviour; it is acceptable if there is no
-  exact 1:1 class match.
-
-- Stable architecture decisions may live alongside the capability as
-  `openspec/specs/<domain>/design.md`. Change-scoped design belongs in
-  `openspec/changes/<change>/design.md`.
-
-- The mapping from spec domains to source files must be maintained in the
-  **Spec-to-Code Mapping** table in `AGENTS.md`.
+  names that mirror the primary code artifact they describe (e.g. `ArcManager`
+  → `openspec/specs/arc-manager/`).
+- Behaviour-oriented domains (e.g. `arc-store/`) need not map 1:1 to a class.
+- Stable architecture notes may live as `openspec/specs/<domain>/design.md`.
+- Keep the **Spec-to-Code Mapping** table in `AGENTS.md` current.
 
 ---
 
-## Security
+## Security (product)
+
+Shared security principles are in `principles.global.md`. In this repo:
 
 - Client certificates are optional but recommended for production.
 - SSL verification is enabled by default.
@@ -186,7 +103,7 @@ PATH” breakage. Fixers must **dismiss** those findings (practicality
 
 ---
 
-## Branch Strategy
+## Branch Strategy (product)
 
 This project uses **Trunk-Based Development** with short-lived branches:
 
@@ -196,9 +113,9 @@ This project uses **Trunk-Based Development** with short-lived branches:
 | `feature/*` | New features and bug fixes | PR checks; manual pre-release via `workflow_dispatch` |
 | `docs/*` | Documentation-only changes | Change detection skips all CI jobs |
 
-<!-- Rules: -->
-
 - All branches merge into `main` via pull request.
-- `feature/*` covers both new functionality and bug fixes; no separate `fix/*` or `hotfix/*` branches.
-- `docs/*` branches exist solely to skip unnecessary CI; they carry no release privilege.
+- `feature/*` covers both new functionality and bug fixes; no separate
+  `fix/*` or `hotfix/*` branches.
+- `docs/*` branches exist solely to skip unnecessary CI; they carry no release
+  privilege.
 - Long-lived branches other than `main` are not permitted.
