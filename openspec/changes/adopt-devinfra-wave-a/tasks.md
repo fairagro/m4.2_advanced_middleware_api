@@ -3,7 +3,8 @@
 ## 1. Pin and sync Wave A paths
 
 - [x] 1.1 Record Devinfra `main` commit SHA to use for this adopt (document in
-      PR description when opening)
+      PR description when opening) — pin:
+      `906870bd18fa7fef3c5593f75440291e04ceb43e` (also in `proposal.md`)
 - [x] 1.2 Copy verbatim from that SHA: `docs/ai_review_policy.md`,
       `docs/surface-quality-bar.global.md`, `docs/review-fixer.md`,
       `docs/create-issue.md`, `docs/issue-fixer.md`

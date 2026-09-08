@@ -14,6 +14,9 @@ asks to adopt the shared stack without local drift on synced paths, as the
 fleet pilot before sql_to_arc / harvester. Wave A prereqs on Devinfra are
 **done** (2026-09-08); sync automation (#13) remains optional.
 
+**Pinned Devinfra SHA for this adopt:** `906870bd18fa7fef3c5593f75440291e04ceb43e`
+(document the same value in the adopt PR description).
+
 ## What Changes
 
 - Replace/align synced AI-stack paths with Devinfra `main` at a **pinned SHA**:
