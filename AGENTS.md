@@ -24,23 +24,27 @@ project for AI assistants (GitHub Copilot, Claude, etc.).
 ```text
 .agents/
 └── skills/                # Project Agent Skills (agentskills.io)
-    ├── arctrl/            # arctrl Python library reference
-    ├── config-wrapper/    # ConfigWrapper / ConfigBase pattern
-    ├── gh/                # Official GitHub CLI patterns (`gh skill install cli/cli gh`)
-    ├── review-fixer/      # Triage Copilot/Bugbot PR comments (`/review-fixer`)
-    └── scan-secrets/      # Official ggshield (`gh skill install GitGuardian/agent-skills scan-secrets`)
+    ├── arctrl/            # Shared first-party arctrl reference (synced from Devinfra)
+    ├── config-wrapper/    # ConfigWrapper / ConfigBase pattern (local)
+    ├── create-issue/      # `/create-issue` (synced)
+    ├── issue-fixer/       # `/issue-fixer` (synced)
+    ├── review-fixer/      # `/review-fixer` (synced)
+    ├── gh/, docker/, hadolint/, uv/  # Vendor pins (`gh skill`; do not hand-edit)
 
 .cursor/skills/            # OpenSpec-generated Cursor skills (openspec update)
-.cursor/BUGBOT.md          # Bugbot entry point → docs/ai_review_policy.md
+.cursor/BUGBOT.md          # Bugbot entry → docs/ai_review_policy.md
 .github/skills/            # OpenSpec-generated Copilot skills (openspec update)
-.github/copilot-instructions.md  # Copilot entry point → AGENTS.md + review policy
+.github/copilot-instructions.md  # Copilot → principles.global + review policy
 
 docs/
 ├── ai_workflow.md         # AI agent workflow documentation
-└── ai_review_policy.md    # Copilot/Bugbot policy (finder + fixer)
+├── ai_review_policy.md    # Copilot/Bugbot policy (synced)
+├── surface-quality-bar.global.md  # Default path→surface map (synced)
+└── surface-quality-bar.md # Product path rows / typical entries (local)
 
 openspec/                  # OpenSpec source of truth + change proposals
-├── principles.md          # Foundation contract, project values
+├── principles.global.md   # Shared foundation (synced — do not hand-edit)
+├── principles.md          # Product overlay (stack, modules, scaling)
 ├── config.yaml            # OpenSpec project context and rules
 └── specs/                 # Capability specs (current behaviour)
     ├── arc-manager/
@@ -59,9 +63,11 @@ middleware/
 │   └── config.py          # Optional certificate support (26 tests)
 
 scripts/
+├── ai/                            # m42-ai (synced): uv run --project scripts/ai m42-ai …
 ├── load-env.sh                    # Environment setup (sourced from ~/.bashrc)
 ├── setup-git-lfs.sh               # Git LFS hooks (standalone / re-runnable)
 ├── devcontainer-post-create.sh    # Dev Container + local one-time setup
+├── bin/gh                         # PATH wrapper + personal GH_TOKEN (Dev Container)
 └── git-hooks/                     # Version-controlled hooks
     ├── pre-push                   # Combined: Git LFS + pre-commit
     ├── post-checkout
@@ -275,9 +281,10 @@ When editing files:
 
 ## 🏗️ Architecture & Design
 
-**Read [`openspec/principles.md`](openspec/principles.md) first.** It defines module
-dependency rules, configuration constraints, typing rules, and code quality
-requirements. Do not restate what is there.
+**Read [`openspec/principles.global.md`](openspec/principles.global.md) first**, then
+[`openspec/principles.md`](openspec/principles.md). Global owns Type Safety /
+Supported environment / shared Values; local owns stack, module graph, and
+scaling. Do not restate or weaken what is in `.global`.
 
 Specs follow [OpenSpec](https://openspec.dev/): current behaviour lives in
 `openspec/specs/<domain>/`; proposed work lives in `openspec/changes/`.
@@ -289,7 +296,8 @@ Before generating or modifying code, read the relevant specs:
 
 **Foundation / cross-cutting:**
 
-- **[`openspec/principles.md`](openspec/principles.md)** — Authoritative project principles (start here).
+- **[`openspec/principles.global.md`](openspec/principles.global.md)** — Shared foundation (synced).
+- **[`openspec/principles.md`](openspec/principles.md)** — Product overlay (stack, modules, scaling).
 - **[`openspec/specs/ci-cd/`](openspec/specs/ci-cd/)** — GitHub Actions: PR validation, Docker/Helm releases, CodeQL scanning.
 
 **API capabilities** (`openspec/specs/`):
@@ -334,8 +342,10 @@ Before generating or modifying code, read the relevant specs:
   `RepositoryReport`, `HarvestIssue`.
 
 For the AI agent workflow documentation, see [`docs/ai_workflow.md`](docs/ai_workflow.md).
-For Copilot/Bugbot review triage, see [`docs/ai_review_policy.md`](docs/ai_review_policy.md)
-and `/review-fixer`.
+For Copilot/Bugbot review triage, see [`docs/ai_review_policy.md`](docs/ai_review_policy.md),
+[`docs/surface-quality-bar.global.md`](docs/surface-quality-bar.global.md) /
+[`docs/surface-quality-bar.md`](docs/surface-quality-bar.md), and `/review-fixer`
+(plus `/create-issue`, `/issue-fixer`; plumbing via `uv run --project scripts/ai m42-ai …`).
 
 ### Spec-to-Code Mapping
 
@@ -371,6 +381,7 @@ the PR has zero AI comments.
 | ----- | -------- | --- |
 | Finder | `.github/copilot-instructions.md`, `.cursor/BUGBOT.md` | Load `docs/ai_review_policy.md`; report reachable bugs |
 | Policy | `docs/ai_review_policy.md` | Severity, practicality, cost, nit-budget, types |
+| Path map | `docs/surface-quality-bar.global.md` + local `docs/surface-quality-bar.md` | Path→surface rows for fixer triage |
 | Fixer | `/review-fixer` (`.agents/skills/review-fixer/`) | Re-evaluate each thread → fix, dismiss, or one follow-up issue |
 
 Do not widen types (`T | None`, `Any`, `object`) or add `if x is None` when the
@@ -379,7 +390,7 @@ Do not hide `Any`/`object` behind a type alias.
 
 Supported environment: Linux Dev Container (and GitHub Actions Linux). Dismiss
 macOS / Windows / Homebrew / unofficial host-PATH review findings
-(`openspec/principles.md`).
+(`openspec/principles.global.md`).
 
 ---
 
@@ -454,12 +465,14 @@ Before making changes, consider:
 - Where do specs live? → `openspec/specs/<domain>/` (propose changes via `/opsx-propose`)
 - Copilot/Bugbot comments? → `/review-fixer` (policy in `docs/ai_review_policy.md`); do not loop until 0 comments
 - Personal `GH_TOKEN` / `GITGUARDIAN_API_KEY`? → TTY prompt (empty = skip);
-  `./scripts/set-dev-tokens.sh` to set later; stored in `/commandhistory/tokens.env`
-  or `~/.config/middleware-api/tokens.env`, not `.env.integration.enc`
-- Vendor `gh` / `scan-secrets` skills? → `.agents/skills/{gh,scan-secrets}` (`gh skill update`); do not hand-edit
+  `source ./scripts/set-dev-tokens.sh` to set later; store is
+  `/commandhistory/tokens.env` in the Dev Container (not the git worktree)
+- Vendor skills? → `.agents/skills/{gh,docker,hadolint,uv}` (`gh skill update`);
+  do not hand-edit. First-party synced: `arctrl`, review/create/issue-fixer
+- Agent GitHub plumbing? → `uv run --project scripts/ai m42-ai …`
 
 ---
 
-**Last Updated**: 2026-09-03
-**Current Branch**: feature/going_sdd
-**Maintainer Notes**: Keep this file updated when architectural decisions change
+**Last Updated**: 2026-09-08
+**Maintainer Notes**: Keep this file updated when architectural decisions change.
+  Synced Devinfra Wave A paths: do not hand-edit; land shared changes upstream.

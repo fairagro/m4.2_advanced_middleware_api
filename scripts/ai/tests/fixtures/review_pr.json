@@ -1,0 +1,84 @@
+{
+  "data": {
+    "repository": {
+      "pullRequest": {
+        "url": "https://github.com/fairagro/m4.2_middleware_devinfra/pull/22",
+        "number": 22,
+        "reviews": {
+          "nodes": [
+            {
+              "databaseId": 1,
+              "author": { "login": "human-reviewer" },
+              "submittedAt": "2026-09-01T10:00:00Z",
+              "state": "COMMENTED",
+              "body": "looks fine"
+            },
+            {
+              "databaseId": 2,
+              "author": { "login": "copilot-pull-request-reviewer" },
+              "submittedAt": "2026-09-02T10:00:00Z",
+              "state": "COMMENTED",
+              "body": "### Changes\n\n## Suppressed comments\n\n- Unused import in foo.py\n- Typo in README\n\n## Other\n\nDone."
+            },
+            {
+              "databaseId": 3,
+              "author": { "login": "cursor" },
+              "submittedAt": "2026-09-03T10:00:00Z",
+              "state": "COMMENTED",
+              "body": "Bugbot found 1 issue."
+            }
+          ]
+        },
+        "reviewThreads": {
+          "nodes": [
+            {
+              "id": "PRRT_resolved",
+              "isResolved": true,
+              "comments": {
+                "nodes": [
+                  {
+                    "databaseId": 100,
+                    "author": { "login": "copilot-pull-request-reviewer" },
+                    "body": "old finding",
+                    "path": "a.py",
+                    "originalPosition": 1
+                  }
+                ]
+              }
+            },
+            {
+              "id": "PRRT_open_ai",
+              "isResolved": false,
+              "comments": {
+                "nodes": [
+                  {
+                    "databaseId": 200,
+                    "author": { "login": "copilot-pull-request-reviewer" },
+                    "body": "High: bug here",
+                    "path": "b.py",
+                    "originalPosition": 3
+                  }
+                ]
+              }
+            },
+            {
+              "id": "PRRT_open_human",
+              "isResolved": false,
+              "comments": {
+                "nodes": [
+                  {
+                    "databaseId": 300,
+                    "author": { "login": "alice" },
+                    "body": "please fix naming",
+                    "path": "c.py",
+                    "originalPosition": 2
+                  }
+                ]
+              }
+            }
+          ]
+        }
+      }
+    }
+  }
+}

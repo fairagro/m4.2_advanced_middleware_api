@@ -1,12 +1,18 @@
 ---
-description: "Triage and fix GitHub Issues (Branch + PR + optional sub-issues)"
+description: "Triage and fix a GitHub issue (branch→propose→pause → apply→pause → draft PR + archive; no auto fix commits)"
 ---
 
-Triage and fix GitHub Issues following the Policy in the Issue-Fixer Skill:
+# issue-fixer
 
-- Create a branch with the issue number in the name
-- Push an empty head branch and open a PR (PR body includes `Fixes #<n>`)
-- Local fix changes only in the working tree (do not automatically push)
-- For large changes, create sub-issues and implement only the MVP slice in the PR
+Triage and fix a GitHub issue following `.agents/skills/issue-fixer/SKILL.md`:
 
-Do not commit or push unless the user asks.
+- When explore is required: **`/opsx-explore`** (no parallel in-skill explore)
+- OpenSpec cadence: **create issue branch → `/opsx-propose` → pause → `/opsx-apply` → pause → draft PR +
+  `/opsx-archive`**
+- Create the branch **before** `/opsx-propose` so propose artifacts land on the issue branch and the user can commit
+- OpenSpec is **only** for `/issue-fixer` — not `/review-fixer` or `/create-issue`
+- Draft PR only after apply confirmation, when the tip has **real** commits ahead of `main` — never empty bootstrap
+- Implement only in the working tree — do **not** auto-commit or auto-push fix commits
+- Split deferred work via create-issue (`sub-of` vs `linked`)
+
+Do not mark the PR ready.

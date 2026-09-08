@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 # PATH wrapper: prompt/load GH_TOKEN, then exec real gh.
+# Environment: Linux Dev Container only (scripts/bin on PATH via remoteEnv; token store).
 set -euo pipefail
 _gh_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 _gh_self="${_gh_dir}/$(basename "${BASH_SOURCE[0]}")"
@@ -7,14 +8,20 @@ _gh_self="${_gh_dir}/$(basename "${BASH_SOURCE[0]}")"
 source "${_gh_dir}/../dev-tokens.sh"
 export GH_TOKEN="${GH_TOKEN:-${GITHUB_TOKEN:-}}"
 if [ -z "${GH_TOKEN}" ]; then
-    echo "gh: no GH_TOKEN — run ./scripts/set-dev-tokens.sh (or open a terminal if never asked)" >&2
-    exit 1
+  echo "gh: no GH_TOKEN — run: source ./scripts/set-dev-tokens.sh (or open a terminal if never asked)" >&2
+  exit 1
 fi
-for g in /usr/bin/gh /bin/gh; do
-    if [ -x "${g}" ] && [ ! "${g}" -ef "${_gh_self}" ]; then
-        exec "${g}" "$@"
-    fi
-done
+
+REAL_GH="$(command -v -p gh 2>/dev/null || true)"
+if [[ -n "${REAL_GH}" && "${REAL_GH}" -ef "${_gh_self}" ]]; then
+  REAL_GH=""
+fi
+if [[ -z "${REAL_GH}" ]] && [[ -x /usr/bin/gh ]] && [[ ! /usr/bin/gh -ef "${_gh_self}" ]]; then
+  REAL_GH=/usr/bin/gh
+fi
+if [[ -z "${REAL_GH}" || ! -x "${REAL_GH}" ]]; then
+  echo "gh wrapper: could not find real gh binary" >&2
+  exit 127
+fi
 unset _gh_dir _gh_self
-echo "gh wrapper: real gh not found" >&2
-exit 127
+exec "${REAL_GH}" "$@"

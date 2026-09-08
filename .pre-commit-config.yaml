@@ -13,9 +13,9 @@ repos:
     hooks:
       - id: trailing-whitespace
         # Vendor skills from `gh skill install` — keep upstream whitespace.
-        exclude: ^\.agents/skills/(gh|scan-secrets)/
+        exclude: ^\.agents/skills/(gh|docker|hadolint|uv)/
       - id: end-of-file-fixer
-        exclude: ^\.agents/skills/(gh|scan-secrets)/
+        exclude: ^\.agents/skills/(gh|docker|hadolint|uv)/
       - id: check-yaml
         exclude: ^helmchart/[^/]+/templates/.*\.ya?ml$
       - id: check-added-large-files

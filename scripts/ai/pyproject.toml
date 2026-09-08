@@ -1,0 +1,17 @@
+[project]
+name = "m42-ai-gh"
+version = "0.1.0"
+description = "Deterministic GitHub/git plumbing for m4.2 agent skills"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = []
+
+[project.scripts]
+m42-ai = "m42_ai.cli:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/m42_ai"]

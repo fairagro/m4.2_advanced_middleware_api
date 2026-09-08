@@ -5,7 +5,8 @@ context: |
   Package manager: always `uv` (never pip/poetry directly).
   Config: ConfigWrapper only — no `os.environ` in application code.
   Specs live under `openspec/specs/<domain>/` (kebab-case domains).
-  Foundation contract: `openspec/principles.md` (read before proposing changes).
+  Foundation contract: `openspec/principles.global.md` (shared) then
+  `openspec/principles.md` (product overlay). Read before proposing changes.
   Spec-to-code mapping is maintained in `AGENTS.md`.
   Quality gates: `uv run ruff format/check --config pyproject.toml middleware/`, mypy, pylint, bandit, pytest.
   Scale: one worker process per container; horizontal via Kubernetes replicas.
@@ -24,7 +25,8 @@ rules:
     - One behaviour per requirement — split "and also" clauses.
     - Keep implementation details (function names, modules) out of requirements
       unless they are exception classes, wire-protocol literals, or domain IDs.
-    - Do not restate constraints already in openspec/principles.md.
+    - Do not restate constraints already in openspec/principles.global.md
+      or weaken them in openspec/principles.md.
   design:
     - Decisions describe the current state, not change history.
     - Every decision has a stated reason.
