@@ -231,3 +231,4 @@ helmchart/**/client_ext.conf
 .cache_ggshield
 
 docker/Dockerfile.api.bak
+scripts/ai/uv.lock
