@@ -1,0 +1,172 @@
+# TEMPORARY product-local check (NOT synced).
+# Diff vs Devinfra reusable-check: omitted `licence-check` job (Trivy license scanner).
+# Upstream: https://github.com/fairagro/m4.2_middleware_devinfra/issues/74
+# Drop this file and switch callers back to Devinfra when #74 lands.
+#
+# Artifact contract (from a prior build job in the same workflow run):
+#   - docker-image-<component>-<version>  → contains docker-image-<component>.tar.gz
+#   - sbom-<component>-<version>          → contains sbom-<component>.spdx.json
+# Local image tag after load (must match how build tagged the image in the tar):
+#   local/<image_base_name>-<component>:<version>
+# CST config in the caller checkout:
+#   docker/container-structure-tests/<component>.yaml
+name: Reusable Check (local, no licence scan)
+
+permissions:
+  contents: read
+
+on:
+  workflow_call:
+    inputs:
+      version:
+        description: "Version calculated in Build phase (required when skip is false)"
+        required: false
+        type: string
+        default: ""
+      components:
+        description: "JSON array of components to check"
+        required: false
+        type: string
+        default: '["api"]'
+      image_base_name:
+        description: "Image name prefix used when tagging loaded artifacts (local/<prefix>-<component>:<version>)"
+        required: false
+        type: string
+        default: "fairagro-advanced-middleware"
+      skip:
+        description: "Exit successfully without running checks (PRs with no code changes)"
+        required: false
+        type: boolean
+        default: false
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
+jobs:
+  security-check:
+    name: Security Check
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        component: ${{ fromJson(inputs.components) }}
+    permissions:
+      contents: read
+      security-events: write
+
+    steps:
+      - name: No code changes — skipping checks
+        if: ${{ inputs.skip }}
+        run: echo "No code files changed. Exiting with success."
+
+      - name: Require version when not skipping
+        if: ${{ !inputs.skip }}
+        env:
+          VERSION: ${{ inputs.version }}
+        run: |
+          if [[ -z "${VERSION}" ]]; then
+            echo "ERROR: reusable-check requires non-empty 'version' when skip is false." >&2
+            exit 1
+          fi
+
+      - name: Download Docker image artifact
+        if: ${{ !inputs.skip }}
+        uses: actions/download-artifact@v8
+        with:
+          name: docker-image-${{ matrix.component }}-${{ inputs.version }}
+
+      - name: Download SBOM artifact
+        if: ${{ !inputs.skip }}
+        uses: actions/download-artifact@v8
+        with:
+          name: sbom-${{ matrix.component }}-${{ inputs.version }}
+
+      - name: Load Docker image
+        if: ${{ !inputs.skip }}
+        # stdin load (not -i): Docker accepts gzipped archives from the documented *.tar.gz contract
+        run: docker load < "docker-image-${{ matrix.component }}.tar.gz"
+
+      - name: Run Trivy Vulnerability Scan (Image)
+        if: ${{ !inputs.skip }}
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25
+        with:
+          image-ref: local/${{ inputs.image_base_name }}-${{ matrix.component }}:${{ inputs.version }}
+          format: "sarif"
+          output: "trivy-image-results.sarif"
+          severity: "CRITICAL,HIGH"
+          # SARIF defaults to all severities; without this, exit-code 1 fails on LOW/MEDIUM too.
+          limit-severities-for-sarif: true
+          exit-code: "1"
+
+      # Run even if the image scan failed (exit-code 1), so SBOM results are not dropped and
+      # the SBOM upload step does not fail on a missing SARIF file.
+      - name: Run Trivy Vulnerability Scan (SBOM)
+        if: ${{ !inputs.skip && (success() || failure()) }}
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25
+        with:
+          scan-ref: "sbom-${{ matrix.component }}.spdx.json"
+          scan-type: "sbom"
+          format: "sarif"
+          output: "trivy-sbom-results.sarif"
+          severity: "CRITICAL,HIGH"
+          limit-severities-for-sarif: true
+          exit-code: "1"
+
+      - name: Upload Trivy scan results
+        uses: github/codeql-action/upload-sarif@v4
+        if: ${{ !inputs.skip && (success() || failure()) && hashFiles('trivy-image-results.sarif') != '' }}
+        with:
+          sarif_file: "trivy-image-results.sarif"
+          category: "trivy-image-scan-${{ matrix.component }}"
+
+      - name: Upload Trivy SBOM scan results
+        uses: github/codeql-action/upload-sarif@v4
+        if: ${{ !inputs.skip && (success() || failure()) && hashFiles('trivy-sbom-results.sarif') != '' }}
+        with:
+          sarif_file: "trivy-sbom-results.sarif"
+          category: "trivy-sbom-scan-${{ matrix.component }}"
+
+  container-structure-tests:
+    name: Container Structure Tests
+    strategy:
+      matrix:
+        component: ${{ fromJson(inputs.components) }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+
+    steps:
+      - name: No code changes — skipping checks
+        if: ${{ inputs.skip }}
+        run: echo "No code files changed. Exiting with success."
+
+      - name: Require version when not skipping
+        if: ${{ !inputs.skip }}
+        env:
+          VERSION: ${{ inputs.version }}
+        run: |
+          if [[ -z "${VERSION}" ]]; then
+            echo "ERROR: reusable-check requires non-empty 'version' when skip is false." >&2
+            exit 1
+          fi
+
+      - name: Checkout code
+        if: ${{ !inputs.skip }}
+        uses: actions/checkout@v7
+
+      - name: Download Docker image artifact
+        if: ${{ !inputs.skip }}
+        uses: actions/download-artifact@v8
+        with:
+          name: docker-image-${{ matrix.component }}-${{ inputs.version }}
+
+      - name: Load Docker image
+        if: ${{ !inputs.skip }}
+        # stdin load (not -i): Docker accepts gzipped archives from the documented *.tar.gz contract
+        run: docker load < "docker-image-${{ matrix.component }}.tar.gz"
+
+      - name: Run Container Structure Tests
+        if: ${{ !inputs.skip }}
+        uses: plexsystems/container-structure-test-action@v0.3.0
+        with:
+          image: local/${{ inputs.image_base_name }}-${{ matrix.component }}:${{ inputs.version }}
+          config: docker/container-structure-tests/${{ matrix.component }}.yaml

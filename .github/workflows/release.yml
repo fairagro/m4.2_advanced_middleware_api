@@ -33,37 +33,45 @@ jobs:
   code-quality:
     name: Code Quality
     needs: validate-branch
-    uses: ./.github/workflows/reusable-code-quality.yml
+    # SHA pin until fairagro/m4.2_middleware_devinfra#72 lands on main.
+    uses: fairagro/m4.2_middleware_devinfra/.github/workflows/reusable-code-quality.yml@a061d6fb85afc8dfd54083ff58bf788744dcdca8
     with:
+      python_package_root: middleware
       components: '["api"]'
+      mypy_path: stubs:middleware/api/src:middleware/api_client/src:middleware/shared/src:middleware/api/tests/unit:middleware/api_client/tests/unit:middleware/shared/tests
+      pylint_source_roots: middleware/api/src,middleware/api/tests/unit,middleware/api_client/tests/unit,middleware/shared/tests
     secrets: inherit
 
   build:
     name: Build
     needs: validate-branch
-    uses: ./.github/workflows/reusable-build.yml
+    uses: fairagro/m4.2_middleware_devinfra/.github/workflows/reusable-build.yml@main
     with:
       version_bump: ${{ inputs.version_bump }}
       components: '["api"]'
+      image_base_name: fairagro-advanced-middleware
     secrets: inherit
 
   check:
     name: Check
     needs: build
-    uses: ./.github/workflows/reusable-check.yml
+    # Local until Devinfra #74: omit Trivy licence-check (Alpine GPL noise).
+    uses: ./.github/workflows/reusable-check-local.yml
     with:
       version: ${{ needs.build.outputs.version }}
       components: '["api"]'
+      image_base_name: fairagro-advanced-middleware
     secrets: inherit
 
   release:
     name: Release
     needs: [build, check, code-quality]
-    uses: ./.github/workflows/reusable-release.yml
+    uses: fairagro/m4.2_middleware_devinfra/.github/workflows/reusable-release.yml@main
     with:
       version: ${{ needs.build.outputs.version }}
       pep440_version: ${{ needs.build.outputs.pep440_version }}
       components: '["api"]'
+      image_base_name: fairagro-advanced-middleware
       release_type: 'final'
       tag_prefix: 'docker-v'
     secrets: inherit
