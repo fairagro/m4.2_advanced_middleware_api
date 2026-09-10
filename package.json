@@ -1,0 +1,17 @@
+{
+  "name": "m4.2_middleware_devinfra",
+  "private": true,
+  "description": "Shared Devinfra tooling pins and scripts for FAIRagro m4.2 middleware repos",
+  "scripts": {
+    "format:md": "prettier --write \"**/*.{md,mdc}\"",
+    "format:md:check": "prettier --check \"**/*.{md,mdc}\"",
+    "lint:md": "markdownlint-cli2"
+  },
+  "devDependencies": {
+    "markdownlint-cli2": "0.23.2",
+    "prettier": "3.9.6"
+  },
+  "engines": {
+    "node": ">=22"
+  }
+}

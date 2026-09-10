@@ -3,7 +3,7 @@
 from unittest.mock import MagicMock, patch
 
 import pytest
-from arctrl import ARC  # type: ignore[import-untyped]
+from arctrl import ARC
 
 from middleware.api.arc_store import ArcStore, ArcStoreError
 

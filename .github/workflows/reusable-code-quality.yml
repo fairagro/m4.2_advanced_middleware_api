@@ -70,10 +70,13 @@ jobs:
       - name: Code formatting and linting
         if: ${{ !inputs.skip }}
         run: |
-          uv run ruff format --check --diff --config pyproject.toml middleware/
-          uv run ruff check --config pyproject.toml middleware/
-          uv run pylint --rcfile pyproject.toml middleware/
-          uv run mypy --config-file pyproject.toml middleware/
+          uv run ruff format --check --diff --config ruff.toml middleware/
+          uv run ruff check --config ruff.toml middleware/
+          uv run pylint --rcfile .pylintrc \
+            --source-roots=middleware/api/src,middleware/api/tests/unit,middleware/api_client/tests/unit,middleware/shared/tests \
+            middleware/
+          export MYPYPATH=stubs:middleware/api/src:middleware/api_client/src:middleware/shared/src:middleware/api/tests/unit:middleware/api_client/tests/unit:middleware/shared/tests
+          uv run mypy --config-file mypy.ini middleware/
 
       - name: Security check with bandit
         if: ${{ !inputs.skip }}

@@ -7,7 +7,7 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from typing import NoReturn
 
-from arctrl import ARC  # type: ignore[import-untyped]
+from arctrl import ARC
 from opentelemetry import trace
 
 from middleware.api.arc_store.arctrl_compat import patch_fable_int32_for_openpyxl

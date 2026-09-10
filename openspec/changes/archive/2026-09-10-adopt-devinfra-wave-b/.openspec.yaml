@@ -1,0 +1,4 @@
+schema: spec-driven
+created: 2026-09-10
+# Tooling/docs adopt of shared Devinfra Wave B — no product domain requirement deltas.
+skip_specs: true

@@ -1,0 +1,138 @@
+# Shared product-app image base (issue #36 / C2).
+#
+# Stages: package-builder → binary-builder → export-binaries
+# Runtime finishing (USER/CMD/HEALTHCHECK/…) belongs in the product-local last stage.
+#
+# Product-only builder/runtime extras (e.g. sql-to-arc Microsoft ODBC driver apk) MUST NOT live
+# here — put them in the product-local last stage (and/or a product-only Bake stage), not in this
+# synced base.
+#
+# Compose with Buildx Bake (A4): build a "*-base" target through export-binaries, then wire
+# contexts so the last stage can `COPY --from=export_bins /dist/…`.
+#
+# ── Version pins ───────────────────────────────────────────────────────────────
+# Do NOT put concrete version numbers in this file. Pins live only in repo-root versions.env
+# (one pin per component). Pass them as Bake / --build-arg (reusable-build and
+# scripts/run-container-structure-test.sh do this after sourcing versions.env).
+#
+# ── ARGs (required unless noted) ───────────────────────────────────────────────
+# Toolchain (FROM-scoped — declare before first FROM):
+#   PYTHON_VERSION, ALPINE_MINOR, PIP_VERSION, UV_VERSION
+# Package build:
+#   APP_VERSION           PEP 440 pretend version for setuptools-scm (default 0.0.0)
+#   UV_BUILD_PACKAGES     space-separated uv workspace package names to wheel (required)
+# Binary build:
+#   BINARY_NAME             primary PyInstaller --name / onedir under dist/ (required)
+#   PYINSTALLER_IMPORT      preferred: import path of the app package that owns main.py
+#   PYINSTALLER_ENTRY       optional override path after wheel install
+#   EXTRA_PYINSTALLER_ARGS  extra args appended to pyinstaller (word-split)
+#   PYINSTALLER_VERSION     from versions.env
+#   BUILDER_APK_PACKAGES    extra compile/link apk packages (optional, default empty)
+#
+# Install path (single): uv pip install --system built wheels + pyinstaller, then pyinstaller --onedir.
+# The binary-builder does not COPY repo source; entry must come from the installed wheel (IMPORT or ENTRY).
+
+ARG PYTHON_VERSION
+ARG ALPINE_MINOR
+ARG PIP_VERSION
+ARG UV_VERSION
+
+# ── package-builder ───────────────────────────────────────────────────────────
+FROM python:${PYTHON_VERSION}-alpine${ALPINE_MINOR} AS package-builder
+
+ARG APP_VERSION=0.0.0
+ARG PIP_VERSION
+ARG UV_VERSION
+ARG UV_BUILD_PACKAGES
+
+ENV SETUPTOOLS_SCM_PRETEND_VERSION=${APP_VERSION}
+
+WORKDIR /build
+
+COPY pyproject.toml uv.lock ./
+COPY middleware ./middleware
+
+RUN pip install --no-cache-dir --upgrade \
+    "pip==${PIP_VERSION}" \
+    "uv==${UV_VERSION}"
+
+# Build one wheel per package name in UV_BUILD_PACKAGES
+RUN set -eu; \
+    if [ -z "${UV_BUILD_PACKAGES:-}" ]; then \
+      echo "ERROR: UV_BUILD_PACKAGES must list uv workspace package names" >&2; \
+      exit 1; \
+    fi; \
+    for pkg in ${UV_BUILD_PACKAGES}; do \
+      uv build --package "${pkg}" --wheel; \
+    done
+
+# ── binary-builder ────────────────────────────────────────────────────────────
+ARG PYTHON_VERSION
+ARG ALPINE_MINOR
+ARG PIP_VERSION
+ARG UV_VERSION
+
+FROM python:${PYTHON_VERSION}-alpine${ALPINE_MINOR} AS binary-builder
+
+ARG APP_VERSION=0.0.0
+ARG PIP_VERSION
+ARG UV_VERSION
+ARG BINARY_NAME
+ARG PYINSTALLER_IMPORT=""
+ARG PYINSTALLER_ENTRY=""
+ARG EXTRA_PYINSTALLER_ARGS=""
+ARG PYINSTALLER_VERSION
+ARG BUILDER_APK_PACKAGES=""
+
+ENV SETUPTOOLS_SCM_PRETEND_VERSION=${APP_VERSION}
+
+# hadolint ignore=DL3018
+RUN apk add --no-cache \
+    build-base \
+    libffi-dev \
+    openssl-dev \
+    cargo \
+    musl-utils \
+    libssl3 \
+    ${BUILDER_APK_PACKAGES}
+
+WORKDIR /build
+
+RUN pip install --no-cache-dir --upgrade \
+    "pip==${PIP_VERSION}" \
+    "uv==${UV_VERSION}"
+
+COPY --from=package-builder /build/dist/*.whl /tmp/wheels/
+
+RUN set -eu; \
+    if [ -z "${PYINSTALLER_VERSION:-}" ]; then \
+      echo "ERROR: PYINSTALLER_VERSION build-arg is required (from versions.env)" >&2; \
+      exit 1; \
+    fi; \
+    uv pip install --system /tmp/wheels/*.whl; \
+    uv pip install --system "pyinstaller==${PYINSTALLER_VERSION}"
+
+# Resolve entry from installed package (preferred) or an explicit in-image path.
+RUN set -eu; \
+    if [ -z "${BINARY_NAME:-}" ]; then \
+      echo "ERROR: BINARY_NAME is required" >&2; \
+      exit 1; \
+    fi; \
+    if [ -n "${PYINSTALLER_IMPORT}" ]; then \
+      ENTRY="$(python -c "import importlib, pathlib; m = importlib.import_module('${PYINSTALLER_IMPORT}'); print(pathlib.Path(m.__file__).resolve().with_name('main.py'))")"; \
+    elif [ -n "${PYINSTALLER_ENTRY}" ] && [ -f "${PYINSTALLER_ENTRY}" ]; then \
+      ENTRY="${PYINSTALLER_ENTRY}"; \
+    else \
+      echo "ERROR: set PYINSTALLER_IMPORT (preferred) or PYINSTALLER_ENTRY to an existing path after wheel install" >&2; \
+      exit 1; \
+    fi; \
+    # shellcheck disable=SC2086
+    pyinstaller --onedir \
+      --name "${BINARY_NAME}" \
+      ${EXTRA_PYINSTALLER_ARGS} \
+      "${ENTRY}"
+
+# ── export-binaries (Bake context payload) ────────────────────────────────────
+FROM scratch AS export-binaries
+
+COPY --from=binary-builder /build/dist /dist

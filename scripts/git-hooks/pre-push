@@ -1,33 +1,39 @@
 #!/usr/bin/env bash
-# Combined pre-push hook: Git LFS + pre-commit
-# This file is version-controlled and should be installed via scripts/setup-git-hooks.sh
+# Pre-push hook: shared pre-commit pre-push stage (pytest / CST when configured).
+# Installed via scripts/setup-git-hooks.sh
+#
+# Environment: host or Dev Container (needs uv/pre-commit for the quality stage).
+#
+# Git feeds the ref list on stdin; buffer once and replay to pre-commit.
 
-# Git LFS pre-push hook
-command -v git-lfs >/dev/null 2>&1 || {
-    echo >&2 "\nThis repository is configured for Git LFS but 'git-lfs' was not found on your path."
-    echo >&2 "Please install git-lfs or run: sudo apt-get install git-lfs"
-    echo >&2 "If you no longer wish to use Git LFS, remove this hook by deleting '.git/hooks/pre-push'.\n"
-    exit 2
-}
-git lfs pre-push "$@"
+set -euo pipefail
 
-# Pre-commit hook - find the correct Python and run pre-commit
-INSTALL_PYTHON=""
-if [ -f ".venv/bin/python3" ]; then
-    INSTALL_PYTHON="$(pwd)/.venv/bin/python3"
-elif [ -f ".venv/bin/python" ]; then
-    INSTALL_PYTHON="$(pwd)/.venv/bin/python"
-fi
+stdin_file="$(mktemp)"
+trap 'rm -f "${stdin_file}"' EXIT
+cat >"${stdin_file}"
+
+# Resolve repo root (hooks run with cwd = worktree root for normal pushes).
+repo_root="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
+cd "${repo_root}"
 
 ARGS=(hook-impl --config=.pre-commit-config.yaml --hook-type=pre-push)
 HERE="$(cd "$(dirname "$0")" && pwd)"
-ARGS+=(--hook-dir "$HERE" -- "$@")
+ARGS+=(--hook-dir "${HERE}" -- "$@")
 
-if [ -x "$INSTALL_PYTHON" ]; then
-    exec "$INSTALL_PYTHON" -mpre_commit "${ARGS[@]}"
-elif command -v pre-commit > /dev/null; then
-    exec pre-commit "${ARGS[@]}"
-else
-    echo '`pre-commit` not found. Did you forget to activate your virtualenv?' 1>&2
-    exit 1
+if command -v uv >/dev/null 2>&1 && [[ -f "${repo_root}/pyproject.toml" ]]; then
+  uv run pre-commit "${ARGS[@]}" <"${stdin_file}"
+  exit $?
 fi
+
+if [[ -x "${repo_root}/.venv/bin/python" ]]; then
+  "${repo_root}/.venv/bin/python" -m pre_commit "${ARGS[@]}" <"${stdin_file}"
+  exit $?
+fi
+
+if command -v pre-commit >/dev/null 2>&1; then
+  pre-commit "${ARGS[@]}" <"${stdin_file}"
+  exit $?
+fi
+
+echo >&2 "pre-commit not found. Run: uv sync && ensure 'uv' is on PATH (or activate .venv)."
+exit 1

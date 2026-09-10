@@ -14,7 +14,7 @@ from __future__ import annotations
 import importlib.metadata
 import json
 
-from arctrl import ARC  # type: ignore[import-untyped]
+from arctrl import ARC
 
 # ro_crates/minimal.json (embedded so this file is self-contained)
 MINIMAL_ROCRATE = {

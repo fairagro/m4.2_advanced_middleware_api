@@ -18,7 +18,7 @@ from pathlib import Path
 from typing import Annotated, ParamSpec, TypeVar
 
 import gitlab
-from arctrl import ARC  # type: ignore[import-untyped]
+from arctrl import ARC
 from gitlab.exceptions import GitlabGetError
 from gitlab.v4.objects import Project, ProjectFile
 from opentelemetry import context

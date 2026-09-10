@@ -230,5 +230,8 @@ helmchart/**/client_ext.conf
 # ggshield cache
 .cache_ggshield
 
+# Node (markdownlint / prettier package.json — Dev Container also has globals)
+node_modules/
+
 docker/Dockerfile.api.bak
 scripts/ai/uv.lock

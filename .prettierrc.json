@@ -1,0 +1,27 @@
+{
+  "printWidth": 120,
+  "proseWrap": "always",
+  "overrides": [
+    {
+      "files": [
+        "*.md"
+      ],
+      "options": {
+        "printWidth": 120,
+        "proseWrap": "always",
+        "embeddedLanguageFormatting": "off"
+      }
+    },
+    {
+      "files": [
+        "*.mdc"
+      ],
+      "options": {
+        "parser": "markdown",
+        "printWidth": 120,
+        "proseWrap": "always",
+        "embeddedLanguageFormatting": "off"
+      }
+    }
+  ]
+}

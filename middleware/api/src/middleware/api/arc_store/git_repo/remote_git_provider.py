@@ -12,7 +12,7 @@ from pathlib import Path
 from urllib.parse import quote, unquote, urlparse
 
 import gitlab
-from arctrl import ARC  # type: ignore[import-untyped]
+from arctrl import ARC
 from git import Repo
 from gitlab.exceptions import GitlabError, GitlabGetError
 from gitlab.v4.objects import Project

@@ -4,7 +4,7 @@ import json
 import logging
 from datetime import UTC, datetime
 
-from arctrl import ARC  # type: ignore[import-untyped]
+from arctrl import ARC
 from opentelemetry import trace
 
 from middleware.api.arc_store import ArcStore, ArcStoreTransientError, CatalogFinalizeResult

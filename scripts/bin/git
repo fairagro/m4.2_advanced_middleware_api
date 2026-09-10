@@ -1,3 +1,62 @@
 #!/usr/bin/env bash
-# PATH entry for Cursor SCM (see .devcontainer/devcontainer.json remoteEnv).
-exec "$(cd "$(dirname "$0")" && pwd)/../cursor-git.sh" "$@"
+# PATH git wrapper (via .devcontainer remoteEnv).
+# Environment: Linux Dev Container only (scripts/bin on PATH; token store + Cursor hooksPath strip).
+# Cursor SCM (≥3.15.6) injects core.hooksPath=/dev/null via GIT_CONFIG_*,
+# which skips pre-commit. This wrapper strips that pin, loads personal tokens,
+# then execs real git.
+# https://forum.cursor.com/t/167719
+
+set -euo pipefail
+
+_git_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+_git_self="${_git_dir}/$(basename "${BASH_SOURCE[0]}")"
+
+REAL_GIT="${CURSOR_REAL_GIT:-}"
+if [[ -n "${REAL_GIT}" ]] && { [[ ! -x "${REAL_GIT}" ]] || [[ "${REAL_GIT}" -ef "${_git_self}" ]]; }; then
+  REAL_GIT=""
+fi
+if [[ -z "${REAL_GIT}" ]]; then
+  REAL_GIT="$(command -v -p git 2>/dev/null || true)"
+fi
+if [[ -n "${REAL_GIT}" ]] && [[ "${REAL_GIT}" -ef "${_git_self}" ]]; then
+  REAL_GIT=""
+fi
+if [[ -z "${REAL_GIT}" ]] && [[ -x /usr/bin/git ]] && [[ ! /usr/bin/git -ef "${_git_self}" ]]; then
+  REAL_GIT=/usr/bin/git
+fi
+if [[ -z "${REAL_GIT}" || ! -x "${REAL_GIT}" ]]; then
+  echo "git wrapper: could not find real git binary" >&2
+  exit 127
+fi
+
+count="${GIT_CONFIG_COUNT:-0}"
+if [[ "${count}" =~ ^[0-9]+$ ]] && ((count > 0)); then
+  new_keys=()
+  new_vals=()
+  for ((i = 0; i < count; i++)); do
+    key_var="GIT_CONFIG_KEY_${i}"
+    val_var="GIT_CONFIG_VALUE_${i}"
+    key="${!key_var-}"
+    val="${!val_var-}"
+    if [[ "${key}" == "core.hooksPath" && "${val}" == "/dev/null" ]]; then
+      continue
+    fi
+    new_keys+=("${key}")
+    new_vals+=("${val}")
+  done
+  for ((i = 0; i < count; i++)); do
+    unset "GIT_CONFIG_KEY_${i}" "GIT_CONFIG_VALUE_${i}" || true
+  done
+  unset GIT_CONFIG_COUNT || true
+  export GIT_CONFIG_COUNT="${#new_keys[@]}"
+  for i in "${!new_keys[@]}"; do
+    export "GIT_CONFIG_KEY_${i}=${new_keys[$i]}"
+    export "GIT_CONFIG_VALUE_${i}=${new_vals[$i]}"
+  done
+fi
+
+# shellcheck source=scripts/dev-tokens.sh
+source "${_git_dir}/../dev-tokens.sh"
+unset _git_dir _git_self
+
+exec "${REAL_GIT}" "$@"

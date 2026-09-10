@@ -28,7 +28,7 @@ from .config import Config
 from .models import ArcResult, HarvestError, HarvestErrorType, HarvestResult, HarvestStatus
 
 if TYPE_CHECKING:
-    from arctrl import ARC  # type: ignore[import-untyped]
+    from arctrl import ARC
 
 logger = logging.getLogger(__name__)
 

@@ -16,7 +16,6 @@ project for AI assistants (GitHub Copilot, Claude, etc.).
 | CouchDB | Latest | Fast document store (ARC + harvest metadata) |
 | RabbitMQ | Latest | Message broker for Celery |
 | Docker | Latest | Containerization |
-| Git LFS | 3.3.0+ | Large file storage |
 | uv | Latest | Python package manager |
 
 ## 📁 Project Structure
@@ -41,7 +40,8 @@ docs/
 ├── ai_review_policy.md    # Copilot/Bugbot policy (synced)
 ├── surface-quality-bar.global.md  # Default path→surface map (synced)
 ├── surface-quality-bar.md # Product path rows / typical entries (local)
-├── synced-paths.global.md # Synced-path allowlist (synced — do not hand-edit)
+├── synced-paths.yaml      # Sync allowlist (synced — do not hand-edit)
+├── quality.md / conventions.md / devcontainer.md  # Shared DX docs (synced)
 └── review/create/issue-fixer.md   # Thin skill indexes (synced)
 
 openspec/                  # OpenSpec source of truth + change proposals
@@ -66,15 +66,19 @@ middleware/
 
 scripts/
 ├── ai/                            # m42-ai (synced): uv run --project scripts/ai m42-ai …
-├── load-env.sh                    # Environment setup (sourced from ~/.bashrc)
-├── setup-git-lfs.sh               # Git LFS hooks (standalone / re-runnable)
-├── devcontainer-post-create.sh    # Dev Container + local one-time setup
-├── bin/gh                         # PATH wrapper + personal GH_TOKEN (Dev Container)
-└── git-hooks/                     # Version-controlled hooks
-    ├── pre-push                   # Combined: Git LFS + pre-commit
-    ├── post-checkout
-    ├── post-commit
-    └── post-merge
+├── quality-*.sh / setup-git-hooks.sh / load-versions-env.sh  # Synced Dev DX
+├── devcontainer-post-create.sh    # Synced shared postCreate (needs #56 for --dev/--all-packages)
+├── install-dev-hooks.sh           # Product: venv/hook repair (not a sync patch)
+├── setup-bashrc-load-env.sh       # Product: bashrc → load-env (#58)
+├── load-env.sh                    # Product shell init (promote #58)
+├── update-apk-dependencies.sh     # Product APK pin helper (promote #68)
+├── update-docker-pins.sh          # Product Docker/pip/uv pin helper
+├── bin/gh, bin/git                # PATH wrappers + personal GH_TOKEN (DC)
+└── git-hooks/
+    └── pre-push                   # Synced quality pre-push (pre-commit stage)
+
+stubs/                             # Type stubs until Devinfra #67 sync (arctrl, fable_library)
+pyrightconfig.json                 # stubPath + extraPaths (promote shared file #64)
 
 dev_environment/
 ├── start.sh              # Start Docker Compose with sops
@@ -91,24 +95,31 @@ dev_environment/
 uv run pytest middleware/shared/tests/unit/ -v
 uv run pytest middleware/api_client/tests/unit/ -v
 
-# Quality checks
-uv run ruff check --config pyproject.toml middleware/
-uv run mypy --config-file pyproject.toml middleware/
-
-# Ruff parity checks (local + pre-commit + CI)
-uv run ruff format --check --diff --config pyproject.toml middleware/
-uv run ruff check --config pyproject.toml middleware/
+# Quality checks (synced fragments — see docs/quality.md)
+uv run ruff check --config ruff.toml middleware/
+uv run ruff format --check --diff --config ruff.toml middleware/
+export MYPYPATH=stubs:middleware/api/src:middleware/api_client/src:middleware/shared/src:middleware/api/tests/unit:middleware/api_client/tests/unit:middleware/shared/tests
+uv run mypy --config-file mypy.ini middleware/
+uv run pylint --rcfile .pylintrc \
+  --source-roots=middleware/api/src,middleware/api/tests/unit,middleware/api_client/tests/unit,middleware/shared/tests \
+  middleware/
+uv run bandit -r middleware/ -c .bandit -ll
 
 # Commit-stage gate (= `pre-commit run --all-files`; no pre-push/pytest)
 ./scripts/quality-check.sh
 # Autofix hooks only (trailing-whitespace, eof, ruff, ruff-format)
 ./scripts/quality-fix.sh
 
+# Repair hooks / venv after path drift
+./scripts/install-dev-hooks.sh
+
 # Refresh Docker/apk/pip/uv pins (versions.env + Dockerfile.api fallbacks)
 ./scripts/update-docker-pins.sh
 
-# Install all dependecies
+# Install all dependencies
 uv sync --dev --all-packages
+# Agent GitHub plumbing (not root workspace member)
+uv run --project scripts/ai m42-ai --help
 ```
 
 ## 📝 Key Implementation Details
@@ -161,17 +172,23 @@ config2 = Config(
 
 **Test Coverage**: 26/26 tests passing
 
-### Git LFS Integration
+### Git hooks
 
 **Setup Process**:
 
-1. `scripts/devcontainer-post-create.sh` (or Dev Container postCreate) installs
-   pre-commit and calls `scripts/setup-git-lfs.sh`
-2. Git LFS hooks are installed from `scripts/git-hooks/`
-3. Hooks are version-controlled, not just in `.git/hooks/`
-4. Re-run LFS hooks alone with `scripts/setup-git-lfs.sh` when needed
+1. Synced `scripts/devcontainer-post-create.sh` (Dev Container `postCreateCommand`) installs
+   pre-commit and runs `scripts/setup-git-hooks.sh` (quality `pre-push` only)
+2. Product `postStartCommand` runs `scripts/setup-bashrc-load-env.sh` (load-env → `~/.bashrc`)
+3. After path/venv drift: `scripts/install-dev-hooks.sh` (`uv sync --dev --all-packages` + hooks)
+4. Shared post-create still runs plain `uv sync` until [Devinfra #56](https://github.com/fairagro/m4.2_middleware_devinfra/issues/56) — do **not** patch the synced script locally
 
-**Files Tracked by LFS**: `*.sql` (configured in `.gitattributes`)
+**TEMP (remove with Wave C Bake):** Until repo-root `docker-bake.hcl` exists, product
+`scripts/load-env.sh` appends `container-structure-test` to `SKIP` so verbatim pre-push
+does not hard-fail (CST YAML exists; Bake wiring is Wave C). After Wave C, delete that
+block if it is still present (it also no-ops once `docker-bake.hcl` is there). Shells that
+never source `load-env` can use `SKIP=container-structure-test git push` once.
+
+**Git LFS:** not used (no tracking in `.gitattributes`, no `setup-git-lfs.sh`, no LFS hooks).
 
 ## 🐳 Docker Compose Services
 
@@ -241,16 +258,16 @@ by the project's configured tools: **Ruff, Pylance, MyPy, Pylint, and Bandit**.
 
 - Keep Ruff behavior identical in Cursor/VS Code, pre-commit, and GitHub Actions
   by using the same scope (`middleware/`), the same **workspace-root** config
-  (`pyproject.toml` — not `middleware/*/pyproject.toml`), and the same binary
-  (`.venv/bin/ruff` via `uv run ruff --config pyproject.toml`).
+  (`ruff.toml` — not `middleware/*/pyproject.toml`), and the same binary
+  (`.venv/bin/ruff` via `uv run ruff --config ruff.toml`).
 - Editor: `.vscode/settings.json` must set `ruff.path` to
-  `${workspaceFolder}/.venv/bin/ruff`, `ruff.configuration` to the root
-  `pyproject.toml`, and `ruff.configurationPreference` to `editorOnly`. Do
-  **not** set `ruff.path` to `["uv", "run", "ruff"]` — those entries are treated
-  as executables, so `uv` would be launched as Ruff and Problems stays empty.
-- Do not put `[tool.ruff]` (including `extend = ...`) in package pyprojects;
-  discovery would stop there and the Ruff native server often fails to apply
-  extended rules → empty Problems tab while CLI still looks fine.
+  `${workspaceFolder}/.venv/bin/ruff`, `ruff.configuration` to
+  `${workspaceFolder}/ruff.toml`, and `ruff.configurationPreference` to
+  `editorOnly`. Do **not** set `ruff.path` to `["uv", "run", "ruff"]` — those
+  entries are treated as executables, so `uv` would be launched as Ruff and
+  Problems stays empty.
+- Do **not** put `[tool.ruff]` back into root or package `pyproject.toml`
+  (fragments are the single source — see `docs/quality.md`).
 - Lint diagnostics appear in Problems; **format** drift does not (Ruff applies
   format via Format on Save / `ruff format`). Before commit, run
   `./scripts/quality-fix.sh` then `./scripts/quality-check.sh` (both wrap
@@ -271,6 +288,8 @@ by the project's configured tools: **Ruff, Pylance, MyPy, Pylint, and Bandit**.
 - In that case, verify `tool.hatch.version.raw-options` in
   `middleware/*/pyproject.toml` can parse repository tags used by CI/release
   workflows.
+- Agent / no-TTY `GH_TOKEN` shadow: `env -u GH_TOKEN gh …` /
+  `env -u GH_TOKEN uv run --project scripts/ai m42-ai …` (devinfra#69).
 
 ## 📚 File Modifications Pattern
 
@@ -460,7 +479,8 @@ Before making changes, consider:
 
 - Should I use `uv` or another tool? → Always `uv`
 - Are client certificates required? → No, they're optional
-- Should I modify `.git/hooks/` directly? → No, use `scripts/setup-git-lfs.sh`
+- Should I modify `.git/hooks/` directly? → No — `scripts/setup-git-hooks.sh`
+  or `scripts/install-dev-hooks.sh`
 - What Python version? → `versions.env` (`PYTHON_VERSION`; syncs `.python-version`)
 - What Alpine / tool versions? → repo-root `versions.env`
 - How to run tests? → `uv run pytest ...`
@@ -468,11 +488,14 @@ Before making changes, consider:
 - Copilot/Bugbot comments? → `/review-fixer` (policy in `docs/ai_review_policy.md`); do not loop until 0 comments
 - Personal `GH_TOKEN` / `GITGUARDIAN_API_KEY`? → TTY prompt (empty = skip);
   `source ./scripts/set-dev-tokens.sh` to set later; store is
-  `/commandhistory/tokens.env` in the Dev Container (not the git worktree)
+  `/commandhistory/tokens.env` in the Dev Container (not the git worktree);
+  agent shells: `env -u GH_TOKEN …` if a stale token shadows the store (#69)
 - Vendor skills? → `.agents/skills/{gh,docker,hadolint,uv}` (`gh skill update`);
   do not hand-edit. First-party synced: `arctrl`, review/create/issue-fixer
 - Agent GitHub plumbing? → `uv run --project scripts/ai m42-ai …`
-
+- Synced paths? → `docs/synced-paths.yaml` (canonical allowlist); never hand-edit
+  allowlisted files — fix upstream or split `.global`/local
+- `uv sync` in this workspace? → always `--dev --all-packages` (shared post-create: Devinfra #56)
 ---
 
 **Last Updated**: 2026-09-08

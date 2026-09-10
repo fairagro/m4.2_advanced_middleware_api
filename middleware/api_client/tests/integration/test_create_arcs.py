@@ -11,7 +11,7 @@ import json
 import httpx
 import pytest
 import respx
-from arctrl import ARC, ArcInvestigation  # type: ignore[import-untyped]
+from arctrl import ARC, ArcInvestigation
 
 from middleware.api_client import ApiClient, Config
 

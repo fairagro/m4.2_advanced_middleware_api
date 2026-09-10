@@ -3,10 +3,7 @@
   "ignores": [
     ".venv/**",
     "node_modules/**",
-    // OpenSpec regenerates these on `openspec update` — do not hand-lint/edit.
-    ".cursor/**",
-    ".github/skills/**",
-    ".github/prompts/**",
+    "LICENSE",
     // Vendor agent skills (`gh skill install`; do not hand-edit).
     ".agents/skills/gh/**",
     ".agents/skills/docker/**",
