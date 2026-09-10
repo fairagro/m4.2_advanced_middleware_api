@@ -11,7 +11,7 @@ _state: dict[str, bool] = {"patched": False}
 
 _FableInt32: Any | None
 try:
-    from fable_library.core import Int32 as _FableInt32  # type: ignore[import-untyped, no-redef]
+    from fable_library.core import Int32 as _FableInt32  # type: ignore[no-redef]
 except ImportError:
     _FableInt32 = None
 

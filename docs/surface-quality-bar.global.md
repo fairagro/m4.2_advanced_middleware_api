@@ -5,7 +5,7 @@ after sync).
 
 **Rules** (how the bar affects step 5, nits, dismiss) live in
 [`docs/ai_review_policy.md`](ai_review_policy.md#surface-quality-bar-fixer-triage). This file is only the map. Paths
-consumers must not hand-edit after sync: [`docs/synced-paths.global.md`](synced-paths.global.md).
+consumers must not hand-edit after sync: [`docs/synced-paths.yaml`](synced-paths.yaml).
 
 **Product overlay:** add extra rows in local [`docs/surface-quality-bar.md`](surface-quality-bar.md) (create when
 needed). Sync of this `.global.md` file MUST NOT overwrite that product file. Do not edit `docs/ai_review_policy.md`

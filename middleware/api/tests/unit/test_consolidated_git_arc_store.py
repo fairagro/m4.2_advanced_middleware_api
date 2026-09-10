@@ -1,6 +1,8 @@
 """Tests for ConsolidatedGitArcStore finalize and ephemeral clone behaviour."""
 
+from collections.abc import AsyncIterator
 from pathlib import Path
+from typing import Any
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -27,7 +29,7 @@ def doc_store() -> MagicMock:
     """Document store mock returning one ARC for finalize."""
     store = MagicMock()
 
-    async def _iter_arcs(_rdi: str):
+    async def _iter_arcs(_rdi: str) -> AsyncIterator[tuple[str, dict[str, Any]]]:
         yield ("arc-1", minimal_rocrate_dict("DS-1"))
 
     store.iter_arc_contents_by_rdi = MagicMock(side_effect=_iter_arcs)
@@ -142,7 +144,7 @@ async def test_finalize_partial_push_skips_bad_arc_keeps_good(
         ],
     }
 
-    async def _iter_arcs(_rdi: str):
+    async def _iter_arcs(_rdi: str) -> AsyncIterator[tuple[str, dict[str, Any]]]:
         yield ("good-arc", minimal_rocrate_dict("DS-GOOD"))
         yield ("bad-arc", bad_arc)
 
@@ -168,7 +170,7 @@ async def test_finalize_all_arcs_fail_refuses_empty_wipe(
     """When every ARC fails, do not publish [] over an existing remote catalog."""
     doc_store = MagicMock()
 
-    async def _iter_arcs(_rdi: str):
+    async def _iter_arcs(_rdi: str) -> AsyncIterator[tuple[str, dict[str, Any]]]:
         yield ("bad-1", {"not": "an ro-crate"})
         yield ("bad-2", {"@graph": "nope"})
 
@@ -191,7 +193,7 @@ async def test_finalize_empty_rdi_still_publishes_empty_catalog(
     """No CouchDB ARCs → empty catalog is allowed (legitimate empty RDI)."""
     doc_store = MagicMock()
 
-    async def _iter_arcs(_rdi: str):
+    async def _iter_arcs(_rdi: str) -> AsyncIterator[tuple[str, dict[str, Any]]]:
         return
         yield  # pragma: no cover — async generator with no items
 

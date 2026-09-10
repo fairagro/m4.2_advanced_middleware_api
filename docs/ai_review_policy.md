@@ -115,12 +115,11 @@ Stop at the first matching step.
    documented Dev Container path is actually broken.
 2. **This PR?** If it is drive-by on unchanged code, another module, or speculative hardening the change does not need →
    `dismiss` or `follow-up` (only if Medium+). **Synced path (product consumers) — before steps 3–5:** If the finding’s
-   primary path is on [`docs/synced-paths.global.md`](synced-paths.global.md) (or a matching glob) **and** the checkout
-   is a product consumer (not Devinfra), **sync source of truth overrides** cheap/`fix` in this PR. Do **not** patch the
-   synced tree. Use `follow-up` to Devinfra when the finding is correct for shared content and severity is Medium+, or
-   Risk, or seen-in-the-wild; otherwise `dismiss` (“synced path — edit upstream in Devinfra / wait for sync”); or `fix`
-   only a **documented product-local overlay** from that allowlist. See
-   [Synced paths](#synced-paths-sync-source-of-truth).
+   primary path is on [`docs/synced-paths.yaml`](synced-paths.yaml) (or a matching glob) **and** the checkout is a product
+   consumer (not Devinfra), **sync source of truth overrides** cheap/`fix` in this PR. Do **not** patch the synced tree.
+   Use `follow-up` to Devinfra when the finding is correct for shared content and severity is Medium+, or Risk, or
+   seen-in-the-wild; otherwise `dismiss` (“synced path — edit upstream in Devinfra / wait for sync”); or `fix` only a
+   **documented product-local overlay** from that allowlist. See [Synced paths](#synced-paths-sync-source-of-truth).
 3. **Cheapest correct fix?** Prefer a narrower type, a cited invariant, or an existing helper over the finder’s patch.
    Widening a type is not a fix (see [Types](#types)).
 4. **Risk.** Severity Blocker/High **and** practicality not Low → `fix`. Nit-budget does not apply. If the fix itself is
@@ -143,11 +142,11 @@ If the cheaper fix is unclear, default to `dismiss` rather than adding a layer.
 
 ## Synced paths (sync source of truth)
 
-For paths listed in [`docs/synced-paths.global.md`](synced-paths.global.md), **sync source of truth** overrides the
-usual “cheap + High practicality + Medium+ → `fix` in this PR” rule when `/review-fixer` runs in a **product** checkout.
-Fixers MUST NOT treat a correct cheap patch on a synced path as an in-PR `fix` of that synced file; they MUST
-`follow-up` to Devinfra or `dismiss` (synced — edit upstream), or `fix` only a documented product-local overlay. In the
-Devinfra repository itself, those paths are the local source of truth and MAY be fixed like any other in-repo file.
+For paths listed in [`docs/synced-paths.yaml`](synced-paths.yaml), **sync source of truth** overrides the usual “cheap +
+High practicality + Medium+ → `fix` in this PR” rule when `/review-fixer` runs in a **product** checkout. Fixers MUST
+NOT treat a correct cheap patch on a synced path as an in-PR `fix` of that synced file; they MUST `follow-up` to
+Devinfra or `dismiss` (synced — edit upstream), or `fix` only a documented product-local overlay. In the Devinfra
+repository itself, those paths are the local source of truth and MAY be fixed like any other in-repo file.
 
 ---
 
@@ -200,8 +199,8 @@ middleware.
 **Path map:** default rows are in [`docs/surface-quality-bar.global.md`](surface-quality-bar.global.md) (synced — do not
 hand-edit). Product repos MAY add rows in local [`docs/surface-quality-bar.md`](surface-quality-bar.md); sync of the
 `.global.md` file does not overwrite that overlay. Do not edit this policy file solely to add a path→surface row.
-**Synced path ownership** (which trees consumers must not patch) is
-[`docs/synced-paths.global.md`](synced-paths.global.md) — see [Synced paths](#synced-paths-sync-source-of-truth).
+**Synced path ownership** (which trees consumers must not patch) is [`docs/synced-paths.yaml`](synced-paths.yaml) — see
+[Synced paths](#synced-paths-sync-source-of-truth).
 
 For **shared Devinfra scripts** (and reusable CI helpers that only orchestrate them), a realistic path is the
 **documented default** in the Linux Dev Container or GitHub Actions Linux (e.g. `./scripts/quality-check.sh`,

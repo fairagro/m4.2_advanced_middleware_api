@@ -4,6 +4,13 @@ if [ $sourced -eq 0 ]; then
   exit 1
 fi
 
+# Sourced from interactive ~/.bashrc — never abort the parent shell.
+# Promote shared shell-init upstream: m4.2_middleware_devinfra#58.
+__load_env_saved_opts="$(set +o)"
+set +e
+set +u
+set +o pipefail 2>/dev/null || true
+
 # Load Environment Script
 # Decrypts shared `.env.integration.enc` → `.env`, then personal tokens
 # (scripts/dev-tokens.sh: TTY prompt, /commandhistory/tokens.env).
@@ -20,6 +27,12 @@ if [ -d "${repo_root}/.venv/bin" ]; then
     esac
 fi
 
+# Product MYPYPATH until Devinfra #58 / #63 (verbatim pre-commit has no path overlay).
+# CI sets the same value in reusable-code-quality.yml.
+if [ -z "${MYPYPATH:-}" ]; then
+    export MYPYPATH="stubs:middleware/api/src:middleware/api_client/src:middleware/shared/src:middleware/api/tests/unit:middleware/api_client/tests/unit:middleware/shared/tests"
+fi
+
 # Setup aliases (completions: static files in image + bash-completion lazy-load)
 alias k=kubectl
 alias d=docker
@@ -31,6 +44,20 @@ alias ksn="kubectl config set-context --current --namespace"
 declare -F __start_kubectl &>/dev/null && complete -o default -F __start_kubectl k
 declare -F __start_docker &>/dev/null && complete -o default -F __start_docker d
 
+# ggshield (dev dependency in .venv; same PATH as pre-commit above)
+if command -v ggshield &> /dev/null; then
+    if [ -n "${GITGUARDIAN_API_KEY:-}" ]; then
+        echo "✅ ggshield: using GITGUARDIAN_API_KEY from environment"
+    elif [ -f ~/.config/ggshield/auth_config.yaml ] && grep -q "token:" ~/.config/ggshield/auth_config.yaml 2>/dev/null; then
+        echo "✅ ggshield: authenticated (~/.config/ggshield/auth_config.yaml)"
+    else
+        echo "🔐 ggshield not authenticated — run: ggshield auth login --method token"
+        echo "   Or set GITGUARDIAN_API_KEY (non-interactive)"
+    fi
+else
+    echo "⚠️ ggshield not available - run: uv sync --dev --all-packages"
+fi
+
 ENCRYPTED_FILE="${mydir}/../.env.integration.enc"
 DECRYPTED_FILE="${mydir}/../.env"
 
@@ -39,9 +66,10 @@ if [ -f "$DECRYPTED_FILE" ] && [ -s "$DECRYPTED_FILE" ]; then
     echo "✅ $DECRYPTED_FILE already exists and is not empty - skipping decryption"
 
     # Still load for current shell if not already loaded
-    if [ -z "$GITLAB_API_TOKEN" ]; then
+    if [ -z "${GITLAB_API_TOKEN:-}" ]; then
         echo "🔄 Loading existing environment variables..."
         set -a
+        # shellcheck source=/dev/null
         source "$DECRYPTED_FILE"
         set +a
         echo "✅ Environment variables loaded from existing $DECRYPTED_FILE"
@@ -55,10 +83,10 @@ else
     elif [ ! -f "$ENCRYPTED_FILE" ]; then
         echo "⚠️ $ENCRYPTED_FILE not found - skipping secrets loading"
     elif grep -q '"sops"' "$ENCRYPTED_FILE" 2>/dev/null; then
-        sops -d "$ENCRYPTED_FILE" > "$DECRYPTED_FILE" 2>/dev/null
-        if [ $? -eq 0 ]; then
+        if sops -d "$ENCRYPTED_FILE" > "$DECRYPTED_FILE" 2>/dev/null; then
             echo "✅ Encrypted secrets decrypted to $DECRYPTED_FILE"
             set -a
+            # shellcheck source=/dev/null
             source "$DECRYPTED_FILE"
             set +a
         else
@@ -77,3 +105,6 @@ fi
 
 # shellcheck source=scripts/dev-tokens.sh
 source "${mydir}/dev-tokens.sh"
+
+eval "${__load_env_saved_opts}"
+return 0

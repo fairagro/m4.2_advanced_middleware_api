@@ -6,7 +6,7 @@ from collections.abc import AsyncGenerator
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
-    from arctrl import ARC  # type: ignore[import-untyped]
+    from arctrl import ARC
 
 ARC_RESPONSE = {
     "client_id": "test-client",

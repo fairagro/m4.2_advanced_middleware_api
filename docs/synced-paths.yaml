@@ -1,0 +1,81 @@
+# Sole source of truth for paths synced from Devinfra into product repos.
+# Consumers must not hand-edit these after sync. No product-local synced-paths overlay.
+# Docs: docs/sync.md | Policy: docs/ai_review_policy.md#synced-paths-sync-source-of-truth
+
+allow:
+  - docs/ai_review_policy.md
+  - docs/surface-quality-bar.global.md
+  - docs/synced-paths.yaml
+  - docs/sync.md
+  - docs/renovate.md
+  - docs/review-fixer.md
+  - docs/create-issue.md
+  - docs/issue-fixer.md
+  - docs/quality.md
+  - docs/devcontainer.md
+  - docs/conventions.md
+  - docs/ci.md
+  - .cursor/BUGBOT.md
+  - .github/copilot-instructions.md
+  - .cursor/commands/review-fixer.md
+  - .cursor/commands/create-issue.md
+  - .cursor/commands/issue-fixer.md
+  - .github/prompts/review-fixer.prompt.md
+  - .github/prompts/create-issue.prompt.md
+  - .github/prompts/issue-fixer.prompt.md
+  - .agents/skills/review-fixer/**
+  - .agents/skills/create-issue/**
+  - .agents/skills/issue-fixer/**
+  - .agents/skills/arctrl/**
+  - .agents/skills/gh/**
+  - .agents/skills/docker/**
+  - .agents/skills/hadolint/**
+  - .agents/skills/uv/**
+  - scripts/ai/**
+  - scripts/dev-tokens.sh
+  - scripts/set-dev-tokens.sh
+  - scripts/bin/gh
+  - scripts/bin/git
+  - scripts/quality-check.sh
+  - scripts/quality-fix.sh
+  - scripts/run-container-structure-test.sh
+  - scripts/setup-git-hooks.sh
+  - scripts/git-hooks/**
+  - scripts/load-versions-env.sh
+  - scripts/devcontainer-post-create.sh
+  - openspec/principles.global.md
+  - renovate.json
+  - .github/workflows/renovate.yml
+  - docker/Dockerfile.product-app.base
+  - versions.env
+  - .python-version
+  - .pre-commit-config.yaml
+  - .bandit
+  - ruff.toml
+  - mypy.ini
+  - .pylintrc
+  - .markdownlint.json
+  - .markdownlint-cli2.jsonc
+  - .markdownlintignore
+  - .prettierrc.json
+  - .prettierignore
+  - .vscode/settings.json
+  - .devcontainer/Dockerfile
+
+# Never copy — even if mis-listed under allow.
+exclude:
+  - middleware/**
+  - openspec/specs/**
+  - openspec/changes/**
+  - .github/workflows/reusable-*.yml
+  - docs/surface-quality-bar.md
+  - openspec/principles.md
+  - AGENTS.md
+  - .devcontainer/devcontainer.json
+  - .devcontainer/docker-compose.yml
+
+# Product-local overlays (MAY edit in consumers; never overwritten by sync).
+overlays:
+  - docs/surface-quality-bar.md
+  - openspec/principles.md
+  - AGENTS.md

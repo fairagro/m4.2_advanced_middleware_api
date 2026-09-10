@@ -11,8 +11,8 @@ import sys
 import tempfile
 from pathlib import Path
 
-from arctrl import ARC  # type: ignore[import-untyped]
-from fable_library.core import int32  # type: ignore[import-untyped]
+from arctrl import ARC
+from fable_library.core import int32
 from openpyxl.utils.cell import get_column_letter  # type: ignore[import-untyped]
 
 

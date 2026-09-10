@@ -12,7 +12,7 @@ from unittest.mock import AsyncMock, patch
 import httpx
 import pytest
 import respx
-from arctrl import ARC, ArcInvestigation  # type: ignore[import-untyped]
+from arctrl import ARC, ArcInvestigation
 from client_test_support import ARC_RESPONSE, HARVEST_RESPONSE, rocrate_dict
 
 from middleware.api_client import (

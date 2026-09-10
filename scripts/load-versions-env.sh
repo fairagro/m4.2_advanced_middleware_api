@@ -1,10 +1,7 @@
 #!/usr/bin/env bash
-# Load repo-root versions.env, validate runtime pins, derive ALPINE_MINOR,
-# and sync .python-version from PYTHON_VERSION.
+# Load repo-root versions.env and sync .python-version from PYTHON_VERSION.
 #
-# Alpine stays only in versions.env (no .alpine-version file): nothing outside
-# this loader/Docker build-args consumes a dedicated Alpine pin file. Python
-# still needs .python-version for uv / actions/setup-python.
+# Environment: host or Dev Container.
 #
 # Usage (from any cwd):
 #   source "$(git rev-parse --show-toplevel)/scripts/load-versions-env.sh"
@@ -22,6 +19,7 @@ fi
 
 # shellcheck disable=SC1090
 set -a
+# shellcheck source=/dev/null
 source "${VERSIONS_ENV}"
 set +a
 
@@ -29,17 +27,25 @@ if [[ ! "${PYTHON_VERSION:-}" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
   echo "ERROR: PYTHON_VERSION must be X.Y.Z in versions.env (got: '${PYTHON_VERSION:-<empty>}')" >&2
   return 1 2>/dev/null || exit 1
 fi
-if [[ ! "${ALPINE_VERSION:-}" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
-  echo "ERROR: ALPINE_VERSION must be X.Y.Z in versions.env (got: '${ALPINE_VERSION:-<empty>}')" >&2
+if [[ -z "${UV_VERSION:-}" ]]; then
+  echo "ERROR: UV_VERSION must be set in versions.env" >&2
   return 1 2>/dev/null || exit 1
 fi
-if [[ -z "${UV_VERSION:-}" || -z "${PIP_VERSION:-}" ]]; then
-  echo "ERROR: UV_VERSION and PIP_VERSION must be set in versions.env" >&2
+if [[ -z "${NODE_VERSION:-}" || -z "${OPENSPEC_VERSION:-}" ]]; then
+  echo "ERROR: NODE_VERSION and OPENSPEC_VERSION must be set in versions.env" >&2
+  return 1 2>/dev/null || exit 1
+fi
+if [[ -z "${PRETTIER_VERSION:-}" || -z "${MARKDOWNLINT_CLI2_VERSION:-}" ]]; then
+  echo "ERROR: PRETTIER_VERSION and MARKDOWNLINT_CLI2_VERSION must be set in versions.env" >&2
+  return 1 2>/dev/null || exit 1
+fi
+if [[ -z "${PIP_VERSION:-}" || -z "${ALPINE_VERSION:-}" || -z "${ALPINE_MINOR:-}" || -z "${PYINSTALLER_VERSION:-}" ]]; then
+  echo "ERROR: product-app image pins PIP_VERSION, ALPINE_VERSION, ALPINE_MINOR, PYINSTALLER_VERSION must be set in versions.env" >&2
   return 1 2>/dev/null || exit 1
 fi
 
-ALPINE_MINOR="${ALPINE_VERSION%.*}"
-export PYTHON_VERSION ALPINE_VERSION ALPINE_MINOR UV_VERSION PIP_VERSION
+export PYTHON_VERSION UV_VERSION NODE_VERSION OPENSPEC_VERSION PRETTIER_VERSION MARKDOWNLINT_CLI2_VERSION
+export PIP_VERSION ALPINE_VERSION ALPINE_MINOR PYINSTALLER_VERSION
 
-# Keep uv / setup-python pin file aligned with versions.env
+# Keep uv / actions/setup-python pin file aligned with versions.env
 printf '%s\n' "${PYTHON_VERSION}" > "${REPO_ROOT}/.python-version"

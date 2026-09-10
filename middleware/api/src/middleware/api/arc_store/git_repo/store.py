@@ -12,7 +12,7 @@ from pathlib import Path
 from typing import ParamSpec, TypeVar
 
 import git.cmd
-from arctrl import ARC  # type: ignore[import-untyped]
+from arctrl import ARC
 from git.exc import GitCommandError
 from opentelemetry import context, trace
 

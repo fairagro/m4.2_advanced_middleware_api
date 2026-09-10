@@ -6,8 +6,7 @@ _gh_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 _gh_self="${_gh_dir}/$(basename "${BASH_SOURCE[0]}")"
 # shellcheck source=scripts/dev-tokens.sh
 source "${_gh_dir}/../dev-tokens.sh"
-export GH_TOKEN="${GH_TOKEN:-${GITHUB_TOKEN:-}}"
-if [ -z "${GH_TOKEN}" ]; then
+if [ -z "${GH_TOKEN:-}" ]; then
   echo "gh: no GH_TOKEN — run: source ./scripts/set-dev-tokens.sh (or open a terminal if never asked)" >&2
   exit 1
 fi

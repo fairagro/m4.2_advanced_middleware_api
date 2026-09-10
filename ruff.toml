@@ -1,0 +1,73 @@
+# Shared Ruff config for m4.2 product repos (sync into product checkout root).
+# Seeded from m4.2_advanced_middleware_api; owned in m4.2_middleware_devinfra.
+# Product root pyproject.toml keeps [project] / uv workspace — do not duplicate [tool.ruff] there.
+
+exclude = [
+  ".venv",
+  "venv",
+  ".git",
+  "__pycache__",
+  "*.egg-info",
+  ".pytest_cache",
+  ".mypy_cache",
+  ".ruff_cache",
+  "build",
+  "dist",
+]
+
+# Preview required for PLR0917 (too-many-positional-arguments).
+preview = true
+line-length = 120
+
+[lint]
+select = [
+  "E",
+  "W",
+  "F",
+  "I",
+  "C90",
+  "N",
+  "D",
+  "UP",
+  "B",
+  "SIM",
+  "A",
+  "ARG",
+  "BLE",
+  "PLR",
+  "SLF",
+]
+
+[lint.mccabe]
+max-complexity = 10
+
+[lint.isort]
+known-first-party = ["middleware"]
+force-single-line = false
+combine-as-imports = true
+
+[lint.per-file-ignores]
+# Pytest fixtures / test data — argument-count and magic-number noise.
+"middleware/*/tests/**/*.py" = ["SLF001", "PLR0913", "PLR0917", "PLR2004", "D103"]
+# Devinfra agent plumbing (`m42-ai`): not product middleware. IDE still uses this
+# ruff.toml; hooks/CI only lint middleware/. Keep import/bug rules; drop docstring
+# and complexity/magic noise that matches the product surface bar.
+"scripts/ai/**/*.py" = [
+  "D",
+  "ARG001",
+  "C901",
+  "PLR0913",
+  "PLR0914",
+  "PLR0915",
+  "PLR0917",
+  "PLR2004",
+]
+
+[lint.pydocstyle]
+convention = "pep257"
+
+[format]
+quote-style = "double"
+indent-style = "space"
+skip-magic-trailing-comma = false
+line-ending = "lf"

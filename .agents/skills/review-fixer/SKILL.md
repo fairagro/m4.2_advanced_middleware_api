@@ -142,7 +142,7 @@ budget: nit-in-budget|nit-regression|nit-exhausted|n/a-risk
 ```
 
 **Synced paths (product consumers):** Before any `fix`, match the finding’s primary path against
-[`docs/synced-paths.global.md`](../../../docs/synced-paths.global.md). In a **product** checkout, **never** modify
+[`docs/synced-paths.yaml`](../../../docs/synced-paths.yaml). In a **product** checkout, **never** modify
 allowlisted / synced trees. Prefer detecting Devinfra via `git remote` matching `fairagro/m4.2_middleware_devinfra`; if
 unsure, treat as consumer (safer). In **this Devinfra repo**, allowlisted paths are local SoT and MAY be `fix`ed.
 
@@ -167,7 +167,7 @@ Decision order (stop at first match) — same as the policy:
    contract; do **not** add `REQUIRE_*` opt-in shims or dual modes. **Cheap does not override this** — do not take step
    5 for host-only, one-shot-migration, or contract-violator-only hardening.
 2. Not this PR → `dismiss`, or `follow-up` if Medium+ **Synced path (product consumers) — before steps 3–5:** Path on
-   [`docs/synced-paths.global.md`](../../../docs/synced-paths.global.md) (or matching glob) **and** this checkout is
+   [`docs/synced-paths.yaml`](../../../docs/synced-paths.yaml) (or matching glob) **and** this checkout is
    **not** Devinfra → **do not** `fix` that synced file. Instead:
    - `follow-up` (create-issue against **Devinfra**, or clear Devinfra-targeted follow-up) when the finding is correct
      for shared content and severity is Medium+, or Risk, or seen-in-the-wild shared bug;
@@ -210,7 +210,7 @@ run**.
 - Prefer narrowing types over guards. Do not add tests that only assert impossible `None` states.
 - Specs: update only when the code’s real contract changed.
 - In product consumers: never stage or leave dirty edits under
-  [`docs/synced-paths.global.md`](../../../docs/synced-paths.global.md) paths from fixer work.
+  [`docs/synced-paths.yaml`](../../../docs/synced-paths.yaml) paths from fixer work.
 
 ## GitHub replies (PR known)
 

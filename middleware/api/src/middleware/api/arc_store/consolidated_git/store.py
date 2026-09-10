@@ -14,7 +14,7 @@ from typing import ParamSpec, TypeVar, override
 from urllib.parse import unquote, urlparse
 
 import git.cmd
-from arctrl import ARC  # type: ignore[import-untyped]
+from arctrl import ARC
 from git import Repo
 from git.exc import GitCommandError
 from opentelemetry import context

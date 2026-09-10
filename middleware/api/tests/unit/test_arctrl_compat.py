@@ -6,7 +6,7 @@ import importlib.metadata
 from pathlib import Path
 
 import pytest
-from arctrl import ARC  # type: ignore[import-untyped]
+from arctrl import ARC
 from packaging.version import Version
 
 from middleware.api.arc_store.arctrl_compat import (
