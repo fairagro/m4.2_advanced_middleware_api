@@ -59,10 +59,9 @@ target "api" {
     export_bins = "target:api-base"
   }
   args = {
-    ALPINE_VERSION  = ALPINE_VERSION
-    BINARY_NAME     = "middleware-api"
-    RUNTIME_USER    = "middleware"
-    RUNTIME_WORKDIR = "/api"
+    ALPINE_VERSION = ALPINE_VERSION
+    BINARY_NAME    = "middleware-api"
+    RUNTIME_USER   = "middleware"
   }
   tags      = [IMAGE_TAG]
   platforms = ["linux/amd64"]

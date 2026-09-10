@@ -11,14 +11,13 @@ ARG BINARY_NAME=middleware-api
 ARG RUNTIME_USER=middleware
 ARG RUNTIME_UID=65532
 ARG RUNTIME_GID=65532
-ARG RUNTIME_WORKDIR=/api
 
 ENV BINARY_NAME=${BINARY_NAME}
 ENV UVICORN_HOST=0.0.0.0
 ENV UVICORN_PORT=8000
 ENV UVICORN_LOG_LEVEL=info
 
-WORKDIR ${RUNTIME_WORKDIR}
+WORKDIR /api
 
 # Runtime extras required by the API process (curl liveness, git for ArcStore).
 # Keep apk packages version-pinned (Trivy / update via scripts/update-apk-dependencies.sh).
@@ -32,20 +31,22 @@ RUN apk add --no-cache --upgrade \
         libssl3=3.5.8-r0 \
     && addgroup -S -g "${RUNTIME_GID}" "${RUNTIME_USER}" \
     && adduser -S -u "${RUNTIME_UID}" -H -G "${RUNTIME_USER}" "${RUNTIME_USER}" \
-    && chown "${RUNTIME_USER}:${RUNTIME_USER}" "${RUNTIME_WORKDIR}" \
+    && chown "${RUNTIME_USER}:${RUNTIME_USER}" /api \
     && git config --system http.postBuffer 524288000 \
     && git config --system http.version HTTP/1.1 \
     && git config --system http.keepAlive false
 
 # Primary onedir from shared product-app.base export-binaries
 # hadolint ignore=DL3022
-COPY --chown=${RUNTIME_USER}:${RUNTIME_USER} --from=export_bins /dist/${BINARY_NAME} ${RUNTIME_WORKDIR}/${BINARY_NAME}
+COPY --chown=${RUNTIME_USER}:${RUNTIME_USER} --from=export_bins /dist/${BINARY_NAME} /api/${BINARY_NAME}
 
 USER ${RUNTIME_USER}
 
 EXPOSE ${UVICORN_PORT}
 
-ENTRYPOINT ["/api/middleware-api/middleware-api"]
+# Shell form so ARG defaults / Bake overrides expand at build time (exec-form JSON does not).
+# hadolint ignore=DL3025
+ENTRYPOINT /api/${BINARY_NAME}/${BINARY_NAME}
 
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
   CMD ["sh", "-c", "curl -f http://127.0.0.1:${UVICORN_PORT}/v1/liveness"]
