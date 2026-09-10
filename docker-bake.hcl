@@ -60,7 +60,6 @@ target "api" {
   }
   args = {
     ALPINE_VERSION = ALPINE_VERSION
-    BINARY_NAME    = "middleware-api"
     RUNTIME_USER   = "middleware"
   }
   tags      = [IMAGE_TAG]

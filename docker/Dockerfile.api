@@ -7,7 +7,6 @@
 ARG ALPINE_VERSION
 FROM alpine:${ALPINE_VERSION}
 
-ARG BINARY_NAME=middleware-api
 ARG RUNTIME_USER=middleware
 ARG RUNTIME_UID=65532
 ARG RUNTIME_GID=65532
@@ -36,15 +35,14 @@ RUN apk add --no-cache --upgrade \
     && git config --system http.keepAlive false
 
 # Primary onedir from shared product-app.base export-binaries
+# (BINARY_NAME=middleware-api is set on Bake target api-base, not here.)
 # hadolint ignore=DL3022
-COPY --chown=${RUNTIME_USER}:${RUNTIME_USER} --from=export_bins /dist/${BINARY_NAME} /api/${BINARY_NAME}
+COPY --chown=${RUNTIME_USER}:${RUNTIME_USER} --from=export_bins /dist/middleware-api /api/middleware-api
 
 USER ${RUNTIME_USER}
 
 EXPOSE ${UVICORN_PORT}
 
-# Exec form: binary is PID 1 (signals). Path matches BINARY_NAME default / Bake override
-# used in COPY above; keep in sync with docker-bake.hcl `BINARY_NAME`.
 ENTRYPOINT ["/api/middleware-api/middleware-api"]
 
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
