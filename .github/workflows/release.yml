@@ -18,6 +18,10 @@ on:
         - minor
         - patch
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
 jobs:
   validate-branch:
     name: Validate Main Branch
