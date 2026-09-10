@@ -1,19 +1,20 @@
+# Self-hosted Renovate (shared SoT — sync to product repos via #13).
+# Requires repository Actions secret DEVINFRA_BOT_TOKEN (fine-grained PAT; shared with product sync).
+# See docs/renovate.md / docs/sync.md.
 name: Renovate
+
 on:
   workflow_dispatch:
   schedule:
-    - cron: '0 3 * * *' # Täglich um 03:00 Uhr
+    - cron: "0 3 * * *"
   push:
     branches:
       - main
     paths:
-      - 'renovate.json'
+      - renovate.json
 
 permissions:
   contents: read
-
-env:
-  GITHUB_COM_TOKEN: ${{ secrets.RENOVATE_TOKEN }}
 
 jobs:
   renovate:
@@ -26,8 +27,9 @@ jobs:
         uses: renovatebot/github-action@v46.2.6
         with:
           configurationFile: renovate.json
-          token: ${{ secrets.RENOVATE_TOKEN }}
+          token: ${{ secrets.DEVINFRA_BOT_TOKEN }}
         env:
+          # Scope the bot token to this step only (not checkout).
+          GITHUB_COM_TOKEN: ${{ secrets.DEVINFRA_BOT_TOKEN }}
           RENOVATE_REPOSITORIES: ${{ github.repository }}
-          # Erlaubt Renovate, Pull Requests im Namen des Tokens zu erstellen
-          LOG_LEVEL: 'info'
+          LOG_LEVEL: info
