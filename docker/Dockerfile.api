@@ -12,7 +12,6 @@ ARG RUNTIME_USER=middleware
 ARG RUNTIME_UID=65532
 ARG RUNTIME_GID=65532
 
-ENV BINARY_NAME=${BINARY_NAME}
 ENV UVICORN_HOST=0.0.0.0
 ENV UVICORN_PORT=8000
 ENV UVICORN_LOG_LEVEL=info
@@ -44,9 +43,9 @@ USER ${RUNTIME_USER}
 
 EXPOSE ${UVICORN_PORT}
 
-# Shell form so ARG defaults / Bake overrides expand at build time (exec-form JSON does not).
-# hadolint ignore=DL3025
-ENTRYPOINT /api/${BINARY_NAME}/${BINARY_NAME}
+# Exec form: binary is PID 1 (signals). Path matches BINARY_NAME default / Bake override
+# used in COPY above; keep in sync with docker-bake.hcl `BINARY_NAME`.
+ENTRYPOINT ["/api/middleware-api/middleware-api"]
 
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
   CMD ["sh", "-c", "curl -f http://127.0.0.1:${UVICORN_PORT}/v1/liveness"]
