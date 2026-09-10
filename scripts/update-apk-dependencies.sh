@@ -1,4 +1,12 @@
 #!/usr/bin/env bash
+# Update Alpine apk pins in docker/Dockerfile.api (product helper until Devinfra #68).
+# Alpine minor for APKINDEX comes from versions.env (SoT) — not the Dockerfile FROM line.
+# Dockerfile.api uses alpine${ALPINE_MINOR:-…} / alpine:${ALPINE_VERSION:-…}, which the old
+# literal `alpine3.xx` grep cannot parse.
+#
+# Usage:
+#   ./scripts/update-apk-dependencies.sh
+#   ./scripts/update-apk-dependencies.sh path/to/Dockerfile
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -20,16 +28,15 @@ if ! command -v uv >/dev/null 2>&1; then
   exit 1
 fi
 
-# Extract Alpine version dynamically from the base image in the Dockerfile
-# Matches e.g. "FROM python:3.12.12-alpine3.23" → "3.23"
-ALPINE_VERSION=$(grep -m1 '^FROM ' "$DOCKERFILE" | grep -oE 'alpine([0-9]+\.[0-9]+)' | grep -oE '[0-9]+\.[0-9]+')
-if [[ -z "$ALPINE_VERSION" ]]; then
-  echo "❌ Could not extract Alpine version from $DOCKERFILE" >&2
+# shellcheck source=load-versions-env.sh
+source "${SCRIPT_DIR}/load-versions-env.sh"
+if [[ -z "${ALPINE_MINOR:-}" ]]; then
+  echo "❌ ALPINE_MINOR unset after loading versions.env" >&2
   exit 1
 fi
-echo "🏔️  Detected Alpine version: $ALPINE_VERSION"
+echo "🏔️  Alpine minor ${ALPINE_MINOR} (APKINDEX from versions.env)"
 
-APK_INDEX_URL="https://dl-cdn.alpinelinux.org/alpine/v${ALPINE_VERSION}/main/x86_64/APKINDEX.tar.gz"
+APK_INDEX_URL="https://dl-cdn.alpinelinux.org/alpine/v${ALPINE_MINOR}/main/x86_64/APKINDEX.tar.gz"
 
 TMP_DIR=$(mktemp -d)
 trap 'rm -rf "$TMP_DIR"' EXIT
