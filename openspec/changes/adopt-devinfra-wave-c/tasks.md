@@ -30,4 +30,4 @@
 ## 5. Verify / PR
 
 - [x] 5.1 Focused smoke (bake + CST on `middleware-api:wave-c-test`); pause for user commit/push
-- [ ] 5.2 Draft PR `Fixes #368` after real commits
+- [x] 5.2 Draft PR `Fixes #368` — https://github.com/fairagro/m4.2_advanced_middleware_api/pull/378
