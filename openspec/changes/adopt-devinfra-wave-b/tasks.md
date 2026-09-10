@@ -43,5 +43,5 @@
       `SKIP=check-yaml,markdownlint ./scripts/quality-check.sh` green (upstream
       [#59](https://github.com/fairagro/m4.2_middleware_devinfra/issues/59) /
       [#63](https://github.com/fairagro/m4.2_middleware_devinfra/issues/63))
-- [ ] 5.3 Draft PR: `Fixes #367`, pinned SHA, link upstream #56–#69 as needed
-      — blocked: no commits yet (ask user to commit/push first)
+- [x] 5.3 Draft PR: `Fixes #367`, pinned SHA, link upstream #56–#69 as needed
+      — https://github.com/fairagro/m4.2_advanced_middleware_api/pull/377
