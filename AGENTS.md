@@ -182,11 +182,16 @@ config2 = Config(
 3. After path/venv drift: `scripts/install-dev-hooks.sh` (`uv sync --dev --all-packages` + hooks)
 4. Shared post-create still runs plain `uv sync` until [Devinfra #56](https://github.com/fairagro/m4.2_middleware_devinfra/issues/56) — do **not** patch the synced script locally
 
-**TEMP (remove with Wave C Bake):** Until repo-root `docker-bake.hcl` exists, product
-`scripts/load-env.sh` appends `container-structure-test` to `SKIP` so verbatim pre-push
-does not hard-fail (CST YAML exists; Bake wiring is Wave C). After Wave C, delete that
-block if it is still present (it also no-ops once `docker-bake.hcl` is there). Shells that
-never source `load-env` can use `SKIP=container-structure-test git push` once.
+**Bake / CST (Wave C):** Root `docker-bake.hcl` target `api` builds via synced
+`docker/Dockerfile.product-app.base` + thin `docker/Dockerfile.api`. Local smoke:
+`source versions.env` (or `scripts/load-versions-env.sh`) then
+`docker buildx bake api`. Pre-push CST uses `CST_BAKE_TARGET=api` (defaulted in
+`scripts/load-env.sh` when the Bake file exists).
+
+**CI callers:** Feature/pre-release/release use Devinfra
+`reusable-{code-quality,build,release}`; check temporarily uses product-local
+`reusable-check-local.yml` until [devinfra#74](https://github.com/fairagro/m4.2_middleware_devinfra/issues/74).
+Do **not** hand-edit allowlisted synced paths.
 
 **Git LFS:** not used (no tracking in `.gitattributes`, no `setup-git-lfs.sh`, no LFS hooks).
 
@@ -272,9 +277,9 @@ by the project's configured tools: **Ruff, Pylance, MyPy, Pylint, and Bandit**.
   format via Format on Save / `ruff format`). Before commit, run
   `./scripts/quality-fix.sh` then `./scripts/quality-check.sh` (both wrap
   pre-commit commit-stage hooks), or `uv run pre-commit run --all-files`, or
-  terminal `git commit`. CI quality steps live in
-  `.github/workflows/reusable-code-quality.yml` and may differ slightly
-  (read-only ruff, full-tree pylint/bandit severity gate).
+  terminal `git commit`. CI quality steps call Devinfra
+  `reusable-code-quality.yml` (product `with:` overlays for `MYPYPATH` /
+  pylint `--source-roots`; may SHA-pin until upstream inputs land on `main`).
   Note: Cursor Source Control may skip git hooks (≥3.15.6: forces
   `core.hooksPath=/dev/null`). Dev Container `remoteEnv` prepends
   `scripts/bin` so SCM uses `scripts/cursor-git.sh`, which strips that pin.
