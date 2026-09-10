@@ -182,6 +182,12 @@ config2 = Config(
 3. After path/venv drift: `scripts/install-dev-hooks.sh` (`uv sync --dev --all-packages` + hooks)
 4. Shared post-create still runs plain `uv sync` until [Devinfra #56](https://github.com/fairagro/m4.2_middleware_devinfra/issues/56) — do **not** patch the synced script locally
 
+**TEMP (remove with Wave C Bake):** Until repo-root `docker-bake.hcl` exists, product
+`scripts/load-env.sh` appends `container-structure-test` to `SKIP` so verbatim pre-push
+does not hard-fail (CST YAML exists; Bake wiring is Wave C). After Wave C, delete that
+block if it is still present (it also no-ops once `docker-bake.hcl` is there). Shells that
+never source `load-env` can use `SKIP=container-structure-test git push` once.
+
 **Git LFS:** not used (no tracking in `.gitattributes`, no `setup-git-lfs.sh`, no LFS hooks).
 
 ## 🐳 Docker Compose Services

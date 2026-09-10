@@ -33,6 +33,18 @@ if [ -z "${MYPYPATH:-}" ]; then
     export MYPYPATH="stubs:middleware/api/src:middleware/api_client/src:middleware/shared/src:middleware/api/tests/unit:middleware/api_client/tests/unit:middleware/shared/tests"
 fi
 
+# TEMP until Wave C Bake: verbatim pre-push runs container-structure-test (always_run) via
+# synced scripts/run-container-structure-test.sh, which hard-fails without docker-bake.hcl /
+# CST_BAKE_TARGET while docker/container-structure-tests/ already exists. Do not patch synced
+# files — skip the hook until Bake lands. Self-clears when repo-root docker-bake.hcl appears;
+# delete this block in the Wave C adopt PR (see fairagro/m4.2_middleware_devinfra#70).
+if [[ ! -f "${repo_root}/docker-bake.hcl" ]]; then
+    case ",${SKIP:-}," in
+        *,container-structure-test,*) ;;
+        *) export SKIP="${SKIP:+${SKIP},}container-structure-test" ;;
+    esac
+fi
+
 # Setup aliases (completions: static files in image + bash-completion lazy-load)
 alias k=kubectl
 alias d=docker
