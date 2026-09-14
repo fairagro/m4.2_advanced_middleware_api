@@ -1,0 +1,7 @@
+#!/usr/bin/env bash
+# Short name for kubectl in the shared m4.2 Dev Container.
+# Binary: /usr/local/bin/kubectl (pinned in .devcontainer/Dockerfile).
+# On PATH via remoteEnv (scripts/bin). No tokens; no bashrc. Completion: image file
+# /usr/share/bash-completion/completions/k
+set -euo pipefail
+exec /usr/local/bin/kubectl "$@"

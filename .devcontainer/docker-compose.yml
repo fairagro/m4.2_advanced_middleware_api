@@ -1,7 +1,6 @@
 # Build-arg substitution (${UV_VERSION}, etc.) reads .env in this directory —
 # a symlink to ../versions.env (single source of truth).
-# PRODUCT-OWNED overlay (volume path / workspace bind). Dockerfile + args match
-# synced Devinfra `.devcontainer/Dockerfile`.
+# Optional product-owned `.devcontainer/product.env` (not synced) for MYPYPATH / CST_* / similar.
 services:
   devcontainer:
     # Tool release URLs in the Dockerfile are linux/amd64; pin the platform so ARM hosts
@@ -31,6 +30,9 @@ services:
         OPENSPEC_VERSION: ${OPENSPEC_VERSION}
         PRETTIER_VERSION: ${PRETTIER_VERSION}
         MARKDOWNLINT_CLI2_VERSION: ${MARKDOWNLINT_CLI2_VERSION}
+    env_file:
+      - path: product.env
+        required: false
     volumes:
-      - ..:/workspaces/m4.2_advanced_middleware_api:cached
+      - ..:/workspace:cached
     command: sleep infinity
