@@ -71,7 +71,9 @@ if [ -f "${repo_root}/pyproject.toml" ]; then
     echo "Removing stale .venv (broken Python interpreter)..."
     rm -rf .venv
   fi
-  uv sync
+  # Match reusable-code-quality / product workspaces: dev group + all workspace members.
+  # Stale .venv (broken interpreter) is removed above when needed — same idea as product uv-sync-dev.sh.
+  uv sync --dev --all-packages
   if [ -d "${repo_root}/.venv/bin" ]; then
     export PATH="${repo_root}/.venv/bin:${PATH}"
   fi
