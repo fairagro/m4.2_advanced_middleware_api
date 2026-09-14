@@ -3,23 +3,49 @@
 Open this repo with **Dev Containers: Reopen in Container** (VS Code or Cursor).
 
 This image is the **shared product Dev Container toolchain** (issue #10): base pins in `versions.env`, fat tooling in
-`.devcontainer/Dockerfile`, generic postCreate. Product repos keep a thin `devcontainer.json` overlay (`name`,
-`workspaceFolder`, distinct volume `source=` names; optional extra extensions) and sync Dockerfile / compose /
-`versions.env` / scripts from here (#13).
+`.devcontainer/Dockerfile`, generic postCreate. Products adopt **verbatim** `.devcontainer/devcontainer.json` and
+`.devcontainer/docker-compose.yml` from sync (#13,
+[#65](https://github.com/fairagro/m4.2_middleware_devinfra/issues/65)) — do **not** hand-edit those blobs after sync.
+Repo-specific container env (`MYPYPATH`, `CST_*`, …) belongs in optional product-owned `.devcontainer/product.env` (not
+synced) and/or CI/hook env inputs.
 
 OpenSpec **specs/changes** for product work stay in the product repos
 ([epic #1](https://github.com/fairagro/m4.2_middleware_devinfra/issues/1)); this image provides the OpenSpec CLI.
 
 ## Layout
 
-| Path                                                | Purpose                                                      |
-| --------------------------------------------------- | ------------------------------------------------------------ |
-| `.devcontainer/devcontainer.json`                   | Compose service, DinD, mounts, extensions, postCreate        |
-| `.devcontainer/docker-compose.yml`                  | Build args from `versions.env` via `.env` symlink            |
-| `.devcontainer/Dockerfile`                          | Pinned shared tooling image                                  |
-| [`.vscode/settings.json`](../.vscode/settings.json) | Shared workspace IDE settings (also apply on host clones)    |
-| `versions.env`                                      | Single source of truth for tool versions                     |
-| `.devcontainer/.env`                                | Symlink → `../versions.env` (Compose build-arg substitution) |
+| Path                                                | Purpose                                                                  |
+| --------------------------------------------------- | ------------------------------------------------------------------------ |
+| `.devcontainer/devcontainer.json`                   | **Verbatim** sync: Compose service, DinD, mounts, extensions, postCreate |
+| `.devcontainer/docker-compose.yml`                  | **Verbatim** sync: build args from `versions.env`, bind `..:/workspace`  |
+| `.devcontainer/product.env`                         | **Product-owned** (optional, not synced): `MYPYPATH`, `CST_*`, …         |
+| `.devcontainer/Dockerfile`                          | Pinned shared tooling image                                              |
+| [`.vscode/settings.json`](../.vscode/settings.json) | Shared workspace IDE settings (also apply on host clones)                |
+| `versions.env`                                      | Single source of truth for tool versions                                 |
+| `.devcontainer/.env`                                | Symlink → `../versions.env` (Compose build-arg substitution)             |
+
+## Shared JSON + Compose contract (`/workspace`)
+
+Fleet-wide in-container workspace path is **`/workspace`** (`workspaceFolder` and Compose bind). Window title and named
+volumes use `${localWorkspaceFolderBasename}` so each opened folder stays distinct without product-specific JSON keys.
+
+| Concern                       | Where                                                                               |
+| ----------------------------- | ----------------------------------------------------------------------------------- |
+| Window / Dev Container `name` | Shared JSON: `${localWorkspaceFolderBasename}`                                      |
+| History / `gh` volumes        | Shared JSON: `${localWorkspaceFolderBasename}-bashhistory` / `-gh-config`           |
+| Workspace bind                | Shared Compose: `..:/workspace:cached`                                              |
+| `.venv/bin` + `scripts/bin`   | Shared JSON: `remoteEnv.PATH`                                                       |
+| `MYPYPATH`, `CST_*`, …        | Optional `.devcontainer/product.env` and/or CI inputs — **not** synced JSON/Compose |
+
+Starship’s directory segment may show `workspace` (cwd). Repo identity still appears in the window title, Git branch,
+and Python venv / package segments.
+
+On sync, Prettier + markdownlint-cli2 (and their extensions) **replace or supplement** prior product markdown
+format/lint setups. Prefer `signageos.signageos-vscode-sops` (Open VSX / Cursor) over `shipitsmarter.sops-edit`.
+
+**Git LFS** is not part of the shared image. Products that need it (e.g. sql-to-arc) install `git-lfs` in a
+**product-owned** path that sync of the shared Dockerfile does not overwrite (e.g. product postCreate snippet or a
+non-synced local fragment).
 
 ## Tool versions
 
@@ -57,21 +83,23 @@ renovate --version
 Python quality tools (ruff, mypy, pylint, bandit, ggshield, pre-commit) are **project deps** via `uv`, not separate
 image binaries — same pattern as product repos.
 
-## Consumer overlays
+## Bashrc-free shell init (no `load-env.sh`)
 
-Product `devcontainer.json` should own at least:
+Fleet shell convenience MUST NOT mutate `~/.bashrc`. Shared verbatim `devcontainer.json` already prepends `.venv/bin`
+and `scripts/bin` via `remoteEnv.PATH` ([#58](https://github.com/fairagro/m4.2_middleware_devinfra/issues/58),
+[#65](https://github.com/fairagro/m4.2_middleware_devinfra/issues/65)).
 
-- `name`
-- `workspaceFolder` (must match that product’s compose bind path)
-- distinct Docker volume `source=` names (do not reuse another product’s volume names)
+| Need                            | Shared mechanism                                                                                       |
+| ------------------------------- | ------------------------------------------------------------------------------------------------------ |
+| `.venv/bin` + `scripts/bin`     | `remoteEnv.PATH` in synced `devcontainer.json`                                                         |
+| Short `kubectl` / `docker`      | Synced wrappers [`scripts/bin/k`](../scripts/bin/k) and [`scripts/bin/d`](../scripts/bin/d)            |
+| Bash completion for `k` / `d`   | Shared image files under `/usr/share/bash-completion/completions/` (rebuild after Dockerfile change)   |
+| Personal tokens                 | [`scripts/bin/gh`](../scripts/bin/gh) / [`git`](../scripts/bin/git) + `set-dev-tokens.sh` (not bashrc) |
+| `.env.integration.enc` → `.env` | Shared postCreate decrypt (writes the file; does **not** auto-`source` into every shell)               |
 
-Shared fragments must **not** hardcode another product’s folder or volume names. On sync, Prettier + markdownlint-cli2
-(and their extensions) **replace or supplement** prior product markdown format/lint setups. Prefer
-`signageos.signageos-vscode-sops` (Open VSX / Cursor) over `shipitsmarter.sops-edit`.
-
-**Git LFS** is not part of the shared image. Products that need it (e.g. sql-to-arc) install `git-lfs` in a
-**product-owned** path that sync of the shared Dockerfile does not overwrite (e.g. product postCreate snippet or a
-non-synced local fragment).
+Product-local `scripts/load-env.sh` and `setup-bashrc-load-env.sh` (or inline bashrc `source` lines) are **deprecated**.
+After sync of postCreate + wrappers + JSON, drop them in product adopt follow-ups (tracked from #58 / #65). Optional
+product deltas (`MYPYPATH`, CST bake target, …) belong in `.devcontainer/product.env` / CI — not a forked load-env blob.
 
 ## Markdown (format + lint)
 
@@ -97,9 +125,12 @@ Actions remain a separate CI concern.
 
 ## Bash history
 
-History is stored in Docker volume `middleware-devinfra-bashhistory` (`HISTFILE=/commandhistory/.bash_history`). The
-image sets a large `HISTFILESIZE`, `histappend`, and `HISTIGNORE` so Cursor/VS Code agent bootstrap lines (`set +/-o …`)
-do not flood the file and age out real commands.
+History is stored in a Docker volume named `${localWorkspaceFolderBasename}-bashhistory` (mount
+`HISTFILE=/commandhistory/.bash_history`). The image sets a large `HISTFILESIZE`, `histappend`, and `HISTIGNORE` so
+Cursor/VS Code agent bootstrap lines (`set +/-o …`) do not flood the file and age out real commands.
+
+**Note:** Changing volume `source=` names (e.g. from a fixed `middleware-devinfra-bashhistory` to basename-derived)
+starts a **new** empty volume on rebuild; copy from the old volume if you need prior history.
 
 One-time cleanup if an older volume is already polluted:
 
@@ -134,7 +165,8 @@ Alternatively:
 gh auth login
 ```
 
-`gh` CLI login credentials (if used) live in Docker volume `middleware-devinfra-gh-config` and survive rebuilds.
+`gh` CLI login credentials (if used) live in Docker volume `${localWorkspaceFolderBasename}-gh-config` and survive
+rebuilds.
 
 ## postCreateCommand
 
@@ -148,10 +180,13 @@ Runs `scripts/devcontainer-post-create.sh` once per create:
 - `pre-commit install --hook-type pre-commit`
 - `./scripts/setup-git-hooks.sh` (project pre-push quality hook; no Git LFS)
 - import `public_gpg_keys/*.asc` when present (skip if absent)
+- optionally decrypt repo-root `.env.integration.enc` → `.env` when present (skip if `.env` already non-empty,
+  ciphertext absent, or `sops`/keys unavailable; never fails create; does **not** patch bashrc to `source` `.env`)
 - soft-fail install of recommended IDE extensions via Cursor/VS Code remote CLI (shared product set: Docker/Helm/
   Python/Ruff/Pylint/Mypy, PlantUML, signageos SOPS, Prettier, markdownlint, … — same list as `devcontainer.json`)
 
-`PATH` with `scripts/bin` first comes from `.devcontainer/devcontainer.json` (`remoteEnv`) after rebuild.
+`PATH` with `.venv/bin` and `scripts/bin` first comes from `.devcontainer/devcontainer.json` (`remoteEnv`) after rebuild
+— not from `~/.bashrc`.
 
 Re-run anytime:
 

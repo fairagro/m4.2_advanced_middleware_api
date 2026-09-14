@@ -29,8 +29,11 @@
 #   PYINSTALLER_VERSION     from versions.env
 #   BUILDER_APK_PACKAGES    extra compile/link apk packages (optional, default empty)
 #
-# Install path (single): uv pip install --system built wheels + pyinstaller, then pyinstaller --onedir.
-# The binary-builder does not COPY repo source; entry must come from the installed wheel (IMPORT or ENTRY).
+# Install path (binary-builder): copy uv.lock + workspace metadata from package-builder,
+# `uv sync --frozen --no-dev --no-install-workspace` for lockfile-deterministic transitive deps,
+# then `uv pip install --no-deps` of the built wheels, then pyinstaller (ARG pin from versions.env).
+# The copied `middleware/` tree is only for frozen sync metadata — remove it before resolving the
+# PyInstaller entry so `PYINSTALLER_ENTRY` cannot point at repo source (entry = installed wheel).
 
 ARG PYTHON_VERSION
 ARG ALPINE_MINOR
@@ -102,15 +105,25 @@ RUN pip install --no-cache-dir --upgrade \
     "pip==${PIP_VERSION}" \
     "uv==${UV_VERSION}"
 
+# Lock + workspace metadata for frozen sync (not used as PyInstaller entry source).
+COPY --from=package-builder /build/pyproject.toml /build/uv.lock ./
+COPY --from=package-builder /build/middleware ./middleware
 COPY --from=package-builder /build/dist/*.whl /tmp/wheels/
 
+# Transitive deps from uv.lock only; workspace members come from wheels with --no-deps
+# (no live-index resolve of Requires-Dist). PyInstaller stays ARG-pinned from versions.env.
+# Drop workspace source after install so PYINSTALLER_ENTRY cannot resolve under ./middleware.
 RUN set -eu; \
     if [ -z "${PYINSTALLER_VERSION:-}" ]; then \
       echo "ERROR: PYINSTALLER_VERSION build-arg is required (from versions.env)" >&2; \
       exit 1; \
     fi; \
-    uv pip install --system /tmp/wheels/*.whl; \
-    uv pip install --system "pyinstaller==${PYINSTALLER_VERSION}"
+    uv sync --frozen --no-dev --no-install-workspace; \
+    uv pip install --python .venv/bin/python --no-deps /tmp/wheels/*.whl; \
+    uv pip install --python .venv/bin/python "pyinstaller==${PYINSTALLER_VERSION}"; \
+    rm -rf /build/middleware
+
+ENV PATH="/build/.venv/bin:${PATH}"
 
 # Resolve entry from installed package (preferred) or an explicit in-image path.
 RUN set -eu; \

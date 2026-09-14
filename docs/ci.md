@@ -37,8 +37,15 @@ adopted this layout (product Wave C / sync [#13](https://github.com/fairagro/m4.
 
 Example stubs (not used by Devinfra CST): [`docker/examples/`](../docker/examples/). ARG list is documented at the top
 of [`docker/Dockerfile.product-app.base`](../docker/Dockerfile.product-app.base). Prefer `PYINSTALLER_IMPORT` (package
-import path whose `main.py` is resolved after wheel install); do not pass a repo-relative entry path — the binary
-builder does not COPY application source.
+import path whose `main.py` is resolved after wheel install); do not pass a repo-relative entry path — PyInstaller entry
+must come from the installed wheel, not from copying application source as the script path.
+
+**Lockfile-deterministic binary-builder install
+([#73](https://github.com/fairagro/m4.2_middleware_devinfra/issues/73)):** `binary-builder` copies `uv.lock` and
+workspace metadata from `package-builder`, runs `uv sync --frozen --no-dev --no-install-workspace` so transitive deps
+match the lock, then installs the built workspace wheels with `uv pip install --no-deps` (no live-index resolve of wheel
+`Requires-Dist`). `pyinstaller` remains pinned via `PYINSTALLER_VERSION` from `versions.env`. Do **not** hand-edit this
+synced base in products to “fix” install reproducibility.
 
 **Version pins (one per component):** concrete numbers live only in repo-root [`versions.env`](../versions.env) (Dev
 Container section + **Product app image** section for `PIP_VERSION`, `ALPINE_*`, `PYINSTALLER_VERSION`; shared

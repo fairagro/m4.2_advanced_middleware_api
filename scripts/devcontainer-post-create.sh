@@ -108,6 +108,40 @@ else
 fi
 shopt -u nullglob
 
+# ── optional SOPS: .env.integration.enc → .env (file only; no bashrc source) ─
+echo "==> Decrypt .env.integration.enc → .env (if present)"
+enc_file="${repo_root}/.env.integration.enc"
+dec_file="${repo_root}/.env"
+if [ -f "${dec_file}" ] && [ -s "${dec_file}" ]; then
+  echo "${dec_file} already exists and is non-empty; skipping decrypt"
+elif [ ! -f "${enc_file}" ]; then
+  echo "No .env.integration.enc; skipping decrypt"
+elif ! command -v sops >/dev/null 2>&1; then
+  echo "WARNING: sops not on PATH; skipping decrypt" >&2
+else
+  # Soft-fail: set -e must not abort postCreate. Temp holds decrypted plaintext — EXIT trap
+  # cleans up on interrupt; successful mv clears tmp_file so the trap does not remove .env.
+  tmp_file=""
+  cleanup_sops_tmp() {
+    if [ -n "${tmp_file}" ] && [ -e "${tmp_file}" ]; then
+      rm -f "${tmp_file}"
+    fi
+  }
+  trap cleanup_sops_tmp EXIT
+  if ! tmp_file="$(mktemp "${repo_root}/.env.sops.XXXXXX")"; then
+    echo "WARNING: mktemp failed; skipping decrypt of ${enc_file}" >&2
+  elif ! sops -d "${enc_file}" > "${tmp_file}"; then
+    echo "WARNING: sops decrypt failed for ${enc_file}; leaving .env unchanged" >&2
+  elif ! mv -f "${tmp_file}" "${dec_file}"; then
+    echo "WARNING: failed to install ${dec_file}; leaving .env unchanged" >&2
+  else
+    tmp_file=""
+    echo "Wrote ${dec_file} from ${enc_file}"
+  fi
+  trap - EXIT
+  cleanup_sops_tmp
+fi
+
 # ── IDE extensions (Cursor/VS Code remote only; soft-fail) ───────────────────
 # Keep in sync with .devcontainer/devcontainer.json → customizations.vscode.extensions
 # (union of shared product-repo needs + Devinfra markdown/hadolint extras).
@@ -151,4 +185,4 @@ echo "==> Dev Container post-create done"
 echo "    gh=$(command -v gh || echo missing)  openspec=$(command -v openspec || echo missing)  uv=$(command -v uv || echo missing)"
 echo "    node=$(command -v node || echo missing)  prettier=$(command -v prettier || echo missing)"
 echo "    sops=$(command -v sops || echo missing)  trivy=$(command -v trivy || echo missing)  renovate=$(command -v renovate || echo missing)"
-echo "    scripts/bin on PATH via remoteEnv after rebuild"
+echo "    scripts/bin + .venv/bin on PATH via remoteEnv after rebuild (no bashrc patch)"

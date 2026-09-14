@@ -9,9 +9,10 @@ Issue: [#3](https://github.com/fairagro/m4.2_middleware_devinfra/issues/3).
 
 ## Product slugs
 
-Short slugs identify a product in **Docker volume names**:
+Historical short slugs (docs / older volume names). Shared `devcontainer.json` now derives volume `source=` from
+`${localWorkspaceFolderBasename}` (the opened folder name), not these slugs:
 
-| Repository                     | product-slug           |
+| Repository                     | product-slug (legacy)  |
 | ------------------------------ | ---------------------- |
 | `m4.2_advanced_middleware_api` | `middleware-api`       |
 | `m4.2_sql_to_arc`              | `sql-to-arc`           |
@@ -30,7 +31,10 @@ containers on the same machine.
 The path string is the same everywhere; isolation comes from each product's own bashhistory volume. There is **no**
 supported host `~/.config/…` token store — personal-token helpers (`dev-tokens.sh`, `set-dev-tokens.sh`,
 `scripts/bin/gh`, `scripts/bin/git`) are **Dev Container only**. Other scripts (quality, CST, `load-versions-env`,
-`m42-ai`) may run on a host checkout; see [Script environments](quality.md#script-environments).
+`m42-ai`) may run on a host checkout; see [Script environments](quality.md#script-environments). Shell PATH for
+`.venv/bin` and `scripts/bin` (including `k`/`d` wrappers) comes from Dev Container `remoteEnv` — see
+[`docs/devcontainer.md`](devcontainer.md#bashrc-free-shell-init-no-load-envsh); do **not** patch `~/.bashrc` for tokens
+or load-env.
 
 **Store is the sole source:** sourcing `dev-tokens.sh` (including via `scripts/bin/gh`) always applies
 `/commandhistory/tokens.env` for `GH_TOKEN` / `GITGUARDIAN_API_KEY`. A non-empty process env value does **not** override
@@ -39,13 +43,15 @@ variable. Set or refresh tokens with `source ./scripts/set-dev-tokens.sh`.
 
 ## Docker volumes
 
-Named volumes follow:
+Shared `devcontainer.json` (verbatim sync) names volumes:
 
-- `<product-slug>-bashhistory` → mount at `/commandhistory`
-- `<product-slug>-gh-config` → mount at `/home/vscode/.config/gh` (when used)
+- `${localWorkspaceFolderBasename}-bashhistory` → `/commandhistory`
+- `${localWorkspaceFolderBasename}-gh-config` → `/home/vscode/.config/gh`
 
-Product `devcontainer.json` overlays own the `source=` names. Shared Devinfra files MUST NOT hardcode another product's
-volume name. Renaming existing volumes is out of scope for this conventions doc (migrate later if needed).
+Do **not** hardcode another product’s volume prefix into synced JSON. Renaming/migrating data from legacy
+`<product-slug>-*` volumes is a one-time local rebuild concern (see [`docs/devcontainer.md`](devcontainer.md)).
+
+In-container workspace path is **`/workspace`** for all middleware repos (Compose bind + `workspaceFolder`).
 
 ## Package root
 
