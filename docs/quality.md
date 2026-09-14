@@ -60,21 +60,23 @@ fail policy only on one surface.
 
 ## Files
 
-| Path                                                | Role                                                                                       |
-| --------------------------------------------------- | ------------------------------------------------------------------------------------------ |
-| `.pre-commit-config.yaml`                           | Commit-stage + pre-push hooks — adopt **verbatim** after sync (see below)                  |
-| `ruff.toml`                                         | Shared Ruff lint/format — **verbatim** sync (no product `extend` / ignore overlay)         |
-| `mypy.ini`                                          | Shared Mypy strictness (path overlays via **env**, not by editing this file)               |
-| `.pylintrc`                                         | Shared Pylint (path overlays via CI / env; `extension-pkg-allow-list=lxml` for I1101)      |
-| `pyrightconfig.json`                                | Shared basedpyright/Pylance (`venv`, `stubPath: stubs`, `scripts/ai` only) — **verbatim**  |
-| `scripts/quality-check.sh`                          | Run **commit-stage** hooks only (check)                                                    |
-| `scripts/quality-fix.sh`                            | Run commit-stage **autofix** hooks only                                                    |
-| `scripts/run-container-structure-test.sh`           | Templated Docker build + `container-structure-test`                                        |
-| `scripts/setup-git-hooks.sh`                        | Install project `pre-push` from `scripts/git-hooks/`                                       |
-| `scripts/git-hooks/`                                | Version-controlled `pre-push` (pre-commit pre-push stage)                                  |
-| `.bandit`                                           | Bandit config (`bandit -c .bandit`)                                                        |
-| `.markdownlint.json` (+ ignore / cli2)              | Markdownlint (also used by the markdownlint hook)                                          |
-| [`.vscode/settings.json`](../.vscode/settings.json) | Shared IDE baseline (interpreter, Ruff, empty `pytestArgs`, Prettier) — adopt **verbatim** |
+| Path                                                | Role                                                                                                                                         |
+| --------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
+| `.pre-commit-config.yaml`                           | Commit-stage + pre-push hooks — adopt **verbatim** after sync (see below)                                                                    |
+| `ruff.toml`                                         | Shared Ruff lint/format — **verbatim** sync (no product `extend` / ignore overlay)                                                           |
+| `mypy.ini`                                          | Shared Mypy strictness (path overlays via **env**, not by editing this file)                                                                 |
+| `.pylintrc`                                         | Shared Pylint (path overlays via CI / env; `extension-pkg-allow-list=lxml` for I1101)                                                        |
+| `pyrightconfig.json`                                | Shared basedpyright/Pylance (`venv`, `stubPath: stubs`, `scripts/ai` only) — **verbatim**                                                    |
+| `stubs/arctrl/`, `stubs/fable_library/`             | Shared incomplete stubs for untyped arctrl/fable — **verbatim** sync ([#67](https://github.com/fairagro/m4.2_middleware_devinfra/issues/67)) |
+| `stubs/README.md`                                   | Fleet vs product-local vs one-off stub/silence contract                                                                                      |
+| `scripts/quality-check.sh`                          | Run **commit-stage** hooks only (check)                                                                                                      |
+| `scripts/quality-fix.sh`                            | Run commit-stage **autofix** hooks only                                                                                                      |
+| `scripts/run-container-structure-test.sh`           | Templated Docker build + `container-structure-test`                                                                                          |
+| `scripts/setup-git-hooks.sh`                        | Install project `pre-push` from `scripts/git-hooks/`                                                                                         |
+| `scripts/git-hooks/`                                | Version-controlled `pre-push` (pre-commit pre-push stage)                                                                                    |
+| `.bandit`                                           | Bandit config (`bandit -c .bandit`)                                                                                                          |
+| `.markdownlint.json` (+ ignore / cli2)              | Markdownlint (also used by the markdownlint hook)                                                                                            |
+| [`.vscode/settings.json`](../.vscode/settings.json) | Shared IDE baseline (interpreter, Ruff, empty `pytestArgs`, Prettier) — adopt **verbatim**                                                   |
 
 ## Shared pre-commit config (verbatim sync)
 
@@ -103,13 +105,14 @@ Product repos historically kept large `[tool.ruff]` / `[tool.mypy]` / `[tool.pyl
 Canonical copies live here as **fragment files** so sync (#13) can overwrite them without replacing product `[project]`
 / uv workspace sections.
 
-| Sync into products   | Keep product-local                                                                    |
-| -------------------- | ------------------------------------------------------------------------------------- |
-| `ruff.toml`          | Root `pyproject.toml` `[project]`, `[tool.uv.*]`, deps (no product Ruff overlay)      |
-| `mypy.ini`           | Import-path overlays via **env** (e.g. `MYPYPATH` in CI/`remoteEnv`), not `pyproject` |
-| `.pylintrc`          | Import-path overlays via CI input / env-driven invocation (`pylint_source_roots`)     |
-| `pyrightconfig.json` | Product third-party stubs under `stubs/` (`stubPath`); no middleware `extraPaths`     |
-| `.bandit`            | pytest / coverage tool tables (unless later unified)                                  |
+| Sync into products                          | Keep product-local                                                                    |
+| ------------------------------------------- | ------------------------------------------------------------------------------------- |
+| `ruff.toml`                                 | Root `pyproject.toml` `[project]`, `[tool.uv.*]`, deps (no product Ruff overlay)      |
+| `mypy.ini`                                  | Import-path overlays via **env** (e.g. `MYPYPATH` in CI/`remoteEnv`), not `pyproject` |
+| `.pylintrc`                                 | Import-path overlays via CI input / env-driven invocation (`pylint_source_roots`)     |
+| `pyrightconfig.json`                        | Product third-party stubs under `stubs/` (`stubPath`); no middleware `extraPaths`     |
+| `stubs/arctrl/**`, `stubs/fable_library/**` | Put `stubs` on `MYPYPATH`; no `[mypy-arctrl*]` in synced `mypy.ini`                   |
+| `.bandit`                                   | pytest / coverage tool tables (unless later unified)                                  |
 
 Shared hooks and reusable CI invoke `mypy --config-file mypy.ini` and `pylint --rcfile .pylintrc`. Those flags mean
 product `[tool.mypy]` / `[tool.pylint.*]` in `pyproject.toml` are **ignored**. Do **not** put path overlays into the
@@ -152,10 +155,16 @@ and sets Prettier as default formatter for Markdown/JSON/YAML.
 [vscode-python#23714](https://github.com/microsoft/vscode-python/issues/23714)). Configure test roots only in that
 repo’s `pyproject.toml` (Devinfra: `scripts/ai/tests`; products: their `middleware/…/tests`).
 
+**Shared stubs (arctrl / fable_library):** sync [`stubs/arctrl/`](../stubs/arctrl/) and
+[`stubs/fable_library/`](../stubs/fable_library/) (see [`stubs/README.md`](../stubs/README.md)). Products MUST put
+`stubs` on `MYPYPATH` for hooks/CI. Do **not** add `[mypy-arctrl*]` / fable module overrides to synced `mypy.ini`, and
+drop `# type: ignore[import-untyped]` on those imports after sync. Product-local stubs (e.g. owslib/rdflib) may coexist
+under `stubs/` without being synced from Devinfra.
+
 **Analysis (basedpyright / Pylance):** use synced [`pyrightconfig.json`](../pyrightconfig.json) **verbatim** — root
-`.venv`, `stubPath: stubs` for product-local third-party stubs (keep silence out of synced `mypy.ini`), and `extraPaths`
-only for `scripts/ai/src`. Do **not** add product `middleware/` (or other package) paths to that file — editable `uv`
-installs resolve them. Do **not** patch `python.analysis.extraPaths` / Cursor Pyright equivalents into synced
+`.venv`, `stubPath: stubs` (shared arctrl/fable stubs + any product-local stub dirs), and `extraPaths` only for
+`scripts/ai/src`. Do **not** add product `middleware/` (or other package) paths to that file — editable `uv` installs
+resolve them. Do **not** patch `python.analysis.extraPaths` / Cursor Pyright equivalents into synced
 `.vscode/settings.json` after sync for product overlays ([`docs/sync.md`](sync.md)). Helm/SOPS file associations that
 cannot live outside `settings.json` need a Devinfra generalization or an explicit non-synced product surface — not
 re-patching.

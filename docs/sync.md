@@ -41,17 +41,17 @@ Review-fixer follows the same rule: in products, do not `fix` synced paths — `
 Machine SoT remains [`synced-paths.yaml`](synced-paths.yaml). This table is a **guide** only — when it disagrees with
 the YAML, the YAML wins. Resolve the live set with `uv run python scripts/sync-products.py --list-files`.
 
-| Category                          | Examples on `allow` (non-exhaustive)                                                                                          |
-| --------------------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
-| Sync / AI policy docs             | `docs/sync.md`, `docs/synced-paths.yaml`, `docs/ai_review_policy.md`, `docs/quality.md`, `docs/devcontainer.md`, …            |
-| Agent skills / commands / prompts | `.agents/skills/{issue-fixer,review-fixer,create-issue,arctrl,gh,docker,hadolint,uv}/**`, `.cursor/commands/*`, prompts       |
-| `m42-ai` package                  | `scripts/ai/**`, `scripts/bin/{gh,git}`, `scripts/{dev-tokens,set-dev-tokens}.sh`                                             |
-| Quality scripts / hooks           | `scripts/quality-{check,fix}.sh`, `scripts/setup-git-hooks.sh`, `scripts/git-hooks/**`, `scripts/devcontainer-post-create.sh` |
-| Python quality fragments          | `ruff.toml`, `mypy.ini`, `.pylintrc`, `.bandit`, `pyrightconfig.json`, `.pre-commit-config.yaml`                              |
-| Markdown / IDE baseline           | `.markdownlint*`, `.prettier*`, `.vscode/settings.json`                                                                       |
-| Dev Container / image pins        | `.devcontainer/Dockerfile`, `versions.env`, `.python-version`, `docker/Dockerfile.product-app.base`                           |
-| Renovate                          | `renovate.json`, `.github/workflows/renovate.yml`                                                                             |
-| Global prose SoT                  | `docs/surface-quality-bar.global.md`, `openspec/principles.global.md`                                                         |
+| Category                          | Examples on `allow` (non-exhaustive)                                                                                                |
+| --------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
+| Sync / AI policy docs             | `docs/sync.md`, `docs/synced-paths.yaml`, `docs/ai_review_policy.md`, `docs/quality.md`, `docs/devcontainer.md`, …                  |
+| Agent skills / commands / prompts | `.agents/skills/{issue-fixer,review-fixer,create-issue,arctrl,gh,docker,hadolint,uv}/**`, `.cursor/commands/*`, prompts             |
+| `m42-ai` package                  | `scripts/ai/**`, `scripts/bin/{gh,git}`, `scripts/{dev-tokens,set-dev-tokens}.sh`                                                   |
+| Quality scripts / hooks           | `scripts/quality-{check,fix}.sh`, `scripts/setup-git-hooks.sh`, `scripts/git-hooks/**`, `scripts/devcontainer-post-create.sh`       |
+| Python quality fragments          | `ruff.toml`, `mypy.ini`, `.pylintrc`, `.bandit`, `pyrightconfig.json`, `stubs/{arctrl,fable_library}/**`, `.pre-commit-config.yaml` |
+| Markdown / IDE baseline           | `.markdownlint*`, `.prettier*`, `.vscode/settings.json`                                                                             |
+| Dev Container / image pins        | `.devcontainer/Dockerfile`, `versions.env`, `.python-version`, `docker/Dockerfile.product-app.base`                                 |
+| Renovate                          | `renovate.json`, `.github/workflows/renovate.yml`                                                                                   |
+| Global prose SoT                  | `docs/surface-quality-bar.global.md`, `openspec/principles.global.md`                                                               |
 
 **Hard excludes / never overwrite:** see `exclude` and `overlays` in the YAML (e.g. product `devcontainer.json`,
 `docs/surface-quality-bar.md`, `openspec/principles.md`, `AGENTS.md`, reusable workflows, `middleware/**`).
