@@ -23,25 +23,19 @@ ARCtrl is a Fable-transpiled F# library — the Python surface is idiomatic but 
 
 ## Package & Imports
 
-arctrl ships no type stubs and no `py.typed` marker. Mypy will report `[import-untyped]` for every `arctrl.*` import
-unless you suppress it.
+arctrl ships no `py.typed` marker. Fleet typing uses **shared incomplete stubs** under
+[`stubs/arctrl/`](../../../stubs/arctrl/) and [`stubs/fable_library/`](../../../stubs/fable_library/) (synced from
+Devinfra — see [`stubs/README.md`](../../../stubs/README.md)).
 
-**Preferred: project-level override in `pyproject.toml`** (no per-import comments needed, covers all submodules):
-
-```toml
-[[tool.mypy.overrides]]
-module = ["arctrl", "arctrl.*", "fable_library", "fable_library.*"]
-ignore_missing_imports = true
-```
-
-The `arctrl.*` glob is required because the Fable-transpiled internals are exposed under `arctrl.py.*` subpackages (e.g.
-`arctrl.py.Core.Table.composite_cell`), which are a different dotted path from the bare `arctrl` package.
-
-**Alternative: per-import suppression** (only needed when the project-level override is not in place):
+- Put `stubs` on **`MYPYPATH`** in hooks/CI (e.g. `MYPYPATH=stubs:…`).
+- Basedpyright / Pylance: synced `pyrightconfig.json` already sets `stubPath: "stubs"`.
+- Do **not** add `[mypy-arctrl*]` / fable overrides to synced `mypy.ini`, and do **not** keep
+  `# type: ignore[import-untyped]` on arctrl / fable_library imports once stubs are synced.
+- Other one-off untyped libs (few call sites) may still use a per-import ignore; do not invent stub packages for those.
 
 ```python
-from fable_library.async_ import start_as_task  # type: ignore[import-untyped]
-from arctrl.py.Core.Table.composite_cell import Data  # type: ignore[import-untyped]
+from fable_library.async_ import start_as_task
+from arctrl.py.Core.Table.composite_cell import Data
 ```
 
 ---
@@ -65,7 +59,7 @@ from arctrl import (
 from arctrl.py.Core.ontology_source_reference import OntologySourceReference
 
 # Async helpers live in the standalone fable_library package (not under arctrl.py):
-from fable_library.async_ import start_as_task  # type: ignore[import-untyped]
+from fable_library.async_ import start_as_task
 ```
 
 ---
@@ -325,9 +319,9 @@ To write supplementary file **content** to disk without ARCtrl changes, create a
 or alongside ISA contracts):
 
 ```python
-from arctrl.py.Contract.contract import Contract, DTO, DTOType  # type: ignore[import-untyped]
-from arctrl.py.ContractIO.contract_io import full_fill_contract_batch_async  # type: ignore[import-untyped]
-from fable_library.async_ import run_synchronously  # type: ignore[import-untyped]
+from arctrl.py.Contract.contract import Contract, DTO, DTOType
+from arctrl.py.ContractIO.contract_io import full_fill_contract_batch_async
+from fable_library.async_ import run_synchronously
 
 arc_dir = "/path/to/output/dir"
 manual = Contract.create_create(
@@ -417,8 +411,8 @@ text payload but semantically wrong for arbitrary supplementary files (serialize
 **`ArcTable` column fields are lowercase** — `col.header` / `col.cells`. `col.Header` / `col.Cells` raise
 `AttributeError` on 3.2+. `table.Headers` and `table.Columns` remain PascalCase.
 
-**`start_as_task` is untyped** — always add `# type: ignore[import-untyped]` on the import (or cover `fable_library.*`
-in mypy overrides).
+**`start_as_task` / `fable_library` typing** — covered by shared `stubs/fable_library/` (no per-import ignore once
+`MYPYPATH` / `stubPath` include `stubs`).
 
 **`CompositeHeader.performer` and `.date` are properties, not constructors** — call them without `()`:
 
