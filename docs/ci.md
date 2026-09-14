@@ -75,6 +75,19 @@ The reusable workflows check out the **caller** repository (not Devinfra), so `v
 `scripts/load-versions-env.sh`, the **Bake product-app layout** (below), and Helm charts must exist in the product repo.
 Callers that sync `versions.env` MUST also sync `scripts/load-versions-env.sh`.
 
+**`components` is required** on `reusable-build.yml`, `reusable-check.yml`, and `reusable-release.yml`. There is no
+shared default (do not omit and expect `["api"]`). A missing input fails at workflow validation. Pass a JSON array of
+Bake / CST component names:
+
+```yaml
+components: '["api"]' # API
+components: '["harvester"]' # Harvester
+components: '["api", "worker"]' # multi-component (example)
+```
+
+`reusable-code-quality.yml` accepts `components` for caller compatibility but does not use it; it has no product-name
+default and may be omitted there.
+
 ### Feature PR (Docker build + check)
 
 ```yaml
@@ -198,13 +211,13 @@ custom `tag_prefix` breaks Helm `appVersion` lookup unless you also change Helm 
 
 ### `reusable-code-quality.yml`
 
-| Input                 | Default      | Purpose                                                                         |
-| --------------------- | ------------ | ------------------------------------------------------------------------------- |
-| `python_package_root` | `middleware` | Path for ruff / pylint / mypy / bandit / pytest                                 |
-| `mypy_path`           | `""`         | Optional colon-separated `MYPYPATH` (stubs + src roots); empty = default        |
-| `pylint_source_roots` | `""`         | Optional comma-separated pylint `--source-roots`                                |
-| `components`          | `["api"]`    | Accepted for caller compatibility; unused by this workflow                      |
-| `skip`                | `false`      | Successful no-op (keeps required check names green)                             |
+| Input                 | Default      | Purpose                                                                  |
+| --------------------- | ------------ | ------------------------------------------------------------------------ |
+| `python_package_root` | `middleware` | Path for ruff / pylint / mypy / bandit / pytest                          |
+| `mypy_path`           | `""`         | Optional colon-separated `MYPYPATH` (stubs + src roots); empty = default |
+| `pylint_source_roots` | `""`         | Optional comma-separated pylint `--source-roots`                         |
+| `components`          | (optional)   | Accepted for caller compatibility; unused by this workflow               |
+| `skip`                | `false`      | Successful no-op (keeps required check names green)                      |
 
 Python version comes from the caller’s `versions.env` (`PYTHON_VERSION`) plus matching `.python-version` — there is no
 version override input.
@@ -216,7 +229,7 @@ The job display name stays **`Code Quality Check (3.12)`** for existing branch r
 | Input             | Default                        | Purpose                                                            |
 | ----------------- | ------------------------------ | ------------------------------------------------------------------ |
 | `version`         | `""`                           | Build version string (required when `skip` is false)               |
-| `components`      | `["api"]`                      | JSON array; matrix over components                                 |
+| `components`      | (required)                     | JSON array; matrix over components                                 |
 | `image_base_name` | `fairagro-advanced-middleware` | Prefix for `local/<name>-<component>:<version>`                    |
 | `skip`            | `false`                        | Successful no-op on all check jobs (keeps required statuses green) |
 
@@ -225,7 +238,7 @@ The job display name stays **`Code Quality Check (3.12)`** for existing branch r
 | Input             | Default                        | Purpose                                            |
 | ----------------- | ------------------------------ | -------------------------------------------------- |
 | `version_bump`    | `patch`                        | major / minor / patch against latest `*-docker-v*` |
-| `components`      | `["api"]`                      | JSON array; matrix build                           |
+| `components`      | (required)                     | JSON array; matrix build                           |
 | `image_base_name` | `fairagro-advanced-middleware` | Local image tag prefix                             |
 | `skip`            | `false`                        | Successful no-op without artifacts                 |
 
@@ -238,7 +251,7 @@ Outputs: `version`, `pep440_version`, `components`. Version scheme is shared acr
 | ----------------------- | ------------------------------ | -------------------------------------------------------------------- |
 | `version`               | (required)                     | From build                                                           |
 | `pep440_version`        | `""`                           | Caller compatibility; unused (no PyPI here)                          |
-| `components`            | `["api"]`                      | Matrix push                                                          |
+| `components`            | (required)                     | Matrix push                                                          |
 | `image_base_name`       | `fairagro-advanced-middleware` | Must match build                                                     |
 | `dockerhub_namespace`   | `zalf`                         | Docker Hub org/user                                                  |
 | `ghcr_namespace`        | `""` → `repository_owner`      | GHCR namespace; empty uses owner                                     |
