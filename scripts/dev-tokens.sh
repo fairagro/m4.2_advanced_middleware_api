@@ -80,15 +80,25 @@ fi
 _dev_tokens_write() {
   local var=$1 val=$2 b64 tmp
   (
+    set -euo pipefail
     umask 077
     touch "${_DEV_TOKENS_FILE}"
     chmod 600 "${_DEV_TOKENS_FILE}"
-    tmp="$(mktemp "${_DEV_TOKENS_FILE}.XXXXXX")"
+    # Bash may not trip `set -e` on a failing command-substitution assignment — check explicitly.
+    tmp="$(mktemp "${_DEV_TOKENS_FILE}.XXXXXX")" || exit 1
     # Remove temp (may hold encoded secrets) if we exit before a successful rename.
     trap 'rm -f "${tmp}"' EXIT
-    grep -v "^${var}=" "${_DEV_TOKENS_FILE}" >"${tmp}" 2>/dev/null || true
+    # grep exit 1 = no remaining lines (empty or only this var) — OK; other statuses abort.
+    # Capture status before `case` — bash sets $? to 0 when a case arm matches.
+    grep -v "^${var}=" "${_DEV_TOKENS_FILE}" >"${tmp}" 2>/dev/null || {
+      _grep_st=$?
+      case ${_grep_st} in
+        1) ;;
+        *) exit "${_grep_st}" ;;
+      esac
+    }
     # GNU coreutils in the Dev Container (no BSD wrap fallback).
-    b64="$(printf '%s' "${val}" | base64 -w0)"
+    b64="$(printf '%s' "${val}" | base64 -w0)" || exit 1
     printf '%s=b64:%s\n' "${var}" "${b64}" >>"${tmp}"
     # Atomic replace: do not truncate the live store via redirect.
     chmod 600 "${tmp}"
@@ -108,7 +118,9 @@ _dev_tokens_ask() {
   printf '%s — %s (empty skips until set-dev-tokens.sh)\n> ' "${var}" "${hint}" >/dev/tty
   IFS= read -r -s val </dev/tty || true
   printf '\n' >/dev/tty
-  _dev_tokens_write "${var}" "${val}"
+  if ! _dev_tokens_write "${var}" "${val}"; then
+    echo "dev-tokens: failed to persist ${var}; value kept for this shell only (re-run: source ./scripts/set-dev-tokens.sh)" >&2
+  fi
   if [ -n "${val}" ]; then
     export "${var}=${val}"
   fi
