@@ -24,6 +24,9 @@ pushes; the agent opens the draft PR only when the tip already differs from `mai
 
 ## Auth (`gh`)
 
+Prefer `uv run --project scripts/ai m42-ai …` (works in Devinfra and product checkouts). Bare `uv run m42-ai` is only OK
+when `scripts/ai` is a root workspace member (Devinfra).
+
 `gh` is wrapped (`scripts/bin/gh`, on `PATH` in the Dev Container via `remoteEnv`). Missing `GH_TOKEN` prompts on
 `/dev/tty` and is saved to `/commandhistory/tokens.env` (Linux Dev Container only — see `docs/conventions.md`). The
 wrapper sources `scripts/dev-tokens.sh` on each invoke (no `.bashrc` patch). Do not read tokens from the git worktree;
@@ -40,8 +43,8 @@ do not invent them. Never ask the user to paste a PAT into chat.
 
    Then reply here when done (or decline).
 
-3. After they confirm, retry `uv run m42-ai auth-status` (or `gh auth status`). If auth works, continue with fetch /
-   branch / PR as usual.
+3. After they confirm, retry `uv run --project scripts/ai m42-ai auth-status` (or `gh auth status`). If auth works,
+   continue with fetch / branch / PR as usual.
 4. Only if they decline or auth still fails: skip GitHub writes, print intended branch/PR drafts, and may still work
    locally when appropriate.
 
@@ -50,7 +53,7 @@ do not invent them. Never ask the user to paste a PAT into chat.
 1. Prefer the CLI for a stable shape:
 
    ```bash
-   uv run m42-ai issue-view --issue <issue_number>
+   uv run --project scripts/ai m42-ai issue-view --issue <issue_number>
    ```
 
    Use `issue_type`, `labels`, `triage`, `body`, and `url` from that JSON (fall back to `gh issue view` only if the CLI
@@ -123,7 +126,7 @@ On every run that will implement, after explore (when it ran) or immediately whe
 1. **Create the issue branch** from `main` via CLI when possible (**before** OpenSpec artifacts or product code):
 
    ```bash
-   uv run m42-ai issue-branch --issue <issue_number> [--slug <slug>]
+   uv run --project scripts/ai m42-ai issue-branch --issue <issue_number> [--slug <slug>]
    ```
 
    Do **not** commit, push, or open a draft PR yet. If already on the correct issue branch, skip creating it again.
@@ -151,7 +154,7 @@ when the tree is clean and the tip is already ahead of `main` (`git log main..HE
 not count):
 
 ```bash
-uv run m42-ai issue-start --issue <issue_number> [--slug <slug>]
+uv run --project scripts/ai m42-ai issue-start --issue <issue_number> [--slug <slug>]
 ```
 
 `issue-start` ensures branch `issue-<issue_number>-<slug>` (checkout/create from `main` if needed), refuses when there
@@ -169,7 +172,7 @@ is Summary + `Fixes #<issue_number>` (+ deferred issue links when needed). If a 
 immediately with:
 
 ```bash
-uv run m42-ai pr-strip-footer --pr <pr_number>
+uv run --project scripts/ai m42-ai pr-strip-footer --pr <pr_number>
 ```
 
 Manual equivalent if the CLI is unavailable:

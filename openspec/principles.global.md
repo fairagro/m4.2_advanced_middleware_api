@@ -84,15 +84,16 @@ and scaling notes live in the local `principles.md` (or product capability specs
 
 ## Code Quality
 
-Product application code under `middleware/` must pass (via `uv run`, config from shared fragments / `.bandit` as
-applicable):
+Product application code under `middleware/` must pass via `uv run`. Prefer shared synced fragments when present
+(`ruff.toml`, `mypy.ini`, `.pylintrc`, `.bandit`); otherwise use the project's equivalent config (e.g. root
+`pyproject.toml` tool tables). Do not invent a second quality policy channel. Example invocations with shared fragments:
 
 - `uv run ruff format --check --config ruff.toml middleware/` — formatting
 - `uv run ruff check --config ruff.toml middleware/` — linting
 - `uv run mypy --config-file mypy.ini middleware/` — static type checking
 - `uv run pylint --rcfile .pylintrc middleware/` — style and code smells
 - `uv run bandit -r middleware/ -c .bandit -ll` — security (hooks: MEDIUM+ only via `-ll`). CI may omit `-ll` to log LOW
-  while still failing only on MEDIUM/HIGH — same fail bar; see `docs/quality.md`
+  while still failing only on MEDIUM/HIGH — same fail bar; see `docs/quality.md` when that file is synced
 
 Markdown must pass Prettier formatting and markdownlint (`.markdownlint.json` disables rules that fight Prettier).
 Typical scripts (see `package.json` where present):
@@ -121,7 +122,7 @@ outcome** (same policy findings) in:
 Invocations MAY pass the config-file path, analysis target paths, and documented product path overlays (e.g. `MYPYPATH`,
 pylint `--source-roots`). They MUST NOT restate rule/severity/version policy as extra CLI or IDE flags when that policy
 is expressible in the shared config file. If a tool has no supported IDE integration, document “hooks + CI only” for
-that tool — do not invent a second config channel. Details: `docs/quality.md`.
+that tool — do not invent a second config channel. Details: `docs/quality.md` when synced.
 
 This Devinfra repository has no product `middleware/` packages; the Python gates above apply when working in product
 consumers. Markdown and hadolint gates apply here and in consumers that ship those files.
