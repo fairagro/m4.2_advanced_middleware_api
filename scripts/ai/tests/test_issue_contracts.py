@@ -2,18 +2,17 @@
 
 from __future__ import annotations
 
+from argparse import Namespace
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pytest
+from m42_ai.cli import cmd_issue_create
 from m42_ai.gh import GhError
 from m42_ai.issue import create_issue, ensure_labels, issue_start
 
 
 def test_cli_issue_create_omits_practicality_when_unset() -> None:
-    from argparse import Namespace
-
-    from m42_ai.cli import cmd_issue_create
 
     with patch("m42_ai.cli.create_issue") as create:
         create.return_value = {"url": "https://example/issues/1"}
