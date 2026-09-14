@@ -55,6 +55,7 @@ allow:
   - ruff.toml
   - mypy.ini
   - .pylintrc
+  - pyrightconfig.json
   - .markdownlint.json
   - .markdownlint-cli2.jsonc
   - .markdownlintignore
