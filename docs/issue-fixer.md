@@ -21,8 +21,8 @@ invoked explicitly.
    explore **in-skill** (no `/opsx-explore`). Wait for lock-in / `go` / `skip explore`.
 3. Create the issue branch **before** propose or implement.
 4. **OpenSpec types:** follow openspec-propose → **pause** → on `go` apply → **pause** → on `go` draft PR
-   (`m42-ai issue-start` when the tip is ahead of `main`) → on `go` (last) follow openspec-archive → **pause** to
-   commit. Never empty bootstrap commits.
+   (`uv run --project scripts/ai m42-ai issue-start` when the tip is ahead of `main`) → on `go` (last) follow
+   openspec-archive → **pause** to commit. Never empty bootstrap commits.
 5. **Bug / cheap Security**, and **docs-only** Task/Feature/Refactoring with no skill file: implement in the working
    tree → **pause** → on continue: draft PR when ahead of `main`.
 6. **`skip_specs`:** when OpenSpec **is** used, real delta spec if a capability contract changes; `skip_specs: true`

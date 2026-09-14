@@ -142,7 +142,8 @@ def test_shape_review_open_filters_resolved_and_human() -> None:
     thread = shaped["unresolved_ai_threads"][0]
     assert thread["thread_id"] == "PRRT_open_ai"
     assert thread["first_comment"]["database_id"] == 200
-    assert shaped["latest_ai_review"]["author"] == "cursor"
+    assert shaped["latest_ai_review"] is not None
+    assert shaped["ai_reviews"][-1]["author"] == "cursor"
     assert shaped["summary_only_findings"]  # open Copilot suppressed from fixture
     assert shaped["open_work_empty"] is False
 
@@ -157,7 +158,8 @@ def test_shape_keeps_suppressed_when_later_cursor_review_has_none() -> None:
         if "copilot" in n["author"]["login"]:
             n["body"] = COPILOT_SUPPRESSED_BODY
     shaped = shape_review_open(payload)
-    assert shaped["latest_ai_review"]["author"] == "cursor"
+    assert shaped["latest_ai_review"] is not None
+    assert shaped["ai_reviews"][-1]["author"] == "cursor"
     assert shaped["open_summary_review_id"] == 2
     assert len(shaped["summary_only_findings"]) == 2
     assert shaped["summary_only_findings"][0]["resolvable"] is False
@@ -230,6 +232,20 @@ def test_shape_review_id_scopes_summary_bodies() -> None:
 def test_shape_null_pull_request_raises() -> None:
     with pytest.raises(RuntimeError, match="null"):
         shape_review_open({"data": {"repository": {"pullRequest": None}}})
+
+
+def test_latest_ai_review_null_when_no_submitted_ai() -> None:
+    """Empty submitted AI reviews → JSON null, not {} (issue #96)."""
+    payload = _payload()
+    pr = payload["data"]["repository"]["pullRequest"]
+    pr["reviews"]["nodes"] = [
+        n for n in pr["reviews"]["nodes"] if not is_ai_author((n.get("author") or {}).get("login"))
+    ]
+    pr["reviewThreads"]["nodes"] = []
+    shaped = shape_review_open(payload)
+    assert not shaped["ai_reviews"]
+    assert shaped["latest_ai_review"] is None
+    assert shaped["round_count"] == 0
 
 
 def test_slugify() -> None:

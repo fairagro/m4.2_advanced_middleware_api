@@ -302,7 +302,7 @@ def shape_review_open(
                 }
             )
 
-    latest = reviews_out[-1] if reviews_out else {}
+    latest = reviews_out[-1] if reviews_out else None
     return {
         "pr": {"number": pr.get("number"), "url": pr.get("url")},
         "round_count": len(all_ai),
