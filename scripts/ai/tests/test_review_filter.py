@@ -5,7 +5,12 @@ from pathlib import Path
 
 import pytest
 from m42_ai.issue import slugify
-from m42_ai.review import extract_suppressed_comments, is_ai_author, is_submitted_review, shape_review_open
+from m42_ai.review import (
+    extract_suppressed_comments,
+    is_ai_author,
+    is_submitted_review,
+    shape_review_open,
+)
 
 FIXTURE = Path(__file__).parent / "fixtures" / "review_pr.json"
 
@@ -65,6 +70,51 @@ def test_shape_ignores_pending_ai_reviews() -> None:
     shaped = shape_review_open(payload)
     assert shaped["round_count"] == before
     assert all(r["database_id"] != 999 for r in shaped["ai_reviews"])
+
+
+def test_pending_human_draft_does_not_answer_suppressed() -> None:
+    """PENDING viewer drafts must not close suppressed Copilot findings (issue #53)."""
+    payload = _payload()
+    nodes = payload["data"]["repository"]["pullRequest"]["reviews"]["nodes"]
+    for n in nodes:
+        if n["databaseId"] == 2:
+            n["body"] = COPILOT_SUPPRESSED_BODY
+            n["submittedAt"] = "2026-09-02T10:00:00Z"
+            n["state"] = "COMMENTED"
+    nodes.append({
+        "databaseId": 500,
+        "author": {"login": "alice"},
+        "submittedAt": None,
+        "state": "PENDING",
+        "body": "Dismissed. draft only — not submitted.\n#pullrequestreview-2",
+    })
+    shaped = shape_review_open(payload)
+    assert shaped["open_summary_review_id"] == 2
+    assert len(shaped["summary_only_findings"]) == 2
+    rev2 = next(r for r in shaped["ai_reviews"] if r["database_id"] == 2)
+    assert rev2["summary_answered"] is False
+
+
+def test_submitted_human_review_body_still_answers_suppressed() -> None:
+    payload = _payload()
+    nodes = payload["data"]["repository"]["pullRequest"]["reviews"]["nodes"]
+    for n in nodes:
+        if n["databaseId"] == 2:
+            n["body"] = COPILOT_SUPPRESSED_BODY
+            n["submittedAt"] = "2026-09-02T10:00:00Z"
+            n["state"] = "COMMENTED"
+    nodes.append({
+        "databaseId": 501,
+        "author": {"login": "alice"},
+        "submittedAt": "2026-09-03T10:00:00Z",
+        "state": "COMMENTED",
+        "body": "Dismissed. real submission.\n#pullrequestreview-2",
+    })
+    shaped = shape_review_open(payload)
+    assert shaped["open_summary_review_id"] is None
+    assert not shaped["summary_only_findings"]
+    rev2 = next(r for r in shaped["ai_reviews"] if r["database_id"] == 2)
+    assert rev2["summary_answered"] is True
 
 
 def test_extract_suppressed_comments() -> None:
@@ -158,7 +208,7 @@ def test_triage_reply_without_id_closes_prior_suppressed() -> None:
         ]
     }
     shaped = shape_review_open(payload)
-    assert shaped["summary_only_findings"] == []
+    assert not shaped["summary_only_findings"]
     assert shaped["open_summary_review_id"] is None
     rev2 = next(r for r in shaped["ai_reviews"] if r["database_id"] == 2)
     assert rev2["summary_answered"] is True
