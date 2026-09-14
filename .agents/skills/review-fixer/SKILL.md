@@ -66,6 +66,9 @@ a SHA.
 
 ## Auth (`gh`)
 
+Prefer `uv run --project scripts/ai m42-ai …` (works in Devinfra and product checkouts). Bare `uv run m42-ai` is only OK
+when `scripts/ai` is a root workspace member (Devinfra).
+
 `gh` is wrapped (`scripts/bin/gh`, on `PATH` in the Dev Container via `remoteEnv`). Missing `GH_TOKEN` prompts on
 `/dev/tty` and is saved to `/commandhistory/tokens.env` (Linux Dev Container only — see `docs/conventions.md`). The
 wrapper sources `scripts/dev-tokens.sh` on each invoke (no `.bashrc` patch). Do not read tokens from the git worktree;
@@ -82,8 +85,8 @@ do not invent them. Never ask the user to paste a PAT into chat.
 
    Then reply here when done (or decline).
 
-3. After they confirm, retry `uv run m42-ai auth-status` (or `gh auth status` / the GraphQL fetch). If auth works,
-   continue with fetch / replies / resolves as usual.
+3. After they confirm, retry `uv run --project scripts/ai m42-ai auth-status` (or `gh auth status` / the GraphQL fetch).
+   If auth works, continue with fetch / replies / resolves as usual.
 4. Only if they decline or auth still fails: skip GitHub writes, print the intended replies/resolves, and stop that
    part. Still apply local code fixes when triage says `fix`.
 
@@ -92,9 +95,9 @@ do not invent them. Never ask the user to paste a PAT into chat.
 **Start from the CLI** (do not dump raw GraphQL into context):
 
 ```bash
-uv run m42-ai review-open --pr PR
+uv run --project scripts/ai m42-ai review-open --pr PR
 # optional, when the user gave /pull/N#pullrequestreview-ID:
-uv run m42-ai review-open --pr PR --review-id ID
+uv run --project scripts/ai m42-ai review-open --pr PR --review-id ID
 ```
 
 The JSON already filters to unresolved AI threads and **summary-only findings from every AI review body**
@@ -142,9 +145,9 @@ budget: nit-in-budget|nit-regression|nit-exhausted|n/a-risk
 ```
 
 **Synced paths (product consumers):** Before any `fix`, match the finding’s primary path against
-[`docs/synced-paths.yaml`](../../../docs/synced-paths.yaml). In a **product** checkout, **never** modify
-allowlisted / synced trees. Prefer detecting Devinfra via `git remote` matching `fairagro/m4.2_middleware_devinfra`; if
-unsure, treat as consumer (safer). In **this Devinfra repo**, allowlisted paths are local SoT and MAY be `fix`ed.
+[`docs/synced-paths.yaml`](../../../docs/synced-paths.yaml). In a **product** checkout, **never** modify allowlisted /
+synced trees. Prefer detecting Devinfra via `git remote` matching `fairagro/m4.2_middleware_devinfra`; if unsure, treat
+as consumer (safer). In **this Devinfra repo**, allowlisted paths are local SoT and MAY be `fix`ed.
 
 Decision order (stop at first match) — same as the policy:
 
@@ -167,8 +170,8 @@ Decision order (stop at first match) — same as the policy:
    contract; do **not** add `REQUIRE_*` opt-in shims or dual modes. **Cheap does not override this** — do not take step
    5 for host-only, one-shot-migration, or contract-violator-only hardening.
 2. Not this PR → `dismiss`, or `follow-up` if Medium+ **Synced path (product consumers) — before steps 3–5:** Path on
-   [`docs/synced-paths.yaml`](../../../docs/synced-paths.yaml) (or matching glob) **and** this checkout is
-   **not** Devinfra → **do not** `fix` that synced file. Instead:
+   [`docs/synced-paths.yaml`](../../../docs/synced-paths.yaml) (or matching glob) **and** this checkout is **not**
+   Devinfra → **do not** `fix` that synced file. Instead:
    - `follow-up` (create-issue against **Devinfra**, or clear Devinfra-targeted follow-up) when the finding is correct
      for shared content and severity is Medium+, or Risk, or seen-in-the-wild shared bug;
    - else `dismiss` with reason `synced path — edit upstream in Devinfra / wait for sync`;
@@ -247,10 +250,10 @@ On nit fixes only, append a plain line: `nit-lines this run: N` (budget tracking
 Prefer the CLI (auth still via `scripts/bin/gh` / `GH_TOKEN`):
 
 ```bash
-uv run m42-ai review-reply --pr PR --in-reply-to COMMENT_DATABASE_ID --body-file /tmp/reply.md
-uv run m42-ai review-resolve --thread-id THREAD_NODE_ID
+uv run --project scripts/ai m42-ai review-reply --pr PR --in-reply-to COMMENT_DATABASE_ID --body-file /tmp/reply.md
+uv run --project scripts/ai m42-ai review-resolve --thread-id THREAD_NODE_ID
 # summary-only / suppressed:
-uv run m42-ai review-reply --pr PR --conversation --body-file /tmp/reply.md
+uv run --project scripts/ai m42-ai review-reply --pr PR --conversation --body-file /tmp/reply.md
 ```
 
 ## Follow-up issue
