@@ -40,7 +40,8 @@ CI may **log** LOW findings while hooks suppress them with `-ll` — see the Ban
 **Minimal CLI / IDE args:** pass only the config-file path (when the tool does not auto-discover it), target paths, and
 documented path overlays via **environment / CI inputs** (`MYPYPATH`, reusable-workflow `pylint_source_roots`). Do not
 restate line length, rule selects, ignore lists, or similar policy on the command line when the shared config file
-already defines them. Do not patch synced `.pre-commit-config.yaml` to carry those overlays.
+already defines them. Do not patch synced `.pre-commit-config.yaml` to carry those overlays. After syncing `.pylintrc`,
+products may drop a duplicate `--extension-pkg-allow-list=lxml` CLI flag — that allow-list lives in the rcfile.
 
 | Tool                    | IDE                                              | Hooks             | CI                              | Notes                                                               |
 | ----------------------- | ------------------------------------------------ | ----------------- | ------------------------------- | ------------------------------------------------------------------- |
@@ -63,7 +64,7 @@ fail policy only on one surface.
 | `.pre-commit-config.yaml`                           | Commit-stage + pre-push hooks — adopt **verbatim** after sync (see below)                    |
 | `ruff.toml`                                         | Shared Ruff lint/format (product sync; not Devinfra `[project]`)                             |
 | `mypy.ini`                                          | Shared Mypy strictness (path overlays via **env**, not by editing this file)                 |
-| `.pylintrc`                                         | Shared Pylint (path overlays via CI / env invocation — see below)                            |
+| `.pylintrc`                                         | Shared Pylint (path overlays via CI / env; `extension-pkg-allow-list=lxml` for I1101)        |
 | `scripts/quality-check.sh`                          | Run **commit-stage** hooks only (check)                                                      |
 | `scripts/quality-fix.sh`                            | Run commit-stage **autofix** hooks only                                                      |
 | `scripts/run-container-structure-test.sh`           | Templated Docker build + `container-structure-test`                                          |
@@ -112,6 +113,12 @@ product `[tool.mypy]` / `[tool.pylint.*]` in `pyproject.toml` are **ignored**. D
 synced fragments or into synced `.pre-commit-config.yaml` — sync (#13) overwrites both. Use product CI inputs / process
 env (examples in `mypy.ini` / `.pylintrc` headers and [`docs/ci.md`](ci.md)). If a product needs a hook change that
 cannot be expressed that way, open a Devinfra issue to generalize — do not leave a permanent post-sync YAML patch.
+
+**lxml / I1101:** `lxml` is a C extension. Keep the real type (`lxml.etree._Element`); do not silence
+`c-extension-no-member` (I1101) with `Any` or an `Any`-shaped alias. Shared `.pylintrc` sets
+`extension-pkg-allow-list=lxml` so IDE Pylint (rcfile only) and `--rcfile` invocations see members. Do not disable I1101
+globally ([Type Safety](../openspec/principles.global.md#type-safety)). Product hooks/CI that still pass
+`--extension-pkg-allow-list=lxml` can drop that flag after this fragment is synced.
 
 **Not** in the product quality sync set: `scripts/ai/pyproject.toml` (Devinfra `m42-ai-gh` package manifest only).
 
