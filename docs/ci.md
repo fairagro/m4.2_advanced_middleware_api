@@ -88,6 +88,17 @@ components: '["api", "worker"]' # multi-component (example)
 `reusable-code-quality.yml` accepts `components` for caller compatibility but does not use it; it has no product-name
 default and may be omitted there.
 
+### Trivy: licenses vs vulnerabilities
+
+- **Licences (report-only):** `reusable-check` **Licence Check** still runs Trivy `scanners: license` and uploads a JSON
+  artifact, but **does not fail** the job on findings (Alpine base GPL / `restricted` is expected). When
+  `reusable-release` creates a GitHub Release, it re-scans each component image and appends an **Image licenses
+  (Trivy)** section (counts + package/license/classification table). License hits alone must not fail release.
+- **Vulnerabilities (gate):** `reusable-check` **Security Check** keeps failing on CRITICAL/HIGH vulns (SARIF upload
+  unchanged). Do not treat license policy as a reason to relax vuln gates.
+
+Bump the product `uses:` ref after this policy lands so callers pick up report-only Licence Check.
+
 ### Feature PR (Docker build + check)
 
 ```yaml
@@ -233,6 +244,9 @@ The job display name stays **`Code Quality Check (3.12)`** for existing branch r
 | `image_base_name` | `fairagro-advanced-middleware` | Prefix for `local/<name>-<component>:<version>`                    |
 | `skip`            | `false`                        | Successful no-op on all check jobs (keeps required statuses green) |
 
+**Licence Check** is report-only (does not fail on Trivy license findings). **Security Check** still fails on
+CRITICAL/HIGH vulnerabilities. See [Trivy: licenses vs vulnerabilities](#trivy-licenses-vs-vulnerabilities).
+
 ### `reusable-build.yml`
 
 | Input             | Default                        | Purpose                                            |
@@ -262,8 +276,8 @@ Outputs: `version`, `pep440_version`, `components`. Version scheme is shared acr
 
 Secrets: `DOCKERHUB_USER`, `DOCKERHUB_TOKEN` (optional — if missing, DockerHub push is skipped and the GitHub Release
 body states why). GHCR uses `GITHUB_TOKEN` (`packages: write` on the reusable job). Git tags / GitHub Releases are
-created even when a registry push fails; the release body includes a **Registry status** section. Re-pushing an existing
-release is a follow-up (retry workflow).
+created even when a registry push fails; the release body includes a **Registry status** section and an **Image licenses
+(Trivy)** section (informational). Re-pushing an existing release is a follow-up (retry workflow).
 
 GHCR image tag shape: `ghcr.io/<ghcr_namespace>/<image_base_name>-<component>:<version>` (aligned with DockerHub
 naming).
