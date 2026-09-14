@@ -37,6 +37,8 @@ allow:
   - scripts/set-dev-tokens.sh
   - scripts/bin/gh
   - scripts/bin/git
+  - scripts/bin/k
+  - scripts/bin/d
   - scripts/quality-check.sh
   - scripts/quality-fix.sh
   - scripts/run-container-structure-test.sh
@@ -56,6 +58,9 @@ allow:
   - mypy.ini
   - .pylintrc
   - pyrightconfig.json
+  - stubs/README.md
+  - stubs/arctrl/**
+  - stubs/fable_library/**
   - .markdownlint.json
   - .markdownlint-cli2.jsonc
   - .markdownlintignore
@@ -63,6 +68,8 @@ allow:
   - .prettierignore
   - .vscode/settings.json
   - .devcontainer/Dockerfile
+  - .devcontainer/devcontainer.json
+  - .devcontainer/docker-compose.yml
 
 # Never copy — even if mis-listed under allow.
 exclude:
@@ -73,11 +80,11 @@ exclude:
   - docs/surface-quality-bar.md
   - openspec/principles.md
   - AGENTS.md
-  - .devcontainer/devcontainer.json
-  - .devcontainer/docker-compose.yml
+  - .devcontainer/product.env
 
 # Product-local overlays (MAY edit in consumers; never overwritten by sync).
 overlays:
   - docs/surface-quality-bar.md
   - openspec/principles.md
   - AGENTS.md
+  - .devcontainer/product.env
