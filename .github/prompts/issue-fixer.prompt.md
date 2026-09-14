@@ -1,5 +1,5 @@
 ---
-description: "Triage and fix a GitHub issue (branch → implement → pause → draft PR; no OpenSpec; no auto fix commits)"
+description: "Triage and fix a GitHub issue (OpenSpec for Task/Feature/Refactoring; Bug fast path; no auto fix commits)"
 ---
 
 # issue-fixer
@@ -7,9 +7,12 @@ description: "Triage and fix a GitHub issue (branch → implement → pause → 
 Triage and fix a GitHub issue following `.agents/skills/issue-fixer/SKILL.md`:
 
 - When explore is required: explore **in-skill** (no `/opsx-explore`)
-- Cadence: **create issue branch → implement → pause → draft PR**
-- Do **not** run OpenSpec (`/opsx-*`) as part of `/issue-fixer` (same for `/review-fixer` / `/create-issue`)
-- Draft PR only after implement confirmation, when the tip has **real** commits ahead of `main` — never empty bootstrap
+- **Task / Feature / Refactoring:** issue branch → follow openspec-propose → pause → apply → pause → draft PR → archive
+  (last `go`). **Docs-only** (Markdown/comments only, no skill file): same as Bug path — no OpenSpec
+- **Bug / cheap Security:** issue branch → implement → pause → draft PR (no OpenSpec unless the user asks)
+- `/review-fixer` and `/create-issue` do **not** run `/opsx-*`
+- Real delta specs when a capability contract changes; `skip_specs: true` only for docs/tooling with no spec delta
+- Draft PR only when the tip has **real** commits ahead of `main` — never empty bootstrap
 - Implement only in the working tree — do **not** auto-commit or auto-push fix commits
 - Split deferred work via create-issue (`sub-of` vs `linked`)
 
