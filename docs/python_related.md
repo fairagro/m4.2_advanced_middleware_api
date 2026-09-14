@@ -95,8 +95,9 @@ export MIDDLEWARE_API_CONFIG=example_config.yaml
 Having a look at the file `example_config.yaml` you will notice that the gitlab
 API token is missing, as we do not want to commit a secret to git. Nevertheless
 the token is needed, otherwise the middleware API won't start. So you can either
-define the variable `GITLAB_API_TOKEN` manually, or reuse the the token used for
-integration tests that should have already been decrypted by the script `load-env.sh`:
+define the variable `GITLAB_API_TOKEN` manually, or reuse the token used for
+integration tests from `.env` (written by Dev Container postCreate from
+`.env.integration.enc`, or decrypt with `sops` yourself):
 
 ```bash
 source .env
