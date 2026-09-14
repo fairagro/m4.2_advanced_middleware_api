@@ -1,0 +1,4 @@
+schema: spec-driven
+created: 2026-09-14
+# Tooling/DX adopt of bashrc-free shell init (#58 / #400) — no product domain requirement deltas.
+skip_specs: true

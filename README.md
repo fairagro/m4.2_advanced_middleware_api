@@ -22,12 +22,12 @@ before the CI/CD pipelines can publish artefacts.
 ### Local personal tokens (not committed)
 
 `GH_TOKEN` and `GITGUARDIAN_API_KEY` are prompted on a TTY when missing
-(new terminal via `scripts/load-env.sh`, `gh` via `scripts/bin/gh`,
-`./scripts/quality-check.sh`). Empty input skips and is remembered. Re-prompt
-with `./scripts/set-dev-tokens.sh` (or `source` it to export in the current
-shell). They are stored in `/commandhistory/tokens.env`
-in the Dev Container (named volume `middleware-api-bashhistory`, same as shell
-history — survives rebuilds) or `~/.config/middleware-api/tokens.env` on a
-local clone.
+(`gh` / `git` via `scripts/bin`, or `./scripts/quality-check.sh`). Empty input
+skips and is remembered. Re-prompt with `./scripts/set-dev-tokens.sh` (or
+`source` it to export in the current shell). They are stored in
+`/commandhistory/tokens.env` in the Dev Container (bashhistory volume — survives
+rebuilds) or `~/.config/middleware-api/tokens.env` on a local clone. Dev Container
+PATH already includes `.venv/bin` and `scripts/bin`; product env overlays
+(`MYPYPATH`, `CST_BAKE_TARGET`) live in `.devcontainer/product.env`.
 
 Do not put personal PATs in `.env.integration.enc` — that file is team-shared.

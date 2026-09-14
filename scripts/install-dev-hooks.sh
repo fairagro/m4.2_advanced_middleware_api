@@ -10,7 +10,7 @@
 #   - scripts/setup-git-hooks.sh     (synced: quality pre-push only)
 #
 # Prefer Dev Container postCreate (synced script) for first install.
-# Do not invoke from load-env.sh (per-shell).
+# Shell env overlays: .devcontainer/product.env (not a per-shell sourced blob).
 
 set -euo pipefail
 

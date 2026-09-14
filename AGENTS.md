@@ -67,15 +67,15 @@ middleware/
 scripts/
 ├── ai/                            # m42-ai (synced): uv run --project scripts/ai m42-ai …
 ├── quality-*.sh / setup-git-hooks.sh / load-versions-env.sh  # Synced Dev DX
-├── devcontainer-post-create.sh    # Synced shared postCreate (needs #56 for --dev/--all-packages)
+├── devcontainer-post-create.sh    # Synced shared postCreate (decrypt .env; uv sync; hooks)
 ├── install-dev-hooks.sh           # Product: venv/hook repair (not a sync patch)
-├── setup-bashrc-load-env.sh       # Product: bashrc → load-env (#58)
-├── load-env.sh                    # Product shell init (promote #58)
 ├── update-apk-dependencies.sh     # Product APK pin helper (promote #68)
 ├── update-docker-pins.sh          # Product Docker/pip/uv pin helper
-├── bin/gh, bin/git                # PATH wrappers + personal GH_TOKEN (DC)
+├── bin/{gh,git,k,d}               # PATH wrappers (tokens via set-dev-tokens; k/d aliases)
 └── git-hooks/
     └── pre-push                   # Synced quality pre-push (pre-commit stage)
+
+.devcontainer/product.env          # Product overlay: MYPYPATH, CST_BAKE_TARGET (not synced)
 
 stubs/                             # Type stubs until Devinfra #67 sync (arctrl, fable_library)
 pyrightconfig.json                 # stubPath + extraPaths (promote shared file #64)
@@ -176,17 +176,21 @@ config2 = Config(
 
 **Setup Process**:
 
-1. Synced `scripts/devcontainer-post-create.sh` (Dev Container `postCreateCommand`) installs
-   pre-commit and runs `scripts/setup-git-hooks.sh` (quality `pre-push` only)
-2. Product `postStartCommand` runs `scripts/setup-bashrc-load-env.sh` (load-env → `~/.bashrc`)
+1. Synced `scripts/devcontainer-post-create.sh` (Dev Container `postCreateCommand`) runs
+   `uv sync --dev --all-packages`, installs pre-commit / `setup-git-hooks.sh`, and decrypts
+   `.env.integration.enc` → `.env` (file only — no bashrc auto-source)
+2. Bashrc-free shell init ([Devinfra #58](https://github.com/fairagro/m4.2_middleware_devinfra/issues/58)):
+   synced `remoteEnv.PATH` prepends `.venv/bin` + `scripts/bin`; product overlays
+   (`MYPYPATH`, `CST_BAKE_TARGET`) live in `.devcontainer/product.env` — do **not** reintroduce
+   `load-env.sh` / bashrc mutation
 3. After path/venv drift: `scripts/install-dev-hooks.sh` (`uv sync --dev --all-packages` + hooks)
-4. Shared post-create still runs plain `uv sync` until [Devinfra #56](https://github.com/fairagro/m4.2_middleware_devinfra/issues/56) — do **not** patch the synced script locally
+4. Do **not** hand-edit allowlisted synced paths (including postCreate / `devcontainer.json`)
 
 **Bake / CST (Wave C):** Root `docker-bake.hcl` target `api` builds via synced
 `docker/Dockerfile.product-app.base` + thin `docker/Dockerfile.api`. Local smoke:
 `source versions.env` (or `scripts/load-versions-env.sh`) then
-`docker buildx bake api`. Pre-push CST uses `CST_BAKE_TARGET=api` (defaulted in
-`scripts/load-env.sh` when the Bake file exists).
+`docker buildx bake api`. Pre-push CST uses `CST_BAKE_TARGET=api` (from
+`.devcontainer/product.env` / shell env when the Bake file exists).
 
 **CI callers:** Feature/pre-release/release use Devinfra
 `reusable-{code-quality,build,release}`; check temporarily uses product-local
@@ -432,7 +436,7 @@ macOS / Windows / Homebrew / unofficial host-PATH review findings
 
 - Implemented Git LFS for large SQL files
 - Created version-controlled hooks in `scripts/git-hooks/`
-- Integrated setup into `scripts/load-env.sh`
+- Integrated setup into product shell init (later superseded by bashrc-free / `product.env`)
 
 ### Session 3: Optional Client Certificates
 
@@ -500,9 +504,10 @@ Before making changes, consider:
 - Agent GitHub plumbing? → `uv run --project scripts/ai m42-ai …`
 - Synced paths? → `docs/synced-paths.yaml` (canonical allowlist); never hand-edit
   allowlisted files — fix upstream or split `.global`/local
-- `uv sync` in this workspace? → always `--dev --all-packages` (shared post-create: Devinfra #56)
+- `uv sync` in this workspace? → always `--dev --all-packages` (shared postCreate)
+- Shell / MYPYPATH / CST? → `.devcontainer/product.env` + `scripts/bin` (no `load-env.sh` / bashrc)
 ---
 
-**Last Updated**: 2026-09-08
+**Last Updated**: 2026-09-14
 **Maintainer Notes**: Keep this file updated when architectural decisions change.
   Synced Devinfra Wave A paths: do not hand-edit; land shared changes upstream.
