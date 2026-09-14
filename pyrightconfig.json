@@ -2,15 +2,7 @@
   "venvPath": ".",
   "venv": ".venv",
   "stubPath": "stubs",
-  "extraPaths": [
-    "scripts/ai/src",
-    "middleware/api/src",
-    "middleware/api_client/src",
-    "middleware/shared/src",
-    "middleware/api/tests/unit",
-    "middleware/api_client/tests/unit",
-    "middleware/shared/tests"
-  ],
+  "extraPaths": ["scripts/ai/src"],
   "exclude": [
     "**/node_modules",
     "**/__pycache__",

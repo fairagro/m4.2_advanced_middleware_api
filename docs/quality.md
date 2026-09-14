@@ -46,6 +46,7 @@ products may drop a duplicate `--extension-pkg-allow-list=lxml` CLI flag — tha
 | Tool                    | IDE                                              | Hooks             | CI                              | Notes                                                             |
 | ----------------------- | ------------------------------------------------ | ----------------- | ------------------------------- | ----------------------------------------------------------------- |
 | Ruff format/lint        | yes (`ruff.toml`)                                | yes               | yes                             | Primary IDE Python lint/format                                    |
+| basedpyright / Pylance  | yes (`pyrightconfig.json`)                       | —                 | —                               | Synced analysis fragment; product stubs via `stubPath`            |
 | Prettier / markdownlint | yes (Prettier formatter; markdownlint extension) | yes               | via commit-stage / docs scripts | Shared `.markdownlint*` + Prettier                                |
 | Mypy                    | **hooks + CI only**                              | yes (`mypy.ini`)  | yes                             | No shared IDE mypy settings — do not add a second config          |
 | Pylint                  | **hooks + CI only**                              | yes (`.pylintrc`) | yes                             | Same as Mypy                                                      |
@@ -65,6 +66,7 @@ fail policy only on one surface.
 | `ruff.toml`                                         | Shared Ruff lint/format — **verbatim** sync (no product `extend` / ignore overlay)         |
 | `mypy.ini`                                          | Shared Mypy strictness (path overlays via **env**, not by editing this file)               |
 | `.pylintrc`                                         | Shared Pylint (path overlays via CI / env; `extension-pkg-allow-list=lxml` for I1101)      |
+| `pyrightconfig.json`                                | Shared basedpyright/Pylance (`venv`, `stubPath: stubs`, `scripts/ai` only) — **verbatim**  |
 | `scripts/quality-check.sh`                          | Run **commit-stage** hooks only (check)                                                    |
 | `scripts/quality-fix.sh`                            | Run commit-stage **autofix** hooks only                                                    |
 | `scripts/run-container-structure-test.sh`           | Templated Docker build + `container-structure-test`                                        |
@@ -101,12 +103,13 @@ Product repos historically kept large `[tool.ruff]` / `[tool.mypy]` / `[tool.pyl
 Canonical copies live here as **fragment files** so sync (#13) can overwrite them without replacing product `[project]`
 / uv workspace sections.
 
-| Sync into products | Keep product-local                                                                    |
-| ------------------ | ------------------------------------------------------------------------------------- |
-| `ruff.toml`        | Root `pyproject.toml` `[project]`, `[tool.uv.*]`, deps (no product Ruff overlay)      |
-| `mypy.ini`         | Import-path overlays via **env** (e.g. `MYPYPATH` in CI/`remoteEnv`), not `pyproject` |
-| `.pylintrc`        | Import-path overlays via CI input / env-driven invocation (`pylint_source_roots`)     |
-| `.bandit`          | pytest / coverage tool tables (unless later unified)                                  |
+| Sync into products   | Keep product-local                                                                    |
+| -------------------- | ------------------------------------------------------------------------------------- |
+| `ruff.toml`          | Root `pyproject.toml` `[project]`, `[tool.uv.*]`, deps (no product Ruff overlay)      |
+| `mypy.ini`           | Import-path overlays via **env** (e.g. `MYPYPATH` in CI/`remoteEnv`), not `pyproject` |
+| `.pylintrc`          | Import-path overlays via CI input / env-driven invocation (`pylint_source_roots`)     |
+| `pyrightconfig.json` | Product third-party stubs under `stubs/` (`stubPath`); no middleware `extraPaths`     |
+| `.bandit`            | pytest / coverage tool tables (unless later unified)                                  |
 
 Shared hooks and reusable CI invoke `mypy --config-file mypy.ini` and `pylint --rcfile .pylintrc`. Those flags mean
 product `[tool.mypy]` / `[tool.pylint.*]` in `pyproject.toml` are **ignored**. Do **not** put path overlays into the
@@ -149,10 +152,13 @@ and sets Prettier as default formatter for Markdown/JSON/YAML.
 [vscode-python#23714](https://github.com/microsoft/vscode-python/issues/23714)). Configure test roots only in that
 repo’s `pyproject.toml` (Devinfra: `scripts/ai/tests`; products: their `middleware/…/tests`).
 
-**Analysis path overlays:** do **not** patch `python.analysis.extraPaths` (or Cursor Pyright equivalents) into the
-synced settings after sync. Prefer a product-local `pyrightconfig.json` until a shared fragment exists
-([#64](https://github.com/fairagro/m4.2_middleware_devinfra/issues/64)). Helm/SOPS file associations that cannot live
-outside `settings.json` need a Devinfra generalization or an explicit non-synced product surface — not re-patching.
+**Analysis (basedpyright / Pylance):** use synced [`pyrightconfig.json`](../pyrightconfig.json) **verbatim** — root
+`.venv`, `stubPath: stubs` for product-local third-party stubs (keep silence out of synced `mypy.ini`), and `extraPaths`
+only for `scripts/ai/src`. Do **not** add product `middleware/` (or other package) paths to that file — editable `uv`
+installs resolve them. Do **not** patch `python.analysis.extraPaths` / Cursor Pyright equivalents into synced
+`.vscode/settings.json` after sync for product overlays ([`docs/sync.md`](sync.md)). Helm/SOPS file associations that
+cannot live outside `settings.json` need a Devinfra generalization or an explicit non-synced product surface — not
+re-patching.
 
 Mypy, Pylint, and Bandit stay **hooks + CI only** in the shared baseline (see
 [Environment parity](#environment-parity-ide-hooks-ci)) — do not add product-local IDE settings that invent a second
