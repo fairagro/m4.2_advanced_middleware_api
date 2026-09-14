@@ -43,9 +43,11 @@ and Python venv / package segments.
 On sync, Prettier + markdownlint-cli2 (and their extensions) **replace or supplement** prior product markdown
 format/lint setups. Prefer `signageos.signageos-vscode-sops` (Open VSX / Cursor) over `shipitsmarter.sops-edit`.
 
-**Git LFS** is not part of the shared image. Products that need it (e.g. sql-to-arc) install `git-lfs` in a
-**product-owned** path that sync of the shared Dockerfile does not overwrite (e.g. product postCreate snippet or a
-non-synced local fragment).
+**Git LFS** is not part of the shared image or shared hook installer. Products that need it (e.g. sql-to-arc) own
+install and hook overlays entirely in the product repo (independent of Devinfra). Shared `setup-git-hooks.sh` only
+installs the quality `pre-push` and does not remove or manage LFS hooks. Shared postCreate does **not** call product
+scripts such as `install-dev-hooks.sh` / `setup-git-lfs.sh`, and you MUST NOT edit synced JSON `postCreate` for LFS —
+re-apply LFS product-side after clone/rebuild when needed.
 
 ## Tool versions
 
@@ -178,7 +180,7 @@ Runs `scripts/devcontainer-post-create.sh` once per create:
 - `uv sync --dev --all-packages` when `pyproject.toml` exists (dev dependency group + all uv workspace members; same
   flags as reusable code-quality CI). Stale `.venv` with a broken interpreter is removed first when detected.
 - `pre-commit install --hook-type pre-commit`
-- `./scripts/setup-git-hooks.sh` (project pre-push quality hook; no Git LFS)
+- `./scripts/setup-git-hooks.sh` (project pre-push quality hook only; does not manage Git LFS or call product scripts)
 - import `public_gpg_keys/*.asc` when present (skip if absent)
 - optionally decrypt repo-root `.env.integration.enc` → `.env` when present (skip if `.env` already non-empty,
   ciphertext absent, or `sops`/keys unavailable; never fails create; does **not** patch bashrc to `source` `.env`)

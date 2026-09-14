@@ -115,11 +115,12 @@ Stop at the first matching step.
    documented Dev Container path is actually broken.
 2. **This PR?** If it is drive-by on unchanged code, another module, or speculative hardening the change does not need →
    `dismiss` or `follow-up` (only if Medium+). **Synced path (product consumers) — before steps 3–5:** If the finding’s
-   primary path is on [`docs/synced-paths.yaml`](synced-paths.yaml) (or a matching glob) **and** the checkout is a product
-   consumer (not Devinfra), **sync source of truth overrides** cheap/`fix` in this PR. Do **not** patch the synced tree.
-   Use `follow-up` to Devinfra when the finding is correct for shared content and severity is Medium+, or Risk, or
-   seen-in-the-wild; otherwise `dismiss` (“synced path — edit upstream in Devinfra / wait for sync”); or `fix` only a
-   **documented product-local overlay** from that allowlist. See [Synced paths](#synced-paths-sync-source-of-truth).
+   primary path is on [`docs/synced-paths.yaml`](synced-paths.yaml) (or a matching glob) **and** the checkout is a
+   product consumer (not Devinfra), **sync source of truth overrides** cheap/`fix` in this PR. Do **not** patch the
+   synced tree. Use `follow-up` to Devinfra when the finding is correct for shared content and severity is Medium+, or
+   Risk, or seen-in-the-wild; otherwise `dismiss` (“synced path — edit upstream in Devinfra / wait for sync”); or `fix`
+   only a **documented product-local overlay** from that allowlist. See
+   [Synced paths](#synced-paths-sync-source-of-truth).
 3. **Cheapest correct fix?** Prefer a narrower type, a cited invariant, or an existing helper over the finder’s patch.
    Widening a type is not a fix (see [Types](#types)).
 4. **Risk.** Severity Blocker/High **and** practicality not Low → `fix`. Nit-budget does not apply. If the fix itself is

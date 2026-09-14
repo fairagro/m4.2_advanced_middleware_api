@@ -95,9 +95,9 @@ Examples already in the shared skeleton:
 - CST bake target / image tag come from env (`CST_BAKE_*`), not from a product-hardcoded hook entry.
 - pytest uses product `pyproject.toml` discovery; the hook stays `uv run pytest`.
 
-Path overlays for Mypy/Pylint belong **outside** the synced YAML (shell / Dev Container `remoteEnv` / reusable CI inputs
-such as `mypy_path` and `pylint_source_roots` in [`docs/ci.md`](ci.md)). Prefer generalizing into Devinfra when every
-product needs the same roots.
+Path overlays for Mypy/Pylint belong **outside** the synced YAML (optional `.devcontainer/product.env`, process env, and
+reusable CI inputs such as `mypy_path` and `pylint_source_roots` in [`docs/ci.md`](ci.md) — not synced JSON `remoteEnv`
+for `MYPYPATH`). Prefer generalizing into Devinfra when every product needs the same roots.
 
 ## Shared Python quality fragments (B2)
 
@@ -105,14 +105,14 @@ Product repos historically kept large `[tool.ruff]` / `[tool.mypy]` / `[tool.pyl
 Canonical copies live here as **fragment files** so sync (#13) can overwrite them without replacing product `[project]`
 / uv workspace sections.
 
-| Sync into products                          | Keep product-local                                                                    |
-| ------------------------------------------- | ------------------------------------------------------------------------------------- |
-| `ruff.toml`                                 | Root `pyproject.toml` `[project]`, `[tool.uv.*]`, deps (no product Ruff overlay)      |
-| `mypy.ini`                                  | Import-path overlays via **env** (e.g. `MYPYPATH` in CI/`remoteEnv`), not `pyproject` |
-| `.pylintrc`                                 | Import-path overlays via CI input / env-driven invocation (`pylint_source_roots`)     |
-| `pyrightconfig.json`                        | Product third-party stubs under `stubs/` (`stubPath`); no middleware `extraPaths`     |
-| `stubs/arctrl/**`, `stubs/fable_library/**` | Put `stubs` on `MYPYPATH`; no `[mypy-arctrl*]` in synced `mypy.ini`                   |
-| `.bandit`                                   | pytest / coverage tool tables (unless later unified)                                  |
+| Sync into products                          | Keep product-local                                                                      |
+| ------------------------------------------- | --------------------------------------------------------------------------------------- |
+| `ruff.toml`                                 | Root `pyproject.toml` `[project]`, `[tool.uv.*]`, deps (no product Ruff overlay)        |
+| `mypy.ini`                                  | Import-path overlays via **env** (e.g. `MYPYPATH` in CI/`product.env`), not `pyproject` |
+| `.pylintrc`                                 | Import-path overlays via CI input / env-driven invocation (`pylint_source_roots`)       |
+| `pyrightconfig.json`                        | Product third-party stubs under `stubs/` (`stubPath`); no middleware `extraPaths`       |
+| `stubs/arctrl/**`, `stubs/fable_library/**` | Put `stubs` on `MYPYPATH`; no `[mypy-arctrl*]` in synced `mypy.ini`                     |
+| `.bandit`                                   | pytest / coverage tool tables (unless later unified)                                    |
 
 Shared hooks and reusable CI invoke `mypy --config-file mypy.ini` and `pylint --rcfile .pylintrc`. Those flags mean
 product `[tool.mypy]` / `[tool.pylint.*]` in `pyproject.toml` are **ignored**. Do **not** put path overlays into the
@@ -190,16 +190,17 @@ Typical place: Dev Container **postCreate** (`scripts/devcontainer-post-create.s
 ./scripts/setup-git-hooks.sh
 ```
 
-Copies `scripts/git-hooks/pre-push` into `.git/hooks/`. Does **not** require or install Git LFS. Invoked from Dev
-Container postCreate, or once after clone.
+Copies `scripts/git-hooks/pre-push` into `.git/hooks/`. Does **not** require, install, or manage Git LFS (does not
+delete other hooks). Invoked from Dev Container postCreate, or once after clone. Shared postCreate does **not** call
+product scripts such as `install-dev-hooks.sh`.
 
 On `git push`, `pre-push` runs the shared pre-commit **pre-push** stage (pytest +
 `scripts/run-container-structure-test.sh` from the #7 skeleton). Product Dockerfiles / CST YAML stay in consumers. Needs
 Docker/tests when those hooks are active.
 
-**Git LFS:** not part of the shared Devinfra image or hooks. Products that need LFS (e.g. sql-to-arc) install `git-lfs`
-in a product-owned path that sync of the shared Dockerfile does not overwrite (product postCreate or a non-synced local
-fragment) — see [`docs/devcontainer.md`](devcontainer.md).
+**Git LFS:** not part of the shared Devinfra image or hook installer. Products that need LFS own install and overlays
+entirely in the product repo; re-apply product-side after clone/rebuild when needed — see
+[`docs/devcontainer.md`](devcontainer.md). Do **not** edit synced Dev Container JSON `postCreate` for LFS.
 
 Manual without the git hook:
 
