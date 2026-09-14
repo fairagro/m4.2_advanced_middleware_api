@@ -1,8 +1,9 @@
 {
   // Shared Cursor / VS Code workspace settings for m4.2 Devinfra (and a sync template for products).
   // Interpreter + tool binaries must match `uv sync` / pre-commit / CI (root `.venv`, root `pyproject.toml`).
-  // Product repos add middleware package `extraPaths` and Helm/SOPS associations locally — do not invent
-  // product paths here. See docs/quality.md and scripts/ai/README.md.
+  // Do not invent product paths here after sync. Analysis overlays: product-local pyrightconfig.json
+  // (see docs/quality.md, docs/sync.md). Test roots: each repo pyproject.toml testpaths — keep
+  // python.testing.pytestArgs empty so the extension does not override discovery.
 
   "python.defaultInterpreterPath": "${workspaceFolder}/.venv/bin/python",
   "python-envs.defaultEnvManager": "ms-python.python:venv",
@@ -23,7 +24,7 @@
   "python.testing.autoTestDiscoverOnSaveEnabled": true,
   "python.testing.cwd": "${workspaceFolder}",
   "python.testing.pytestPath": "${workspaceFolder}/.venv/bin/pytest",
-  "python.testing.pytestArgs": ["scripts/ai/tests"],
+  "python.testing.pytestArgs": [],
 
   "[python]": {
     "editor.defaultFormatter": "charliermarsh.ruff",

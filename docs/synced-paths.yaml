@@ -1,6 +1,7 @@
 # Sole source of truth for paths synced from Devinfra into product repos.
-# Consumers must not hand-edit these after sync. No product-local synced-paths overlay.
-# Docs: docs/sync.md | Policy: docs/ai_review_policy.md#synced-paths-sync-source-of-truth
+# Consumers must not hand-edit allowlisted files after sync (corrections → Devinfra → sync).
+# No product-local synced-paths overlay. Human inventory + overlay patterns: docs/sync.md
+# Policy / review-fixer: docs/ai_review_policy.md#synced-paths-sync-source-of-truth
 
 allow:
   - docs/ai_review_policy.md
