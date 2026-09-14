@@ -16,7 +16,8 @@ repos:
       - id: end-of-file-fixer
         exclude: ^\.agents/skills/(gh|docker|hadolint|uv|scan-secrets)/
       - id: check-yaml
-        exclude: ^\.agents/skills/(gh|docker|hadolint|uv|scan-secrets)/
+        # Vendor skills + Go-templated Helm (API helmchart/*, Harvester helm/*). Harmless if absent (#63).
+        exclude: ^(\.agents/skills/(gh|docker|hadolint|uv|scan-secrets)/|(helm|helmchart)(/[^/]+)*/templates/.*\.ya?ml$)
       - id: check-added-large-files
         exclude: ^\.agents/skills/(gh|docker|hadolint|uv|scan-secrets)/
       - id: check-merge-conflict

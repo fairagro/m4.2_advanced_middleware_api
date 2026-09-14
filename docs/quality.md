@@ -38,8 +38,9 @@ differ (IDE diagnostics vs CLI). **Bandit exception:** the fail bar is the same 
 CI may **log** LOW findings while hooks suppress them with `-ll` — see the Bandit note below.
 
 **Minimal CLI / IDE args:** pass only the config-file path (when the tool does not auto-discover it), target paths, and
-documented product path overlays (`MYPYPATH`, pylint `--source-roots`). Do not restate line length, rule selects, ignore
-lists, or similar policy on the command line when the shared config file already defines them.
+documented path overlays via **environment / CI inputs** (`MYPYPATH`, reusable-workflow `pylint_source_roots`). Do not
+restate line length, rule selects, ignore lists, or similar policy on the command line when the shared config file
+already defines them. Do not patch synced `.pre-commit-config.yaml` to carry those overlays.
 
 | Tool                    | IDE                                              | Hooks             | CI                              | Notes                                                               |
 | ----------------------- | ------------------------------------------------ | ----------------- | ------------------------------- | ------------------------------------------------------------------- |
@@ -59,10 +60,10 @@ fail policy only on one surface.
 
 | Path                                                | Role                                                                                         |
 | --------------------------------------------------- | -------------------------------------------------------------------------------------------- |
-| `.pre-commit-config.yaml`                           | Commit-stage + pre-push hook skeleton                                                        |
+| `.pre-commit-config.yaml`                           | Commit-stage + pre-push hooks — adopt **verbatim** after sync (see below)                    |
 | `ruff.toml`                                         | Shared Ruff lint/format (product sync; not Devinfra `[project]`)                             |
-| `mypy.ini`                                          | Shared Mypy strictness (path overlays via `MYPYPATH` / hook env — see below)                 |
-| `.pylintrc`                                         | Shared Pylint (path overlays via `--source-roots` on hook/CI — see below)                    |
+| `mypy.ini`                                          | Shared Mypy strictness (path overlays via **env**, not by editing this file)                 |
+| `.pylintrc`                                         | Shared Pylint (path overlays via CI / env invocation — see below)                            |
 | `scripts/quality-check.sh`                          | Run **commit-stage** hooks only (check)                                                      |
 | `scripts/quality-fix.sh`                            | Run commit-stage **autofix** hooks only                                                      |
 | `scripts/run-container-structure-test.sh`           | Templated Docker build + `container-structure-test`                                          |
@@ -71,6 +72,27 @@ fail policy only on one surface.
 | `.bandit`                                           | Bandit config (`bandit -c .bandit`)                                                          |
 | `.markdownlint.json` (+ ignore / cli2)              | Markdownlint (also used by the markdownlint hook)                                            |
 | [`.vscode/settings.json`](../.vscode/settings.json) | Shared IDE baseline (interpreter, Ruff, pytest, Prettier); products extend for `middleware/` |
+
+## Shared pre-commit config (verbatim sync)
+
+[`.pre-commit-config.yaml`](../.pre-commit-config.yaml) is on the sync allowlist
+([`docs/synced-paths.yaml`](synced-paths.yaml)). Products MUST adopt it **verbatim**.
+
+Do **not** hand-edit that file in a product checkout after sync (no product-only `entry` / `args` / `exclude` / `env`
+patches on the synced blob). Fleet rule ([#63](https://github.com/fairagro/m4.2_middleware_devinfra/issues/63),
+[#57](https://github.com/fairagro/m4.2_middleware_devinfra/issues/57)): either Devinfra generalizes the need, or the
+exception is a documented product-local surface that sync does **not** overwrite — never “re-patch after every sync”.
+
+Examples already in the shared skeleton:
+
+- `check-yaml` excludes Go-templated Helm under `helm/**/templates/` and `helmchart/**/templates/` (and vendor skill
+  trees) — safe when those paths are absent.
+- CST bake target / image tag come from env (`CST_BAKE_*`), not from a product-hardcoded hook entry.
+- pytest uses product `pyproject.toml` discovery; the hook stays `uv run pytest`.
+
+Path overlays for Mypy/Pylint belong **outside** the synced YAML (shell / Dev Container `remoteEnv` / reusable CI inputs
+such as `mypy_path` and `pylint_source_roots` in [`docs/ci.md`](ci.md)). Prefer generalizing into Devinfra when every
+product needs the same roots.
 
 ## Shared Python quality fragments (B2)
 
@@ -81,14 +103,15 @@ Canonical copies live here as **fragment files** so sync (#13) can overwrite the
 | Sync into products | Keep product-local                                                                    |
 | ------------------ | ------------------------------------------------------------------------------------- |
 | `ruff.toml`        | Root `pyproject.toml` `[project]`, `[tool.uv.*]`, deps                                |
-| `mypy.ini`         | Import-path overlays via product hook/CI **env** (e.g. `MYPYPATH`), not `pyproject`   |
-| `.pylintrc`        | Import-path overlays via product hook/CI **args** (e.g. `--source-roots=…`), not edit |
+| `mypy.ini`         | Import-path overlays via **env** (e.g. `MYPYPATH` in CI/`remoteEnv`), not `pyproject` |
+| `.pylintrc`        | Import-path overlays via CI input / env-driven invocation (`pylint_source_roots`)     |
 | `.bandit`          | pytest / coverage tool tables (unless later unified)                                  |
 
 Shared hooks and reusable CI invoke `mypy --config-file mypy.ini` and `pylint --rcfile .pylintrc`. Those flags mean
 product `[tool.mypy]` / `[tool.pylint.*]` in `pyproject.toml` are **ignored**. Do **not** put path overlays into the
-synced fragments either — sync (#13) overwrites them. Override on the **product** pre-commit entry/args or CI env
-instead (examples in `mypy.ini` / `.pylintrc` headers).
+synced fragments or into synced `.pre-commit-config.yaml` — sync (#13) overwrites both. Use product CI inputs / process
+env (examples in `mypy.ini` / `.pylintrc` headers and [`docs/ci.md`](ci.md)). If a product needs a hook change that
+cannot be expressed that way, open a Devinfra issue to generalize — do not leave a permanent post-sync YAML patch.
 
 **Not** in the product quality sync set: `scripts/ai/pyproject.toml` (Devinfra `m42-ai-gh` package manifest only).
 
