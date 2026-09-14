@@ -143,7 +143,8 @@ Runs `scripts/devcontainer-post-create.sh` once per create:
 - fix `/commandhistory` and `~/.config/gh` permissions
 - write `.python-version` from `versions.env` via `scripts/load-versions-env.sh`
 - load stored tokens into the postCreate environment (no hang without TTY; no `~/.bashrc` patch)
-- `uv sync` when `pyproject.toml` exists
+- `uv sync --dev --all-packages` when `pyproject.toml` exists (dev dependency group + all uv workspace members; same
+  flags as reusable code-quality CI). Stale `.venv` with a broken interpreter is removed first when detected.
 - `pre-commit install --hook-type pre-commit`
 - `./scripts/setup-git-hooks.sh` (project pre-push quality hook; no Git LFS)
 - import `public_gpg_keys/*.asc` when present (skip if absent)
