@@ -8,6 +8,13 @@
     ".agents/skills/gh/**",
     ".agents/skills/docker/**",
     ".agents/skills/hadolint/**",
-    ".agents/skills/uv/**"
+    ".agents/skills/uv/**",
+    // OpenSpec-managed trees (generated ## structure / example URLs — not prose docs).
+    "openspec/**",
+    ".cursor/commands/opsx-*.md",
+    ".cursor/skills/openspec-*/**",
+    ".cursor/rules/openspec-*.mdc",
+    ".github/prompts/opsx-*",
+    ".github/skills/openspec-*/**"
   ]
 }
