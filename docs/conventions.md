@@ -32,6 +32,11 @@ supported host `~/.config/…` token store — personal-token helpers (`dev-toke
 `scripts/bin/gh`, `scripts/bin/git`) are **Dev Container only**. Other scripts (quality, CST, `load-versions-env`,
 `m42-ai`) may run on a host checkout; see [Script environments](quality.md#script-environments).
 
+**Store is the sole source:** sourcing `dev-tokens.sh` (including via `scripts/bin/gh`) always applies
+`/commandhistory/tokens.env` for `GH_TOKEN` / `GITGUARDIAN_API_KEY`. A non-empty process env value does **not** override
+the store (stale agent `GH_TOKEN` cannot shadow a freshly written store). Missing or empty store entries unset the
+variable. Set or refresh tokens with `source ./scripts/set-dev-tokens.sh`.
+
 ## Docker volumes
 
 Named volumes follow:
