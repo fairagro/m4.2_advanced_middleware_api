@@ -1,4 +1,4 @@
-# syntax=docker/dockerfile:1.4
+# syntax=docker/dockerfile:1.27
 # Product-local last stage for the API (NOT synced). Bake wires context
 # `export_bins` → shared base `export-binaries` (see docker-bake.hcl).
 #
