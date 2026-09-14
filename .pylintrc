@@ -3,7 +3,8 @@
 #
 # Product path overlay: do not edit this synced file (sync overwrites it). Shared hooks/CI
 # pass --rcfile .pylintrc, so [tool.pylint.*] in product pyproject.toml is ignored.
-# Add product-specific import roots on the product hook/CI invocation, e.g.:
+# Prefer reusable CI input `pylint_source_roots` (docs/ci.md). Do not patch synced
+# .pre-commit-config.yaml to add --source-roots. Example local/CI invocation:
 #   uv run pylint --rcfile .pylintrc --source-roots=middleware/api/src,middleware/shared/src middleware/
 
 [FORMAT]
