@@ -18,6 +18,56 @@ Tracks [#13](https://github.com/fairagro/m4.2_middleware_devinfra/issues/13).
 | [`scripts/sync-products.py`](../scripts/sync-products.py)                       | Read YAML, copy, open **new** sync PRs (**Devinfra-only** — not synced) |
 | [`.github/workflows/sync-products.yml`](../.github/workflows/sync-products.yml) | When to run (`main` push / dispatch) — **Devinfra-only**, not synced    |
 
+## Never hand-edit synced files (product checkouts)
+
+In a **product** repo, every path under `allow` in [`synced-paths.yaml`](synced-paths.yaml) is a **verbatim** sync blob
+after merge. Do **not**:
+
+- patch that file in an adopt/fix PR “just this once”
+- re-apply product overlays after every sync
+- invent a second local copy that drifts from Devinfra
+
+**Corrections** → open a Devinfra issue → land the change here → sync
+([#13](https://github.com/fairagro/m4.2_middleware_devinfra/issues/13)). **Product-only needs** → a documented overlay /
+env / product-owned path that sync does **not** overwrite (see
+[Overlays and product-owned surfaces](#overlays-and-product-owned-surfaces) below).
+
+Review-fixer follows the same rule: in products, do not `fix` synced paths — `follow-up` to Devinfra or `dismiss`
+(synced — edit upstream). See [`docs/review-fixer.md`](review-fixer.md) and
+[`ai_review_policy.md#synced-paths-sync-source-of-truth`](ai_review_policy.md#synced-paths-sync-source-of-truth).
+
+## Allowlist inventory (human-readable)
+
+Machine SoT remains [`synced-paths.yaml`](synced-paths.yaml). This table is a **guide** only — when it disagrees with
+the YAML, the YAML wins. Resolve the live set with `uv run python scripts/sync-products.py --list-files`.
+
+| Category                          | Examples on `allow` (non-exhaustive)                                                                                          |
+| --------------------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
+| Sync / AI policy docs             | `docs/sync.md`, `docs/synced-paths.yaml`, `docs/ai_review_policy.md`, `docs/quality.md`, `docs/devcontainer.md`, …            |
+| Agent skills / commands / prompts | `.agents/skills/{issue-fixer,review-fixer,create-issue,arctrl,gh,docker,hadolint,uv}/**`, `.cursor/commands/*`, prompts       |
+| `m42-ai` package                  | `scripts/ai/**`, `scripts/bin/{gh,git}`, `scripts/{dev-tokens,set-dev-tokens}.sh`                                             |
+| Quality scripts / hooks           | `scripts/quality-{check,fix}.sh`, `scripts/setup-git-hooks.sh`, `scripts/git-hooks/**`, `scripts/devcontainer-post-create.sh` |
+| Python quality fragments          | `ruff.toml`, `mypy.ini`, `.pylintrc`, `.bandit`, `.pre-commit-config.yaml`                                                    |
+| Markdown / IDE baseline           | `.markdownlint*`, `.prettier*`, `.vscode/settings.json`                                                                       |
+| Dev Container / image pins        | `.devcontainer/Dockerfile`, `versions.env`, `.python-version`, `docker/Dockerfile.product-app.base`                           |
+| Renovate                          | `renovate.json`, `.github/workflows/renovate.yml`                                                                             |
+| Global prose SoT                  | `docs/surface-quality-bar.global.md`, `openspec/principles.global.md`                                                         |
+
+**Hard excludes / never overwrite:** see `exclude` and `overlays` in the YAML (e.g. product `devcontainer.json`,
+`docs/surface-quality-bar.md`, `openspec/principles.md`, `AGENTS.md`, reusable workflows, `middleware/**`).
+
+## Overlays and product-owned surfaces
+
+| Pattern                             | When                                                                                     | Examples                                                                                                                                                                                                                                                                                                            |
+| ----------------------------------- | ---------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **`*.global` + product overlay**    | Tool or docs support a synced SoT file plus a product-local file sync must not overwrite | `surface-quality-bar.global.md` + `surface-quality-bar.md`; `principles.global.md` + `principles.md`                                                                                                                                                                                                                |
+| **Env / CI inputs / wrappers**      | Config file has no merge/`extends` — keep the synced blob generic                        | `MYPYPATH`, reusable `pylint_source_roots`, CST bake env, thin product `devcontainer.json` fields (`name`, volumes)                                                                                                                                                                                                 |
+| **Verbatim shared fragment**        | Fleet wants identical policy; product deltas are wrong or go upstream                    | `ruff.toml` (no product `extend` / ignore overlay — see [#60](https://github.com/fairagro/m4.2_middleware_devinfra/issues/60)), `.vscode/settings.json` (empty `pytestArgs`; test roots in each repo’s `pyproject.toml` `testpaths`)                                                                                |
+| **Product-owned until split lands** | Synced blob is not yet generic enough; interim = not an overwrite target                 | `.pre-commit-config.yaml` / `devcontainer.json` ownership stories: [#63](https://github.com/fairagro/m4.2_middleware_devinfra/issues/63), [#65](https://github.com/fairagro/m4.2_middleware_devinfra/issues/65); shared `pyrightconfig.json`: [#64](https://github.com/fairagro/m4.2_middleware_devinfra/issues/64) |
+
+Do **not** invent mypy config-merge here — stubs + `MYPYPATH` remain the product path for third-party silence
+([`docs/quality.md`](quality.md)).
+
 ## Targets
 
 | Key          | Repository                              |
