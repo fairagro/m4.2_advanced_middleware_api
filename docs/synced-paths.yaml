@@ -2,6 +2,8 @@
 # Consumers must not hand-edit allowlisted files after sync (corrections → Devinfra → sync).
 # No product-local synced-paths overlay. Human inventory + overlay patterns: docs/sync.md
 # Policy / review-fixer: docs/ai_review_policy.md#synced-paths-sync-source-of-truth
+# Synced Markdown must not use in-repo relative links to paths outside allow (minus exclude);
+# use absolute Devinfra URLs (blob/main) or plain non-linked names — see docs/sync.md.
 
 allow:
   - docs/ai_review_policy.md
