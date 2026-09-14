@@ -110,7 +110,8 @@
       "matchStrings": ["TRIVY_VERSION=(?<currentValue>v?[^\\s#]+)"],
       "datasourceTemplate": "github-releases",
       "depNameTemplate": "aquasecurity/trivy",
-      "extractVersionTemplate": "^v?(?<version>.*)$"
+      "extractVersionTemplate": "^v?(?<version>.*)$",
+      "autoReplaceStringTemplate": "TRIVY_VERSION=v{{newVersion}}"
     },
     {
       "description": "Renovate CLI pin in versions.env",
@@ -155,7 +156,8 @@
       "matchStrings": ["NODE_VERSION=(?<currentValue>v?[^\\s#]+)"],
       "datasourceTemplate": "node-version",
       "depNameTemplate": "node",
-      "extractVersionTemplate": "^v?(?<version>.*)$"
+      "extractVersionTemplate": "^v?(?<version>.*)$",
+      "autoReplaceStringTemplate": "NODE_VERSION=v{{newVersion}}"
     },
     {
       "description": "kubectl pin in versions.env",
@@ -164,7 +166,8 @@
       "matchStrings": ["KUBECTL_VERSION=(?<currentValue>v?[^\\s#]+)"],
       "datasourceTemplate": "github-releases",
       "depNameTemplate": "kubernetes/kubernetes",
-      "extractVersionTemplate": "^v?(?<version>.*)$"
+      "extractVersionTemplate": "^v?(?<version>.*)$",
+      "autoReplaceStringTemplate": "KUBECTL_VERSION=v{{newVersion}}"
     },
     {
       "description": "Helm pin in versions.env",
@@ -173,7 +176,8 @@
       "matchStrings": ["HELM_VERSION=(?<currentValue>v?[^\\s#]+)"],
       "datasourceTemplate": "github-releases",
       "depNameTemplate": "helm/helm",
-      "extractVersionTemplate": "^v?(?<version>.*)$"
+      "extractVersionTemplate": "^v?(?<version>.*)$",
+      "autoReplaceStringTemplate": "HELM_VERSION=v{{newVersion}}"
     },
     {
       "description": "Minikube pin in versions.env",
@@ -182,7 +186,8 @@
       "matchStrings": ["MINIKUBE_VERSION=(?<currentValue>v?[^\\s#]+)"],
       "datasourceTemplate": "github-releases",
       "depNameTemplate": "kubernetes/minikube",
-      "extractVersionTemplate": "^v?(?<version>.*)$"
+      "extractVersionTemplate": "^v?(?<version>.*)$",
+      "autoReplaceStringTemplate": "MINIKUBE_VERSION=v{{newVersion}}"
     },
     {
       "description": "SOPS pin in versions.env",
@@ -191,7 +196,8 @@
       "matchStrings": ["SOPS_VERSION=(?<currentValue>v?[^\\s#]+)"],
       "datasourceTemplate": "github-releases",
       "depNameTemplate": "getsops/sops",
-      "extractVersionTemplate": "^v?(?<version>.*)$"
+      "extractVersionTemplate": "^v?(?<version>.*)$",
+      "autoReplaceStringTemplate": "SOPS_VERSION=v{{newVersion}}"
     },
     {
       "description": "age pin in versions.env",
@@ -200,7 +206,8 @@
       "matchStrings": ["AGE_VERSION=(?<currentValue>v?[^\\s#]+)"],
       "datasourceTemplate": "github-releases",
       "depNameTemplate": "FiloSottile/age",
-      "extractVersionTemplate": "^v?(?<version>.*)$"
+      "extractVersionTemplate": "^v?(?<version>.*)$",
+      "autoReplaceStringTemplate": "AGE_VERSION=v{{newVersion}}"
     },
     {
       "description": "yq pin in versions.env",
@@ -209,7 +216,8 @@
       "matchStrings": ["YQ_VERSION=(?<currentValue>v?[^\\s#]+)"],
       "datasourceTemplate": "github-releases",
       "depNameTemplate": "mikefarah/yq",
-      "extractVersionTemplate": "^v?(?<version>.*)$"
+      "extractVersionTemplate": "^v?(?<version>.*)$",
+      "autoReplaceStringTemplate": "YQ_VERSION=v{{newVersion}}"
     },
     {
       "description": "xq pin in versions.env",
@@ -218,7 +226,8 @@
       "matchStrings": ["XQ_VERSION=(?<currentValue>v?[^\\s#]+)"],
       "datasourceTemplate": "github-releases",
       "depNameTemplate": "sibprogrammer/xq",
-      "extractVersionTemplate": "^v?(?<version>.*)$"
+      "extractVersionTemplate": "^v?(?<version>.*)$",
+      "autoReplaceStringTemplate": "XQ_VERSION=v{{newVersion}}"
     },
     {
       "description": "yamlfmt pin in versions.env",
@@ -227,7 +236,8 @@
       "matchStrings": ["YAMLFMT_VERSION=(?<currentValue>v?[^\\s#]+)"],
       "datasourceTemplate": "github-releases",
       "depNameTemplate": "google/yamlfmt",
-      "extractVersionTemplate": "^v?(?<version>.*)$"
+      "extractVersionTemplate": "^v?(?<version>.*)$",
+      "autoReplaceStringTemplate": "YAMLFMT_VERSION=v{{newVersion}}"
     },
     {
       "description": "hadolint pin in versions.env",
@@ -236,7 +246,8 @@
       "matchStrings": ["HADOLINT_VERSION=(?<currentValue>v?[^\\s#]+)"],
       "datasourceTemplate": "github-releases",
       "depNameTemplate": "hadolint/hadolint",
-      "extractVersionTemplate": "^v?(?<version>.*)$"
+      "extractVersionTemplate": "^v?(?<version>.*)$",
+      "autoReplaceStringTemplate": "HADOLINT_VERSION=v{{newVersion}}"
     },
     {
       "description": "Starship pin in versions.env",
@@ -245,7 +256,8 @@
       "matchStrings": ["STARSHIP_VERSION=(?<currentValue>v?[^\\s#]+)"],
       "datasourceTemplate": "github-releases",
       "depNameTemplate": "starship/starship",
-      "extractVersionTemplate": "^v?(?<version>.*)$"
+      "extractVersionTemplate": "^v?(?<version>.*)$",
+      "autoReplaceStringTemplate": "STARSHIP_VERSION=v{{newVersion}}"
     },
     {
       "description": "container-structure-test pin in versions.env",
@@ -254,11 +266,39 @@
       "matchStrings": ["CST_VERSION=(?<currentValue>v?[^\\s#]+)"],
       "datasourceTemplate": "github-releases",
       "depNameTemplate": "GoogleContainerTools/container-structure-test",
-      "extractVersionTemplate": "^v?(?<version>.*)$"
+      "extractVersionTemplate": "^v?(?<version>.*)$",
+      "autoReplaceStringTemplate": "CST_VERSION=v{{newVersion}}"
     }
   ],
 
   "packageRules": [
+    {
+      "description": "Product repos: do not bump Devinfra-synced SoT files (land in Devinfra, then sync #13)",
+      "matchRepositories": [
+        "fairagro/m4.2_advanced_middleware_api",
+        "fairagro/m4.2_sql_to_arc",
+        "fairagro/m4.2_middleware_harvester"
+      ],
+      "matchFileNames": [
+        "versions.env",
+        ".python-version",
+        "docker/Dockerfile.product-app.base",
+        ".devcontainer/Dockerfile",
+        "renovate.json",
+        ".github/workflows/renovate.yml"
+      ],
+      "enabled": false
+    },
+    {
+      "description": "Product repos: BuildKit frontend pin is documented/bumped in Devinfra examples",
+      "matchRepositories": [
+        "fairagro/m4.2_advanced_middleware_api",
+        "fairagro/m4.2_sql_to_arc",
+        "fairagro/m4.2_middleware_harvester"
+      ],
+      "matchPackageNames": ["docker/dockerfile"],
+      "enabled": false
+    },
     {
       "description": "Python 3.12 global lock (versions.env + .python-version)",
       "matchManagers": ["dockerfile", "devcontainer", "github-actions", "custom.regex"],

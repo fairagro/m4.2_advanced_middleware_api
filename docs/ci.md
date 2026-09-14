@@ -198,13 +198,13 @@ custom `tag_prefix` breaks Helm `appVersion` lookup unless you also change Helm 
 
 ### `reusable-code-quality.yml`
 
-| Input                 | Default      | Purpose                                                    |
-| --------------------- | ------------ | ---------------------------------------------------------- |
-| `python_package_root` | `middleware` | Path for ruff / pylint / mypy / bandit / pytest            |
-| `mypy_path`           | `""`         | Optional colon-separated `MYPYPATH` (stubs + src roots); empty = default |
-| `pylint_source_roots` | `""`         | Optional comma-separated pylint `--source-roots`           |
-| `components`          | `["api"]`    | Accepted for caller compatibility; unused by this workflow |
-| `skip`                | `false`      | Successful no-op (keeps required check names green)        |
+| Input                 | Default      | Purpose                                                                         |
+| --------------------- | ------------ | ------------------------------------------------------------------------------- |
+| `python_package_root` | `middleware` | Path for ruff / pylint / mypy / bandit / pytest                                 |
+| `mypy_path`           | `""`         | Optional colon-separated `MYPYPATH` (stubs + src roots); empty = default        |
+| `pylint_source_roots` | `""`         | Optional comma-separated pylint `--source-roots`                                |
+| `components`          | `["api"]`    | Accepted for caller compatibility; unused by this workflow                      |
+| `skip`                | `false`      | Successful no-op (keeps required check names green)                             |
 
 Python version comes from the caller’s `versions.env` (`PYTHON_VERSION`) plus matching `.python-version` — there is no
 version override input.

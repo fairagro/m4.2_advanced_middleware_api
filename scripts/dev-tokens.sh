@@ -1,7 +1,7 @@
 # Personal GH_TOKEN / GITGUARDIAN_API_KEY. Source this file.
 # Environment: Linux Dev Container only (requires /commandhistory).
 # Empty prompt = skip (remembered). To set later: source ./scripts/set-dev-tokens.sh
-# Store: /commandhistory/tokens.env
+# Store: /commandhistory/tokens.env (sole source — process env does not override it).
 
 if [ "${BASH_SOURCE[0]-}" = "${0-}" ]; then
   echo "dev-tokens: source this file (do not execute it directly)" >&2
@@ -10,6 +10,11 @@ if [ "${BASH_SOURCE[0]-}" = "${0-}" ]; then
 fi
 
 _dev_tokens_file() {
+  # Test/smoke only: absolute path override (do not use for normal interactive work).
+  if [ -n "${DEV_TOKENS_FILE:-}" ]; then
+    printf '%s\n' "${DEV_TOKENS_FILE}"
+    return 0
+  fi
   if [ -d /commandhistory ]; then
     echo /commandhistory/tokens.env
     return 0
@@ -48,8 +53,7 @@ _dev_tokens_get_stored() {
 _DEV_TOKENS_FILE="$(_dev_tokens_file)" || return 1
 
 # If the environment already holds a store-encoded value (e.g. someone ran
-# `source /commandhistory/tokens.env`), decode it in place. Otherwise a later
-# "already set → keep" skip would leave GH_TOKEN=b64:… and break gh auth.
+# `source /commandhistory/tokens.env`), decode it in place before applying the store.
 for _dev_tokens_var in GH_TOKEN GITGUARDIAN_API_KEY; do
   _dev_tokens_cur="${!_dev_tokens_var-}"
   if [ -n "${_dev_tokens_cur}" ] && [ "${_dev_tokens_cur#b64:}" != "${_dev_tokens_cur}" ]; then
@@ -62,19 +66,24 @@ for _dev_tokens_var in GH_TOKEN GITGUARDIAN_API_KEY; do
 done
 unset _dev_tokens_var _dev_tokens_cur _dev_tokens_val
 
-# Apply stored tokens without clobbering a caller-set *decoded* value, and without
-# exporting empty "skip" markers (GH_TOKEN='') over a live environment.
+# Store is the sole source for known keys. Process env never overrides the store:
+# missing key → unset; empty skip marker → unset; non-empty → export store value.
 if [ -f "${_DEV_TOKENS_FILE}" ]; then
   for _dev_tokens_var in GH_TOKEN GITGUARDIAN_API_KEY; do
-    if [ -n "${!_dev_tokens_var-}" ]; then
-      continue
-    fi
-    _dev_tokens_val="$(_dev_tokens_get_stored "${_dev_tokens_var}")"
-    if [ -n "${_dev_tokens_val}" ]; then
-      export "${_dev_tokens_var}=${_dev_tokens_val}"
+    if grep -q "^${_dev_tokens_var}=" "${_DEV_TOKENS_FILE}" 2>/dev/null; then
+      _dev_tokens_val="$(_dev_tokens_get_stored "${_dev_tokens_var}")"
+      if [ -n "${_dev_tokens_val}" ]; then
+        export "${_dev_tokens_var}=${_dev_tokens_val}"
+      else
+        unset "${_dev_tokens_var}"
+      fi
+    else
+      unset "${_dev_tokens_var}"
     fi
   done
   unset _dev_tokens_var _dev_tokens_val
+else
+  unset GH_TOKEN GITGUARDIAN_API_KEY
 fi
 
 _dev_tokens_write() {
@@ -108,10 +117,8 @@ _dev_tokens_write() {
 }
 
 _dev_tokens_ask() {
-  local var=$1 hint=$2 val cur
-  cur="${!var-}"
+  local var=$1 hint=$2 val
   if [ -z "${DEV_TOKENS_FORCE:-}" ]; then
-    [ -n "${cur}" ] && return 0
     grep -q "^${var}=" "${_DEV_TOKENS_FILE}" 2>/dev/null && return 0
   fi
   { printf '' >/dev/tty; } 2>/dev/null || return 0
@@ -123,6 +130,8 @@ _dev_tokens_ask() {
   fi
   if [ -n "${val}" ]; then
     export "${var}=${val}"
+  else
+    unset "${var}"
   fi
   return 0
 }

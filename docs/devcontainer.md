@@ -123,9 +123,10 @@ Ensure on the **host**:
 
 Prefer the personal-token helpers (see root README **Personal tokens**):
 
-- Stored `GH_TOKEN` in `/commandhistory/tokens.env` (Linux Dev Container only)
+- Stored `GH_TOKEN` in `/commandhistory/tokens.env` (Linux Dev Container only) — **sole source** (process env does not
+  override the store)
 - Empty prompt skips until `source ./scripts/set-dev-tokens.sh`
-- `scripts/bin/gh` on `PATH` (after rebuild) loads tokens then runs real `gh`
+- `scripts/bin/gh` on `PATH` (after rebuild) applies the store then runs real `gh`
 
 Alternatively:
 

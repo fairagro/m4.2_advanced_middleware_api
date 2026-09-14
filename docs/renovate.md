@@ -99,5 +99,21 @@ Keep alerts enabled.
 3. Set `DEVINFRA_BOT_TOKEN` per product repo for Renovate; remove Dependabot version-update config; converge API onto
    the shared config (drop divergent local rules unless documented as a thin overlay / `extends`).
 
+### What product Renovate must not bump
+
+Shared `renovate.json` disables updates in the three product repos for **Devinfra-owned** pins/files (SoT stays here;
+products get them via sync):
+
+| Disabled in products                              | Why                                                           |
+| ------------------------------------------------- | ------------------------------------------------------------- |
+| `versions.env`, `.python-version`                 | Toolchain SoT — bump in Devinfra only                         |
+| `docker/Dockerfile.product-app.base`              | Synced base image                                             |
+| `.devcontainer/Dockerfile`                        | Synced Dev Container image                                    |
+| `renovate.json`, `.github/workflows/renovate.yml` | Shared Renovate SoT                                           |
+| Package `docker/dockerfile` (`# syntax=…`)        | Frontend pin tracked in Devinfra; avoid duplicate product PRs |
+
+Product Renovate **still** updates product-local deps (e.g. `middleware/` pep621, product last-stage `FROM` images,
+product-only workflows). Close any open product PRs that only touch the disabled paths after this config is synced.
+
 Reusable `reusable-renovate.yml` is **out of scope** for now — the thin workflow is expected to stay identical across
 repos via sync.
