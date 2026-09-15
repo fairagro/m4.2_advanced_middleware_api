@@ -1,5 +1,36 @@
 # On helm charts
 
+## Ingress and Gateway API (dual-path)
+
+The chart can expose the API in two independently flagged ways:
+
+| Path | Values | Role today |
+| ---- | ------ | ---------- |
+| Classic Ingress | `api.ingress.enabled` | Local minikube smoke; optional nginx client mTLS (`api.ingress.mtlsEnabled`) and Ingress TLS Secrets from `api.tls.*` |
+| Gateway API `HTTPRoute` | `api.httpRoute.enabled` | Attach to a platform-owned parent (typically `ListenerSet` `fairagro-https` in `kube-gateway-api`). Server TLS for `*.fairagro.net` stays on the platform ListenerSet / wildcard cert — the chart does **not** create a `Certificate` for that hostname |
+
+Defaults leave both off (`enabled: false`). Deploy overlays supply cluster-specific `parentRefs` and `hostnames`; chart defaults stay cluster-agnostic (no elise/fizz/draven/gangplank hardcoding).
+
+**ListenerSet allowlist:** the Helm release namespace must be allowed by the target ListenerSet (current platform inventories use `fairagro-advanced-middleware`). Routes from other namespaces are not accepted.
+
+**Client mTLS cutover** to NGINX Gateway Fabric is a **platform** follow-up. Until then, keep Ingress (with mTLS) if clients need cert auth; HTTPRoute can run in parallel for Gateway TLS exposure.
+
+**Render check (no live Gateway):**
+
+```bash
+helm template api-test ./helmchart/fairagro-advanced-middleware-api-chart \
+  -f helmchart/test_deploy/values-httproute.yaml
+```
+
+Minikube installs continue to use `helmchart/test_deploy/values.yaml` (Ingress only).
+
+### IDE: Helm templates vs YAML
+
+Chart `templates/*.yaml` files are Helm Go templates. Red Hat YAML false-positives on `{{ … }}`
+are fixed by treating those paths as language `helm` (Kubernetes Tools) plus suppressing the
+extension’s missing-kubeconfig toast when no cluster is configured. That belongs in **synced
+Devinfra** `.vscode` / Dev Container settings — not product-local forks of allowlisted paths.
+
 ## Helm chart testing
 
 This section is about a local test installation of the middleware api using helm.
