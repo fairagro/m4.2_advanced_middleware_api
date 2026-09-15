@@ -52,7 +52,10 @@ synced base in products to “fix” install reproducibility.
 **Version pins (one per component):** concrete numbers live only in repo-root [`versions.env`](../versions.env) (Dev
 Container section + **Product app image** section for `PIP_VERSION`, `ALPINE_*`, `PYINSTALLER_VERSION`; shared
 `PYTHON_VERSION` / `UV_VERSION`). Do **not** duplicate pins as Dockerfile `ARG` defaults or Bake HCL `variable` defaults
-— inject via Bake `--set` / `reusable-build` (after `load-versions-env.sh`).
+— inject via Bake `--set` / `reusable-build` (after `load-versions-env.sh`). The shared base `FROM` lines use
+`${PYTHON_VERSION:?}` / `${ALPINE_MINOR:?}` so a forgotten build-arg fails the build loudly and BuildKit’s
+`InvalidDefaultArgInFrom` check stays clean (products pick this up on the next Devinfra sync of
+`docker/Dockerfile.product-app.base`).
 
 **Structure expectation** for API, sql-to-arc, and harvester: same three-stage skeleton; product differences via base
 ARGs (packages, binary name, optional compile apk extras) and local last-stage finishing. **Product-only** extras (e.g.
