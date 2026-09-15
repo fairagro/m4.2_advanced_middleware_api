@@ -44,18 +44,23 @@ Dev Container token store and `scripts/bin/gh` wrapper are optional and DC-only.
 
 ## Commands
 
-| Command                         | Role                                                                                  |
-| ------------------------------- | ------------------------------------------------------------------------------------- |
-| `auth-status`                   | Probe `gh auth` as JSON; exit `1` when not ok                                         |
-| `review-open --pr N`            | One GraphQL fetch; JSON of unresolved AI threads + latest AI review body / suppressed |
-| `review-reply`                  | `in_reply_to` on a review comment, or `--conversation` PR comment                     |
-| `review-resolve --thread-id ID` | `resolveReviewThread`                                                                 |
-| `issue-view --issue N`          | Stable triage JSON (type, labels, body, url, triage:\* extract)                       |
-| `issue-create`                  | Type + severity/cost (+ optional `--practicality`, `--parent`)                        |
-| `issue-branch --issue N`        | Ensure `issue-N-slug` checked out from base (no commit / push / PR)                   |
-| `branch-ahead`                  | JSON ahead count vs `origin/<base>`; exit `1` when tip is not ahead                   |
-| `issue-start --issue N`         | Ensure branch, push when ahead of base, draft PR with `Fixes #N` (no empty commit)    |
-| `pr-strip-footer --pr N`        | Remove trailing “Made with Cursor” (and similar) footers from a PR body               |
+| Command                         | Role                                                                                                    |
+| ------------------------------- | ------------------------------------------------------------------------------------------------------- |
+| `auth-status`                   | Probe `gh auth` as JSON; exit `1` when not ok                                                           |
+| `review-open --pr N`            | Ensure PR head checkout, then GraphQL shape; JSON includes `head_ref` / `current_branch` + open AI work |
+| `review-reply`                  | `in_reply_to` on a review comment, or `--conversation` PR comment                                       |
+| `review-resolve --thread-id ID` | `resolveReviewThread`                                                                                   |
+| `issue-view --issue N`          | Stable triage JSON (type, labels, body, url, triage:\* extract)                                         |
+| `issue-create`                  | Type + severity/cost (+ optional `--practicality`, `--parent`)                                          |
+| `issue-branch --issue N`        | Ensure `issue-N-slug` checked out from base (no commit / push / PR)                                     |
+| `branch-ahead`                  | JSON ahead count vs `origin/<base>`; exit `1` when tip is not ahead                                     |
+| `issue-start --issue N`         | Ensure branch, push when ahead of base, draft PR with `Fixes #N` (no empty commit)                      |
+| `pr-strip-footer --pr N`        | Remove trailing “Made with Cursor” (and similar) footers from a PR body                                 |
+
+`review-open` has a **git side effect**: it checks out the PR head (via `gh pr checkout`) when the current branch
+differs. Dirty trees on a **different** branch refuse with JSON `{"ok": false, "error": …}` and exit `1`. Dirty on the
+correct head is allowed. Paste-only / shaping-only callers can use library
+`fetch_review_open(..., ensure_checkout=False)`.
 
 ## Tests
 

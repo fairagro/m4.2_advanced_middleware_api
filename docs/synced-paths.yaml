@@ -45,12 +45,14 @@ allow:
   - scripts/quality-fix.sh
   - scripts/run-container-structure-test.sh
   - scripts/setup-git-hooks.sh
+  - scripts/update-dockerfile-pins.sh
   - scripts/git-hooks/**
   - scripts/load-versions-env.sh
   - scripts/devcontainer-post-create.sh
   - openspec/principles.global.md
   - renovate.json
   - .github/workflows/renovate.yml
+  - .github/workflows/codeql.yml
   - docker/Dockerfile.product-app.base
   - versions.env
   - .python-version
@@ -68,11 +70,14 @@ allow:
   - .markdownlintignore
   - .prettierrc.json
   - .prettierignore
+  - package.json
+  - package-lock.json
   - .vscode/settings.json
   - .vscode/extensions.json
   - .devcontainer/Dockerfile
   - .devcontainer/devcontainer.json
   - .devcontainer/docker-compose.yml
+  - .gitignore
 
 # Never copy — even if mis-listed under allow.
 exclude:

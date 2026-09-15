@@ -92,7 +92,10 @@ do not invent them. Never ask the user to paste a PAT into chat.
 
 ## Fetch open work (when a PR is known)
 
-**Start from the CLI** (do not dump raw GraphQL into context):
+**Start from the CLI** (do not dump raw GraphQL into context). Successful `review-open` also **checks out the PR head
+branch** (fails closed with JSON error if the tree is dirty on a different branch). Do **not** apply any local `fix`
+edits until this command succeeds and `current_branch` / `head_ref` match. Paste-only triage without a PR does not
+require checkout.
 
 ```bash
 uv run --project scripts/ai m42-ai review-open --pr PR
@@ -208,8 +211,8 @@ run**.
 ## Implement fixes
 
 - Batch all `fix` threads, then run focused `uv run pytest` on affected packages and
-  `uv run ruff format --config pyproject.toml` / `ruff check` on touched files (when the repo has product `middleware/`
-  packages).
+  `uv run ruff format --config ruff.toml` / `uv run ruff check --config ruff.toml` on touched files (when the repo has
+  product `middleware/` packages).
 - Prefer narrowing types over guards. Do not add tests that only assert impossible `None` states.
 - Specs: update only when the code’s real contract changed.
 - In product consumers: never stage or leave dirty edits under
