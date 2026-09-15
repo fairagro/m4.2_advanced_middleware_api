@@ -25,6 +25,9 @@ from testcontainers.core.wait_strategies import (  # type: ignore[import-untyped
 from middleware.api.api.fastapi_app import Api
 from middleware.api.config import Config
 
+# Directory-level mark so pre-push `-m "not system_external"` cannot miss new tests.
+pytestmark = pytest.mark.system_external
+
 # Load environment variables from .env (postCreate decrypt of .env.integration.enc)
 load_dotenv()
 
