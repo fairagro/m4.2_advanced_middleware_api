@@ -79,6 +79,11 @@ fail policy only on one surface.
 | `package.json` / `package-lock.json`                | Shared npm scripts + pins for Prettier/markdownlint (hooks + reusable CI) — **verbatim** sync                                                |
 | [`.vscode/settings.json`](../.vscode/settings.json) | Shared IDE baseline (interpreter, Ruff, empty `pytestArgs`, Prettier) — adopt **verbatim**                                                   |
 
+**Local artifact excludes:** repo-root `dist/` (PyInstaller onedir, etc.) is gitignored and already skipped by Ruff /
+Mypy / Pylint / Bandit. Markdown/Node tools must match: synced `.markdownlint-cli2.jsonc`, `.markdownlintignore`, and
+`.prettierignore` ignore `dist/**` (same class as `.venv/` / `node_modules/`). IDE analysis excludes `**/dist` in
+`pyrightconfig.json` and `.vscode/settings.json`. Do not hand-edit those lists in product checkouts after sync.
+
 ## Shared pre-commit config (verbatim sync)
 
 [`.pre-commit-config.yaml`](../.pre-commit-config.yaml) is on the sync allowlist
@@ -128,7 +133,9 @@ cannot be expressed that way, open a Devinfra issue to generalize — do not lea
 globally ([Type Safety](../openspec/principles.global.md#type-safety)). Product hooks/CI that still pass
 `--extension-pkg-allow-list=lxml` can drop that flag after this fragment is synced.
 
-**Not** in the product quality sync set: `scripts/ai/pyproject.toml` (Devinfra `m42-ai-gh` package manifest only).
+**Not** in the product quality sync set as a root-workspace member: `scripts/ai/pyproject.toml` is still the Devinfra
+`m42-ai-gh` package manifest — but products **do** sync `scripts/ai/**` including `scripts/ai/uv.lock` for
+`--project scripts/ai` invocations (see [`scripts/ai/README.md`](../scripts/ai/README.md)).
 
 After sync, products should **remove** duplicated `[tool.ruff]` / `[tool.mypy]` / `[tool.pylint.*]` from root
 `pyproject.toml` so the fragments are the single tool config. First adoption smoke is expected via sync / product PRs

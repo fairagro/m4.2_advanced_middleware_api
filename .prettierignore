@@ -1,6 +1,7 @@
 # Vendor / local — OpenSpec opsx Markdown is NOT ignored (format + lint + AI fix).
 .venv/
 node_modules/
+dist/
 LICENSE
 .agents/skills/gh/
 .agents/skills/docker/

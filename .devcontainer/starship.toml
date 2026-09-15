@@ -9,10 +9,7 @@ $env_var\
 $directory\
 $git_branch\
 $git_status\
-$package\
 $python\
-$docker_context\
-$container\
 $cmd_duration\
 $line_break\
 $character\
@@ -37,5 +34,16 @@ substitutions = { "workspace" = "" }
 # Parent of `.venv` is `workspace`, so native $virtualenv is useless — omit it.
 format = 'via [${symbol}${version} ]($style)'
 
+# Markdown tooling ships package.json; npm version in the prompt is noise for Python repos.
+[package]
+disabled = true
+
 [nodejs]
+disabled = true
+
+# Always in a Dev Container — no need for ⬢ [Docker].
+[container]
+disabled = true
+
+[docker_context]
 disabled = true

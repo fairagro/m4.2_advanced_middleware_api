@@ -16,7 +16,8 @@
     "**/__pycache__",
     "**/.*",
     "**/.venv",
-    "**/venv"
+    "**/venv",
+    "**/dist"
   ],
 
   "python.testing.pytestEnabled": true,
@@ -84,7 +85,8 @@
     "**/__pycache__",
     "**/.*",
     "**/.venv",
-    "**/venv"
+    "**/venv",
+    "**/dist"
   ],
   "cursorpyright.analysis.extraPaths": [
     "${workspaceFolder}/scripts/ai/src"
