@@ -11,7 +11,8 @@ Issue: [#5](https://github.com/fairagro/m4.2_middleware_devinfra/issues/5).
 ## Workflow (summary)
 
 - Process **open** AI work only — start with `uv run --project scripts/ai m42-ai review-open --pr <n>` (not raw
-  GraphQL). Triage unresolved threads **and** `summary_only_findings` from every AI review (not only the latest).
+  GraphQL). That call also checks out the PR head before any local `fix` edits. Triage unresolved threads **and**
+  `summary_only_findings` from every AI review (not only the latest).
 - Two phases when anything is `fix`: local fixes + dismiss/follow-up replies first (**no commit**); `Fixed in <sha>`
   only after the user commits.
 - In **product** repos: do not `fix` paths on [`synced-paths.yaml`](synced-paths.yaml); `follow-up` to Devinfra or
