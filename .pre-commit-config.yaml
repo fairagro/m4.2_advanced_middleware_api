@@ -2,7 +2,8 @@
 # See https://pre-commit.com
 #
 # Commit stage: fast checks / autofixes.
-# Pre-push: pytest + container-structure-test (git hook install is issue #9).
+# Pre-push: pytest (excludes system_external/system_local) + container-structure-test
+# (git hook install is issue #9).
 #
 # Python hooks target middleware/ (path conventions). This Devinfra repo has no
 # product middleware/ packages — those hooks no-op until synced to a product.
@@ -89,7 +90,10 @@ repos:
 
       - id: pytest
         name: pytest
-        entry: bash -c "uv run pytest"
+        entry: >-
+          bash -c 'echo "pre-push pytest excludes system_external/system_local
+          (may take several minutes). Escape hatch only: SKIP=pytest git push" >&2;
+          uv run pytest -m "not system_external and not system_local"'
         language: system
         pass_filenames: false
         always_run: true
