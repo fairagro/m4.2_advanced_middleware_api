@@ -356,6 +356,10 @@ Before generating or modifying code, read the relevant specs:
 - **[`openspec/specs/admission-control/`](openspec/specs/admission-control/)** —
   Process-local concurrent request admission: at capacity → `503` +
   `Retry-After` (probes exempt).
+- **[`openspec/changes/helm-gateway-httproute/`](openspec/changes/helm-gateway-httproute/)**
+  (`helm-httproute` capability) — Optional Gateway API `HTTPRoute` in the product
+  Helm chart (dual-path with Ingress; cluster-agnostic `parentRefs`; no chart-owned
+  public hostname cert). Archives to `openspec/specs/helm-httproute/`.
 
 **API Client capabilities:**
 
@@ -396,6 +400,7 @@ Agents (`/opsx-apply` and default Agent mode) use it to locate affected code.
 | `openspec/specs/harvest-client/` | `middleware/api_client/src/middleware/api_client/api_client.py`, `models.py` |
 | `openspec/specs/harvest-report/` | `middleware/shared/src/middleware/shared/report/`, `ns/harvest-report/` |
 | `openspec/specs/ci-cd/` | `.github/workflows/` (see domain design for workflow files) |
+| `openspec/specs/helm-httproute/` | `helmchart/fairagro-advanced-middleware-api-chart/templates/httproute.yaml`, `values.yaml` (`api.httpRoute`), `templates/NOTES.txt`; template overlay `helmchart/test_deploy/values-httproute.yaml` |
 
 ---
 

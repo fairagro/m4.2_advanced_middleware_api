@@ -20,3 +20,17 @@
   echo "Visit http://127.0.0.1:8080 to use your application"
   kubectl --namespace {{ .Release.Namespace }} port-forward $POD_NAME 8080:$CONTAINER_PORT
 {{- end }}
+{{- if .Values.api.httpRoute.enabled }}
+
+2. Gateway API HTTPRoute is enabled for this release.
+   - Server TLS for platform hostnames (e.g. *.fairagro.net) is owned by the parent
+     Gateway / ListenerSet — this chart does not create a Certificate for that path.
+   - The Helm release namespace ({{ .Release.Namespace }}) MUST be allowed by the
+     target ListenerSet allowlist (currently fairagro-advanced-middleware on platform
+     inventories).
+   - Client mTLS may still be provided by Ingress during the transition; cutting over
+     client TLS to Gateway Fabric is a platform follow-up, not chart-local.
+{{- range .Values.api.httpRoute.hostnames }}
+   - hostname: {{ . }}
+{{- end }}
+{{- end }}
