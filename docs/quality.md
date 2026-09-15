@@ -27,11 +27,11 @@ tokens already in your environment (e.g. exported from `~/.bashrc`) or `gh auth`
 Shared quality tools must agree across three surfaces for the same tree and toolchain pins (`versions.env` / `uv sync` /
 Node as documented):
 
-| Environment   | How it runs                                                                   | Config source                                |
-| ------------- | ----------------------------------------------------------------------------- | -------------------------------------------- |
-| **IDE**       | [`.vscode/settings.json`](../.vscode/settings.json) + recommended extensions  | Same fragment / config files as hooks and CI |
-| **Hooks**     | pre-commit (commit) / pre-push stage; `./scripts/quality-check.sh`            | `.pre-commit-config.yaml` → shared configs   |
-| **GitHub CI** | [`reusable-code-quality.yml`](../.github/workflows/reusable-code-quality.yml) | Same shared configs                          |
+| Environment   | How it runs                                                                                                                               | Config source                                |
+| ------------- | ----------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------- |
+| **IDE**       | [`.vscode/settings.json`](../.vscode/settings.json) + recommended extensions                                                              | Same fragment / config files as hooks and CI |
+| **Hooks**     | pre-commit (commit) / pre-push stage; `./scripts/quality-check.sh`                                                                        | `.pre-commit-config.yaml` → shared configs   |
+| **GitHub CI** | [`reusable-code-quality.yml`](https://github.com/fairagro/m4.2_middleware_devinfra/blob/main/.github/workflows/reusable-code-quality.yml) | Same shared configs                          |
 
 **Matching results** means the same pass/fail gate and the same policy findings (rule id + location). Log formatting may
 differ (IDE diagnostics vs CLI). **Bandit exception:** the fail bar is the same (MEDIUM/HIGH fail; LOW never fails), but
@@ -135,8 +135,9 @@ After sync, products should **remove** duplicated `[tool.ruff]` / `[tool.mypy]` 
 
 Shared **app Dockerfile** base + product-local last stage lives in this repo as
 [`docker/Dockerfile.product-app.base`](../docker/Dockerfile.product-app.base) with Bake examples under
-[`docker/examples/`](../docker/examples/). Sync the **base** into products; keep the last stage and `docker-bake.hcl`
-product-local. Reusable build/release are **Bake-only** (no monolith Dockerfile) — see
+[`docker/examples/`](https://github.com/fairagro/m4.2_middleware_devinfra/tree/main/docker/examples/) (Devinfra-only —
+not synced). Sync the **base** into products; keep the last stage and `docker-bake.hcl` product-local. Reusable
+build/release are **Bake-only** (no monolith Dockerfile) — see
 [`docs/ci.md`](ci.md#product-app-images-bake-base--last-stage). Adoption:
 [#13](https://github.com/fairagro/m4.2_middleware_devinfra/issues/13) / product Wave C (issue
 [#36](https://github.com/fairagro/m4.2_middleware_devinfra/issues/36)).

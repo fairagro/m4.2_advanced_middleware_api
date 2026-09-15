@@ -10,13 +10,19 @@ needed.
 **Sole path SoT:** [`docs/synced-paths.yaml`](synced-paths.yaml) is the only place that defines _what_ is synced
 (`allow`) and the hard denylist (`exclude`). The workflow does **not** maintain a second path list (no `paths:` filter).
 
+**Consumer-safe links (synced Markdown):** after sync, relative links only resolve for paths that also ship in the
+product checkout. Synced docs MUST NOT use in-repo relative links (`../…`) to targets outside `allow` (minus `exclude`).
+Point at Devinfra with absolute GitHub URLs (`…/fairagro/m4.2_middleware_devinfra/blob/main/…`), or keep a plain
+non-linked path name. Do **not** “fix” broken links by adding Devinfra-only automation to the product allowlist
+([#86](https://github.com/fairagro/m4.2_middleware_devinfra/issues/86)).
+
 Tracks [#13](https://github.com/fairagro/m4.2_middleware_devinfra/issues/13).
 
-| Artifact                                                                        | Role                                                                    |
-| ------------------------------------------------------------------------------- | ----------------------------------------------------------------------- |
-| [`docs/synced-paths.yaml`](synced-paths.yaml)                                   | **Sole** path SoT (`allow` / `exclude` / `overlays`)                    |
-| [`scripts/sync-products.py`](../scripts/sync-products.py)                       | Read YAML, copy, open **new** sync PRs (**Devinfra-only** — not synced) |
-| [`.github/workflows/sync-products.yml`](../.github/workflows/sync-products.yml) | When to run (`main` push / dispatch) — **Devinfra-only**, not synced    |
+| Artifact                                                                                                                                    | Role                                                                    |
+| ------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------- |
+| [`docs/synced-paths.yaml`](synced-paths.yaml)                                                                                               | **Sole** path SoT (`allow` / `exclude` / `overlays`)                    |
+| [`scripts/sync-products.py`](https://github.com/fairagro/m4.2_middleware_devinfra/blob/main/scripts/sync-products.py)                       | Read YAML, copy, open **new** sync PRs (**Devinfra-only** — not synced) |
+| [`.github/workflows/sync-products.yml`](https://github.com/fairagro/m4.2_middleware_devinfra/blob/main/.github/workflows/sync-products.yml) | When to run (`main` push / dispatch) — **Devinfra-only**, not synced    |
 
 ## Never hand-edit synced files (product checkouts)
 
@@ -39,7 +45,10 @@ Review-fixer follows the same rule: in products, do not `fix` synced paths — `
 ## Allowlist inventory (human-readable)
 
 Machine SoT remains [`synced-paths.yaml`](synced-paths.yaml). This table is a **guide** only — when it disagrees with
-the YAML, the YAML wins. Resolve the live set with `uv run python scripts/sync-products.py --list-files`.
+the YAML, the YAML wins. In a **product** checkout, read that YAML (it is synced). Optionally, in a **Devinfra**
+checkout only, resolve the live allowlist with
+[`scripts/sync-products.py --list-files`](https://github.com/fairagro/m4.2_middleware_devinfra/blob/main/scripts/sync-products.py)
+(`uv run python scripts/sync-products.py --list-files`) — that script is not synced into products.
 
 | Category                          | Examples on `allow` (non-exhaustive)                                                                                                       |
 | --------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
