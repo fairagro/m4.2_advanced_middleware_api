@@ -1,0 +1,41 @@
+# Fleet Dev Container Starship config (STARSHIP_CONFIG via remoteEnv).
+# Repo identity comes from DEVCONTAINER_REPO_NAME (${localWorkspaceFolderBasename}).
+# cwd is /workspace, so the directory module alone cannot show the host folder name.
+
+"$schema" = "https://starship.rs/config-schema.json"
+
+format = """\
+$env_var\
+$directory\
+$git_branch\
+$git_status\
+$package\
+$python\
+$docker_context\
+$container\
+$cmd_duration\
+$line_break\
+$character\
+"""
+
+[env_var.DEVCONTAINER_REPO_NAME]
+variable = "DEVCONTAINER_REPO_NAME"
+format = "[$env_value]($style) "
+style = "bold cyan"
+disabled = false
+
+# At repo root the path basename is "workspace"; hide that redundant segment.
+# Under subdirs Starship still shows the path relative to the git root.
+[directory]
+truncation_length = 3
+truncate_to_repo = true
+style = "cyan bold"
+substitutions = { "workspace" = "" }
+
+[python]
+# VIRTUAL_ENV=/workspace/.venv is set by remoteEnv (activated without `source`).
+# Parent of `.venv` is `workspace`, so native $virtualenv is useless — omit it.
+format = 'via [${symbol}${version} ]($style)'
+
+[nodejs]
+disabled = true

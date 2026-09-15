@@ -18,7 +18,11 @@
     "UV_LINK_MODE": "copy"
   },
   "remoteEnv": {
-    "PATH": "${workspaceFolder}/.venv/bin:${workspaceFolder}/scripts/bin:${containerEnv:PATH}"
+    "PATH": "/workspace/.venv/bin:/workspace/scripts/bin:${containerEnv:PATH}",
+    "VIRTUAL_ENV": "/workspace/.venv",
+    "VIRTUAL_ENV_PROMPT": "${localWorkspaceFolderBasename}",
+    "DEVCONTAINER_REPO_NAME": "${localWorkspaceFolderBasename}",
+    "STARSHIP_CONFIG": "/workspace/.devcontainer/starship.toml"
   },
   "customizations": {
     "vscode": {
