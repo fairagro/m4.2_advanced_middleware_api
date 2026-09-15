@@ -75,16 +75,18 @@ Use [`docs/ai_review_policy.md`](../../../docs/ai_review_policy.md) for the core
 
 GitHub **Issue Types** (not `kind:*` labels):
 
-| Type          | When                                                                                                       |
-| ------------- | ---------------------------------------------------------------------------------------------------------- |
-| `Security`    | Credential/secret/PII leakage, unsafe authn/authz, or exploitable security weakness                        |
-| `Bug`         | Wrong domain result, data loss/silent overwrite, broken API/HTTP contract, ownership/idempotency bypass    |
-| `Feature`     | Intended new behaviour / capability                                                                        |
-| `Task`        | Bounded follow-up: tech-debt, cleanup, docs, or a small actionable slice that is not a structural redesign |
-| `Refactoring` | Multi-module or structural restructure (new abstractions, contract-preserving architecture change)         |
-| `Discussion`  | Question, proposal, or ambiguous trade-off without a clear actionable change                               |
+| Type          | When                                                                                                     |
+| ------------- | -------------------------------------------------------------------------------------------------------- |
+| `Security`    | Credential/secret/PII leakage, unsafe authn/authz, or exploitable security weakness                      |
+| `Bug`         | Wrong domain result, data loss/silent overwrite, broken API/HTTP contract, ownership/idempotency bypass  |
+| `Feature`     | Intended new behaviour / capability / durable contract                                                   |
+| `Task`        | Bounded known-how work: config/hook/YAML wiring, cleanup, docs, marker registration, or “do X as agreed” |
+| `Refactoring` | Multi-module or structural restructure (new abstractions, contract-preserving architecture change)       |
+| `Discussion`  | Question, proposal, or ambiguous trade-off without a clear actionable change                             |
 
-Do **not** use `Task` for major structural work — that is `Refactoring`.
+Do **not** use `Task` for a new capability or durable contract — that is `Feature`. Do **not** use `Task` for major
+structural work — that is `Refactoring`. If acceptance criteria would change a capability under `openspec/specs/`,
+prefer `Feature` (or ask once).
 
 ### Severity (always attach exactly one)
 

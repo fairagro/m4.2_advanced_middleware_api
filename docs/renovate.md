@@ -110,10 +110,12 @@ products get them via sync):
 | `docker/Dockerfile.product-app.base`              | Synced base image                                             |
 | `.devcontainer/Dockerfile`                        | Synced Dev Container image                                    |
 | `renovate.json`, `.github/workflows/renovate.yml` | Shared Renovate SoT                                           |
+| `.github/workflows/codeql.yml`                    | Shared CodeQL SoT — toolchain pins stay in `versions.env`     |
 | Package `docker/dockerfile` (`# syntax=…`)        | Frontend pin tracked in Devinfra; avoid duplicate product PRs |
 
 Product Renovate **still** updates product-local deps (e.g. `middleware/` pep621, product last-stage `FROM` images,
-product-only workflows). Close any open product PRs that only touch the disabled paths after this config is synced.
+product-only workflows other than synced CodeQL/Renovate). Close any open product PRs that only touch the disabled paths
+after this config is synced.
 
 Reusable `reusable-renovate.yml` is **out of scope** for now — the thin workflow is expected to stay identical across
 repos via sync.

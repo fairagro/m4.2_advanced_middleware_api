@@ -45,10 +45,12 @@ Review-fixer follows the same rule: in products, do not `fix` synced paths — `
 ## Allowlist inventory (human-readable)
 
 Machine SoT remains [`synced-paths.yaml`](synced-paths.yaml). This table is a **guide** only — when it disagrees with
-the YAML, the YAML wins. In a **product** checkout, read that YAML (it is synced). Optionally, in a **Devinfra**
-checkout only, resolve the live allowlist with
-[`scripts/sync-products.py --list-files`](https://github.com/fairagro/m4.2_middleware_devinfra/blob/main/scripts/sync-products.py)
-(`uv run python scripts/sync-products.py --list-files`) — that script is not synced into products.
+the YAML, the YAML wins.
+
+- **Product checkout:** open the synced [`synced-paths.yaml`](synced-paths.yaml) in this repo. Do **not** run
+  `scripts/sync-products.py` here — that script is Devinfra-only and is not present after sync.
+- **Devinfra checkout:** optionally resolve the live allowlist with `--list-files` under [Local dry-run](#local-dry-run)
+  (same script as in the Artifacts table).
 
 | Category                          | Examples on `allow` (non-exhaustive)                                                                                                       |
 | --------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
@@ -127,7 +129,8 @@ Listed under `exclude` in [`docs/synced-paths.yaml`](synced-paths.yaml) (and enf
 
 ## Local dry-run
 
-From the Devinfra repo root (after `uv sync`; PyYAML comes from the project lock):
+From the **Devinfra** repo root only (after `uv sync`; PyYAML comes from the project lock). Product checkouts do not
+ship `scripts/sync-products.py` — use [`synced-paths.yaml`](synced-paths.yaml) there instead.
 
 ```bash
 uv run python scripts/sync-products.py --list-files
