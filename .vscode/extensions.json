@@ -1,26 +1,33 @@
 {
+  // Shared VS Code / Cursor recommendations — MUST match
+  // .devcontainer/devcontainer.json customizations.vscode.extensions and the
+  // postCreate install list in scripts/devcontainer-post-create.sh.
   "recommendations": [
     "jeff-hykin.better-dockerfile-syntax",
     "ms-azuretools.vscode-docker",
     "formulahendry.docker-explorer",
-    "signageos.signageos-vscode-sops",
+    "exiasr.hadolint",
+    "esbenp.prettier-vscode",
     "davidanson.vscode-markdownlint",
+    "signageos.signageos-vscode-sops",
     "samuelcolvin.jinjahtml",
+    "redhat.vscode-yaml",
     "tamasfe.even-better-toml",
     "ms-python.python",
     "ms-python.vscode-pylance",
     "ms-python.debugpy",
     "ms-python.vscode-python-envs",
     "ms-python.pylint",
+    "ms-python.mypy-type-checker",
+    "charliermarsh.ruff",
     "mhutchie.git-graph",
     "donjayamanne.githistory",
     "codezombiech.gitignore",
     "github.copilot-chat",
-    "matangover.mypy",
-    "charliermarsh.ruff",
+    "github.vscode-github-actions",
     "tim-koehler.helm-intellisense",
     "vadzimnestsiarenka.helm-template-preview-and-more",
-    "ms-vscode-remote.remote-containers",
+    "ms-kubernetes-tools.vscode-kubernetes-tools",
     "jebbs.plantuml"
-  ],
+  ]
 }
