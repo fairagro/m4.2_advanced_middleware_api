@@ -285,7 +285,8 @@
         "docker/Dockerfile.product-app.base",
         ".devcontainer/Dockerfile",
         "renovate.json",
-        ".github/workflows/renovate.yml"
+        ".github/workflows/renovate.yml",
+        ".github/workflows/codeql.yml"
       ],
       "enabled": false
     },

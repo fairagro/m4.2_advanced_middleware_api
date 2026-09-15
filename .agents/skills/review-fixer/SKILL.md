@@ -208,8 +208,8 @@ run**.
 ## Implement fixes
 
 - Batch all `fix` threads, then run focused `uv run pytest` on affected packages and
-  `uv run ruff format --config pyproject.toml` / `ruff check` on touched files (when the repo has product `middleware/`
-  packages).
+  `uv run ruff format --config ruff.toml` / `uv run ruff check --config ruff.toml` on touched files (when the repo has
+  product `middleware/` packages).
 - Prefer narrowing types over guards. Do not add tests that only assert impossible `None` states.
 - Specs: update only when the code’s real contract changed.
 - In product consumers: never stage or leave dirty edits under
