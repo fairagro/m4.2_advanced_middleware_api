@@ -171,6 +171,7 @@ extensions=(
   github.vscode-github-actions
   tim-koehler.helm-intellisense
   vadzimnestsiarenka.helm-template-preview-and-more
+  ms-kubernetes-tools.vscode-kubernetes-tools
   jebbs.plantuml
 )
 if remote_cli="$(find_remote_cli)"; then

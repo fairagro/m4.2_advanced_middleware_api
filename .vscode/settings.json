@@ -62,6 +62,23 @@
   "[yaml]": {
     "editor.defaultFormatter": "esbenp.prettier-vscode"
   },
+
+  // Helm Go templates (language mode from Kubernetes Tools). Avoid Red Hat YAML
+  // false positives on {{ … }} in chart templates.
+  "files.associations": {
+    "**/helmchart/**/templates/**/*.yaml": "helm",
+    "**/helmchart/**/templates/**/*.yml": "helm",
+    "**/helmchart/**/templates/**/*.tpl": "helm",
+    "**/helm/**/templates/**/*.yaml": "helm",
+    "**/helm/**/templates/**/*.yml": "helm",
+    "**/helm/**/templates/**/*.tpl": "helm"
+  },
+  // Dev Containers often have no cluster kubeconfig; suppress toast noise only.
+  // Do not suppress kubectl-not-found — kubectl/helm are on the shared image PATH.
+  "vs-kubernetes": {
+    "vs-kubernetes.suppress-kubeconfig-not-found-alerts": true
+  },
+
   "cursorpyright.analysis.exclude": [
     "**/node_modules",
     "**/__pycache__",

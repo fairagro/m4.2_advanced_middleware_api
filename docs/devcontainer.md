@@ -185,7 +185,8 @@ Runs `scripts/devcontainer-post-create.sh` once per create:
 - optionally decrypt repo-root `.env.integration.enc` → `.env` when present (skip if `.env` already non-empty,
   ciphertext absent, or `sops`/keys unavailable; never fails create; does **not** patch bashrc to `source` `.env`)
 - soft-fail install of recommended IDE extensions via Cursor/VS Code remote CLI (shared product set: Docker/Helm/
-  Python/Ruff/Pylint/Mypy, PlantUML, signageos SOPS, Prettier, markdownlint, … — same list as `devcontainer.json`)
+  Python/Ruff/Pylint/Mypy, PlantUML, Kubernetes Tools, signageos SOPS, Prettier, markdownlint, … — same list as
+  `devcontainer.json` and synced `.vscode/extensions.json`)
 
 `PATH` with `.venv/bin` and `scripts/bin` first comes from `.devcontainer/devcontainer.json` (`remoteEnv`) after rebuild
 — not from `~/.bashrc`.

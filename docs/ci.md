@@ -2,16 +2,16 @@
 
 Canonical GitHub Actions for the three m4.2 product repos live in this repository:
 
-| Workflow            | Path                                                                                                                                              |
-| ------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Code quality        | [`.github/workflows/reusable-code-quality.yml`](../.github/workflows/reusable-code-quality.yml)                                                   |
-| Image / SBOM checks | [`.github/workflows/reusable-check.yml`](../.github/workflows/reusable-check.yml)                                                                 |
-| Docker build        | [`.github/workflows/reusable-build.yml`](../.github/workflows/reusable-build.yml)                                                                 |
-| Docker release      | [`.github/workflows/reusable-release.yml`](../.github/workflows/reusable-release.yml)                                                             |
-| Helm final release  | [`.github/workflows/reusable-helm-release.yml`](../.github/workflows/reusable-helm-release.yml)                                                   |
-| Helm pre-release    | [`.github/workflows/reusable-helm-pre-release.yml`](../.github/workflows/reusable-helm-pre-release.yml)                                           |
-| Renovate (per-repo) | [`.github/workflows/renovate.yml`](../.github/workflows/renovate.yml) + [`renovate.json`](../renovate.json) — see [docs/renovate.md](renovate.md) |
-| Sync products       | [`.github/workflows/sync-products.yml`](../.github/workflows/sync-products.yml) — allowlist push; see [docs/sync.md](sync.md)                     |
+| Workflow            | Path                                                                                                                                                                                      |
+| ------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Code quality        | [`.github/workflows/reusable-code-quality.yml`](https://github.com/fairagro/m4.2_middleware_devinfra/blob/main/.github/workflows/reusable-code-quality.yml)                               |
+| Image / SBOM checks | [`.github/workflows/reusable-check.yml`](https://github.com/fairagro/m4.2_middleware_devinfra/blob/main/.github/workflows/reusable-check.yml)                                             |
+| Docker build        | [`.github/workflows/reusable-build.yml`](https://github.com/fairagro/m4.2_middleware_devinfra/blob/main/.github/workflows/reusable-build.yml)                                             |
+| Docker release      | [`.github/workflows/reusable-release.yml`](https://github.com/fairagro/m4.2_middleware_devinfra/blob/main/.github/workflows/reusable-release.yml)                                         |
+| Helm final release  | [`.github/workflows/reusable-helm-release.yml`](https://github.com/fairagro/m4.2_middleware_devinfra/blob/main/.github/workflows/reusable-helm-release.yml)                               |
+| Helm pre-release    | [`.github/workflows/reusable-helm-pre-release.yml`](https://github.com/fairagro/m4.2_middleware_devinfra/blob/main/.github/workflows/reusable-helm-pre-release.yml)                       |
+| Renovate (per-repo) | [`.github/workflows/renovate.yml`](../.github/workflows/renovate.yml) + [`renovate.json`](../renovate.json) — see [docs/renovate.md](renovate.md)                                         |
+| Sync products       | [`.github/workflows/sync-products.yml`](https://github.com/fairagro/m4.2_middleware_devinfra/blob/main/.github/workflows/sync-products.yml) — allowlist push; see [docs/sync.md](sync.md) |
 
 **Stay product-local (not shared here):** PyPI / TestPyPI publish jobs and ns-pages workflows (API today).
 
@@ -35,8 +35,10 @@ adopted this layout (product Wave C / sync [#13](https://github.com/fairagro/m4.
 | `docker/Dockerfile.<component>`      | **No** (local)      | Thin last stage: USER / CMD / HEALTHCHECK / runtime apk / labels  |
 | `docker-bake.hcl` (repo root)        | **No** (local)      | Bake targets: `<component>-base` + `<component>` with `contexts`  |
 
-Example stubs (not used by Devinfra CST): [`docker/examples/`](../docker/examples/). ARG list is documented at the top
-of [`docker/Dockerfile.product-app.base`](../docker/Dockerfile.product-app.base). Prefer `PYINSTALLER_IMPORT` (package
+Example stubs (not used by Devinfra CST):
+[`docker/examples/`](https://github.com/fairagro/m4.2_middleware_devinfra/tree/main/docker/examples/) (Devinfra-only —
+not synced). ARG list is documented at the top of
+[`docker/Dockerfile.product-app.base`](../docker/Dockerfile.product-app.base). Prefer `PYINSTALLER_IMPORT` (package
 import path whose `main.py` is resolved after wheel install); do not pass a repo-relative entry path — PyInstaller entry
 must come from the installed wheel, not from copying application source as the script path.
 
