@@ -69,8 +69,7 @@ scripts/
 ├── quality-*.sh / setup-git-hooks.sh / load-versions-env.sh  # Synced Dev DX
 ├── devcontainer-post-create.sh    # Synced shared postCreate (decrypt .env; uv sync; hooks)
 ├── install-dev-hooks.sh           # Product: venv/hook repair (not a sync patch)
-├── update-apk-dependencies.sh     # Product APK pin helper (promote #68)
-├── update-docker-pins.sh          # Product Docker/pip/uv pin helper
+├── update-dockerfile-pins.sh      # Synced: Dockerfile apk + inline pip pins
 ├── bin/{gh,git,k,d}               # PATH wrappers (tokens via set-dev-tokens; k/d aliases)
 └── git-hooks/
     └── pre-push                   # Synced quality pre-push (pre-commit stage)
@@ -113,8 +112,8 @@ uv run bandit -r middleware/ -c .bandit -ll
 # Repair hooks / venv after path drift
 ./scripts/install-dev-hooks.sh
 
-# Refresh Docker/apk/pip/uv pins (versions.env + Dockerfile.api fallbacks)
-./scripts/update-docker-pins.sh
+# Refresh Dockerfile apk + inline pip pins (not versions.env — Renovate + sync)
+./scripts/update-dockerfile-pins.sh
 
 # Install all dependencies
 uv sync --dev --all-packages
