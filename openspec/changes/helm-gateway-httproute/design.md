@@ -35,13 +35,15 @@ Mirror `api.ingress` under `api.httpRoute` with at least:
 | Key | Default | Role |
 | --- | ------- | ---- |
 | `enabled` | `false` | Feature flag |
-| `parentRefs` | `[]` | Full parentRef objects as YAML (ListenerSet or Gateway) |
-| `hostnames` | `[]` | HTTPRoute hostnames |
+| `parentRefs` | shared `ListenerSet` `fairagro-https` / `kube-gateway-api` | Platform default from misc inventories; overlays may override |
+| `hostnames` | `[]` | Deploy overlay supplies FQDNs |
 | (rules) | single default path `/` → chart Service + `api.service.port` | Keep MVP minimal; optional future `rules` override only if needed |
 
-**Reason:** Same nesting as Ingress; overlays own parentRef details.
+**Reason:** Same nesting as Ingress; ListenerSet attachment is platform-wide (not a
+cluster inventory name). Hostnames stay overlay-owned.
 
-**Alternatives:** Nested `api.gateway.httpRoute` — extra indirection without benefit for one resource kind.
+**Alternatives:** Empty `parentRefs` in chart defaults — forces every overlay to repeat the
+same ListenerSet ref; rejected for misc ergonomics.
 
 ### D2: API versions
 

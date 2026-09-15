@@ -26,21 +26,28 @@ resource.
 - **THEN** an `HTTPRoute` is produced that references those parents and hostnames and
   routes HTTP traffic to the chart’s API Service on the configured port
 
-### Requirement: Cluster-agnostic parentRefs and hostnames
+### Requirement: Platform-default parentRefs without cluster inventory names
 
 Chart default values MUST NOT hardcode cluster inventory names (for example elise, fizz,
-draven, or gangplank). Deploy overlays SHALL supply `parentRefs` and `hostnames`
-appropriate to the target cluster. Default chart values MAY document an example shape
-suitable for a shared `ListenerSet` named `fairagro-https` in namespace
-`kube-gateway-api` without making that configuration active by default.
+draven, or gangplank). Default values MAY include `parentRefs` for the shared platform
+`ListenerSet` `fairagro-https` in namespace `kube-gateway-api`. Deploy overlays SHALL
+supply `hostnames` (and MAY override `parentRefs`) for the target deployment. HTTPRoute
+rendering remains off until explicitly enabled.
 
-#### Scenario: Overlay supplies parentRefs
+#### Scenario: Defaults include ListenerSet parentRefs
 
-- **GIVEN** an overlay that sets `parentRefs` to a platform `ListenerSet` and sets
-  hostnames for the API
+- **GIVEN** chart default values
+- **WHEN** values are inspected without an overlay
+- **THEN** `api.httpRoute.parentRefs` reference `ListenerSet` `fairagro-https` in
+  `kube-gateway-api`, `api.httpRoute.enabled` is false, and `hostnames` are empty
+
+#### Scenario: Overlay supplies hostnames
+
+- **GIVEN** an overlay that enables HTTPRoute and sets hostnames (optionally overriding
+  `parentRefs`)
 - **WHEN** the chart is rendered with that overlay
-- **THEN** the `HTTPRoute` `parentRefs` and `hostnames` match the overlay values
-
+- **THEN** the `HTTPRoute` uses the effective `parentRefs` and `hostnames` from the
+  merge
 ### Requirement: Dual-path with Ingress
 
 Enabling HTTPRoute MUST NOT require disabling Ingress. Ingress and HTTPRoute SHALL be
