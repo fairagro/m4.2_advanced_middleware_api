@@ -2,10 +2,12 @@
 # Product-local last stage for the API (NOT synced). Bake wires context
 # `export_bins` → shared base `export-binaries` (see docker-bake.hcl).
 #
-# Pins: ALPINE_VERSION from versions.env (no literal pin here).
+# Pins: ALPINE_VERSION from versions.env (Bake / --build-arg). No Dockerfile
+# default — that would drift from versions.env. ${…:?} requires the arg and
+# satisfies BuildKit InvalidDefaultArgInFrom without a stale pin.
 
 ARG ALPINE_VERSION
-FROM alpine:${ALPINE_VERSION}
+FROM alpine:${ALPINE_VERSION:?}
 
 ARG RUNTIME_USER=middleware
 ARG RUNTIME_UID=65532
