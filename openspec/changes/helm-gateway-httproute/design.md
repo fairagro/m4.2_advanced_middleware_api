@@ -61,9 +61,10 @@ Ingress TLS Secrets remain for the Ingress path only.
 
 ### D4: Minikube / test_deploy stays Ingress-only
 
-Add something like `helmchart/test_deploy/values-httproute-render.yaml` (or a short
-documented `helm template -f …` snippet) for CI/local render checks. Do not require
-Gateway in `test_deploy/values.yaml`.
+Add something like `helmchart/test_deploy/values-httproute.yaml` (or a short
+documented `helm template -f …` snippet) for CI/local template checks. Do not require
+Gateway in `test_deploy/values.yaml`. Avoid filenames matching SchemaStore
+“Render Blueprints” (`*render*.yaml`).
 
 **Reason:** Minikube addon path is still Ingress; Gateway smoke is cluster-specific.
 

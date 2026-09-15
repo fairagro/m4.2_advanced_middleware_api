@@ -96,6 +96,20 @@ api:
     mtlsVerifyDepth: 1
     hosts: []
     tls: []
+  # Optional Gateway API HTTPRoute (dual-path with ingress). Defaults stay off and
+  # cluster-agnostic — deploy overlays supply parentRefs / hostnames.
+  # Example parentRef shape for platform ListenerSet fairagro-https (do not enable here):
+  #   parentRefs:
+  #     - group: gateway.networking.x-k8s.io
+  #       kind: ListenerSet
+  #       name: fairagro-https
+  #       namespace: kube-gateway-api
+  #   hostnames:
+  #     - api.example.fairagro.net
+  httpRoute:
+    enabled: false
+    parentRefs: []
+    hostnames: []
   tls:
     # Direct certificate values (preferred for secrets management)
     serverCrt: ""  # Base64-encoded or PEM server certificate

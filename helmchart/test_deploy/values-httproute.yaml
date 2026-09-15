@@ -1,0 +1,34 @@
+# Render-only overlay for Gateway API HTTPRoute (no live Gateway required).
+# Dummy rabbitmq/couchdb auth satisfies chart required() for full `helm template`.
+# Usage:
+#   helm template api-test ./helmchart/fairagro-advanced-middleware-api-chart \
+#     -f helmchart/test_deploy/values-httproute.yaml
+# Or HTTPRoute only:
+#   helm template api-test ./helmchart/fairagro-advanced-middleware-api-chart \
+#     -f helmchart/test_deploy/values-httproute.yaml \
+#     --show-only templates/httproute.yaml
+#
+# Minikube smoke installs keep using values.yaml (Ingress). Do not use this file
+# as the sole overlay for a real install unless the cluster has Gateway CRDs and
+# the release namespace is on the ListenerSet allowlist.
+
+rabbitmq:
+  auth:
+    username: render-check
+    password: render-check
+
+couchdb:
+  auth:
+    username: render-check
+    password: render-check
+
+api:
+  httpRoute:
+    enabled: true
+    parentRefs:
+      - group: gateway.networking.x-k8s.io
+        kind: ListenerSet
+        name: fairagro-https
+        namespace: kube-gateway-api
+    hostnames:
+      - chart-example.fairagro.net
