@@ -46,12 +46,17 @@ def cmd_auth_status(args: argparse.Namespace) -> int:
 
 
 def cmd_review_open(args: argparse.Namespace) -> int:
-    data = fetch_review_open(
-        args.pr,
-        owner=args.owner,
-        repo=args.repo,
-        review_id=args.review_id,
-    )
+    try:
+        data = fetch_review_open(
+            args.pr,
+            owner=args.owner,
+            repo=args.repo,
+            review_id=args.review_id,
+            cwd=Path(args.cwd) if getattr(args, "cwd", None) else None,
+        )
+    except (GhError, ValueError, RuntimeError, OSError, json.JSONDecodeError) as exc:
+        _print_json({"ok": False, "error": str(exc)})
+        return 1
     _print_json(data)
     return 0
 
@@ -151,7 +156,10 @@ def build_parser() -> argparse.ArgumentParser:
     au.add_argument("--cwd", help="Git repo root (default: cwd)")
     au.set_defaults(func=cmd_auth_status)
 
-    ro = sub.add_parser("review-open", help="Fetch and shape open AI review work for a PR")
+    ro = sub.add_parser(
+        "review-open",
+        help="Ensure PR head checkout, then fetch/shape open AI review work",
+    )
     ro.add_argument("--pr", type=int, required=True)
     ro.add_argument(
         "--review-id",
@@ -161,6 +169,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
     ro.add_argument("--owner")
     ro.add_argument("--repo")
+    ro.add_argument("--cwd", help="Git repo root (default: cwd)")
     ro.set_defaults(func=cmd_review_open)
 
     rr = sub.add_parser("review-reply", help="Reply on a review thread or PR conversation")

@@ -4,9 +4,10 @@ from __future__ import annotations
 
 import json
 import re
+from pathlib import Path
 from typing import Any
 
-from m42_ai.gh import repo_owner_name, run_gh
+from m42_ai.gh import GhError, repo_owner_name, run_gh, run_git
 
 AI_AUTHOR_RE = re.compile(r"copilot|bugbot|cursor", re.IGNORECASE)
 
@@ -143,11 +144,7 @@ def answered_suppressed_review_ids(
     if not suppressed_reviews:
         return answered
 
-    by_id = {
-        int(r["databaseId"]): r
-        for r in suppressed_reviews
-        if r.get("databaseId") is not None
-    }
+    by_id = {int(r["databaseId"]): r for r in suppressed_reviews if r.get("databaseId") is not None}
 
     replies: list[tuple[str, str]] = []
     for c in issue_comments:
@@ -182,10 +179,7 @@ def answered_suppressed_review_ids(
         if not is_triage_reply_body(body):
             continue
         candidates = [
-            r
-            for r in ordered
-            if int(r["databaseId"]) not in answered
-            and _event_time(r, "submittedAt") <= at
+            r for r in ordered if int(r["databaseId"]) not in answered and _event_time(r, "submittedAt") <= at
         ]
         if candidates:
             answered.add(int(candidates[-1]["databaseId"]))
@@ -201,9 +195,7 @@ def shape_review_open(
     repo = (payload.get("data") or {}).get("repository") or {}
     pr = repo.get("pullRequest")
     if pr is None:
-        raise RuntimeError(
-            "pullRequest is null in GraphQL response (wrong number or no access)"
-        )
+        raise RuntimeError("pullRequest is null in GraphQL response (wrong number or no access)")
 
     threads_out: list[dict[str, Any]] = []
     for thread in pr["reviewThreads"]["nodes"]:
@@ -216,36 +208,30 @@ def shape_review_open(
         author = (first.get("author") or {}).get("login")
         if not is_ai_author(author):
             continue
-        threads_out.append(
-            {
-                "thread_id": thread["id"],
-                "is_resolved": False,
-                "path": first.get("path"),
-                "first_comment": {
-                    "database_id": first.get("databaseId"),
-                    "author": author,
-                    "body": first.get("body") or "",
-                    "original_position": first.get("originalPosition"),
-                },
-                "comment_count": len(comments),
-            }
-        )
+        threads_out.append({
+            "thread_id": thread["id"],
+            "is_resolved": False,
+            "path": first.get("path"),
+            "first_comment": {
+                "database_id": first.get("databaseId"),
+                "author": author,
+                "body": first.get("body") or "",
+                "original_position": first.get("originalPosition"),
+            },
+            "comment_count": len(comments),
+        })
 
     all_reviews = list(pr["reviews"]["nodes"])
     all_ai = [
         r
         for r in all_reviews
-        if r.get("author")
-        and is_ai_author((r["author"] or {}).get("login"))
-        and is_submitted_review(r)
+        if r.get("author") and is_ai_author((r["author"] or {}).get("login")) and is_submitted_review(r)
     ]
     all_ai.sort(key=lambda r: (_event_time(r, "submittedAt"), r.get("databaseId") or 0))
 
     issue_comments = list((pr.get("comments") or {}).get("nodes") or [])
 
-    suppressed_ai = [
-        r for r in all_ai if extract_suppressed_comments(r.get("body") or "")
-    ]
+    suppressed_ai = [r for r in all_ai if extract_suppressed_comments(r.get("body") or "")]
     answered_ids = answered_suppressed_review_ids(
         suppressed_ai,
         issue_comments=issue_comments,
@@ -262,11 +248,7 @@ def shape_review_open(
     if review_id is not None:
         open_suppressed_id = review_id
 
-    scoped_ai = (
-        [r for r in all_ai if r.get("databaseId") == review_id]
-        if review_id is not None
-        else all_ai
-    )
+    scoped_ai = [r for r in all_ai if r.get("databaseId") == review_id] if review_id is not None else all_ai
 
     reviews_out: list[dict[str, Any]] = []
     summary_only: list[dict[str, Any]] = []
@@ -291,16 +273,14 @@ def shape_review_open(
         if not summary_open:
             continue
         for item in suppressed:
-            summary_only.append(
-                {
-                    "review_database_id": rid,
-                    "author": entry["author"],
-                    "path": item.get("path"),
-                    "line": item.get("line"),
-                    "text": item.get("text") or "",
-                    "resolvable": False,
-                }
-            )
+            summary_only.append({
+                "review_database_id": rid,
+                "author": entry["author"],
+                "path": item.get("path"),
+                "line": item.get("line"),
+                "text": item.get("text") or "",
+                "resolvable": False,
+            })
 
     latest = reviews_out[-1] if reviews_out else None
     return {
@@ -315,15 +295,78 @@ def shape_review_open(
     }
 
 
+def ensure_pr_head(
+    pr: int,
+    *,
+    owner: str | None = None,
+    repo: str | None = None,
+    cwd: Path | None = None,
+) -> dict[str, Any]:
+    """Resolve PR head ref and ensure local checkout matches it.
+
+    Dirty working tree/index on a *different* branch refuses checkout. Dirty on the
+    PR head is allowed. Fail closed when checkout cannot establish the head branch.
+    """
+    root = cwd or Path.cwd()
+    view_args = ["pr", "view", str(pr), "--json", "headRefName"]
+    if owner and repo:
+        view_args.extend(["--repo", f"{owner}/{repo}"])
+    meta = json.loads(run_gh(view_args, cwd=root).stdout)
+    head_ref = str(meta.get("headRefName") or "").strip()
+    if not head_ref:
+        raise RuntimeError(f"PR #{pr} has empty headRefName")
+
+    current = run_git(["branch", "--show-current"], cwd=root).stdout.strip()
+    dirty = bool(run_git(["status", "--porcelain"], cwd=root).stdout.strip())
+
+    if current == head_ref:
+        return {
+            "head_ref": head_ref,
+            "current_branch": current,
+            "checked_out": False,
+        }
+
+    if dirty:
+        raise RuntimeError(
+            f"working tree/index dirty on branch {current!r}; refuse checkout of PR #{pr} head {head_ref!r}"
+        )
+
+    checkout_args = ["pr", "checkout", str(pr)]
+    if owner and repo:
+        checkout_args.extend(["--repo", f"{owner}/{repo}"])
+    try:
+        run_gh(checkout_args, cwd=root)
+    except GhError as exc:
+        raise RuntimeError(f"failed to checkout PR #{pr} head {head_ref!r}: {exc}") from exc
+
+    current = run_git(["branch", "--show-current"], cwd=root).stdout.strip()
+    if current != head_ref:
+        raise RuntimeError(f"after checkout expected branch {head_ref!r}, got {current!r}")
+
+    return {
+        "head_ref": head_ref,
+        "current_branch": current,
+        "checked_out": True,
+    }
+
+
 def fetch_review_open(
     pr: int,
     *,
     owner: str | None = None,
     repo: str | None = None,
     review_id: int | None = None,
+    cwd: Path | None = None,
+    ensure_checkout: bool = True,
 ) -> dict[str, Any]:
+    root = cwd or Path.cwd()
     if owner is None or repo is None:
-        owner, repo = repo_owner_name()
+        owner, repo = repo_owner_name(cwd=root)
+
+    head_info: dict[str, Any] | None = None
+    if ensure_checkout:
+        head_info = ensure_pr_head(pr, owner=owner, repo=repo, cwd=root)
+
     proc = run_gh(
         [
             "api",
@@ -336,17 +379,20 @@ def fetch_review_open(
             f"name={repo}",
             "-F",
             f"n={pr}",
-        ]
+        ],
+        cwd=root,
     )
     payload = json.loads(proc.stdout)
     if payload.get("errors"):
         raise RuntimeError(f"GraphQL errors: {payload['errors']}")
     try:
-        return shape_review_open(payload, review_id=review_id)
+        shaped = shape_review_open(payload, review_id=review_id)
     except RuntimeError:
-        raise RuntimeError(
-            f"pullRequest is null for {owner}/{repo}#{pr} (wrong number or no access)"
-        ) from None
+        raise RuntimeError(f"pullRequest is null for {owner}/{repo}#{pr} (wrong number or no access)") from None
+    if head_info is not None:
+        shaped["head_ref"] = head_info["head_ref"]
+        shaped["current_branch"] = head_info["current_branch"]
+    return shaped
 
 
 def review_reply(
@@ -394,16 +440,14 @@ def review_reply(
 
 
 def review_resolve(thread_id: str) -> dict[str, Any]:
-    proc = run_gh(
-        [
-            "api",
-            "graphql",
-            "-f",
-            f"query={RESOLVE_MUTATION}",
-            "-F",
-            f"id={thread_id}",
-        ]
-    )
+    proc = run_gh([
+        "api",
+        "graphql",
+        "-f",
+        f"query={RESOLVE_MUTATION}",
+        "-F",
+        f"id={thread_id}",
+    ])
     payload = json.loads(proc.stdout)
     if payload.get("errors"):
         raise RuntimeError(f"GraphQL errors: {payload['errors']}")

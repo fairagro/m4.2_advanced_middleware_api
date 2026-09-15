@@ -11,6 +11,7 @@ Canonical GitHub Actions for the three m4.2 product repos live in this repositor
 | Helm final release  | [`.github/workflows/reusable-helm-release.yml`](https://github.com/fairagro/m4.2_middleware_devinfra/blob/main/.github/workflows/reusable-helm-release.yml)                               |
 | Helm pre-release    | [`.github/workflows/reusable-helm-pre-release.yml`](https://github.com/fairagro/m4.2_middleware_devinfra/blob/main/.github/workflows/reusable-helm-pre-release.yml)                       |
 | Renovate (per-repo) | [`.github/workflows/renovate.yml`](../.github/workflows/renovate.yml) + [`renovate.json`](../renovate.json) — see [docs/renovate.md](renovate.md)                                         |
+| CodeQL (per-repo)   | [`.github/workflows/codeql.yml`](../.github/workflows/codeql.yml) — thin synced workflow; see below                                                                                       |
 | Sync products       | [`.github/workflows/sync-products.yml`](https://github.com/fairagro/m4.2_middleware_devinfra/blob/main/.github/workflows/sync-products.yml) — allowlist push; see [docs/sync.md](sync.md) |
 
 **Stay product-local (not shared here):** PyPI / TestPyPI publish jobs and ns-pages workflows (API today).
@@ -19,6 +20,13 @@ Renovate is a **thin per-repo workflow** (not `workflow_call`), synced like othe
 a thin Devinfra-hosted job that opens PRs in the three product repos. Both use one bot PAT via repository secret
 `DEVINFRA_BOT_TOKEN` — see [`docs/renovate.md`](renovate.md) and [`docs/sync.md`](sync.md). Same-repo release/Helm/GHCR
 jobs keep using the automatic `secrets.GITHUB_TOKEN` where that is enough.
+
+**CodeQL** is likewise a **thin per-repo workflow** (synced; not `reusable-*.yml`). Triggers: `pull_request` → `main`
+plus a weekly schedule. Python/uv pins come from [`versions.env`](../versions.env) via `scripts/load-versions-env.sh`
+and `uv sync --dev --all-packages` (same bootstrap family as reusable code-quality). Product Renovate must not bump the
+synced `codeql.yml` — see [`docs/renovate.md`](renovate.md). Products pick up the file on the next Devinfra sync
+([#13](https://github.com/fairagro/m4.2_middleware_devinfra/issues/13)); until then divergent local CodeQL copies may
+still attract shadow pin PRs.
 
 Product-distinguishing names use **`workflow_call` inputs** (e.g. `image_base_name`, `chart_dir`) — do not rely on
 silent repository Variables for correct identity.
@@ -52,7 +60,10 @@ synced base in products to “fix” install reproducibility.
 **Version pins (one per component):** concrete numbers live only in repo-root [`versions.env`](../versions.env) (Dev
 Container section + **Product app image** section for `PIP_VERSION`, `ALPINE_*`, `PYINSTALLER_VERSION`; shared
 `PYTHON_VERSION` / `UV_VERSION`). Do **not** duplicate pins as Dockerfile `ARG` defaults or Bake HCL `variable` defaults
-— inject via Bake `--set` / `reusable-build` (after `load-versions-env.sh`).
+— inject via Bake `--set` / `reusable-build` (after `load-versions-env.sh`). The shared base `FROM` lines use
+`${PYTHON_VERSION:?}` / `${ALPINE_MINOR:?}` so a forgotten build-arg fails the build loudly and BuildKit’s
+`InvalidDefaultArgInFrom` check stays clean (products pick this up on the next Devinfra sync of
+`docker/Dockerfile.product-app.base`).
 
 **Structure expectation** for API, sql-to-arc, and harvester: same three-stage skeleton; product differences via base
 ARGs (packages, binary name, optional compile apk extras) and local last-stage finishing. **Product-only** extras (e.g.
@@ -238,6 +249,15 @@ custom `tag_prefix` breaks Helm `appVersion` lookup unless you also change Helm 
 | `pylint_source_roots` | `""`         | Optional comma-separated pylint `--source-roots`                         |
 | `components`          | (optional)   | Accepted for caller compatibility; unused by this workflow               |
 | `skip`                | `false`      | Successful no-op (keeps required check names green)                      |
+
+**pytest vs pre-push:** this workflow runs `uv run pytest "${PKG}" …` **without** the synced pre-push marker filter
+(`-m "not system_external and not system_local"`). CI stays the broader gate; local push excludes `system_*` by default
+— see [Pre-push pytest scope](quality.md#pre-push-pytest-scope) in `docs/quality.md`.
+
+**Markdown (Prettier / markdownlint):** when `skip` is false, the job requires root `package.json` + `package-lock.json`
+(synced from Devinfra), installs Node from the caller’s `versions.env` (`NODE_VERSION`), runs `npm ci`, then
+`npm run format:md:check` and `npm run lint:md` against the same shared configs as commit-stage hooks. Missing manifests
+fail the job (no soft-skip).
 
 Python version comes from the caller’s `versions.env` (`PYTHON_VERSION`) plus matching `.python-version` — there is no
 version override input.
