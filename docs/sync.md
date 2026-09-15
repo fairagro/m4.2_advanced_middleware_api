@@ -45,22 +45,24 @@ Review-fixer follows the same rule: in products, do not `fix` synced paths — `
 ## Allowlist inventory (human-readable)
 
 Machine SoT remains [`synced-paths.yaml`](synced-paths.yaml). This table is a **guide** only — when it disagrees with
-the YAML, the YAML wins. In a **product** checkout, read that YAML (it is synced). Optionally, in a **Devinfra**
-checkout only, resolve the live allowlist with
-[`scripts/sync-products.py --list-files`](https://github.com/fairagro/m4.2_middleware_devinfra/blob/main/scripts/sync-products.py)
-(`uv run python scripts/sync-products.py --list-files`) — that script is not synced into products.
+the YAML, the YAML wins.
 
-| Category                          | Examples on `allow` (non-exhaustive)                                                                                                       |
-| --------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
-| Sync / AI policy docs             | `docs/sync.md`, `docs/synced-paths.yaml`, `docs/ai_review_policy.md`, `docs/quality.md`, `docs/devcontainer.md`, …                         |
-| Agent skills / commands / prompts | `.agents/skills/{issue-fixer,review-fixer,create-issue,arctrl,gh,docker,hadolint,uv}/**`, `.cursor/commands/*`, prompts                    |
-| `m42-ai` package                  | `scripts/ai/**`, `scripts/bin/{gh,git,k,d}`, `scripts/{dev-tokens,set-dev-tokens}.sh`                                                      |
-| Quality scripts / hooks           | `scripts/quality-{check,fix}.sh`, `scripts/setup-git-hooks.sh`, `scripts/git-hooks/**`, `scripts/devcontainer-post-create.sh`              |
-| Python quality fragments          | `ruff.toml`, `mypy.ini`, `.pylintrc`, `.bandit`, `pyrightconfig.json`, `stubs/{arctrl,fable_library}/**`, `.pre-commit-config.yaml`        |
-| Markdown / IDE baseline           | `.markdownlint*`, `.prettier*`, `.vscode/settings.json`, `.vscode/extensions.json`                                                         |
-| Dev Container / image pins        | `.devcontainer/{Dockerfile,devcontainer.json,docker-compose.yml}`, `versions.env`, `.python-version`, `docker/Dockerfile.product-app.base` |
-| Renovate                          | `renovate.json`, `.github/workflows/renovate.yml`                                                                                          |
-| Global prose SoT                  | `docs/surface-quality-bar.global.md`, `openspec/principles.global.md`                                                                      |
+- **Product checkout:** open the synced [`synced-paths.yaml`](synced-paths.yaml) in this repo. Do **not** run
+  `scripts/sync-products.py` here — that script is Devinfra-only and is not present after sync.
+- **Devinfra checkout:** optionally resolve the live allowlist with `--list-files` under [Local dry-run](#local-dry-run)
+  (same script as in the Artifacts table).
+
+| Category                          | Examples on `allow` (non-exhaustive)                                                                                                                               |
+| --------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Sync / AI policy docs             | `docs/sync.md`, `docs/synced-paths.yaml`, `docs/ai_review_policy.md`, `docs/quality.md`, `docs/devcontainer.md`, …                                                 |
+| Agent skills / commands / prompts | `.agents/skills/{issue-fixer,review-fixer,create-issue,arctrl,gh,docker,hadolint,uv}/**`, `.cursor/commands/*`, prompts                                            |
+| `m42-ai` package                  | `scripts/ai/**`, `scripts/bin/{gh,git,k,d}`, `scripts/{dev-tokens,set-dev-tokens}.sh`                                                                              |
+| Quality scripts / hooks           | `scripts/quality-{check,fix}.sh`, `scripts/setup-git-hooks.sh`, `scripts/git-hooks/**`, `scripts/update-dockerfile-pins.sh`, `scripts/devcontainer-post-create.sh` |
+| Python quality fragments          | `ruff.toml`, `mypy.ini`, `.pylintrc`, `.bandit`, `pyrightconfig.json`, `stubs/{arctrl,fable_library}/**`, `.pre-commit-config.yaml`                                |
+| Markdown / IDE baseline           | `.markdownlint*`, `.prettier*`, `package.json`, `package-lock.json`, `.vscode/settings.json`, `.vscode/extensions.json`                                            |
+| Dev Container / image pins        | `.devcontainer/{Dockerfile,devcontainer.json,docker-compose.yml}`, `versions.env`, `.python-version`, `docker/Dockerfile.product-app.base`                         |
+| Renovate                          | `renovate.json`, `.github/workflows/renovate.yml`                                                                                                                  |
+| Global prose SoT                  | `docs/surface-quality-bar.global.md`, `openspec/principles.global.md`                                                                                              |
 
 **Hard excludes / never overwrite:** see `exclude` and `overlays` in the YAML (e.g. `.devcontainer/product.env`,
 `docs/surface-quality-bar.md`, `openspec/principles.md`, `AGENTS.md`, reusable workflows, `middleware/**`).
@@ -127,7 +129,8 @@ Listed under `exclude` in [`docs/synced-paths.yaml`](synced-paths.yaml) (and enf
 
 ## Local dry-run
 
-From the Devinfra repo root (after `uv sync`; PyYAML comes from the project lock):
+From the **Devinfra** repo root only (after `uv sync`; PyYAML comes from the project lock). Product checkouts do not
+ship `scripts/sync-products.py` — use [`synced-paths.yaml`](synced-paths.yaml) there instead.
 
 ```bash
 uv run python scripts/sync-products.py --list-files
