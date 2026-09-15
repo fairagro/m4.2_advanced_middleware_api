@@ -12,8 +12,12 @@ In [m4.2_middleware_devinfra](https://github.com/fairagro/m4.2_middleware_devinf
 
 ### Product consumers
 
-Product repos sync `scripts/ai/` but **do not** add it to the root `tool.uv.workspace`. Invoke with
-`--project scripts/ai` (see below). Do not expect root-workspace membership solely because Devinfra has it.
+Product repos sync `scripts/ai/` (including **`scripts/ai/uv.lock`**) but **do not** add it to the root
+`tool.uv.workspace`. Invoke with `--project scripts/ai` (see below). Do not expect root-workspace membership solely
+because Devinfra has it.
+
+Treat the synced `scripts/ai/uv.lock` as source of truth: prefer `uv run --project scripts/ai --locked …`, do **not**
+hand-edit the lock in product checkouts, and do **not** gitignore it once synced (corrections → Devinfra → sync).
 
 ## Run
 
@@ -34,13 +38,14 @@ Equivalent: `uv run --project scripts/ai m42-ai …`.
 From the **repo root**:
 
 ```bash
-uv run --project scripts/ai m42-ai --help
-uv run --project scripts/ai m42-ai review-open --pr 22
+uv run --project scripts/ai --locked m42-ai --help
+uv run --project scripts/ai --locked m42-ai review-open --pr 22
 ```
 
-Works on a **host** or in the Dev Container. Auth is whatever `gh` on your `PATH` uses (`GH_TOKEN` / `gh auth`) — the
-Dev Container token store and `scripts/bin/gh` wrapper are optional and DC-only. GitHub commands need a repo context
-(`gh` cwd / remotes), unless you pass `--owner` / `--repo` where the command supports them.
+`--locked` fails closed if the synced lock is missing or out of date — that is intentional. Works on a **host** or in
+the Dev Container. Auth is whatever `gh` on your `PATH` uses (`GH_TOKEN` / `gh auth`) — the Dev Container token store
+and `scripts/bin/gh` wrapper are optional and DC-only. GitHub commands need a repo context (`gh` cwd / remotes), unless
+you pass `--owner` / `--repo` where the command supports them.
 
 ## Commands
 
@@ -79,3 +84,17 @@ uv run --project scripts/ai pytest
 ```
 
 Fixtures only — no live GitHub in CI.
+
+## Maintaining `scripts/ai/uv.lock` (Devinfra)
+
+In this repo `scripts/ai` is a workspace member, so `uv lock` at the repo root updates the **root** `uv.lock` only. To
+refresh the **standalone** lock that products sync, lock a copy of the project outside the workspace (same
+`pyproject.toml` / `src` / `README.md`), then copy `uv.lock` into `scripts/ai/`:
+
+```bash
+tmpdir=$(mktemp -d)
+cp scripts/ai/pyproject.toml scripts/ai/README.md "$tmpdir/"
+cp -a scripts/ai/src "$tmpdir/"
+(cd "$tmpdir" && uv lock)
+cp "$tmpdir/uv.lock" scripts/ai/uv.lock
+```

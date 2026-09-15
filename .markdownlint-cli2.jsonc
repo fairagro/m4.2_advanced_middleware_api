@@ -3,6 +3,7 @@
   "ignores": [
     ".venv/**",
     "node_modules/**",
+    "dist/**",
     "LICENSE",
     // Vendor agent skills (`gh skill install`; do not hand-edit).
     ".agents/skills/gh/**",
