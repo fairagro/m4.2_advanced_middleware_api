@@ -1,8 +1,8 @@
 ---
 name: issue-fixer
 description: >-
-  Triages a GitHub issue, explores when required, then either the Bug fast path
-  or OpenSpec (Task/Feature/Refactoring: propose → apply → draft PR → archive).
+  Triages a GitHub issue, explores when required, then either the Task/Bug fast
+  path or OpenSpec (Feature/Refactoring: propose → apply → draft PR → archive).
   No auto-commit of fix commits. Use when the user asks to /issue-fixer, fix an
   issue, or start work from an issue URL/number.
 ---
@@ -93,17 +93,21 @@ When explore is **not** required, skip it and continue to the type-routed next s
 `/review-fixer` and `/create-issue` MUST NOT run OpenSpec. Standalone `/opsx-*` remain available when the user invokes
 them explicitly outside these skills.
 
-Default by org issue type (user override wins: “use opsx” on a Bug, or “skip openspec” on a Task):
+Default by org issue type (user override wins: “use opsx” on a Bug/Task, or “skip openspec” on a Feature):
 
-| Type                             | OpenSpec?                                                        |
-| -------------------------------- | ---------------------------------------------------------------- |
-| `Task`, `Feature`, `Refactoring` | **Required** — unless the slice is clearly **docs-only** (below) |
-| `Bug`, cheap `Security`          | **No** unless the user asks                                      |
-| `Discussion`                     | No implement by default                                          |
+| Type                            | OpenSpec?                                                            |
+| ------------------------------- | -------------------------------------------------------------------- |
+| `Feature`, `Refactoring`        | **Required** — unless the slice is clearly **docs-only** (below)     |
+| `Task`, `Bug`, cheap `Security` | **No** unless the user asks — **except** skill file in scope (below) |
+| `Discussion`                    | No implement by default                                              |
 
-**Docs-only (no OpenSpec):** it is clear the slice only changes Markdown/MDC and/or code comments. **Exception:** if a
-skill file is in scope (`SKILL.md` under `.agents/skills/` or `.cursor/skills/`), OpenSpec stays required. Markdown
-under `openspec/specs/` or `openspec/changes/` is not docs-only. If unclear, keep OpenSpec for Task/Feature/Refactoring.
+**Docs-only (no OpenSpec):** Feature/Refactoring only — it is clear the slice only changes Markdown/MDC and/or code
+comments. **Skill file exception:** if a skill file is in scope (`SKILL.md` under `.agents/skills/` or
+`.cursor/skills/`), OpenSpec stays required even for Task. Markdown under `openspec/specs/` or `openspec/changes/` is
+not docs-only. If docs-only is unclear for Feature/Refactoring, keep OpenSpec.
+
+**Misfiled Task:** if a Task clearly changes a capability under `openspec/specs/`, pause once and ask to retype as
+Feature or confirm `use opsx` — do **not** silently create an OpenSpec change.
 
 **Embed (do not copy skill steps into this file):**
 
@@ -114,8 +118,9 @@ under `openspec/specs/` or `openspec/changes/` is not docs-only. If unclear, kee
 - Archive: read and follow
   [`.cursor/skills/openspec-archive-change/SKILL.md`](../../../.cursor/skills/openspec-archive-change/SKILL.md)
 
-**`skip_specs` vs delta specs:** write a real delta spec when a capability contract changes. Set `skip_specs: true` only
-for docs/tooling with **no** spec-level behavior change. Do not invent a requirement solely to pass `openspec validate`.
+**`skip_specs` vs delta specs:** when OpenSpec **is** used, write a real delta spec when a capability contract changes.
+Set `skip_specs: true` only for docs/tooling with **no** spec-level behavior change. Do not invent a requirement solely
+to pass `openspec validate`.
 
 This skill is Devinfra source of truth (synced allowlist). Products MUST NOT fork it.
 
@@ -131,18 +136,20 @@ On every run that will implement, after explore (when it ran) or immediately whe
 
    Do **not** commit, push, or open a draft PR yet. If already on the correct issue branch, skip creating it again.
 
-2. **Task / Feature / Refactoring** (OpenSpec path), unless docs-only with no skill file:
+2. **Feature / Refactoring** (OpenSpec path), unless docs-only with no skill file — also any type with a skill file in
+   scope, or Task/Bug with explicit `use opsx`:
 
    1. Follow openspec-propose → **pause** (user reviews proposal / specs / design / tasks).
    2. On `go`: follow openspec-apply → **pause** (user reviews working tree; they commit/push).
    3. On `go`: ensure a **draft** PR when the tip is ahead of `main` (next section).
    4. On `go` (**last**): follow openspec-archive → **pause** so the user can commit archive results.
 
-3. **Bug / cheap Security**, and **docs-only** Task/Feature/Refactoring that do not touch a skill file: implement in the
-   working tree → **pause** → on `go`: draft PR when ahead of `main`. Do **not** create an OpenSpec change for process.
+3. **Task / Bug / cheap Security**, and **docs-only** Feature/Refactoring that do not touch a skill file: implement in
+   the working tree → **pause** → on `go`: draft PR when ahead of `main`. Do **not** create an OpenSpec change for
+   process.
 
 Early exits that never implement skip this cadence. Once the user asks to implement a `Discussion`, start at branch +
-the type-routed path (OpenSpec if they retyped it as Task/Feature/Refactoring).
+the type-routed path (OpenSpec if they retyped it as Feature/Refactoring).
 
 ## Branch + draft PR (real commits only)
 
@@ -219,8 +226,9 @@ invocation per issue, max 3–6). Do **not** call `gh issue create` with an issu
 - Distinct follow-up problem (not in done-when) → `relation: linked`.
 - Unclear → ask once; default `linked`.
 
-Types for slices: `Refactoring` when structural; `Task` when the parent is only subdivided; keep Bug/Feature/Security
-when the slice retains that nature.
+Types for slices: `Refactoring` when structural; `Task` when the parent is only subdivided into known-how work; keep
+Bug/Feature/Security when the slice retains that nature. Prefer `Feature` when the slice adds a durable capability
+contract.
 
 Link deferred issue URLs from the PR body. If create-issue is missing in a consumer checkout, say so and print intended
 create-issue inputs — do not invent an off-allowlist create path.
@@ -229,8 +237,8 @@ create-issue inputs — do not invent an off-allowlist create path.
 
 - Follow Type Safety in [`openspec/principles.global.md`](../../../openspec/principles.global.md): no wide types (`Any`,
   `object`, unnecessary `T | None`).
-- Update specs only when the real contract changes (OpenSpec delta on the Task/Feature/Refactoring path; archive folds
-  into main specs).
+- Update specs only when the real contract changes (OpenSpec delta on the Feature/Refactoring path, or Task with skill
+  file / `use opsx`; archive folds into main specs).
 
 ## Surface quality bar (`scripts/` — implement)
 
@@ -250,7 +258,7 @@ Provide:
 
 - Issue URL + number + org issue type
 - Whether explore ran and what was locked
-- Whether OpenSpec ran (change name) or the Bug fast path
+- Whether OpenSpec ran (change name) or the Task/Bug fast path
 - Branch name
 - Draft PR URL when opened (or “PR deferred until real commits” / “skipped PR creation”)
 - Created sub-issue / linked-issue URLs (or none)
