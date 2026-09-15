@@ -215,3 +215,30 @@ implementation module), move it to the sub-component `config.py` and then:
 2. Update references/messages/docs that mention the old import path.
 3. Verify that no sub-config imports `middleware.api.config`.
 4. Run focused unit tests for affected modules.
+
+## Pytest markers (`system_external` / `system_local`)
+
+Registered in root `pyproject.toml`. Heavy suites live under:
+
+| Directory | Marker | Typical deps |
+| --------- | ------ | ------------ |
+| `middleware/api/tests/system_external/` | `system_external` | Testcontainers + real GitLab (`GITLAB_API_TOKEN`) |
+| `middleware/api/tests/system_local/` | `system_local` | Testcontainers only (e.g. CouchDB) |
+
+Directory `conftest.py` files set `pytestmark` so new tests inherit the marker.
+
+**Intentional runs:**
+
+```bash
+uv run pytest -m system_external
+uv run pytest -m system_local
+```
+
+**Pre-push (after Devinfra [#120](https://github.com/fairagro/m4.2_middleware_devinfra/issues/120)):** synced hook uses
+`-m "not system_external and not system_local"` so those suites stay off the push gate. Do not fork
+`.pre-commit-config.yaml` for this — keep markers accurate instead.
+
+```bash
+# Approximate local pre-push pytest scope
+uv run pytest -m "not system_external and not system_local"
+```
