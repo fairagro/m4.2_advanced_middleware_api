@@ -93,7 +93,8 @@ Examples already in the shared skeleton:
 - `check-yaml` excludes Go-templated Helm under `helm/**/templates/` and `helmchart/**/templates/` (and vendor skill
   trees) — safe when those paths are absent.
 - CST bake target / image tag come from env (`CST_BAKE_*`), not from a product-hardcoded hook entry.
-- pytest uses product `pyproject.toml` discovery; the hook stays `uv run pytest`.
+- pytest uses product `pyproject.toml` discovery; the shared pre-push hook runs
+  `uv run pytest -m "not system_external and not system_local"` (see [Pre-push pytest scope](#pre-push-pytest-scope)).
 
 Path overlays for Mypy/Pylint belong **outside** the synced YAML (optional `.devcontainer/product.env`, process env, and
 reusable CI inputs such as `mypy_path` and `pylint_source_roots` in [`docs/ci.md`](ci.md) — not synced JSON `remoteEnv`
@@ -105,14 +106,14 @@ Product repos historically kept large `[tool.ruff]` / `[tool.mypy]` / `[tool.pyl
 Canonical copies live here as **fragment files** so sync (#13) can overwrite them without replacing product `[project]`
 / uv workspace sections.
 
-| Sync into products                          | Keep product-local                                                                      |
-| ------------------------------------------- | --------------------------------------------------------------------------------------- |
-| `ruff.toml`                                 | Root `pyproject.toml` `[project]`, `[tool.uv.*]`, deps (no product Ruff overlay)        |
-| `mypy.ini`                                  | Import-path overlays via **env** (e.g. `MYPYPATH` in CI/`product.env`), not `pyproject` |
-| `.pylintrc`                                 | Import-path overlays via CI input / env-driven invocation (`pylint_source_roots`)       |
-| `pyrightconfig.json`                        | Product third-party stubs under `stubs/` (`stubPath`); no middleware `extraPaths`       |
-| `stubs/arctrl/**`, `stubs/fable_library/**` | Put `stubs` on `MYPYPATH`; no `[mypy-arctrl*]` in synced `mypy.ini`                     |
-| `.bandit`                                   | pytest / coverage tool tables (unless later unified)                                    |
+| Sync into products                          | Keep product-local                                                                                               |
+| ------------------------------------------- | ---------------------------------------------------------------------------------------------------------------- |
+| `ruff.toml`                                 | Root `pyproject.toml` `[project]`, `[tool.uv.*]`, deps (no product Ruff overlay)                                 |
+| `mypy.ini`                                  | Import-path overlays via **env** (e.g. `MYPYPATH` in CI/`product.env`), not `pyproject`                          |
+| `.pylintrc`                                 | Import-path overlays via CI input / env-driven invocation (`pylint_source_roots`)                                |
+| `pyrightconfig.json`                        | Product third-party stubs under `stubs/` (`stubPath`); no middleware `extraPaths`                                |
+| `stubs/arctrl/**`, `stubs/fable_library/**` | Put `stubs` on `MYPYPATH`; no `[mypy-arctrl*]` in synced `mypy.ini`                                              |
+| `.bandit`                                   | pytest / coverage tool tables ([#123](https://github.com/fairagro/m4.2_middleware_devinfra/issues/123) deferred) |
 
 Shared hooks and reusable CI invoke `mypy --config-file mypy.ini` and `pylint --rcfile .pylintrc`. Those flags mean
 product `[tool.mypy]` / `[tool.pylint.*]` in `pyproject.toml` are **ignored**. Do **not** put path overlays into the
@@ -201,6 +202,31 @@ product scripts such as `install-dev-hooks.sh`.
 On `git push`, `pre-push` runs the shared pre-commit **pre-push** stage (pytest +
 `scripts/run-container-structure-test.sh` from the #7 skeleton). Product Dockerfiles / CST YAML stay in consumers. Needs
 Docker/tests when those hooks are active.
+
+### Pre-push pytest scope
+
+Synced pre-push pytest excludes heavy system suites by default:
+
+```text
+-m "not system_external and not system_local"
+```
+
+Products must register those markers in local `pyproject.toml` (or equivalent) so `--strict-markers` stays valid. A
+shared pytest-plugin / coverage-fragment SoT is deferred
+([#123](https://github.com/fairagro/m4.2_middleware_devinfra/issues/123)) — do **not** hand-copy marker strings into
+Devinfra sync blobs as a permanent product fork.
+
+The remaining suite can still take several minutes. The hook prints a short notice before pytest runs.
+`SKIP=pytest git push` is an **escape hatch only**, not the normal workflow.
+
+| Where                        | Scope                                                                  |
+| ---------------------------- | ---------------------------------------------------------------------- |
+| Synced pre-push              | Excludes `system_external` / `system_local`                            |
+| Reusable / product CI        | Broader suite — does **not** inherit the pre-push `-m` filter          |
+| Intentional local `system_*` | Explicit `uv run pytest -m system_external` (or `system_local`) / path |
+
+Do **not** fork synced `.pre-commit-config.yaml` to restore system tests on every push — run them intentionally or rely
+on CI ([`docs/ci.md`](ci.md)).
 
 **Git LFS:** not part of the shared Devinfra image or hook installer. Products that need LFS own install and overlays
 entirely in the product repo; re-apply product-side after clone/rebuild when needed — see
