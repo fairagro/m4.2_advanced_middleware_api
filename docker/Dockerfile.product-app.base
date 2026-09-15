@@ -14,7 +14,9 @@
 # Do NOT put concrete version numbers in this file. Pins live only in repo-root versions.env
 # (one pin per component). Pass them as Bake / --build-arg (reusable-build and
 # scripts/run-container-structure-test.sh do this after sourcing versions.env).
-#
+# FROM lines use ${PYTHON_VERSION:?} / ${ALPINE_MINOR:?} so missing build-args fail loudly
+# and BuildKit InvalidDefaultArgInFrom stays quiet (no ARG defaults that drift from versions.env).
+
 # ── ARGs (required unless noted) ───────────────────────────────────────────────
 # Toolchain (FROM-scoped — declare before first FROM):
 #   PYTHON_VERSION, ALPINE_MINOR, PIP_VERSION, UV_VERSION
@@ -41,7 +43,7 @@ ARG PIP_VERSION
 ARG UV_VERSION
 
 # ── package-builder ───────────────────────────────────────────────────────────
-FROM python:${PYTHON_VERSION}-alpine${ALPINE_MINOR} AS package-builder
+FROM python:${PYTHON_VERSION:?}-alpine${ALPINE_MINOR:?} AS package-builder
 
 ARG APP_VERSION=0.0.0
 ARG PIP_VERSION
@@ -75,7 +77,7 @@ ARG ALPINE_MINOR
 ARG PIP_VERSION
 ARG UV_VERSION
 
-FROM python:${PYTHON_VERSION}-alpine${ALPINE_MINOR} AS binary-builder
+FROM python:${PYTHON_VERSION:?}-alpine${ALPINE_MINOR:?} AS binary-builder
 
 ARG APP_VERSION=0.0.0
 ARG PIP_VERSION
