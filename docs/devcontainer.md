@@ -48,10 +48,12 @@ On sync, Prettier + markdownlint-cli2 (and their extensions) **replace or supple
 format/lint setups. Prefer `signageos.signageos-vscode-sops` (Open VSX / Cursor) over `shipitsmarter.sops-edit`.
 
 **Git LFS** is not part of the shared image or shared hook installer. Products that need it (e.g. sql-to-arc) own
-install and hook overlays entirely in the product repo (independent of Devinfra). Shared `setup-git-hooks.sh` only
-installs the quality `pre-push` and does not remove or manage LFS hooks. Shared postCreate does **not** call product
-scripts such as `install-dev-hooks.sh` / `setup-git-lfs.sh`, and you MUST NOT edit synced JSON `postCreate` for LFS —
-re-apply LFS product-side after clone/rebuild when needed.
+install and hook overlays entirely in the product repo (independent of Devinfra). Shared `setup-git-hooks.sh` installs a
+**dispatcher** (`.git/hooks/pre-push`) plus shared `.git/hooks/pre-push.d/50-quality`; it does not remove foreign
+`pre-push.d` fragments or manage LFS `post-*` hooks. Products add numbered fragments under `pre-push.d/` (e.g.
+`10-git-lfs` before `50-quality`). Shared postCreate does **not** hard-code `install-dev-hooks.sh` / `setup-git-lfs.sh`;
+optional product work runs via **`scripts/devcontainer-post-create.d/*.sh`** (sorted, T-late, hard-fail if present and
+non-executable or non-zero). Do **not** edit synced JSON `postCreate` for LFS.
 
 ## Tool versions
 
@@ -193,13 +195,17 @@ Runs `scripts/devcontainer-post-create.sh` once per create:
 - `uv sync --dev --all-packages` when `pyproject.toml` exists (dev dependency group + all uv workspace members; same
   flags as reusable code-quality CI). Stale `.venv` with a broken interpreter is removed first when detected.
 - `pre-commit install --hook-type pre-commit`
-- `./scripts/setup-git-hooks.sh` (project pre-push quality hook only; does not manage Git LFS or call product scripts)
+- `./scripts/setup-git-hooks.sh` (dispatcher + `pre-push.d/50-quality`; does not manage Git LFS or hard-code product
+  scripts)
 - import `public_gpg_keys/*.asc` when present (skip if absent)
 - optionally decrypt repo-root `.env.integration.enc` → `.env` when present (skip if `.env` already non-empty,
   ciphertext absent, or `sops`/keys unavailable; never fails create; does **not** patch bashrc to `source` `.env`)
 - soft-fail install of recommended IDE extensions via Cursor/VS Code remote CLI (shared product set: Docker/Helm/
   Python/Ruff/Pylint/Mypy, PlantUML, Kubernetes Tools, signageos SOPS, Prettier, markdownlint, … — same list as
   `devcontainer.json` and synced `.vscode/extensions.json`)
+- **T-late:** run `scripts/devcontainer-post-create.d/*` when present (sorted; hard-fail if not executable or non-zero;
+  skip cleanly if the directory is absent/empty). Product-owned, **not** synced — e.g. a thin drop-in that runs
+  `setup-git-lfs.sh`
 
 `PATH` with `/workspace/.venv/bin` and `/workspace/scripts/bin` first, plus `VIRTUAL_ENV=/workspace/.venv`, comes from
 `.devcontainer/devcontainer.json` (`remoteEnv`, literal `/workspace`) after rebuild — not from `~/.bashrc`.
