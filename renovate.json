@@ -32,14 +32,14 @@
   },
 
   "devcontainer": {
-    "fileMatch": ["(^|/)\\.devcontainer(/.+)?/devcontainer\\.json$"]
+    "managerFilePatterns": ["/(^|/)\\.devcontainer(/.+)?/devcontainer\\.json$/"]
   },
 
   "customManagers": [
     {
       "description": "Python patch pin in versions.env",
       "customType": "regex",
-      "fileMatch": ["^versions\\.env$"],
+      "managerFilePatterns": ["/^versions\\.env$/"],
       "matchStrings": ["PYTHON_VERSION=(?<currentValue>\\d+\\.\\d+\\.\\d+)"],
       "datasourceTemplate": "docker",
       "depNameTemplate": "python",
@@ -49,7 +49,7 @@
     {
       "description": "Python patch pin in .python-version (mirror of versions.env)",
       "customType": "regex",
-      "fileMatch": ["^\\.python-version$"],
+      "managerFilePatterns": ["/^\\.python-version$/"],
       "matchStrings": ["^(?<currentValue>\\d+\\.\\d+\\.\\d+)\\s*$"],
       "datasourceTemplate": "docker",
       "depNameTemplate": "python",
@@ -59,7 +59,7 @@
     {
       "description": "Alpine patch pin in versions.env",
       "customType": "regex",
-      "fileMatch": ["^versions\\.env$"],
+      "managerFilePatterns": ["/^versions\\.env$/"],
       "matchStrings": ["ALPINE_VERSION=(?<currentValue>\\d+\\.\\d+\\.\\d+)"],
       "datasourceTemplate": "docker",
       "depNameTemplate": "alpine",
@@ -69,7 +69,7 @@
     {
       "description": "Dev Container base image pin in versions.env",
       "customType": "regex",
-      "fileMatch": ["^versions\\.env$"],
+      "managerFilePatterns": ["/^versions\\.env$/"],
       "matchStrings": [
         "DEVCONTAINER_BASE_IMAGE=(?<depName>[^:\\s#]+):(?<currentValue>[^\\s#]+)"
       ],
@@ -79,7 +79,7 @@
     {
       "description": "uv pin in versions.env",
       "customType": "regex",
-      "fileMatch": ["^versions\\.env$"],
+      "managerFilePatterns": ["/^versions\\.env$/"],
       "matchStrings": ["UV_VERSION=(?<currentValue>[^\\s#]+)"],
       "datasourceTemplate": "pypi",
       "depNameTemplate": "uv",
@@ -88,7 +88,7 @@
     {
       "description": "pip pin in versions.env",
       "customType": "regex",
-      "fileMatch": ["^versions\\.env$"],
+      "managerFilePatterns": ["/^versions\\.env$/"],
       "matchStrings": ["PIP_VERSION=(?<currentValue>[^\\s#]+)"],
       "datasourceTemplate": "pypi",
       "depNameTemplate": "pip",
@@ -97,7 +97,7 @@
     {
       "description": "PyInstaller pin in versions.env",
       "customType": "regex",
-      "fileMatch": ["^versions\\.env$"],
+      "managerFilePatterns": ["/^versions\\.env$/"],
       "matchStrings": ["PYINSTALLER_VERSION=(?<currentValue>[^\\s#]+)"],
       "datasourceTemplate": "pypi",
       "depNameTemplate": "pyinstaller",
@@ -106,7 +106,7 @@
     {
       "description": "Trivy pin in versions.env",
       "customType": "regex",
-      "fileMatch": ["^versions\\.env$"],
+      "managerFilePatterns": ["/^versions\\.env$/"],
       "matchStrings": ["TRIVY_VERSION=(?<currentValue>v?[^\\s#]+)"],
       "datasourceTemplate": "github-releases",
       "depNameTemplate": "aquasecurity/trivy",
@@ -116,7 +116,7 @@
     {
       "description": "Renovate CLI pin in versions.env",
       "customType": "regex",
-      "fileMatch": ["^versions\\.env$"],
+      "managerFilePatterns": ["/^versions\\.env$/"],
       "matchStrings": ["RENOVATE_VERSION=(?<currentValue>[^\\s#]+)"],
       "datasourceTemplate": "npm",
       "depNameTemplate": "renovate",
@@ -125,7 +125,7 @@
     {
       "description": "OpenSpec CLI pin in versions.env",
       "customType": "regex",
-      "fileMatch": ["^versions\\.env$"],
+      "managerFilePatterns": ["/^versions\\.env$/"],
       "matchStrings": ["OPENSPEC_VERSION=(?<currentValue>[^\\s#]+)"],
       "datasourceTemplate": "npm",
       "depNameTemplate": "@fission-ai/openspec",
@@ -134,7 +134,7 @@
     {
       "description": "Prettier pin in versions.env",
       "customType": "regex",
-      "fileMatch": ["^versions\\.env$"],
+      "managerFilePatterns": ["/^versions\\.env$/"],
       "matchStrings": ["PRETTIER_VERSION=(?<currentValue>[^\\s#]+)"],
       "datasourceTemplate": "npm",
       "depNameTemplate": "prettier",
@@ -143,7 +143,7 @@
     {
       "description": "markdownlint-cli2 pin in versions.env",
       "customType": "regex",
-      "fileMatch": ["^versions\\.env$"],
+      "managerFilePatterns": ["/^versions\\.env$/"],
       "matchStrings": ["MARKDOWNLINT_CLI2_VERSION=(?<currentValue>[^\\s#]+)"],
       "datasourceTemplate": "npm",
       "depNameTemplate": "markdownlint-cli2",
@@ -152,7 +152,7 @@
     {
       "description": "Node pin in versions.env",
       "customType": "regex",
-      "fileMatch": ["^versions\\.env$"],
+      "managerFilePatterns": ["/^versions\\.env$/"],
       "matchStrings": ["NODE_VERSION=(?<currentValue>v?[^\\s#]+)"],
       "datasourceTemplate": "node-version",
       "depNameTemplate": "node",
@@ -162,7 +162,7 @@
     {
       "description": "kubectl pin in versions.env",
       "customType": "regex",
-      "fileMatch": ["^versions\\.env$"],
+      "managerFilePatterns": ["/^versions\\.env$/"],
       "matchStrings": ["KUBECTL_VERSION=(?<currentValue>v?[^\\s#]+)"],
       "datasourceTemplate": "github-releases",
       "depNameTemplate": "kubernetes/kubernetes",
@@ -172,7 +172,7 @@
     {
       "description": "Helm pin in versions.env",
       "customType": "regex",
-      "fileMatch": ["^versions\\.env$"],
+      "managerFilePatterns": ["/^versions\\.env$/"],
       "matchStrings": ["HELM_VERSION=(?<currentValue>v?[^\\s#]+)"],
       "datasourceTemplate": "github-releases",
       "depNameTemplate": "helm/helm",
@@ -182,7 +182,7 @@
     {
       "description": "Minikube pin in versions.env",
       "customType": "regex",
-      "fileMatch": ["^versions\\.env$"],
+      "managerFilePatterns": ["/^versions\\.env$/"],
       "matchStrings": ["MINIKUBE_VERSION=(?<currentValue>v?[^\\s#]+)"],
       "datasourceTemplate": "github-releases",
       "depNameTemplate": "kubernetes/minikube",
@@ -192,7 +192,7 @@
     {
       "description": "SOPS pin in versions.env",
       "customType": "regex",
-      "fileMatch": ["^versions\\.env$"],
+      "managerFilePatterns": ["/^versions\\.env$/"],
       "matchStrings": ["SOPS_VERSION=(?<currentValue>v?[^\\s#]+)"],
       "datasourceTemplate": "github-releases",
       "depNameTemplate": "getsops/sops",
@@ -202,7 +202,7 @@
     {
       "description": "age pin in versions.env",
       "customType": "regex",
-      "fileMatch": ["^versions\\.env$"],
+      "managerFilePatterns": ["/^versions\\.env$/"],
       "matchStrings": ["AGE_VERSION=(?<currentValue>v?[^\\s#]+)"],
       "datasourceTemplate": "github-releases",
       "depNameTemplate": "FiloSottile/age",
@@ -212,7 +212,7 @@
     {
       "description": "yq pin in versions.env",
       "customType": "regex",
-      "fileMatch": ["^versions\\.env$"],
+      "managerFilePatterns": ["/^versions\\.env$/"],
       "matchStrings": ["YQ_VERSION=(?<currentValue>v?[^\\s#]+)"],
       "datasourceTemplate": "github-releases",
       "depNameTemplate": "mikefarah/yq",
@@ -222,7 +222,7 @@
     {
       "description": "xq pin in versions.env",
       "customType": "regex",
-      "fileMatch": ["^versions\\.env$"],
+      "managerFilePatterns": ["/^versions\\.env$/"],
       "matchStrings": ["XQ_VERSION=(?<currentValue>v?[^\\s#]+)"],
       "datasourceTemplate": "github-releases",
       "depNameTemplate": "sibprogrammer/xq",
@@ -232,7 +232,7 @@
     {
       "description": "yamlfmt pin in versions.env",
       "customType": "regex",
-      "fileMatch": ["^versions\\.env$"],
+      "managerFilePatterns": ["/^versions\\.env$/"],
       "matchStrings": ["YAMLFMT_VERSION=(?<currentValue>v?[^\\s#]+)"],
       "datasourceTemplate": "github-releases",
       "depNameTemplate": "google/yamlfmt",
@@ -242,7 +242,7 @@
     {
       "description": "hadolint pin in versions.env",
       "customType": "regex",
-      "fileMatch": ["^versions\\.env$"],
+      "managerFilePatterns": ["/^versions\\.env$/"],
       "matchStrings": ["HADOLINT_VERSION=(?<currentValue>v?[^\\s#]+)"],
       "datasourceTemplate": "github-releases",
       "depNameTemplate": "hadolint/hadolint",
@@ -252,7 +252,7 @@
     {
       "description": "Starship pin in versions.env",
       "customType": "regex",
-      "fileMatch": ["^versions\\.env$"],
+      "managerFilePatterns": ["/^versions\\.env$/"],
       "matchStrings": ["STARSHIP_VERSION=(?<currentValue>v?[^\\s#]+)"],
       "datasourceTemplate": "github-releases",
       "depNameTemplate": "starship/starship",
@@ -262,7 +262,7 @@
     {
       "description": "container-structure-test pin in versions.env",
       "customType": "regex",
-      "fileMatch": ["^versions\\.env$"],
+      "managerFilePatterns": ["/^versions\\.env$/"],
       "matchStrings": ["CST_VERSION=(?<currentValue>v?[^\\s#]+)"],
       "datasourceTemplate": "github-releases",
       "depNameTemplate": "GoogleContainerTools/container-structure-test",
@@ -302,23 +302,31 @@
     },
     {
       "description": "Python 3.12 global lock (versions.env + .python-version)",
-      "matchManagers": ["dockerfile", "devcontainer", "github-actions", "custom.regex"],
-      "matchPackagePatterns": ["python"],
+      "matchManagers": [
+        "dockerfile",
+        "devcontainer",
+        "github-actions",
+        "custom.regex"
+      ],
       "allowedVersions": "/^3\\.12/",
-      "groupName": "Python 3.12 runtime"
+      "groupName": "Python 3.12 runtime",
+      "matchPackageNames": ["/python/"]
     },
     {
       "description": "Runtime Sync: Docker + Devcontainer base images",
       "matchManagers": ["dockerfile", "devcontainer", "custom.regex"],
-      "matchPackagePatterns": ["^alpine$", "^mcr\\.microsoft\\.com/devcontainers"],
-      "groupName": "Runtime base (Docker + Devcontainer)"
+      "groupName": "Runtime base (Docker + Devcontainer)",
+      "matchPackageNames": [
+        "/^alpine$/",
+        "/^mcr\\.microsoft\\.com/devcontainers/"
+      ]
     },
     {
       "description": "Devcontainer features",
       "matchManagers": ["devcontainer"],
-      "matchPackagePatterns": ["ghcr\\.io/.*/features/", "/features/"],
       "groupName": "Devcontainer features",
-      "separateMinorPatch": true
+      "separateMinorPatch": true,
+      "matchPackageNames": ["/ghcr\\.io/.*/features//", "//features//"]
     },
     {
       "description": "Python application dependencies (uv / pep621)",
@@ -371,5 +379,9 @@
     }
   ],
 
-  "ignorePaths": ["**/node_modules/**", "**/__pycache__/**", "openspec/changes/**"]
+  "ignorePaths": [
+    "**/node_modules/**",
+    "**/__pycache__/**",
+    "openspec/changes/**"
+  ]
 }

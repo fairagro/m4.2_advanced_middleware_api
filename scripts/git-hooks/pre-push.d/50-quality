@@ -1,0 +1,39 @@
+#!/usr/bin/env bash
+# Shared quality pre-push fragment: pre-commit pre-push stage (pytest / CST when configured).
+# Installed as .git/hooks/pre-push.d/50-quality via scripts/setup-git-hooks.sh.
+#
+# Environment: host or Dev Container (needs uv/pre-commit for the quality stage).
+# Stdin is the git pre-push ref list (replayed by the dispatcher).
+
+set -euo pipefail
+
+stdin_file="$(mktemp)"
+trap 'rm -f "${stdin_file}"' EXIT
+cat >"${stdin_file}"
+
+# Resolve repo root (hooks run with cwd = worktree root for normal pushes).
+repo_root="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
+cd "${repo_root}"
+
+ARGS=(hook-impl --config=.pre-commit-config.yaml --hook-type=pre-push)
+# Fragment lives in pre-push.d/; pre-commit --hook-dir is the parent hooks directory.
+HOOKS_DIR="$(cd "$(dirname "$0")/.." && pwd)"
+ARGS+=(--hook-dir "${HOOKS_DIR}" -- "$@")
+
+if command -v uv >/dev/null 2>&1 && [[ -f "${repo_root}/pyproject.toml" ]]; then
+  uv run pre-commit "${ARGS[@]}" <"${stdin_file}"
+  exit $?
+fi
+
+if [[ -x "${repo_root}/.venv/bin/python" ]]; then
+  "${repo_root}/.venv/bin/python" -m pre_commit "${ARGS[@]}" <"${stdin_file}"
+  exit $?
+fi
+
+if command -v pre-commit >/dev/null 2>&1; then
+  pre-commit "${ARGS[@]}" <"${stdin_file}"
+  exit $?
+fi
+
+echo >&2 "pre-commit not found. Run: uv sync && ensure 'uv' is on PATH (or activate .venv)."
+exit 1

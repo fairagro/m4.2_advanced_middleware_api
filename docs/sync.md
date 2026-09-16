@@ -58,7 +58,7 @@ the YAML, the YAML wins.
 | Agent skills / commands / prompts | `.agents/skills/{issue-fixer,review-fixer,create-issue,arctrl,gh,docker,hadolint,uv}/**`, `.cursor/commands/*`, prompts                                            |
 | `m42-ai` package                  | `scripts/ai/**`, `scripts/bin/{gh,git,k,d}`, `scripts/{dev-tokens,set-dev-tokens}.sh`                                                                              |
 | Quality scripts / hooks           | `scripts/quality-{check,fix}.sh`, `scripts/setup-git-hooks.sh`, `scripts/git-hooks/**`, `scripts/update-dockerfile-pins.sh`, `scripts/devcontainer-post-create.sh` |
-| Python quality fragments          | `ruff.toml`, `mypy.ini`, `.pylintrc`, `.bandit`, `pyrightconfig.json`, `stubs/{arctrl,fable_library}/**`, `.pre-commit-config.yaml`                                |
+| Python quality fragments          | `ruff.toml`, `mypy.ini`, `.pylintrc`, `.bandit`, `pyrightconfig.json`, `.pre-commit-config.yaml`                                                                   |
 | Markdown / IDE baseline           | `.markdownlint*`, `.prettier*`, `package.json`, `package-lock.json`, `.vscode/settings.json`, `.vscode/extensions.json`                                            |
 | Fleet ignore baseline             | root `.gitignore` (incl. `.docker/buildx/` + token-seed runtime; product-only paths → nested `.gitignore`; see Overlays)                                           |
 | Dev Container / image pins        | `.devcontainer/{Dockerfile,devcontainer.json,docker-compose.yml,starship.toml}`, `versions.env`, `.python-version`, `docker/Dockerfile.product-app.base`           |
@@ -77,8 +77,9 @@ the YAML, the YAML wins.
 | **Verbatim shared fragment**     | Fleet wants identical policy; product deltas are wrong or go upstream                    | `ruff.toml` ([#60](https://github.com/fairagro/m4.2_middleware_devinfra/issues/60)), `pyrightconfig.json` ([#64](https://github.com/fairagro/m4.2_middleware_devinfra/issues/64)), `.vscode/settings.json` + `.vscode/extensions.json` (recommendations match Dev Container extensions — [#118](https://github.com/fairagro/m4.2_middleware_devinfra/issues/118)), `.devcontainer/devcontainer.json` + `docker-compose.yml` (`/workspace`, basename `name`/volumes, `remoteEnv.PATH` for `.venv/bin`+`scripts/bin` — [#65](https://github.com/fairagro/m4.2_middleware_devinfra/issues/65)/[#58](https://github.com/fairagro/m4.2_middleware_devinfra/issues/58)), `.pre-commit-config.yaml` ([#63](https://github.com/fairagro/m4.2_middleware_devinfra/issues/63)), root `.gitignore` ([#62](https://github.com/fairagro/m4.2_middleware_devinfra/issues/62)) |
 | **Nested `.gitignore` overlays** | Git has no root-ignore merge; product-only paths must not live in the synced root file   | e.g. `helmchart/.gitignore` (TLS scratch), `dev_environment/.gitignore` (`demo_output`) — sync never overwrites nested ignore files; do **not** append product lines to root after sync. Fleet-wide Docker Buildx / token-seed under `.docker/` belongs in the synced root baseline ([#141](https://github.com/fairagro/m4.2_middleware_devinfra/issues/141)), not a nested overlay — tracked `.docker/config.json` stays commit-able.                                                                                                                                                                                                                                                                                                                                                                                                                          |
 
-Do **not** invent mypy config-merge here — stubs + `MYPYPATH` remain the product path for third-party silence
-([`docs/quality.md`](quality.md)).
+Do **not** invent mypy config-merge here — third-party silence for fleet deps (`arctrl` / `fable_library`) lives in
+synced `mypy.ini` / `.pylintrc` (and Ruff isort classification); `MYPYPATH` remains the product path overlay for
+first-party packages ([`docs/quality.md`](quality.md)).
 
 ## Targets
 
