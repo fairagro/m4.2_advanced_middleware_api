@@ -128,8 +128,8 @@ inside product Dockerfiles. For those, run the synced helper:
 ```
 
 It refreshes apk pins (APKINDEX main + community) and Dockerfile `name==` pins from PyPI. It does **not** edit
-`versions.env` (Devinfra Renovate + sync). Product-local helpers (`update-docker-pins.sh`,
-`update-apk-dependencies.sh`) are removed in favor of this synced script.
+`versions.env` (Devinfra Renovate + sync). After sync, remove divergent local copies (`update-apk-dependencies.sh`,
+`update-docker-pins.sh`, etc.).
 
 Reusable `reusable-renovate.yml` is **out of scope** for now — the thin workflow is expected to stay identical across
 repos via sync.
