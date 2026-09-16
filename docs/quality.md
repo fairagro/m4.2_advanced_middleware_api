@@ -11,7 +11,7 @@ Not every file under `scripts/` is Dev Container-only. Personal-token helpers ar
 | ------------------------------------- | ---------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `quality-check.sh` / `quality-fix.sh` | Host or Dev Container  | Needs `uv`. Commit-stage also runs `npm run lint:md` (Node/`npm`; host: `npm install`). On the host, set `GITGUARDIAN_API_KEY` for ggshield if required. |
 | `run-container-structure-test.sh`     | Host or Dev Container  | Needs Docker + `container-structure-test`                                                                                                                |
-| `setup-git-hooks.sh` / `git-hooks/`   | Host or Dev Container  | Copies `pre-push` into `.git/hooks/`; no `git-lfs` required                                                                                              |
+| `setup-git-hooks.sh` / `git-hooks/`   | Host or Dev Container  | Dispatcher + `pre-push.d/50-quality`; no `git-lfs` required                                                                                              |
 | `load-versions-env.sh`                | Host or Dev Container  | Reads `versions.env`, writes `.python-version`                                                                                                           |
 | `scripts/ai/` (`m42-ai`)              | Host or Dev Container  | uv workspace member; `uv sync` then `uv run m42-ai` (needs `gh` + auth)                                                                                  |
 | `dev-tokens.sh` / `set-dev-tokens.sh` | **Dev Container only** | Store: `/commandhistory/tokens.env`                                                                                                                      |
@@ -72,7 +72,7 @@ fail policy only on one surface.
 | `scripts/quality-check.sh`                          | Run **commit-stage** hooks only (check)                                                                                                      |
 | `scripts/quality-fix.sh`                            | Run commit-stage **autofix** hooks only                                                                                                      |
 | `scripts/run-container-structure-test.sh`           | Templated Docker build + `container-structure-test`                                                                                          |
-| `scripts/setup-git-hooks.sh`                        | Install project `pre-push` from `scripts/git-hooks/`                                                                                         |
+| `scripts/setup-git-hooks.sh`                        | Install dispatcher + `pre-push.d/50-quality` from `scripts/git-hooks/`                                                                       |
 | `scripts/git-hooks/`                                | Version-controlled `pre-push` (pre-commit pre-push stage)                                                                                    |
 | `.bandit`                                           | Bandit config (`bandit -c .bandit`)                                                                                                          |
 | `.markdownlint.json` (+ ignore / cli2)              | Markdownlint (also used by the markdownlint hook)                                                                                            |
@@ -203,13 +203,17 @@ Typical place: Dev Container **postCreate** (`scripts/devcontainer-post-create.s
 ./scripts/setup-git-hooks.sh
 ```
 
-Copies `scripts/git-hooks/pre-push` into `.git/hooks/`. Does **not** require, install, or manage Git LFS (does not
-delete other hooks). Invoked from Dev Container postCreate, or once after clone. Shared postCreate does **not** call
-product scripts such as `install-dev-hooks.sh`.
+Installs `.git/hooks/pre-push` (dispatcher) and `.git/hooks/pre-push.d/50-quality` from `scripts/git-hooks/`. Does
+**not** require, install, or manage Git LFS; does **not** delete other hooks or foreign `pre-push.d` fragments.
+Idempotent re-runs refresh only the shared-owned paths. Invoked from Dev Container postCreate, or once after clone.
+Shared postCreate does **not** hard-code product scripts such as `install-dev-hooks.sh`; optional product work uses
+`scripts/devcontainer-post-create.d/` (see [`docs/devcontainer.md`](devcontainer.md)).
 
-On `git push`, `pre-push` runs the shared pre-commit **pre-push** stage (pytest +
+On `git push`, the dispatcher runs `pre-push.d/*` in lexicographic order (e.g. product `10-git-lfs` then shared
+`50-quality`). The quality fragment runs the shared pre-commit **pre-push** stage (pytest +
 `scripts/run-container-structure-test.sh` from the #7 skeleton). Product Dockerfiles / CST YAML stay in consumers. Needs
-Docker/tests when those hooks are active.
+Docker/tests when those hooks are active. Products that need extra pre-push steps MUST drop numbered executables into
+`.git/hooks/pre-push.d/` via a product installer and MUST NOT replace the shared dispatcher wholesale.
 
 ### Pre-push pytest scope
 
@@ -237,8 +241,9 @@ Do **not** fork synced `.pre-commit-config.yaml` to restore system tests on ever
 on CI ([`docs/ci.md`](ci.md)).
 
 **Git LFS:** not part of the shared Devinfra image or hook installer. Products that need LFS own install and overlays
-entirely in the product repo; re-apply product-side after clone/rebuild when needed — see
-[`docs/devcontainer.md`](devcontainer.md). Do **not** edit synced Dev Container JSON `postCreate` for LFS.
+entirely in the product repo (including optional `pre-push.d` fragments and flat `post-*` hooks); restore after
+clone/rebuild via `scripts/devcontainer-post-create.d/` — see [`docs/devcontainer.md`](devcontainer.md). Do **not** edit
+synced Dev Container JSON `postCreate` for LFS.
 
 Manual without the git hook:
 
