@@ -23,15 +23,16 @@ ARCtrl is a Fable-transpiled F# library — the Python surface is idiomatic but 
 
 ## Package & Imports
 
-arctrl ships no `py.typed` marker. Fleet typing uses **shared incomplete stubs** under
-[`stubs/arctrl/`](../../../stubs/arctrl/) and [`stubs/fable_library/`](../../../stubs/fable_library/) (synced from
-Devinfra — see [`stubs/README.md`](../../../stubs/README.md)).
+arctrl ships no `py.typed` marker. Fleet typing handles it **in synced tool config** (no shared stubs):
 
-- Put `stubs` on **`MYPYPATH`** in hooks/CI (e.g. `MYPYPATH=stubs:…`).
-- Basedpyright / Pylance: synced `pyrightconfig.json` already sets `stubPath: "stubs"`.
-- Do **not** add `[mypy-arctrl*]` / fable overrides to synced `mypy.ini`, and do **not** keep
-  `# type: ignore[import-untyped]` on arctrl / fable_library imports once stubs are synced.
-- Other one-off untyped libs (few call sites) may still use a per-import ignore; do not invent stub packages for those.
+- **mypy:** `[mypy-arctrl*]` / `[mypy-fable_library*]` `ignore_missing_imports` in synced `mypy.ini` (type gate: hooks +
+  CI)
+- **pylint:** `ignored-modules=arctrl,fable_library` in synced `.pylintrc`
+- **ruff:** no third-party missing-import gate; `known-third-party` includes `arctrl` / `fable_library` for isort
+- **basedpyright / Pylance:** synced `pyrightconfig.json` sets `typeCheckingMode: "off"` — language server only; no
+  second IDE type-diagnostics stream
+- Do **not** add `# type: ignore[import-untyped]` on arctrl/fable imports as the fleet default (config covers it).
+  Other one-off untyped libs may still use per-import ignores.
 
 ```python
 from fable_library.async_ import start_as_task
@@ -411,8 +412,7 @@ text payload but semantically wrong for arbitrary supplementary files (serialize
 **`ArcTable` column fields are lowercase** — `col.header` / `col.cells`. `col.Header` / `col.Cells` raise
 `AttributeError` on 3.2+. `table.Headers` and `table.Columns` remain PascalCase.
 
-**`start_as_task` / `fable_library` typing** — covered by shared `stubs/fable_library/` (no per-import ignore once
-`MYPYPATH` / `stubPath` include `stubs`).
+**`start_as_task` / `fable_library` typing** — covered by synced mypy/pyright silences (no per-import ignore).
 
 **`CompositeHeader.performer` and `.date` are properties, not constructors** — call them without `()`:
 
