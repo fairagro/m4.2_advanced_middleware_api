@@ -23,6 +23,7 @@ ARG CST_VERSION
 ARG TRIVY_VERSION
 ARG RENOVATE_VERSION
 ARG NODE_VERSION
+ARG NPM_VERSION
 ARG OPENSPEC_VERSION
 ARG PRETTIER_VERSION
 ARG MARKDOWNLINT_CLI2_VERSION
@@ -117,6 +118,9 @@ RUN curl -fsSL "https://nodejs.org/dist/${NODE_VERSION}/node-${NODE_VERSION}-lin
         "node-${NODE_VERSION}-linux-x64/lib" \
         "node-${NODE_VERSION}-linux-x64/share" && \
         node --version && npm --version
+
+# Pin npm CLI independently of the Node tarball (NPM_VERSION from versions.env).
+RUN npm install -g "npm@${NPM_VERSION}" && npm --version
 
 # ── OpenSpec + Markdown + Renovate (global; bind-mount would hide local node_modules)
 RUN npm install -g \
