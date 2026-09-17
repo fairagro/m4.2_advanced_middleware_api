@@ -40,7 +40,7 @@ Use this mapping:
 | Contents                            | `contents`         | Read and write                 | Clone, branches, commits (Renovate + sync)     |
 | Pull requests                       | `pull_requests`    | Read and write                 | Open/update PRs (Renovate + sync)              |
 | Workflows                           | `workflows`        | Read and write                 | Push changes under `.github/workflows/` (sync) |
-| Issues                              | `issues`           | Read and write                 | Renovate (issue/PR comment APIs, dashboard)    |
+| Issues                              | `issues`           | Read and write                 | Renovate + sync `SYNC-FOLLOWUP` product issues |
 
 **Do not confuse** GUI **Workflows** (`workflows`) with **Actions** (`actions`). **Workflows** is required to create or
 modify workflow _files_; **Actions** covers workflow _runs_/logs and is not required for the current Renovate/sync
@@ -128,8 +128,8 @@ inside product Dockerfiles. For those, run the synced helper:
 ```
 
 It refreshes apk pins (APKINDEX main + community) and Dockerfile `name==` pins from PyPI. It does **not** edit
-`versions.env` (Devinfra Renovate + sync). Product-local helpers (`update-docker-pins.sh`,
-`update-apk-dependencies.sh`) are removed in favor of this synced script.
+`versions.env` (Devinfra Renovate + sync). After sync, remove divergent local copies (`update-apk-dependencies.sh`,
+`update-docker-pins.sh`, etc.).
 
 Reusable `reusable-renovate.yml` is **out of scope** for now — the thin workflow is expected to stay identical across
 repos via sync.
