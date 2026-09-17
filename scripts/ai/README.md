@@ -61,6 +61,9 @@ you pass `--owner` / `--repo` where the command supports them.
 | `branch-ahead`                  | JSON ahead count vs `origin/<base>`; exit `1` when tip is not ahead                                     |
 | `issue-start --issue N`         | Ensure branch, push when ahead of base, draft PR with `Fixes #N` (no empty commit)                      |
 | `pr-strip-footer --pr N`        | Remove trailing “Made with Cursor” (and similar) footers from a PR body                                 |
+| `pr-for-commit --sha`           | Resolve a PR that contains a commit (sync follow-up)                                                    |
+| `sync-followup-ids`             | Parse `SYNC-FOLLOWUP: <id>` from PR body+comments or offline `--body` / `--comment`                     |
+| `sync-followup-ensure`          | Create or reuse product Task (`--repo`, `--id`; dedupe label `sync-followup:<id>`)                      |
 
 `review-open` has a **git side effect**: it checks out the PR head (via `gh pr checkout`) when the current branch
 differs. Dirty trees on a **different** branch refuse with JSON `{"ok": false, "error": …}` and exit `1`. Dirty on the

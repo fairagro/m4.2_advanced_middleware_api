@@ -21,6 +21,12 @@ from m42_ai.issue import (
 )
 from m42_ai.pr import pr_strip_footer
 from m42_ai.review import fetch_review_open, review_reply, review_resolve
+from m42_ai.sync_followup import (
+    collect_sync_followup_ids,
+    ensure_sync_followup_issue,
+    parse_sync_followup_ids,
+    pr_for_commit,
+)
 
 
 def _print_json(data: Any) -> None:
@@ -146,6 +152,57 @@ def cmd_pr_strip_footer(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_pr_for_commit(args: argparse.Namespace) -> int:
+    data = pr_for_commit(
+        args.sha,
+        owner=args.owner,
+        repo=args.repo,
+        cwd=Path(args.cwd) if args.cwd else None,
+    )
+    _print_json({"ok": True, "pr": data})
+    return 0
+
+
+def cmd_sync_followup_ids(args: argparse.Namespace) -> int:
+    if args.pr is not None:
+        ids = collect_sync_followup_ids(
+            pr=args.pr,
+            owner=args.owner,
+            repo=args.repo,
+            cwd=Path(args.cwd) if args.cwd else None,
+            body=args.body,
+        )
+        _print_json({"ok": True, "ids": ids, "pr": args.pr})
+        return 0
+    texts: list[str] = []
+    if args.body_file:
+        texts.append(Path(args.body_file).read_text(encoding="utf-8"))
+    elif args.body is not None:
+        texts.append(str(args.body))
+    if args.comment:
+        texts.extend(args.comment)
+    if not texts:
+        raise SystemExit("provide --pr, or --body/--body-file and/or --comment")
+    ids = parse_sync_followup_ids(*texts)
+    _print_json({"ok": True, "ids": ids})
+    return 0
+
+
+def cmd_sync_followup_ensure(args: argparse.Namespace) -> int:
+    data = ensure_sync_followup_issue(
+        repo=args.repo,
+        stable_id=args.id,
+        source_pr_url=args.source_pr_url,
+        source_sha=args.source_sha,
+        cost=args.cost,
+        template_path=Path(args.template) if args.template else None,
+        dry_run=bool(args.dry_run),
+        cwd=Path(args.cwd) if args.cwd else None,
+    )
+    _print_json(data)
+    return 0 if data.get("ok") else 1
+
+
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(prog="m42-ai", description="Deterministic GitHub/git plumbing for agent skills")
     p.add_argument("--version", action="version", version=f"%(prog)s {__version__}")
@@ -261,6 +318,49 @@ def build_parser() -> argparse.ArgumentParser:
     ps.add_argument("--repo")
     ps.add_argument("--cwd", help="Git repo root (default: cwd)")
     ps.set_defaults(func=cmd_pr_strip_footer)
+
+    pfc = sub.add_parser("pr-for-commit", help="Resolve a pull request that contains a commit SHA")
+    pfc.add_argument("--sha", required=True)
+    pfc.add_argument("--owner")
+    pfc.add_argument("--repo")
+    pfc.add_argument("--cwd", help="Git repo root (default: cwd)")
+    pfc.set_defaults(func=cmd_pr_for_commit)
+
+    sfi = sub.add_parser(
+        "sync-followup-ids",
+        help="Parse SYNC-FOLLOWUP ids from a PR (body+comments) or raw text",
+    )
+    sfi.add_argument("--pr", type=int)
+    sfi.add_argument("--owner")
+    sfi.add_argument("--repo")
+    sfi.add_argument("--cwd", help="Git repo root (default: cwd)")
+    sfi.add_argument("--body", help="PR body text (offline / with --comment)")
+    sfi.add_argument("--body-file")
+    sfi.add_argument(
+        "--comment",
+        action="append",
+        default=[],
+        help="Extra comment body (repeatable); used with --body/--body-file",
+    )
+    sfi.set_defaults(func=cmd_sync_followup_ids)
+
+    sfe = sub.add_parser(
+        "sync-followup-ensure",
+        help="Create or reuse a product sync-followup Task for a stable id",
+    )
+    sfe.add_argument("--repo", required=True, help="owner/name of the product repository")
+    sfe.add_argument("--id", required=True, dest="id", help="SYNC-FOLLOWUP stable id")
+    sfe.add_argument("--source-pr-url", dest="source_pr_url")
+    sfe.add_argument("--source-sha", dest="source_sha")
+    sfe.add_argument(
+        "--cost",
+        default="cost:medium",
+        choices=["cost:cheap", "cost:medium", "cost:expensive"],
+    )
+    sfe.add_argument("--template", help="Override issue body template path")
+    sfe.add_argument("--dry-run", action="store_true")
+    sfe.add_argument("--cwd", help="Git repo root (default: cwd)")
+    sfe.set_defaults(func=cmd_sync_followup_ensure)
 
     return p
 
