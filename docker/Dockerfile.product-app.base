@@ -27,9 +27,14 @@
 #   BINARY_NAME             primary PyInstaller --name / onedir under dist/ (required)
 #   PYINSTALLER_IMPORT      preferred: import path of the app package that owns main.py
 #   PYINSTALLER_ENTRY       optional override path after wheel install
-#   EXTRA_PYINSTALLER_ARGS  extra args appended to pyinstaller (word-split)
+#   EXTRA_PYINSTALLER_ARGS  extra args appended to primary pyinstaller (word-split)
 #   PYINSTALLER_VERSION     from versions.env
 #   BUILDER_APK_PACKAGES    extra compile/link apk packages (optional, default empty)
+# Optional secondary binary (empty SECONDARY_BINARY_NAME = skip; same /dist export):
+#   SECONDARY_BINARY_NAME             gate + PyInstaller --name
+#   SECONDARY_PYINSTALLER_IMPORT      preferred: import path whose main.py is the entry
+#   SECONDARY_PYINSTALLER_ENTRY       optional override path after wheel install
+#   SECONDARY_ONEFILE                 default true (--onefile); set false for --onedir
 #
 # Install path (binary-builder): copy uv.lock + workspace metadata from package-builder,
 # `uv sync --frozen --no-dev --no-install-workspace` for lockfile-deterministic transitive deps,
@@ -88,6 +93,10 @@ ARG PYINSTALLER_ENTRY=""
 ARG EXTRA_PYINSTALLER_ARGS=""
 ARG PYINSTALLER_VERSION
 ARG BUILDER_APK_PACKAGES=""
+ARG SECONDARY_BINARY_NAME=""
+ARG SECONDARY_PYINSTALLER_IMPORT=""
+ARG SECONDARY_PYINSTALLER_ENTRY=""
+ARG SECONDARY_ONEFILE=true
 
 ENV SETUPTOOLS_SCM_PRETEND_VERSION=${APP_VERSION}
 
@@ -145,6 +154,28 @@ RUN set -eu; \
     pyinstaller --onedir \
       --name "${BINARY_NAME}" \
       ${EXTRA_PYINSTALLER_ARGS} \
+      "${ENTRY}"
+
+# Optional secondary binary (same env / dist); skipped when SECONDARY_BINARY_NAME is empty.
+RUN set -eu; \
+    if [ -z "${SECONDARY_BINARY_NAME:-}" ]; then \
+      exit 0; \
+    fi; \
+    if [ -n "${SECONDARY_PYINSTALLER_IMPORT}" ]; then \
+      ENTRY="$(python -c "import importlib, pathlib; m = importlib.import_module('${SECONDARY_PYINSTALLER_IMPORT}'); print(pathlib.Path(m.__file__).resolve().with_name('main.py'))")"; \
+    elif [ -n "${SECONDARY_PYINSTALLER_ENTRY}" ] && [ -f "${SECONDARY_PYINSTALLER_ENTRY}" ]; then \
+      ENTRY="${SECONDARY_PYINSTALLER_ENTRY}"; \
+    else \
+      echo "ERROR: set SECONDARY_PYINSTALLER_IMPORT (preferred) or SECONDARY_PYINSTALLER_ENTRY to an existing path after wheel install" >&2; \
+      exit 1; \
+    fi; \
+    if [ "${SECONDARY_ONEFILE}" = "false" ]; then \
+      MODE=--onedir; \
+    else \
+      MODE=--onefile; \
+    fi; \
+    pyinstaller "${MODE}" \
+      --name "${SECONDARY_BINARY_NAME}" \
       "${ENTRY}"
 
 # ── export-binaries (Bake context payload) ────────────────────────────────────

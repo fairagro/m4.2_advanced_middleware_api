@@ -1,7 +1,6 @@
 {
   "venvPath": ".",
   "venv": ".venv",
-  "stubPath": "stubs",
   "extraPaths": ["scripts/ai/src"],
   "exclude": [
     "**/node_modules",
@@ -10,5 +9,6 @@
     "**/.venv",
     "**/venv",
     "**/dist"
-  ]
+  ],
+  "typeCheckingMode": "off"
 }

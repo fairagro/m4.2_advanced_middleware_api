@@ -1,12 +1,13 @@
 ---
 name: review-fixer
 description: >-
-  Triages GitHub Copilot and Cursor Bugbot pull-request review comments using
-  the project AI review policy: re-evaluates correctness, severity, practicality,
-  and fix cost; implements high-risk or in-budget nits; dismisses the rest with a
-  reply; optionally opens one follow-up issue. Use when the user pastes
-  Copilot/Bugbot reviews, asks to fix AI review comments, run /review-fixer, or
-  process PR review threads.
+  Triages GitHub Copilot, Cursor Bugbot, and first-party `/code-review`
+  pull-request review comments using the project AI review policy:
+  re-evaluates correctness, severity, practicality, and fix cost; implements
+  high-risk or in-budget nits; dismisses the rest with a reply; optionally
+  opens one follow-up issue. Use when the user pastes Copilot/Bugbot/code-review
+  reviews, asks to fix AI review comments, run /review-fixer, or process PR
+  review threads.
 ---
 
 # Review fixer
@@ -14,7 +15,8 @@ description: >-
 Implement policy. Do not re-litigate it. Read [`docs/ai_review_policy.md`](../../../docs/ai_review_policy.md) if
 anything here is ambiguous.
 
-You are the **fixer** (precision). Copilot and Bugbot are finders (recall). Do not loop until comments are gone.
+You are the **fixer** (precision). Copilot, Bugbot, and `/code-review` are finders (recall). Do not loop until
+comments are gone.
 
 **Abort criterion:** When this run’s output shows **Fixed non-nit this run: 0**, the review cycle **stops**. Do not ask
 for another Copilot/Bugbot pass or another `/review-fixer` just because threads/comments remain, Remaining risk is
@@ -103,26 +105,28 @@ uv run --project scripts/ai m42-ai review-open --pr PR
 uv run --project scripts/ai m42-ai review-open --pr PR --review-id ID
 ```
 
-The JSON already filters to unresolved AI threads and **summary-only findings from every AI review body**
-(`summary_only_findings` / each entry in `ai_reviews`), not only the latest submission — Copilot “Suppressed comments”
-often have no thread and would be missed if a later Bugbot/Cursor review became “latest”. Optional `--review-id` scopes
-review bodies when the user gave a `/pull/N#pullrequestreview-ID` permalink. Docs:
-[`scripts/ai/README.md`](../../../scripts/ai/README.md).
+The JSON already filters to **unresolved review threads from any author** (`unresolved_ai_threads` — key kept for
+compat) and **summary-only findings** (`summary_only_findings` / each entry in `ai_reviews`): Copilot/Bugbot/Cursor
+suppressed packing **and** first-party `/code-review` reports (`<!-- m42-ai:code-review -->` + findings table), not
+only the latest submission — Copilot “Suppressed comments” and code-review COMMENT bodies often have no thread and
+would be missed if a later review became “latest”. Optional `--review-id` scopes review bodies when the user gave a
+`/pull/N#pullrequestreview-ID` permalink. Docs: [`scripts/ai/README.md`](../../../scripts/ai/README.md).
 
 **Open work** (this is the only set you triage unless the user pasted a specific review URL):
 
-1. **Unresolved** AI threads from `unresolved_ai_threads` (Copilot / Bugbot / Cursor). Skip human threads unless the
-   user asked.
-2. **`summary_only_findings`** — open summary-only / suppressed items from **at most one** AI review
-   (`open_summary_review_id`): the latest suppressed AI review that is not yet answered. Older suppressed reviews are
-   treated as closed when a triage reply exists after them (PR conversation comment or non-AI review body starting with
-   `Fixed in` / `Dismissed.` / `Follow-up:`, ideally including `#pullrequestreview-<id>`). These findings have **no**
-   resolve button — **never** call `review-resolve` on them; reply with `m42-ai review-reply --pr PR --conversation` and
-   include `#pullrequestreview-<id>` in the body so later `review-open` marks that review answered.
+1. **Unresolved** threads from `unresolved_ai_threads` (**any** first-comment author — human or bot). Skip only
+   **resolved** threads.
+2. **`summary_only_findings`** — open summary-only / suppressed / code-review items from **at most one** finder review
+   (`open_summary_review_id`): the latest finder summary review that is not yet answered. Older summary reviews are
+   treated as closed when a triage reply exists after them (PR conversation comment or non-finder review body starting
+   with `Fixed in` / `Dismissed.` / `Follow-up:`, ideally including `#pullrequestreview-<id>`). These findings have
+   **no** resolve button — **never** call `review-resolve` on them; reply with
+   `m42-ai review-reply --pr PR --conversation` and include `#pullrequestreview-<id>` in the body so later
+   `review-open` marks that review answered.
 
 Ignore resolved threads completely (do not reply on them again).
 
-If `open_work_empty` is true (no unresolved AI threads and no summary-only findings), say so in one sentence and stop.
+If `open_work_empty` is true (no unresolved threads and no summary-only findings), say so in one sentence and stop.
 
 **Nit-budget (soft PR lifetime):** Before fixing nits, sum prior `nit-lines this run: N` from fixer replies already on
 this PR (thread replies + PR conversation). Cap is **~15** for `prior + this run`. Not reset per `/review-fixer`
