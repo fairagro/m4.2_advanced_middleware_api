@@ -7,6 +7,18 @@ Canonical engineering foundation for FAIRagro m4.2 middleware product repos and 
 All component specs and design decisions must stay consistent with the constraints here. Product stack, module graphs,
 and scaling notes live in the local `principles.md` (or product capability specs), not in this file.
 
+### Synced `.global` + product overlay
+
+When a shared file needs a product-specific companion that sync must not wipe, use this naming pair:
+
+| Role                                   | Name shape                                                                                                       | Sync                                                                    |
+| -------------------------------------- | ---------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------- |
+| Fleet SoT (identical in every product) | `*.global` / `*.global.*` (e.g. `principles.global.md`, `surface-quality-bar.global.md`, `.importlinter.global`) | On `docs/synced-paths.yaml` **`allow`** — do not hand-edit in consumers |
+| Product extension / overlay            | Same basename **without** `.global` (e.g. `principles.md`, `surface-quality-bar.md`, `.importlinter`)            | On **`overlays`** (never overwritten by sync)                           |
+
+Do **not** invent alternate suffixes such as `.product` for this split. Other overlay styles (env/CI inputs, nested
+`.gitignore`, verbatim-only fragments with no product twin) stay as documented in `docs/sync.md`.
+
 ---
 
 ## Values
@@ -94,6 +106,10 @@ Product application code under `middleware/` must pass via `uv run`. Prefer shar
 - `uv run pylint --rcfile .pylintrc middleware/` — style and code smells
 - `uv run bandit -r middleware/ -c .bandit -ll` — security (hooks: MEDIUM+ only via `-ll`). CI may omit `-ll` to log LOW
   while still failing only on MEDIUM/HIGH — same fail bar; see `docs/quality.md` when that file is synced
+- `uv run vulture middleware/ --min-confidence 100` — unused definitions (hooks + CI; no IDE gate; no synced whitelist;
+  see `docs/quality.md`)
+- `./scripts/run-import-linter.sh` — import contracts (synced `.importlinter.global` baseline + optional `.importlinter`
+  overlay; hooks + CI; no IDE gate; see `docs/quality.md`)
 
 Markdown must pass Prettier formatting and markdownlint (`.markdownlint.json` disables rules that fight Prettier).
 Typical scripts (see `package.json` where present):
@@ -126,6 +142,47 @@ that tool — do not invent a second config channel. Details: `docs/quality.md` 
 
 This Devinfra repository has no product `middleware/` packages; the Python gates above apply when working in product
 consumers. Markdown and hadolint gates apply here and in consumers that ship those files.
+
+---
+
+## Import policy
+
+Product application code under `middleware/` (and tests that import that code) MUST keep an acyclic import DAG. Do
+**not** paper over a bad graph with path hacks or deferred imports — **cut modules** so every runtime edge is a normal
+top-level absolute import.
+
+1. **Never** mutate import paths at runtime to make a module resolvable (`sys.path` inserts, rewriting `__path__`,
+   project-root shims that redirect to `src/`, and equivalents).
+2. **Imports MUST run at module level** — not inside functions, methods, or conditional runtime blocks.
+3. **`if TYPE_CHECKING:` is allowed** for type-only imports (annotations). It is **not** a license for cyclic
+   **runtime** edges — cut modules instead.
+4. **No relative imports** — use absolute imports (`middleware.<package>…`).
+5. **Never** use deferred / lazy imports **for the purpose of breaking import cycles** (including lazy `__getattr__`
+   re-exports used only to hide a bad graph).
+6. **Do** split modules so the dependency DAG is acyclic and every **runtime** edge is a normal top-level absolute
+   import.
+7. **Exceptions** to (1)/(2)/(4)/(5)/(6) require user agreement plus an inline comment and/or a principles note naming
+   the exception and why.
+
+### Package `__init__.py`
+
+Curated public `__all__` with **eager absolute** re-exports is allowed when the subgraph is already acyclic. Prefer a
+thin docstring-only `__init__` when there is no public surface. Lazy / `__getattr__` re-exports used only to hide cycles
+are forbidden.
+
+### Registration-only imports
+
+Prefer a side-effect module imported absolutely at module level (no function-body imports).
+
+### Monorepo src-layout shadowing
+
+Prefer rename/move or a documented static layout. Runtime shims remain forbidden.
+
+### Tests
+
+Rules (2)/(4)/(5)/(6) apply equally to unit tests that import application code.
+
+Product-only module graphs and stack tables belong in local `principles.md` / product specs — not in this file.
 
 ---
 
@@ -179,15 +236,20 @@ findings (practicality **None** — quote this section).
 
 ## Branch Strategy
 
-These projects use **Trunk-Based Development** with short-lived branches:
+These projects use **Trunk-Based Development** with short-lived branches. Prefixes are **CI channels** (not GitHub issue
+types). Fine-grained job skips stay on path / change detection — do not invent per-kind prefixes (`test/`, `scripts/`,
+…).
 
-| Branch      | Purpose                    | CI behaviour                                            |
-| ----------- | -------------------------- | ------------------------------------------------------- |
-| `main`      | Trunk — always deployable  | Final release via `workflow_dispatch` when applicable   |
-| `feature/*` | New features and bug fixes | PR checks; optional pre-release via `workflow_dispatch` |
-| `docs/*`    | Documentation-only changes | Change detection may skip unnecessary CI jobs           |
+| Branch    | Purpose                                                          | CI behaviour                                          |
+| --------- | ---------------------------------------------------------------- | ----------------------------------------------------- |
+| `main`    | Trunk — always deployable                                        | Final release via `workflow_dispatch` when applicable |
+| `build/*` | Product image/app work (any issue type)                          | PR checks; optional Pre Release / RC via dispatch     |
+| `ci/*`    | Shared CI/tooling (scripts, Dev Container, quality, those tests) | PR checks; no product-image Pre Release               |
+| `docs/*`  | Documentation-only changes                                       | Change detection may skip unnecessary CI jobs         |
+| `chore/*` | Sync / bots                                                      | Never Pre Release                                     |
 
 - All branches merge into `main` via pull request.
-- `feature/*` covers both new functionality and bug fixes; no separate `fix/*` or `hotfix/*` branches.
-- `docs/*` branches exist to skip unnecessary CI where change detection supports it; they carry no release privilege.
+- Issue-driven work uses `{channel}/issue-<n>-<slug>` (issue number always present). Unclear scope → `build/`.
+- No separate `fix/*` / `hotfix/*` / `feature/*` work-branch convention — `build/*` replaced historical `feature/*` for
+  RC.
 - Long-lived branches other than `main` are not permitted.
