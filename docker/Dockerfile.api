@@ -20,15 +20,22 @@ ENV UVICORN_LOG_LEVEL=info
 WORKDIR /api
 
 # Runtime extras required by the API process (curl liveness, git for ArcStore).
-# Keep apk packages version-pinned (Trivy / update via scripts/update-dockerfile-pins.sh).
+# Fleet apk pin style B (Trivy / update via scripts/update-dockerfile-pins.sh).
+ARG CA_CERTIFICATES_VERSION=20260909-r0
+ARG CURL_VERSION=8.22.0-r0
+ARG GIT_VERSION=2.54.0-r0
+ARG ZLIB_VERSION=1.3.2-r0
+ARG TZDATA_VERSION=2026d-r0
+ARG MUSL_UTILS_VERSION=1.2.6-r2
+ARG LIBSSL3_VERSION=3.5.8-r0
 RUN apk add --no-cache --upgrade \
-        ca-certificates=20260611-r0 \
-        curl=8.22.0-r0 \
-        git=2.54.0-r0 \
-        zlib=1.3.2-r0 \
-        tzdata=2026d-r0 \
-        musl-utils=1.2.6-r2 \
-        libssl3=3.5.8-r0 \
+        "ca-certificates=${CA_CERTIFICATES_VERSION}" \
+        "curl=${CURL_VERSION}" \
+        "git=${GIT_VERSION}" \
+        "zlib=${ZLIB_VERSION}" \
+        "tzdata=${TZDATA_VERSION}" \
+        "musl-utils=${MUSL_UTILS_VERSION}" \
+        "libssl3=${LIBSSL3_VERSION}" \
     && addgroup -S -g "${RUNTIME_GID}" "${RUNTIME_USER}" \
     && adduser -S -u "${RUNTIME_UID}" -H -G "${RUNTIME_USER}" "${RUNTIME_USER}" \
     && chown "${RUNTIME_USER}:${RUNTIME_USER}" /api \
