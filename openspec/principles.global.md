@@ -129,6 +129,47 @@ consumers. Markdown and hadolint gates apply here and in consumers that ship tho
 
 ---
 
+## Import policy
+
+Product application code under `middleware/` (and tests that import that code) MUST keep an acyclic import DAG. Do
+**not** paper over a bad graph with path hacks or deferred imports — **cut modules** so every runtime edge is a normal
+top-level absolute import.
+
+1. **Never** mutate import paths at runtime to make a module resolvable (`sys.path` inserts, rewriting `__path__`,
+   project-root shims that redirect to `src/`, and equivalents).
+2. **Imports MUST run at module level** — not inside functions, methods, or conditional runtime blocks.
+3. **`if TYPE_CHECKING:` is allowed** for type-only imports (annotations). It is **not** a license for cyclic
+   **runtime** edges — cut modules instead.
+4. **No relative imports** — use absolute imports (`middleware.<package>…`).
+5. **Never** use deferred / lazy imports **for the purpose of breaking import cycles** (including lazy `__getattr__`
+   re-exports used only to hide a bad graph).
+6. **Do** split modules so the dependency DAG is acyclic and every **runtime** edge is a normal top-level absolute
+   import.
+7. **Exceptions** to (1)/(2)/(4)/(5)/(6) require user agreement plus an inline comment and/or a principles note naming
+   the exception and why.
+
+### Package `__init__.py`
+
+Curated public `__all__` with **eager absolute** re-exports is allowed when the subgraph is already acyclic. Prefer a
+thin docstring-only `__init__` when there is no public surface. Lazy / `__getattr__` re-exports used only to hide cycles
+are forbidden.
+
+### Registration-only imports
+
+Prefer a side-effect module imported absolutely at module level (no function-body imports).
+
+### Monorepo src-layout shadowing
+
+Prefer rename/move or a documented static layout. Runtime shims remain forbidden.
+
+### Tests
+
+Rules (2)/(4)/(5)/(6) apply equally to unit tests that import application code.
+
+Product-only module graphs and stack tables belong in local `principles.md` / product specs — not in this file.
+
+---
+
 ## Testing
 
 - Every public behaviour that can fail must have at least one test.
