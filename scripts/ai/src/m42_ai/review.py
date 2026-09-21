@@ -11,6 +11,9 @@ from m42_ai.gh import GhError, repo_owner_name, run_gh, run_git
 
 AI_AUTHOR_RE = re.compile(r"copilot|bugbot|cursor", re.IGNORECASE)
 
+# Stable marker for first-party `/code-review` COMMENT bodies (often under a human login).
+CODE_REVIEW_MARKER = "<!-- m42-ai:code-review -->"
+
 REVIEW_OPEN_QUERY = """
 query($owner:String!,$name:String!,$n:Int!) {
   repository(owner:$owner, name:$name) {
@@ -50,6 +53,76 @@ def is_ai_author(login: str | None) -> bool:
     if not login:
         return False
     return bool(AI_AUTHOR_RE.search(login))
+
+
+def is_code_review_report(body: str | None) -> bool:
+    """True when a review body was published by the `/code-review` skill."""
+    return bool(body) and CODE_REVIEW_MARKER in body
+
+
+def is_finder_review(review: dict[str, Any]) -> bool:
+    """Copilot/Bugbot/Cursor login **or** first-party code-review marker in body."""
+    author = (review.get("author") or {}).get("login")
+    body = review.get("body") or ""
+    return is_ai_author(author) or is_code_review_report(body)
+
+
+def extract_code_review_findings(body: str) -> list[dict[str, str | None]]:
+    """Parse the Markdown findings table from a marked `/code-review` report."""
+    if not is_code_review_report(body):
+        return []
+    lines = body.splitlines()
+    header_idx: int | None = None
+    cols: list[str] = []
+    for i, line in enumerate(lines):
+        if "|" not in line:
+            continue
+        parts = [p.strip().lower() for p in line.strip().strip("|").split("|")]
+        if "path" in parts:
+            header_idx = i
+            cols = parts
+            break
+    if header_idx is None:
+        return []
+
+    path_i = cols.index("path")
+    note_i = cols.index("note") if "note" in cols else None
+    severity_i = cols.index("severity") if "severity" in cols else None
+    goal_i = cols.index("goal") if "goal" in cols else None
+
+    items: list[dict[str, str | None]] = []
+    for line in lines[header_idx + 1 :]:
+        if "|" not in line:
+            if items:
+                break
+            continue
+        parts = [p.strip() for p in line.strip().strip("|").split("|")]
+        if not parts:
+            continue
+        if all(set(p) <= set("-: ") for p in parts):
+            continue
+        if len(parts) <= path_i:
+            continue
+        path = parts[path_i]
+        if not path or path.lower() == "path":
+            continue
+        bits: list[str] = []
+        if goal_i is not None and goal_i < len(parts) and parts[goal_i]:
+            bits.append(parts[goal_i])
+        if severity_i is not None and severity_i < len(parts) and parts[severity_i]:
+            bits.append(parts[severity_i])
+        if note_i is not None and note_i < len(parts) and parts[note_i]:
+            bits.append(parts[note_i])
+        text = " — ".join(bits) if bits else path
+        items.append({"path": path, "line": None, "text": text})
+    return items
+
+
+def extract_summary_findings(body: str) -> list[dict[str, str | None]]:
+    """Suppressed Copilot packing **or** code-review findings table."""
+    if is_code_review_report(body):
+        return extract_code_review_findings(body)
+    return extract_suppressed_comments(body)
 
 
 def extract_suppressed_comments(body: str) -> list[dict[str, str | None]]:
@@ -156,9 +229,10 @@ def answered_suppressed_review_ids(
         if not is_submitted_review(r):
             continue
         author = (r.get("author") or {}).get("login")
-        if is_ai_author(author):
-            continue
         body = r.get("body") or ""
+        # Skip finders (bot logins and first-party code-review reports) — they are not triage replies.
+        if is_ai_author(author) or is_code_review_report(body):
+            continue
         if not is_triage_reply_body(body) and "pullrequestreview-" not in body:
             continue
         replies.append((_event_time(r, "submittedAt"), body))
@@ -206,8 +280,8 @@ def shape_review_open(
             continue
         first = comments[0]
         author = (first.get("author") or {}).get("login")
-        if not is_ai_author(author):
-            continue
+        # Include every unresolved thread (any author). AI-author heuristics apply only to
+        # review bodies / suppressed summary packing below — not to thread filtering.
         threads_out.append({
             "thread_id": thread["id"],
             "is_resolved": False,
@@ -222,29 +296,26 @@ def shape_review_open(
         })
 
     all_reviews = list(pr["reviews"]["nodes"])
-    all_ai = [
-        r
-        for r in all_reviews
-        if r.get("author") and is_ai_author((r["author"] or {}).get("login")) and is_submitted_review(r)
-    ]
+    # Finder reviews: bot AI authors and/or `/code-review` marker (often human login).
+    all_ai = [r for r in all_reviews if is_finder_review(r) and is_submitted_review(r)]
     all_ai.sort(key=lambda r: (_event_time(r, "submittedAt"), r.get("databaseId") or 0))
 
     issue_comments = list((pr.get("comments") or {}).get("nodes") or [])
 
-    suppressed_ai = [r for r in all_ai if extract_suppressed_comments(r.get("body") or "")]
+    summary_sources = [r for r in all_ai if extract_summary_findings(r.get("body") or "")]
     answered_ids = answered_suppressed_review_ids(
-        suppressed_ai,
+        summary_sources,
         issue_comments=issue_comments,
         all_reviews=all_reviews,
     )
 
-    # Open summary work: at most the latest unanswered suppressed AI review.
+    # Open summary work: at most the latest unanswered finder summary review.
     open_suppressed_id: int | None = None
-    for r in suppressed_ai:
+    for r in summary_sources:
         rid = int(r["databaseId"])
         if rid not in answered_ids:
             open_suppressed_id = rid
-    # Permalink triage: force that review's suppressed into the open set.
+    # Permalink triage: force that review's summary findings into the open set.
     if review_id is not None:
         open_suppressed_id = review_id
 
@@ -254,7 +325,7 @@ def shape_review_open(
     summary_only: list[dict[str, Any]] = []
     for rev in scoped_ai:
         body = rev.get("body") or ""
-        suppressed = extract_suppressed_comments(body)
+        suppressed = extract_summary_findings(body)
         rid = rev.get("databaseId")
         rid_int = int(rid) if rid is not None else None
         answered = rid_int in answered_ids if rid_int is not None else False
@@ -268,6 +339,7 @@ def shape_review_open(
             "suppressed_comments": suppressed,
             "summary_answered": answered,
             "summary_open": summary_open,
+            "is_code_review": is_code_review_report(body),
         }
         reviews_out.append(entry)
         if not summary_open:

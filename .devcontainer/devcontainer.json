@@ -22,7 +22,9 @@
     "VIRTUAL_ENV": "/workspace/.venv",
     "VIRTUAL_ENV_PROMPT": "${localWorkspaceFolderBasename}",
     "DEVCONTAINER_REPO_NAME": "${localWorkspaceFolderBasename}",
-    "STARSHIP_CONFIG": "/workspace/.devcontainer/starship.toml"
+    "STARSHIP_CONFIG": "/workspace/.devcontainer/starship.toml",
+    "GH_TOKEN": "${localEnv:GH_TOKEN}",
+    "GITGUARDIAN_API_KEY": "${localEnv:GITGUARDIAN_API_KEY}"
   },
   "customizations": {
     "vscode": {

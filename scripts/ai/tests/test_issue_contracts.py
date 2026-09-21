@@ -122,7 +122,7 @@ def test_issue_start_refuses_when_not_ahead(tmp_path: Path) -> None:
         if args[:2] == ["fetch", "origin"]:
             return MagicMock(stdout="")
         if args[:2] == ["branch", "--show-current"]:
-            return MagicMock(stdout="issue-16-example\n")
+            return MagicMock(stdout="build/issue-16-example\n")
         if args[:2] == ["rev-list", "--count"]:
             return MagicMock(stdout="0\n")
         raise AssertionError(f"unexpected git call: {args}")
