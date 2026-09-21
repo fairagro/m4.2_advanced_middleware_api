@@ -1,0 +1,113 @@
+---
+name: code-review
+description: >-
+  Produces a first-party critical review of a local branch diff (vs base) or a
+  GitHub pull request. Use when the user asks to /code-review, review this
+  branch/PR, or run a structured code review — not for triaging Copilot/Bugbot
+  threads (that is /review-fixer).
+---
+
+# Code review
+
+You are a **first-party reviewer** (judgment). Quality tools and CI are the gate for style/types/secrets scanners.
+`/review-fixer` consumes **external** Copilot/Bugbot threads — do **not** triage those here.
+
+Do **not** commit, push, or auto-approve. Do **not** auto-LGTM. **One** publish per run (no silent re-post loops).
+
+## Input
+
+Accept any of:
+
+1. Local review: optional `--base` (default `main`); review merge-base(base, HEAD)...HEAD
+2. PR review: PR number or URL
+3. “Review this branch / this PR”
+
+Same checklist for local and PR.
+
+## Auth (`gh`)
+
+Prefer `uv run --project scripts/ai m42-ai …` (works in Devinfra and product checkouts). Bare `uv run m42-ai` is only OK
+when `scripts/ai` is a root workspace member (Devinfra).
+
+`gh` is wrapped (`scripts/bin/gh`, on `PATH` in the Dev Container). Never invent or paste PATs into chat.
+
+**Agent / no TTY (PR publish only):** If auth is missing:
+
+1. Ask the user to run `source ./scripts/set-dev-tokens.sh` in a real terminal and wait.
+2. Retry `uv run --project scripts/ai m42-ai auth-status`.
+3. If they decline or auth still fails: keep the `/tmp` report and **skip** GitHub writes.
+
+Local-only reviews never require GitHub auth.
+
+## Mechanical steps (`m42-ai`)
+
+1. **Context**
+
+   ```bash
+   uv run --project scripts/ai m42-ai code-review-context --base main
+   # or
+   uv run --project scripts/ai m42-ai code-review-context --pr <n>
+   ```
+
+   Use `paths` / `stats` from JSON. Full patch is omitted — open files as needed.
+
+2. **Review** (agent judgment — see Goals). Produce structured Markdown (summary + findings table).
+
+3. **Write report**
+
+   ```bash
+   uv run --project scripts/ai m42-ai code-review-report-write --slug <branch-or-pr> --body-file - <<'EOF'
+   …report…
+   EOF
+   ```
+
+4. **Publish**
+
+   - No PR: stop after report write (`code-review-publish` without `--pr` is a GitHub no-op).
+   - With PR + auth:
+
+     ```bash
+     uv run --project scripts/ai m42-ai code-review-publish --pr <n> --body-file <path-from-step-3>
+     ```
+
+     Prefer channel `pull_request_review` (COMMENT via `gh pr review --comment`). Fallback `conversation_comment` only
+     if review submit fails. Do not approve or request-changes.
+
+## Goals (skip when N/A)
+
+1. Security (logic/auth/secrets-in-diff intent — not Bandit/CodeQL noise replay)
+2. Correctness / missing edge cases (inputs, network, config)
+3. Concurrency & races (when async/shared state)
+4. Architecture & simplicity (YAGNI)
+5. Import graph / cycles — **judgment-only** (mechanical graphs → import-linter when present)
+6. Defensive bloat vs real edges
+7. Resource frugality
+8. Dead / unused code (judgment; vulture when landed is toolchain-owned)
+9. OpenSpec↔code drift — **only** where specs exist and the diff touches that surface
+10. Docs↔code drift (weaker severity than spec drift)
+11. Test adequacy for new risks (not coverage-% nagging)
+
+Severity / cost language: [`docs/ai_review_policy.md`](../../../docs/ai_review_policy.md). Medium+ MAY offer
+`/create-issue` — do **not** auto-create unless the user asks.
+
+## Anti-duplication (hard rule)
+
+Do **not** restate findings owned by: Ruff, mypy, pylint, Bandit, markdownlint, Prettier, ggshield, CodeQL, Trivy, and
+(once landed) **vulture** / **import-linter**. Out of scope: format, import sort, line-length, type noise CI already
+fails.
+
+## Output shape
+
+Suggested Markdown:
+
+- Short verdict (risks / open questions — not LGTM)
+- Findings table: path, goal, severity, cost, note
+- Optional: “defer via `/create-issue`” for Medium+
+
+## Relationship
+
+| Skill           | Role                                      |
+| --------------- | ----------------------------------------- |
+| `/code-review`  | Produce first-party review of a diff / PR |
+| `/review-fixer` | Triage Copilot/Bugbot review threads      |
+| `/create-issue` | Open deferred issues (optional hand-off)  |
