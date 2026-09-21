@@ -1,7 +1,8 @@
 # Personal GH_TOKEN / GITGUARDIAN_API_KEY. Source this file.
 # Environment: Linux Dev Container only (requires /commandhistory).
-# Empty prompt = skip (remembered). To set later: source ./scripts/set-dev-tokens.sh
-# Store: /commandhistory/tokens.env (sole source — process env does not override it).
+# Precedence: non-empty store wins; else keep non-empty process/host env; else prompt on TTY.
+# Empty prompt is not persisted. Override host: source ./scripts/set-dev-tokens.sh
+# Store: /commandhistory/tokens.env
 
 if [ "${BASH_SOURCE[0]-}" = "${0-}" ]; then
   echo "dev-tokens: source this file (do not execute it directly)" >&2
@@ -66,24 +67,20 @@ for _dev_tokens_var in GH_TOKEN GITGUARDIAN_API_KEY; do
 done
 unset _dev_tokens_var _dev_tokens_cur _dev_tokens_val
 
-# Store is the sole source for known keys. Process env never overrides the store:
-# missing key → unset; empty skip marker → unset; non-empty → export store value.
+# Non-empty store wins; missing/empty store key keeps non-empty process/host env.
+# Absent store file does not blanket-unset (preserves remoteEnv host inject).
 if [ -f "${_DEV_TOKENS_FILE}" ]; then
   for _dev_tokens_var in GH_TOKEN GITGUARDIAN_API_KEY; do
     if grep -q "^${_dev_tokens_var}=" "${_DEV_TOKENS_FILE}" 2>/dev/null; then
       _dev_tokens_val="$(_dev_tokens_get_stored "${_dev_tokens_var}")"
       if [ -n "${_dev_tokens_val}" ]; then
         export "${_dev_tokens_var}=${_dev_tokens_val}"
-      else
-        unset "${_dev_tokens_var}"
       fi
-    else
-      unset "${_dev_tokens_var}"
+      # Empty decoded (legacy skip marker or corrupt): leave process env as-is.
     fi
+    # Missing key: leave process env as-is.
   done
   unset _dev_tokens_var _dev_tokens_val
-else
-  unset GH_TOKEN GITGUARDIAN_API_KEY
 fi
 
 _dev_tokens_write() {
@@ -119,20 +116,22 @@ _dev_tokens_write() {
 _dev_tokens_ask() {
   local var=$1 hint=$2 val
   if [ -z "${DEV_TOKENS_FORCE:-}" ]; then
-    grep -q "^${var}=" "${_DEV_TOKENS_FILE}" 2>/dev/null && return 0
+    # Already set (store or host/process) — do not prompt.
+    [ -n "${!var-}" ] && return 0
   fi
   { printf '' >/dev/tty; } 2>/dev/null || return 0
-  printf '%s — %s (empty skips until set-dev-tokens.sh)\n> ' "${var}" "${hint}" >/dev/tty
+  printf '%s — %s (empty leaves unset; override later: set-dev-tokens.sh)\n> ' "${var}" "${hint}" >/dev/tty
   IFS= read -r -s val </dev/tty || true
   printf '\n' >/dev/tty
+  if [ -z "${val}" ]; then
+    # Do not persist empty skip markers.
+    unset "${var}"
+    return 0
+  fi
   if ! _dev_tokens_write "${var}" "${val}"; then
     echo "dev-tokens: failed to persist ${var}; value kept for this shell only (re-run: source ./scripts/set-dev-tokens.sh)" >&2
   fi
-  if [ -n "${val}" ]; then
-    export "${var}=${val}"
-  else
-    unset "${var}"
-  fi
+  export "${var}=${val}"
   return 0
 }
 
