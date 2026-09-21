@@ -75,7 +75,17 @@ repos:
 
       - id: pylint
         name: pylint
+        # No --source-roots here: product paths stay on CI pylint_source_roots / process env
+        # (docs/quality.md). fail-under in .pylintrc is the gate, not E0401 alone.
         entry: uv run pylint --rcfile .pylintrc middleware/
+        language: system
+        files: ^middleware/
+        pass_filenames: false
+
+      - id: vulture
+        name: vulture unused code
+        # Confidence 100; no synced whitelist — FP → fix or # noqa in product code (docs/quality.md)
+        entry: uv run vulture middleware/ --min-confidence 100
         language: system
         files: ^middleware/
         pass_filenames: false
