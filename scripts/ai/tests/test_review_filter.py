@@ -6,8 +6,11 @@ from pathlib import Path
 import pytest
 from m42_ai.issue import slugify
 from m42_ai.review import (
+    CODE_REVIEW_MARKER,
+    extract_code_review_findings,
     extract_suppressed_comments,
     is_ai_author,
+    is_code_review_report,
     is_submitted_review,
     shape_review_open,
 )
@@ -32,6 +35,17 @@ Intro text.
 
 - **Files reviewed:** 29/34
 </details>
+"""
+
+CODE_REVIEW_BODY = f"""{CODE_REVIEW_MARKER}
+## Verdict
+
+One High correctness gap.
+
+| path | goal | severity | cost | note |
+|------|------|----------|------|------|
+| scripts/ai/src/m42_ai/review.py | Correctness | High | S | Null pullRequest not handled |
+| docs/ci.md | Docs | Low | XS | Stale workflow name |
 """
 
 
@@ -134,14 +148,103 @@ def test_extract_copilot_path_bullet_suppressed() -> None:
     assert items[1]["path"] == "scripts/ai/src/m42_ai/review.py"
 
 
-def test_shape_review_open_filters_resolved_and_human() -> None:
+def test_is_code_review_report() -> None:
+    assert is_code_review_report(CODE_REVIEW_BODY)
+    assert not is_code_review_report(COPILOT_SUPPRESSED_BODY)
+    assert not is_code_review_report(None)
+
+
+def test_extract_code_review_findings() -> None:
+    items = extract_code_review_findings(CODE_REVIEW_BODY)
+    assert len(items) == 2
+    assert items[0]["path"] == "scripts/ai/src/m42_ai/review.py"
+    assert "High" in (items[0]["text"] or "")
+    assert "Null pullRequest" in (items[0]["text"] or "")
+    assert items[1]["path"] == "docs/ci.md"
+
+
+def test_shape_includes_human_code_review_summary() -> None:
+    """Human-login `/code-review` COMMENT body must land in summary_only_findings."""
+    payload = _payload()
+    pr = payload["data"]["repository"]["pullRequest"]
+    # Clear bot reviews so only the code-review finder remains for summary packing.
+    pr["reviews"]["nodes"] = [
+        {
+            "databaseId": 700,
+            "author": {"login": "alice"},
+            "submittedAt": "2026-09-05T12:00:00Z",
+            "state": "COMMENTED",
+            "body": CODE_REVIEW_BODY,
+        }
+    ]
+    shaped = shape_review_open(payload)
+    assert shaped["round_count"] == 1
+    assert shaped["ai_reviews"][0]["is_code_review"] is True
+    assert shaped["open_summary_review_id"] == 700
+    assert len(shaped["summary_only_findings"]) == 2
+    assert shaped["summary_only_findings"][0]["resolvable"] is False
+    assert shaped["summary_only_findings"][0]["path"] == "scripts/ai/src/m42_ai/review.py"
+
+
+def test_code_review_report_does_not_answer_suppressed() -> None:
+    """A later code-review COMMENT must not close prior Copilot suppressed findings."""
+    payload = _payload()
+    nodes = payload["data"]["repository"]["pullRequest"]["reviews"]["nodes"]
+    for n in nodes:
+        if n["databaseId"] == 2:
+            n["body"] = COPILOT_SUPPRESSED_BODY
+            n["submittedAt"] = "2026-09-02T10:00:00Z"
+            n["state"] = "COMMENTED"
+    nodes.append({
+        "databaseId": 701,
+        "author": {"login": "alice"},
+        "submittedAt": "2026-09-03T10:00:00Z",
+        "state": "COMMENTED",
+        "body": CODE_REVIEW_BODY,
+    })
+    shaped = shape_review_open(payload)
+    # Latest unanswered summary source is the code-review (after Copilot).
+    assert shaped["open_summary_review_id"] == 701
+    assert all(f["review_database_id"] == 701 for f in shaped["summary_only_findings"])
+    rev2 = next(r for r in shaped["ai_reviews"] if r["database_id"] == 2)
+    assert rev2["summary_answered"] is False
+
+
+def test_triage_reply_answers_code_review_summary() -> None:
+    payload = _payload()
+    pr = payload["data"]["repository"]["pullRequest"]
+    pr["reviews"]["nodes"] = [
+        {
+            "databaseId": 700,
+            "author": {"login": "alice"},
+            "submittedAt": "2026-09-05T12:00:00Z",
+            "state": "COMMENTED",
+            "body": CODE_REVIEW_BODY,
+        },
+        {
+            "databaseId": 702,
+            "author": {"login": "bob"},
+            "submittedAt": "2026-09-06T12:00:00Z",
+            "state": "COMMENTED",
+            "body": "Dismissed.\n#pullrequestreview-700",
+        },
+    ]
+    shaped = shape_review_open(payload)
+    assert not shaped["summary_only_findings"]
+    assert shaped["open_summary_review_id"] is None
+    rev = next(r for r in shaped["ai_reviews"] if r["database_id"] == 700)
+    assert rev["summary_answered"] is True
+
+
+def test_shape_review_open_includes_human_and_ai_threads() -> None:
     shaped = shape_review_open(_payload())
     assert shaped["pr"]["number"] == 22
     assert shaped["round_count"] == 2
-    assert len(shaped["unresolved_ai_threads"]) == 1
-    thread = shaped["unresolved_ai_threads"][0]
-    assert thread["thread_id"] == "PRRT_open_ai"
-    assert thread["first_comment"]["database_id"] == 200
+    thread_ids = {t["thread_id"] for t in shaped["unresolved_ai_threads"]}
+    assert thread_ids == {"PRRT_open_ai", "PRRT_open_human"}
+    assert "PRRT_resolved" not in thread_ids
+    human = next(t for t in shaped["unresolved_ai_threads"] if t["thread_id"] == "PRRT_open_human")
+    assert human["first_comment"]["author"] == "alice"
     assert shaped["latest_ai_review"] is not None
     assert shaped["ai_reviews"][-1]["author"] == "cursor"
     assert shaped["summary_only_findings"]  # open Copilot suppressed from fixture

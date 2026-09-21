@@ -2,16 +2,17 @@
 name: "/review-fixer"
 id: "review-fixer"
 category: "Workflow"
-description: "Triage Copilot/Bugbot PR review comments: fix, dismiss, or bundle a follow-up"
+description: "Triage Copilot/Bugbot/code-review PR comments: fix, dismiss, or bundle a follow-up"
 ---
 
 # review-fixer
 
-Triage GitHub Copilot and Cursor Bugbot review comments using the project AI review policy. Fix high-risk findings and
-in-budget nits; dismiss the rest; at most one follow-up issue.
+Triage GitHub Copilot, Cursor Bugbot, and first-party `/code-review` comments using the project AI review policy. Fix
+high-risk findings and in-budget nits; dismiss the rest; at most one follow-up issue.
 
-When a PR is known, process **open** work only: unresolved AI threads plus findings in the latest Copilot/Bugbot review
-body that have no thread (including Copilot “Suppressed comments”). Do not re-triage resolved threads.
+When a PR is known, process **open** work only: unresolved review threads (**any** author) plus summary-only /
+suppressed findings (Copilot “Suppressed comments” **and** `/code-review` marked COMMENT bodies — no inline thread). Do
+not re-triage resolved threads.
 
 **Two phases when anything is `fix`:** (1) local fixes + immediate dismiss/follow-up replies — **no commit**; pause for
 your commit. (2) after you commit, `Fixed in <sha>.` + resolve. Dismiss/follow-up-only runs finish in phase 1.
