@@ -75,6 +75,8 @@ repos:
 
       - id: pylint
         name: pylint
+        # No --source-roots here: product paths stay on CI pylint_source_roots / process env
+        # (docs/quality.md). fail-under in .pylintrc is the gate, not E0401 alone.
         entry: uv run pylint --rcfile .pylintrc middleware/
         language: system
         files: ^middleware/

@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# Prompt for GH_TOKEN and GITGUARDIAN_API_KEY and save (overrides a previous skip).
-# Environment: Linux Dev Container only (via scripts/dev-tokens.sh).
+# Force-prompt for GH_TOKEN and GITGUARDIAN_API_KEY and save non-empty values to the store
+# (overrides host/process env on later loads). Environment: Linux Dev Container only.
 # Source this to export into the current shell: source scripts/set-dev-tokens.sh
 # Do not `set -euo pipefail` here — this file is sourced into the caller shell.
 #
