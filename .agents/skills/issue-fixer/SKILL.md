@@ -56,15 +56,20 @@ do not invent them. Never ask the user to paste a PAT into chat.
    uv run --project scripts/ai m42-ai issue-view --issue <issue_number>
    ```
 
-   Use `issue_type`, `labels`, `triage`, `body`, and `url` from that JSON (fall back to `gh issue view` only if the CLI
-   is unavailable).
+   Use `issue_type`, `labels`, `triage`, `body`, `comments`, and `url` from that JSON (fall back to `gh issue view`
+   including comments only if the CLI is unavailable).
 
-2. Determine:
+2. **Issue comments are part of triage.** When `comments` is non-empty, read them (oldest → newest) and fold clarifications,
+   lock-ins, and acceptance-criteria edits into the problem statement / done-when. **If comments contradict each other
+   (or the body), the newer comment wins** (`created_at` later). Do not ignore comments that change deletion rules,
+   scope, or type/routing.
+
+3. Determine:
    - org issue type: `Bug|Security|Feature|Task|Discussion|Refactoring` (from `issue_type` when set)
    - triage labels: `severity:*`, `practicality:*`, `cost:*` (from `triage` / `labels` when set)
-   - problem statement; affected paths; acceptance criteria / “done when”
+   - problem statement; affected paths; acceptance criteria / “done when” (body **plus** winning comments)
 
-3. Early exits:
+4. Early exits:
    - Missing actionable info → comment with at most 3 questions and stop (no code / no PR).
    - Already resolved / not applicable → comment briefly and stop.
    - Type `Discussion` → do **not** create branch/PR by default; ask for a decision or retype. Proceed only if the user

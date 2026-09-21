@@ -1,6 +1,7 @@
 # m42-ai — agent GitHub/git plumbing
 
-Small Python CLI for deterministic GitHub/git work used by `/review-fixer`, `/create-issue`, and `/issue-fixer`.
+Small Python CLI for deterministic GitHub/git work used by `/review-fixer`, `/create-issue`, `/issue-fixer`, and
+`/code-review`.
 
 ## Layouts
 
@@ -55,12 +56,18 @@ you pass `--owner` / `--repo` where the command supports them.
 | `review-open --pr N`            | Ensure PR head checkout, then GraphQL shape; JSON includes `head_ref` / `current_branch` + open AI work |
 | `review-reply`                  | `in_reply_to` on a review comment, or `--conversation` PR comment                                       |
 | `review-resolve --thread-id ID` | `resolveReviewThread`                                                                                   |
-| `issue-view --issue N`          | Stable triage JSON (type, labels, body, url, triage:\* extract)                                         |
+| `issue-view --issue N`          | Stable triage JSON (type, labels, body, comments, url, triage:\* extract)                               |
 | `issue-create`                  | Type + severity/cost (+ optional `--practicality`, `--parent`)                                          |
 | `issue-branch --issue N`        | Ensure `issue-N-slug` checked out from base (no commit / push / PR)                                     |
 | `branch-ahead`                  | JSON ahead count vs `origin/<base>`; exit `1` when tip is not ahead                                     |
 | `issue-start --issue N`         | Ensure branch, push when ahead of base, draft PR with `Fixes #N` (no empty commit)                      |
 | `pr-strip-footer --pr N`        | Remove trailing “Made with Cursor” (and similar) footers from a PR body                                 |
+| `code-review-context`           | Local or PR diff metadata JSON (paths/stats; full patch omitted) for `/code-review`                     |
+| `code-review-report-write`      | Write review Markdown under `/tmp/code-review-*.md`; JSON includes path                                 |
+| `code-review-publish`           | COMMENT Pull Request Review via `gh pr review --comment` (local no-op without `--pr`)                   |
+| `pr-for-commit --sha`           | Resolve a PR that contains a commit (sync follow-up)                                                    |
+| `sync-followup-ids`             | Parse `SYNC-FOLLOWUP: <id>` from PR body+comments or offline `--body` / `--comment`                     |
+| `sync-followup-ensure`          | Create or reuse product Task (`--repo`, `--id`; dedupe label `sync-followup:<id>`)                      |
 
 `review-open` has a **git side effect**: it checks out the PR head (via `gh pr checkout`) when the current branch
 differs. Dirty trees on a **different** branch refuse with JSON `{"ok": false, "error": …}` and exit `1`. Dirty on the

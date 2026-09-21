@@ -76,6 +76,18 @@ def test_view_issue_shapes_triage() -> None:
             "also-ok",
         ],
         "author": {"login": "alice"},
+        "comments": [
+            {
+                "author": {"login": "alice"},
+                "body": "newer lock-in wins",
+                "createdAt": "2026-09-02T12:00:00Z",
+            },
+            {
+                "author": {"login": "bob"},
+                "body": "older clarification",
+                "createdAt": "2026-09-01T10:00:00Z",
+            },
+        ],
     }
     with patch("m42_ai.issue.run_gh") as run_gh:
         run_gh.return_value = MagicMock(stdout=__import__("json").dumps(raw))
@@ -90,6 +102,38 @@ def test_view_issue_shapes_triage() -> None:
     assert "also-ok" in out["labels"]
     assert "None" not in out["labels"]
     assert "" not in out["labels"]
+    # API order may be newest-first; issue-view normalizes oldest → newest.
+    assert out["comments"] == [
+        {
+            "author": "bob",
+            "body": "older clarification",
+            "created_at": "2026-09-01T10:00:00Z",
+        },
+        {
+            "author": "alice",
+            "body": "newer lock-in wins",
+            "created_at": "2026-09-02T12:00:00Z",
+        },
+    ]
+
+
+def test_view_issue_empty_comments() -> None:
+    raw = {
+        "number": 7,
+        "title": "No discussion yet",
+        "url": "https://github.com/o/r/issues/7",
+        "body": "just the body",
+        "state": "OPEN",
+        "issueType": {"name": "Bug"},
+        "labels": [],
+        "author": {"login": "alice"},
+        "comments": [],
+    }
+    with patch("m42_ai.issue.run_gh") as run_gh:
+        run_gh.return_value = MagicMock(stdout=__import__("json").dumps(raw))
+        out = view_issue(7)
+    assert out["comments"] == []
+    assert out["body"] == "just the body"
 
 
 def test_branch_ahead_ok_and_not() -> None:

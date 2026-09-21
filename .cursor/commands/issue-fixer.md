@@ -20,7 +20,8 @@ ahead of `main`. `/review-fixer` and `/create-issue` do **not** run OpenSpec.
 
 1. Read and follow `.agents/skills/issue-fixer/SKILL.md`.
 2. When explore is required (`Feature` / `Refactoring`, or unclear Bug/Security/Task / user asks): explore in-skill.
-   Wait for lock-in / `go` / `skip explore`. Do **not** invoke `/opsx-explore`.
+   Wait for lock-in / `go` / `skip explore`. Do **not** invoke `/opsx-explore`. Triage MUST include issue comments from
+   `m42-ai issue-view` (newer comment wins on conflict).
 3. Create `issue-<n>-<slug>` from `main` **before** propose or implement.
 4. OpenSpec types: follow `.cursor/skills/openspec-propose/SKILL.md` → pause → on `go` follow
    `.cursor/skills/openspec-apply-change/SKILL.md` → pause. Task/Bug path **or** clearly docs-only Feature/Refactoring

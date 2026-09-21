@@ -2,8 +2,9 @@
   // Shared Cursor / VS Code workspace settings for m4.2 Devinfra (and a sync template for products).
   // Interpreter + tool binaries must match `uv sync` / pre-commit / CI (root `.venv`, root `pyproject.toml`).
   // Do not invent product paths here after sync. Pyright/basedpyright SoT: synced pyrightconfig.json
-  // (venv, stubPath stubs, scripts/ai only — see docs/quality.md). Test roots: each repo
-  // pyproject.toml testpaths — keep python.testing.pytestArgs empty so discovery is not overridden.
+  // (venv, optional stubPath, scripts/ai, typeCheckingMode off — mypy owns type gates; see docs/quality.md).
+  // Test roots: each repo pyproject.toml testpaths — keep python.testing.pytestArgs empty so discovery
+  // is not overridden.
 
   "python.defaultInterpreterPath": "${workspaceFolder}/.venv/bin/python",
   "python-envs.defaultEnvManager": "ms-python.python:venv",
