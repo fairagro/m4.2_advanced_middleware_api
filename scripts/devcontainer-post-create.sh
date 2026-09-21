@@ -182,6 +182,34 @@ else
   echo "No Cursor/VS Code remote CLI; skipping extension installs (devcontainer.json still recommends them)"
 fi
 
+# ── optional product drop-ins (T-late; hard-fail when present) ───────────────
+# Product-owned, not synced. Example: scripts/devcontainer-post-create.d/50-git-lfs.sh
+echo "==> Run product postCreate drop-ins (if any)"
+drop_in_dir="${repo_root}/scripts/devcontainer-post-create.d"
+if [ -d "${drop_in_dir}" ]; then
+  shopt -s nullglob
+  drop_ins=( "${drop_in_dir}"/* )
+  shopt -u nullglob
+  if [ ${#drop_ins[@]} -gt 0 ]; then
+    mapfile -t drop_ins_sorted < <(printf '%s\n' "${drop_ins[@]}" | LC_ALL=C sort)
+    for drop_in in "${drop_ins_sorted[@]}"; do
+      if [ ! -f "${drop_in}" ]; then
+        continue
+      fi
+      if [ ! -x "${drop_in}" ]; then
+        echo "ERROR: postCreate drop-in not executable: ${drop_in}" >&2
+        exit 1
+      fi
+      echo "Running ${drop_in}"
+      "${drop_in}"
+    done
+  else
+    echo "No scripts/devcontainer-post-create.d/* drop-ins; skipping"
+  fi
+else
+  echo "No scripts/devcontainer-post-create.d/; skipping"
+fi
+
 echo "==> Dev Container post-create done"
 echo "    gh=$(command -v gh || echo missing)  openspec=$(command -v openspec || echo missing)  uv=$(command -v uv || echo missing)"
 echo "    node=$(command -v node || echo missing)  prettier=$(command -v prettier || echo missing)"
