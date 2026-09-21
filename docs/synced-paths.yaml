@@ -13,6 +13,7 @@ allow:
   - docs/renovate.md
   - docs/review-fixer.md
   - docs/create-issue.md
+  - docs/code-review.md
   - docs/issue-fixer.md
   - docs/quality.md
   - docs/devcontainer.md
@@ -22,12 +23,15 @@ allow:
   - .github/copilot-instructions.md
   - .cursor/commands/review-fixer.md
   - .cursor/commands/create-issue.md
+  - .cursor/commands/code-review.md
   - .cursor/commands/issue-fixer.md
   - .github/prompts/review-fixer.prompt.md
   - .github/prompts/create-issue.prompt.md
+  - .github/prompts/code-review.prompt.md
   - .github/prompts/issue-fixer.prompt.md
   - .agents/skills/review-fixer/**
   - .agents/skills/create-issue/**
+  - .agents/skills/code-review/**
   - .agents/skills/issue-fixer/**
   - .agents/skills/arctrl/**
   - .agents/skills/gh/**
@@ -62,9 +66,6 @@ allow:
   - mypy.ini
   - .pylintrc
   - pyrightconfig.json
-  - stubs/README.md
-  - stubs/arctrl/**
-  - stubs/fable_library/**
   - .markdownlint.json
   - .markdownlint-cli2.jsonc
   - .markdownlintignore

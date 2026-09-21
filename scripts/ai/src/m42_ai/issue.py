@@ -38,14 +38,33 @@ def slugify(text: str, *, max_len: int = 48) -> str:
     return s[:max_len].rstrip("-")
 
 
-def ensure_labels(labels: list[str], *, cwd: Path | None = None) -> None:
+def _repo_args(repo: str | None) -> list[str]:
+    return ["--repo", repo] if repo else []
+
+
+def ensure_labels(
+    labels: list[str],
+    *,
+    cwd: Path | None = None,
+    repo: str | None = None,
+) -> None:
     unknown = [n for n in labels if n not in LABEL_SPECS]
     if unknown:
         raise ValueError(f"off-allowlist labels: {unknown}")
     # Default gh page size is 30; triage repos can exceed that. Raise the limit so
     # existing allowlisted labels are not mistaken for missing.
     proc = run_gh(
-        ["label", "list", "--limit", "1000", "--json", "name", "--jq", ".[].name"],
+        [
+            "label",
+            "list",
+            "--limit",
+            "1000",
+            "--json",
+            "name",
+            "--jq",
+            ".[].name",
+            *_repo_args(repo),
+        ],
         cwd=cwd,
     )
     existing = {line.strip() for line in proc.stdout.splitlines() if line.strip()}
@@ -53,7 +72,10 @@ def ensure_labels(labels: list[str], *, cwd: Path | None = None) -> None:
         if name in existing:
             continue
         color, desc = LABEL_SPECS[name]
-        run_gh(["label", "create", name, "--color", color, "--description", desc], cwd=cwd)
+        run_gh(
+            ["label", "create", name, "--color", color, "--description", desc, *_repo_args(repo)],
+            cwd=cwd,
+        )
 
 
 def _extract_issue_url(text: str) -> str | None:
@@ -69,10 +91,16 @@ def create_issue(
     labels: list[str],
     parent: int | None = None,
     cwd: Path | None = None,
+    repo: str | None = None,
 ) -> dict[str, Any]:
     if issue_type not in ORG_TYPES:
         raise ValueError(f"invalid org issue type: {issue_type!r}")
-    ensure_labels(labels, cwd=cwd)
+    # Triage labels must be allowlisted; sync-followup:* may be pre-created by callers.
+    triage = [n for n in labels if n in LABEL_SPECS]
+    extra = [n for n in labels if n not in LABEL_SPECS]
+    if extra and not all(n.startswith("sync-followup:") for n in extra):
+        raise ValueError(f"off-allowlist labels: {extra}")
+    ensure_labels(triage, cwd=cwd, repo=repo)
 
     def _args(with_parent: bool) -> list[str]:
         args = [
@@ -84,6 +112,7 @@ def create_issue(
             "-",
             "--type",
             issue_type,
+            *_repo_args(repo),
         ]
         for lab in labels:
             args.extend(["--label", lab])
