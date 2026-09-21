@@ -3,9 +3,14 @@
 Automation that opens pull requests in the three m4.2 product repos, copying only paths listed in
 [`docs/synced-paths.yaml`](synced-paths.yaml).
 
-**v1 scope:** sync **adds/updates** allowlisted files only. It does **not** delete paths in product repos (even if a
-file was removed in Devinfra or dropped from the allowlist). Propagating deletions would be a separate follow-up if
-needed.
+**Scope:** sync **adds/updates** the current allowlist file set and **`git rm`s allowlist orphans** — paths that were in
+the resolved allowlist set at the comparison base (`github.event.before` on push) but not at source `HEAD`. There is
+**no** `retire:` list; dropping a path from `allow` (or deleting it upstream so it leaves the resolved set) is enough.
+Paths that were **never** on the allowlist (product-only extras) are **not** deleted.
+
+**`SYNC-FOLLOWUP`:** when a merged Devinfra PR body or comment contains `SYNC-FOLLOWUP: <stable-id>`, live sync opens
+(or reuses) a deduplicated Task issue in each product repo via `m42-ai`. Manual `workflow_dispatch` input `followup_id`
+does the same without a trailer. Dry-run creates neither PRs nor issues.
 
 **Sole path SoT:** [`docs/synced-paths.yaml`](synced-paths.yaml) is the only place that defines _what_ is synced
 (`allow`) and the hard denylist (`exclude`). The workflow does **not** maintain a second path list (no `paths:` filter).
@@ -52,18 +57,18 @@ the YAML, the YAML wins.
 - **Devinfra checkout:** optionally resolve the live allowlist with `--list-files` under [Local dry-run](#local-dry-run)
   (same script as in the Artifacts table).
 
-| Category                          | Examples on `allow` (non-exhaustive)                                                                                                                               |
-| --------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| Sync / AI policy docs             | `docs/sync.md`, `docs/synced-paths.yaml`, `docs/ai_review_policy.md`, `docs/quality.md`, `docs/devcontainer.md`, …                                                 |
-| Agent skills / commands / prompts | `.agents/skills/{issue-fixer,review-fixer,create-issue,arctrl,gh,docker,hadolint,uv}/**`, `.cursor/commands/*`, prompts                                            |
-| `m42-ai` package                  | `scripts/ai/**`, `scripts/bin/{gh,git,k,d}`, `scripts/{dev-tokens,set-dev-tokens}.sh`                                                                              |
-| Quality scripts / hooks           | `scripts/quality-{check,fix}.sh`, `scripts/setup-git-hooks.sh`, `scripts/git-hooks/**`, `scripts/update-dockerfile-pins.sh`, `scripts/devcontainer-post-create.sh` |
-| Python quality fragments          | `ruff.toml`, `mypy.ini`, `.pylintrc`, `.bandit`, `pyrightconfig.json`, `stubs/{arctrl,fable_library}/**`, `.pre-commit-config.yaml`                                |
-| Markdown / IDE baseline           | `.markdownlint*`, `.prettier*`, `package.json`, `package-lock.json`, `.vscode/settings.json`, `.vscode/extensions.json`                                            |
-| Fleet ignore baseline             | root `.gitignore` (incl. `.docker/buildx/` + token-seed runtime; product-only paths → nested `.gitignore`; see Overlays)                                           |
-| Dev Container / image pins        | `.devcontainer/{Dockerfile,devcontainer.json,docker-compose.yml,starship.toml}`, `versions.env`, `.python-version`, `docker/Dockerfile.product-app.base`           |
-| Renovate                          | `renovate.json`, `.github/workflows/renovate.yml`                                                                                                                  |
-| Global prose SoT                  | `docs/surface-quality-bar.global.md`, `openspec/principles.global.md`                                                                                              |
+| Category                          | Examples on `allow` (non-exhaustive)                                                                                                                                                                   |
+| --------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Sync / AI policy docs             | `docs/sync.md`, `docs/synced-paths.yaml`, `docs/ai_review_policy.md`, `docs/quality.md`, `docs/devcontainer.md`, …                                                                                     |
+| Agent skills / commands / prompts | `.agents/skills/{issue-fixer,review-fixer,create-issue,arctrl,gh,docker,hadolint,uv}/**`, `.cursor/commands/*`, prompts                                                                                |
+| `m42-ai` package                  | `scripts/ai/**`, `scripts/bin/{gh,git,k,d}`, `scripts/{dev-tokens,set-dev-tokens}.sh`                                                                                                                  |
+| Quality scripts / hooks           | `scripts/quality-{check,fix}.sh`, `scripts/setup-git-hooks.sh`, `scripts/git-hooks/**`, `scripts/update-dockerfile-pins.sh`, `scripts/prune-merged-branches.sh`, `scripts/devcontainer-post-create.sh` |
+| Python quality fragments          | `ruff.toml`, `mypy.ini`, `.pylintrc`, `.bandit`, `pyrightconfig.json`, `.pre-commit-config.yaml`                                                                                                       |
+| Markdown / IDE baseline           | `.markdownlint*`, `.prettier*`, `package.json`, `package-lock.json`, `.vscode/settings.json`, `.vscode/extensions.json`                                                                                |
+| Fleet ignore baseline             | root `.gitignore` (incl. `.docker/buildx/` + token-seed runtime; product-only paths → nested `.gitignore`; see Overlays)                                                                               |
+| Dev Container / image pins        | `.devcontainer/{Dockerfile,devcontainer.json,docker-compose.yml,starship.toml}`, `versions.env`, `.python-version`, `docker/Dockerfile.product-app.base`                                               |
+| Renovate                          | `renovate.json`, `.github/workflows/renovate.yml`                                                                                                                                                      |
+| Global prose SoT                  | `docs/surface-quality-bar.global.md`, `openspec/principles.global.md`                                                                                                                                  |
 
 **Hard excludes / never overwrite:** see `exclude` and `overlays` in the YAML (e.g. `.devcontainer/product.env`,
 `docs/surface-quality-bar.md`, `openspec/principles.md`, `AGENTS.md`, reusable workflows, `middleware/**`).
@@ -77,8 +82,9 @@ the YAML, the YAML wins.
 | **Verbatim shared fragment**     | Fleet wants identical policy; product deltas are wrong or go upstream                    | `ruff.toml` ([#60](https://github.com/fairagro/m4.2_middleware_devinfra/issues/60)), `pyrightconfig.json` ([#64](https://github.com/fairagro/m4.2_middleware_devinfra/issues/64)), `.vscode/settings.json` + `.vscode/extensions.json` (recommendations match Dev Container extensions — [#118](https://github.com/fairagro/m4.2_middleware_devinfra/issues/118)), `.devcontainer/devcontainer.json` + `docker-compose.yml` (`/workspace`, basename `name`/volumes, `remoteEnv.PATH` for `.venv/bin`+`scripts/bin` — [#65](https://github.com/fairagro/m4.2_middleware_devinfra/issues/65)/[#58](https://github.com/fairagro/m4.2_middleware_devinfra/issues/58)), `.pre-commit-config.yaml` ([#63](https://github.com/fairagro/m4.2_middleware_devinfra/issues/63)), root `.gitignore` ([#62](https://github.com/fairagro/m4.2_middleware_devinfra/issues/62)) |
 | **Nested `.gitignore` overlays** | Git has no root-ignore merge; product-only paths must not live in the synced root file   | e.g. `helmchart/.gitignore` (TLS scratch), `dev_environment/.gitignore` (`demo_output`) — sync never overwrites nested ignore files; do **not** append product lines to root after sync. Fleet-wide Docker Buildx / token-seed under `.docker/` belongs in the synced root baseline ([#141](https://github.com/fairagro/m4.2_middleware_devinfra/issues/141)), not a nested overlay — tracked `.docker/config.json` stays commit-able.                                                                                                                                                                                                                                                                                                                                                                                                                          |
 
-Do **not** invent mypy config-merge here — stubs + `MYPYPATH` remain the product path for third-party silence
-([`docs/quality.md`](quality.md)).
+Do **not** invent mypy config-merge here — third-party silence for fleet deps (`arctrl` / `fable_library`) lives in
+synced `mypy.ini` / `.pylintrc` (and Ruff isort classification); `MYPYPATH` remains the product path overlay for
+first-party packages ([`docs/quality.md`](quality.md)).
 
 ## Targets
 
@@ -90,12 +96,32 @@ Do **not** invent mypy config-merge here — stubs + `MYPYPATH` remain the produ
 
 ## Triggers
 
-- **Push to `main`**: live sync. The workflow compares the push `before` SHA to `HEAD` against `docs/synced-paths.yaml`
-  (via `--list-files`) and skips the sync step when nothing allowlisted changed.
-- **`workflow_dispatch`**: inputs `dry_run` (default **true**), `skip_api`, `skip_sql_to_arc`, `skip_harvester`.
+- **Push to `main`**: live sync when the allowlist **file set** or allowlisted **content** changed vs `before`. Passes
+  `--orphan-base` so product PRs can delete delta orphans. Always collects `SYNC-FOLLOWUP` from the merged PR (body +
+  comments) when a PR exists for `HEAD`.
+- **`workflow_dispatch`**: inputs `dry_run` (default **true**), `skip_api`, `skip_sql_to_arc`, `skip_harvester`,
+  `followup_id` (optional stable id).
 
-Dry-run reports resolved files and targets without cloning or opening/closing PRs. Skip flags omit a consumer. Actions
-dry-run (`workflow_dispatch` with `dry_run=true`) does **not** require `DEVINFRA_BOT_TOKEN`; live sync does.
+Dry-run reports resolved files / would-delete orphans and targets without cloning or opening/closing PRs or creating
+issues. Skip flags omit a consumer. Actions dry-run (`workflow_dispatch` with `dry_run=true`) does **not** require
+`DEVINFRA_BOT_TOKEN`; live sync and follow-up ensure do.
+
+## SYNC-FOLLOWUP (product local work)
+
+Put a trailer on the **Devinfra PR** (body preferred; comments also scanned):
+
+```text
+SYNC-FOLLOWUP: remove-stubs
+```
+
+`<stable-id>` must be a non-empty token (`[A-Za-z0-9][A-Za-z0-9._/-]*`). Re-runs reuse an open product issue labeled
+`sync-followup:<id>`.
+
+**Author / agent checklist:** if copy/`git rm` is not enough for products (never-allowlisted paths, CI env, call-site
+ignores), add `SYNC-FOLLOWUP: <id>` before merge — or run Actions → Sync products with `followup_id` after merge.
+
+Plumbing: `uv run m42-ai pr-for-commit`, `sync-followup-ids`, `sync-followup-ensure` (see `scripts/ai/README.md`). Issue
+body template: [`docs/sync-followup-issue.md`](sync-followup-issue.md) (Devinfra-only).
 
 ## PR shape (one PR per sync run)
 
@@ -107,6 +133,20 @@ Each live sync that has allowlisted changes opens a **new** PR per product repo:
 - After the new PR is created, other **open** sync PRs whose head is `chore/devinfra-sync` or `chore/devinfra-sync-*`
   get a **Superseded by #N** comment and are **closed** (not merged)
 - Sync does **not** auto-merge; humans merge the latest open sync PR when ready
+
+### Prune merged / superseded branches
+
+Product checkouts accumulate local and `origin` heads after merges (incl. squash) and after sync closes older PRs as
+**Superseded by #N**. Use the synced helper (dry-run by default):
+
+```bash
+./scripts/prune-merged-branches.sh
+./scripts/prune-merged-branches.sh --apply
+```
+
+It deletes a branch only when it is an ancestor of `origin/main`, the head of a **MERGED** PR into `main`, or the head
+of a **CLOSED** PR that reaches a MERGED PR via a recursive `Superseded by #<n>` chain. It never deletes `main`, the
+current branch, or heads of **OPEN** PRs. Requires `gh` on `PATH` (Dev Container wrappers).
 
 ## Bot token (shared with Renovate)
 
@@ -136,7 +176,9 @@ ship `scripts/sync-products.py` — use [`synced-paths.yaml`](synced-paths.yaml)
 
 ```bash
 uv run python scripts/sync-products.py --list-files
+uv run python scripts/sync-products.py --list-files --ref HEAD^
 uv run python scripts/sync-products.py --dry-run
+uv run python scripts/sync-products.py --dry-run --orphan-base HEAD^
 uv run python scripts/sync-products.py --dry-run --skip-harvester
 ```
 

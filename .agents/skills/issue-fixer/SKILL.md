@@ -56,15 +56,20 @@ do not invent them. Never ask the user to paste a PAT into chat.
    uv run --project scripts/ai m42-ai issue-view --issue <issue_number>
    ```
 
-   Use `issue_type`, `labels`, `triage`, `body`, and `url` from that JSON (fall back to `gh issue view` only if the CLI
-   is unavailable).
+   Use `issue_type`, `labels`, `triage`, `body`, `comments`, and `url` from that JSON (fall back to `gh issue view`
+   including comments only if the CLI is unavailable).
 
-2. Determine:
+2. **Issue comments are part of triage.** When `comments` is non-empty, read them (oldest → newest) and fold clarifications,
+   lock-ins, and acceptance-criteria edits into the problem statement / done-when. **If comments contradict each other
+   (or the body), the newer comment wins** (`created_at` later). Do not ignore comments that change deletion rules,
+   scope, or type/routing.
+
+3. Determine:
    - org issue type: `Bug|Security|Feature|Task|Discussion|Refactoring` (from `issue_type` when set)
    - triage labels: `severity:*`, `practicality:*`, `cost:*` (from `triage` / `labels` when set)
-   - problem statement; affected paths; acceptance criteria / “done when”
+   - problem statement; affected paths; acceptance criteria / “done when” (body **plus** winning comments)
 
-3. Early exits:
+4. Early exits:
    - Missing actionable info → comment with at most 3 questions and stop (no code / no PR).
    - Already resolved / not applicable → comment briefly and stop.
    - Type `Discussion` → do **not** create branch/PR by default; ask for a decision or retype. Proceed only if the user
@@ -131,10 +136,19 @@ On every run that will implement, after explore (when it ran) or immediately whe
 1. **Create the issue branch** from `main` via CLI when possible (**before** OpenSpec artifacts or product code):
 
    ```bash
-   uv run --project scripts/ai m42-ai issue-branch --issue <issue_number> [--slug <slug>]
+   uv run --project scripts/ai m42-ai issue-branch --issue <issue_number> --channel <build|ci|docs> [--slug <slug>]
    ```
 
-   Do **not** commit, push, or open a draft PR yet. If already on the correct issue branch, skip creating it again.
+   Branch shape: `{channel}/issue-<issue_number>-<slug>`. Channels are CI prefixes (not GitHub issue types):
+
+   | Channel | When                                                                                                      |
+   | ------- | --------------------------------------------------------------------------------------------------------- |
+   | `docs`  | Clearly docs-only (Markdown/MDC and/or code comments; no skill file; not under openspec specs or changes) |
+   | `ci`    | Clearly shared CI/tooling only (scripts, Dev Container, workflows, quality configs, those tests)          |
+   | `build` | Product image/app work, or **unclear** scope (fail-safe; RC/Pre Release eligible)                         |
+
+   Do **not** use `feature/` or bare `issue-<n>-…`. Do **not** commit, push, or open a draft PR yet. If already on the
+   correct issue branch, skip creating it again.
 
 2. **Feature / Refactoring** (OpenSpec path), unless docs-only with no skill file — also any type with a skill file in
    scope, or Task/Bug with explicit `use opsx`:
@@ -153,8 +167,8 @@ the type-routed path (OpenSpec if they retyped it as Feature/Refactoring).
 
 ## Branch + draft PR (real commits only)
 
-**Branch early:** create `issue-<issue_number>-<slug>` from `main` **before** propose or implement. That step does
-**not** open the PR yet.
+**Branch early:** create `{channel}/issue-<issue_number>-<slug>` from `main` **before** propose or implement. That step
+does **not** open the PR yet.
 
 **Draft PR:** after the implement/apply-pause confirmation. Assumptions: base branch is `main`. Prefer the plumbing CLI
 when the tree is clean and the tip is already ahead of `main` (`git log main..HEAD` non-empty — uncommitted work does
@@ -164,7 +178,7 @@ not count):
 uv run --project scripts/ai m42-ai issue-start --issue <issue_number> [--slug <slug>]
 ```
 
-`issue-start` ensures branch `issue-<issue_number>-<slug>` (checkout/create from `main` if needed), refuses when there
+`issue-start` ensures branch `{channel}/issue-<issue_number>-<slug>` (checkout/create from `main` if needed), refuses when there
 are no commits ahead of the base, pushes, and opens a **draft** PR with `Fixes #<issue_number>`. It does **not** create
 empty commits. See [`scripts/ai/README.md`](../../../scripts/ai/README.md).
 
@@ -184,7 +198,7 @@ uv run --project scripts/ai m42-ai pr-strip-footer --pr <pr_number>
 
 Manual equivalent if the CLI is unavailable:
 
-1. Be on `issue-<issue_number>-<slug>` with **at least one real commit** ahead of `main` (never
+1. Be on `{channel}/issue-<issue_number>-<slug>` with **at least one real commit** ahead of `main` (never
    `git commit --allow-empty`).
 2. Push the branch and create a **draft** PR:
 

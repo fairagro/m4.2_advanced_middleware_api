@@ -1,6 +1,7 @@
 # Issue-fixer conventions
 
-Shared `/issue-fixer` triages a GitHub issue, explores when needed, and implements on `issue-<n>-<slug>`. **Feature /
+Shared `/issue-fixer` triages a GitHub issue, explores when needed, and implements on
+`{channel}/issue-<n>-<slug>` (`build` / `ci` / `docs` — see skill). **Feature /
 Refactoring** use OpenSpec (propose → apply → draft PR → archive as last `go`), except a **clearly docs-only** slice
 (Markdown/MDC and/or code comments — **not** if a skill file is touched, and **not** Markdown under `openspec/specs/` or
 `openspec/changes/`). **Task**, **Bug**, and cheap **Security** stay on the fast path (no OpenSpec unless asked, or a
@@ -18,10 +19,11 @@ invoked explicitly.
 
 ## Workflow (summary)
 
-1. Fetch + triage (type, labels, done-when).
+1. Fetch + triage (type, labels, done-when, **issue comments** — newer comment wins on conflict with body or older
+   comments; via `m42-ai issue-view`).
 2. When explore is required (`Feature` / `Refactoring`, or Bug/Security/Task when criteria are unclear / user asks):
    explore **in-skill** (no `/opsx-explore`). Wait for lock-in / `go` / `skip explore`.
-3. Create the issue branch **before** propose or implement.
+3. Create `{channel}/issue-<n>-<slug>` **before** propose or implement (`build` / `ci` / `docs` per skill).
 4. **OpenSpec types (Feature / Refactoring):** follow openspec-propose → **pause** → on `go` apply → **pause** → on `go`
    draft PR (`uv run --project scripts/ai m42-ai issue-start` when the tip is ahead of `main`) → on `go` (last) follow
    openspec-archive → **pause** to commit. Never empty bootstrap commits. Same path if a skill file is in scope (even
