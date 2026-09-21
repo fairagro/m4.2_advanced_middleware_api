@@ -40,7 +40,7 @@ Use this mapping:
 | Contents                            | `contents`         | Read and write                 | Clone, branches, commits (Renovate + sync)     |
 | Pull requests                       | `pull_requests`    | Read and write                 | Open/update PRs (Renovate + sync)              |
 | Workflows                           | `workflows`        | Read and write                 | Push changes under `.github/workflows/` (sync) |
-| Issues                              | `issues`           | Read and write                 | Renovate (issue/PR comment APIs, dashboard)    |
+| Issues                              | `issues`           | Read and write                 | Renovate + sync `SYNC-FOLLOWUP` product issues |
 
 **Do not confuse** GUI **Workflows** (`workflows`) with **Actions** (`actions`). **Workflows** is required to create or
 modify workflow _files_; **Actions** covers workflow _runs_/logs and is not required for the current Renovate/sync
@@ -61,12 +61,27 @@ Example API fragment (repository permissions object):
 Until the secret exists, scheduled Renovate runs fail; after setting it, use **Actions → Renovate → Run workflow**. Sync
 dry-run: **Actions → Sync products → Run workflow** (`dry_run=true` by default).
 
+### `gitAuthor` (avoid Mend default)
+
+Self-hosted Renovate without `gitAuthor` falls back to Mend’s `renovate@whitesourcesoftware.com`, which logs a WARN and
+can mark commits **Unverified** under Vigilant Mode
+([renovate discussion #39309](https://github.com/renovatebot/renovate/discussions/39309)).
+
+Shared [`renovate.json`](../renovate.json) sets `gitAuthor` to the GitHub user that owns `DEVINFRA_BOT_TOKEN`, using
+that user’s noreply address (`Name <id+login@users.noreply.github.com>`). Today that is
+`Carsten Scharfenberg <138563220+Zalfsten@users.noreply.github.com>`. If the PAT owner changes, update `gitAuthor` to
+match (or set `RENOVATE_GIT_AUTHOR` in the workflow instead).
+
 ## Local CLI dry-run
 
 The Dev Container pins the **Renovate npm CLI** via `RENOVATE_VERSION` in [`versions.env`](../versions.env) (`renovate`
 on `PATH`). That pin is for local dry-runs only. CI runs
 [`renovatebot/github-action`](../.github/workflows/renovate.yml) at its own Action version (currently `v46.2.6`) — keep
 the Action major aware of the CLI major when bumping either pin; they are not the same artifact.
+
+The **npm CLI** itself is pinned as `NPM_VERSION` in `versions.env` (regex custom manager, `datasourceTemplate: npm`,
+grouped under **npm toolchain** with Prettier / markdownlint-cli2 / OpenSpec / Renovate CLI). It is independent of
+`NODE_VERSION` (Node tarball). Bump npm in Devinfra via Renovate; do not hand-edit the pin in product checkouts.
 
 From the repo root (no PR creation):
 
@@ -128,8 +143,8 @@ inside product Dockerfiles. For those, run the synced helper:
 ```
 
 It refreshes apk pins (APKINDEX main + community) and Dockerfile `name==` pins from PyPI. It does **not** edit
-`versions.env` (Devinfra Renovate + sync). Product-local helpers (`update-docker-pins.sh`,
-`update-apk-dependencies.sh`) are removed in favor of this synced script.
+`versions.env` (Devinfra Renovate + sync). After sync, remove divergent local copies (`update-apk-dependencies.sh`,
+`update-docker-pins.sh`, etc.).
 
 Reusable `reusable-renovate.yml` is **out of scope** for now — the thin workflow is expected to stay identical across
 repos via sync.
