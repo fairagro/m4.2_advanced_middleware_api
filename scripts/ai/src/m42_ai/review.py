@@ -11,6 +11,9 @@ from m42_ai.gh import GhError, repo_owner_name, run_gh, run_git
 
 AI_AUTHOR_RE = re.compile(r"copilot|bugbot|cursor", re.IGNORECASE)
 
+# Stable marker for first-party `/code-review` COMMENT bodies (often under a human login).
+CODE_REVIEW_MARKER = "<!-- m42-ai:code-review -->"
+
 REVIEW_OPEN_QUERY = """
 query($owner:String!,$name:String!,$n:Int!) {
   repository(owner:$owner, name:$name) {
@@ -50,6 +53,133 @@ def is_ai_author(login: str | None) -> bool:
     if not login:
         return False
     return bool(AI_AUTHOR_RE.search(login))
+
+
+def is_code_review_report(body: str | None) -> bool:
+    """True when a review body was published by the `/code-review` skill."""
+    return bool(body) and CODE_REVIEW_MARKER in body
+
+
+def is_finder_review(review: dict[str, Any]) -> bool:
+    """Copilot/Bugbot/Cursor login **or** first-party code-review marker in body."""
+    author = (review.get("author") or {}).get("login")
+    body = review.get("body") or ""
+    return is_ai_author(author) or is_code_review_report(body)
+
+
+class PrHeadGateError(RuntimeError):
+    """Fail-closed PR-head checkout for review-open (structured for agents)."""
+
+    def __init__(
+        self,
+        message: str,
+        *,
+        error_code: str,
+        head_ref: str | None = None,
+        current_branch: str | None = None,
+        pr: int | None = None,
+    ) -> None:
+        super().__init__(message)
+        self.error_code = error_code
+        self.head_ref = head_ref
+        self.current_branch = current_branch
+        self.pr = pr
+
+    def as_json(self) -> dict[str, Any]:
+        """Machine-readable gate failure — agents MUST stop (no stash/improvise)."""
+        out: dict[str, Any] = {
+            "ok": False,
+            "pr_head_ok": False,
+            "error_code": self.error_code,
+            "error": str(self),
+            "agent_action": "stop",
+        }
+        if self.pr is not None:
+            out["pr"] = self.pr
+        if self.head_ref is not None:
+            out["head_ref"] = self.head_ref
+        if self.current_branch is not None:
+            out["current_branch"] = self.current_branch
+        return out
+
+
+def _md_table_cells(line: str) -> list[str]:
+    return [p.strip() for p in line.strip().strip("|").split("|")]
+
+
+def _find_path_table_header(lines: list[str]) -> tuple[int, list[str]] | None:
+    for i, line in enumerate(lines):
+        if "|" not in line:
+            continue
+        parts = [p.lower() for p in _md_table_cells(line)]
+        if "path" in parts:
+            return i, parts
+    return None
+
+
+def _optional_col(cols: list[str], name: str) -> int | None:
+    return cols.index(name) if name in cols else None
+
+
+def _cell_at(parts: list[str], idx: int | None) -> str:
+    if idx is None or idx >= len(parts):
+        return ""
+    return parts[idx]
+
+
+def _parse_code_review_table_row(
+    line: str,
+    *,
+    path_i: int,
+    goal_i: int | None,
+    severity_i: int | None,
+    note_i: int | None,
+) -> dict[str, str | None] | None:
+    if "|" not in line:
+        return None
+    parts = _md_table_cells(line)
+    if not parts or all(set(p) <= set("-: ") for p in parts):
+        return None
+    if len(parts) <= path_i:
+        return None
+    path = parts[path_i]
+    if not path or path.lower() == "path":
+        return None
+    bits = [b for b in (_cell_at(parts, goal_i), _cell_at(parts, severity_i), _cell_at(parts, note_i)) if b]
+    return {"path": path, "line": None, "text": " — ".join(bits) if bits else path}
+
+
+def extract_code_review_findings(body: str) -> list[dict[str, str | None]]:
+    """Parse the Markdown findings table from a marked `/code-review` report."""
+    if not is_code_review_report(body):
+        return []
+    lines = body.splitlines()
+    header = _find_path_table_header(lines)
+    if header is None:
+        return []
+    header_idx, cols = header
+    path_i = cols.index("path")
+    goal_i = _optional_col(cols, "goal")
+    severity_i = _optional_col(cols, "severity")
+    note_i = _optional_col(cols, "note")
+
+    items: list[dict[str, str | None]] = []
+    for line in lines[header_idx + 1 :]:
+        if "|" not in line:
+            if items:
+                break
+            continue
+        row = _parse_code_review_table_row(line, path_i=path_i, goal_i=goal_i, severity_i=severity_i, note_i=note_i)
+        if row is not None:
+            items.append(row)
+    return items
+
+
+def extract_summary_findings(body: str) -> list[dict[str, str | None]]:
+    """Suppressed Copilot packing **or** code-review findings table."""
+    if is_code_review_report(body):
+        return extract_code_review_findings(body)
+    return extract_suppressed_comments(body)
 
 
 def extract_suppressed_comments(body: str) -> list[dict[str, str | None]]:
@@ -156,9 +286,10 @@ def answered_suppressed_review_ids(
         if not is_submitted_review(r):
             continue
         author = (r.get("author") or {}).get("login")
-        if is_ai_author(author):
-            continue
         body = r.get("body") or ""
+        # Skip finders (bot logins and first-party code-review reports) — they are not triage replies.
+        if is_ai_author(author) or is_code_review_report(body):
+            continue
         if not is_triage_reply_body(body) and "pullrequestreview-" not in body:
             continue
         replies.append((_event_time(r, "submittedAt"), body))
@@ -206,8 +337,8 @@ def shape_review_open(
             continue
         first = comments[0]
         author = (first.get("author") or {}).get("login")
-        if not is_ai_author(author):
-            continue
+        # Include every unresolved thread (any author). AI-author heuristics apply only to
+        # review bodies / suppressed summary packing below — not to thread filtering.
         threads_out.append({
             "thread_id": thread["id"],
             "is_resolved": False,
@@ -222,29 +353,26 @@ def shape_review_open(
         })
 
     all_reviews = list(pr["reviews"]["nodes"])
-    all_ai = [
-        r
-        for r in all_reviews
-        if r.get("author") and is_ai_author((r["author"] or {}).get("login")) and is_submitted_review(r)
-    ]
+    # Finder reviews: bot AI authors and/or `/code-review` marker (often human login).
+    all_ai = [r for r in all_reviews if is_finder_review(r) and is_submitted_review(r)]
     all_ai.sort(key=lambda r: (_event_time(r, "submittedAt"), r.get("databaseId") or 0))
 
     issue_comments = list((pr.get("comments") or {}).get("nodes") or [])
 
-    suppressed_ai = [r for r in all_ai if extract_suppressed_comments(r.get("body") or "")]
+    summary_sources = [r for r in all_ai if extract_summary_findings(r.get("body") or "")]
     answered_ids = answered_suppressed_review_ids(
-        suppressed_ai,
+        summary_sources,
         issue_comments=issue_comments,
         all_reviews=all_reviews,
     )
 
-    # Open summary work: at most the latest unanswered suppressed AI review.
+    # Open summary work: at most the latest unanswered finder summary review.
     open_suppressed_id: int | None = None
-    for r in suppressed_ai:
+    for r in summary_sources:
         rid = int(r["databaseId"])
         if rid not in answered_ids:
             open_suppressed_id = rid
-    # Permalink triage: force that review's suppressed into the open set.
+    # Permalink triage: force that review's summary findings into the open set.
     if review_id is not None:
         open_suppressed_id = review_id
 
@@ -254,7 +382,7 @@ def shape_review_open(
     summary_only: list[dict[str, Any]] = []
     for rev in scoped_ai:
         body = rev.get("body") or ""
-        suppressed = extract_suppressed_comments(body)
+        suppressed = extract_summary_findings(body)
         rid = rev.get("databaseId")
         rid_int = int(rid) if rid is not None else None
         answered = rid_int in answered_ids if rid_int is not None else False
@@ -268,6 +396,7 @@ def shape_review_open(
             "suppressed_comments": suppressed,
             "summary_answered": answered,
             "summary_open": summary_open,
+            "is_code_review": is_code_review_report(body),
         }
         reviews_out.append(entry)
         if not summary_open:
@@ -306,6 +435,7 @@ def ensure_pr_head(
 
     Dirty working tree/index on a *different* branch refuses checkout. Dirty on the
     PR head is allowed. Fail closed when checkout cannot establish the head branch.
+    Raises PrHeadGateError with a stable error_code for CLI JSON.
     """
     root = cwd or Path.cwd()
     view_args = ["pr", "view", str(pr), "--json", "headRefName"]
@@ -314,7 +444,11 @@ def ensure_pr_head(
     meta = json.loads(run_gh(view_args, cwd=root).stdout)
     head_ref = str(meta.get("headRefName") or "").strip()
     if not head_ref:
-        raise RuntimeError(f"PR #{pr} has empty headRefName")
+        raise PrHeadGateError(
+            f"PR #{pr} has empty headRefName",
+            error_code="empty_head_ref",
+            pr=pr,
+        )
 
     current = run_git(["branch", "--show-current"], cwd=root).stdout.strip()
     dirty = bool(run_git(["status", "--porcelain"], cwd=root).stdout.strip())
@@ -324,11 +458,16 @@ def ensure_pr_head(
             "head_ref": head_ref,
             "current_branch": current,
             "checked_out": False,
+            "pr_head_ok": True,
         }
 
     if dirty:
-        raise RuntimeError(
-            f"working tree/index dirty on branch {current!r}; refuse checkout of PR #{pr} head {head_ref!r}"
+        raise PrHeadGateError(
+            f"working tree/index dirty on branch {current!r}; refuse checkout of PR #{pr} head {head_ref!r}",
+            error_code="dirty_wrong_branch",
+            head_ref=head_ref,
+            current_branch=current,
+            pr=pr,
         )
 
     checkout_args = ["pr", "checkout", str(pr)]
@@ -337,16 +476,29 @@ def ensure_pr_head(
     try:
         run_gh(checkout_args, cwd=root)
     except GhError as exc:
-        raise RuntimeError(f"failed to checkout PR #{pr} head {head_ref!r}: {exc}") from exc
+        raise PrHeadGateError(
+            f"failed to checkout PR #{pr} head {head_ref!r}: {exc}",
+            error_code="checkout_failed",
+            head_ref=head_ref,
+            current_branch=current,
+            pr=pr,
+        ) from exc
 
     current = run_git(["branch", "--show-current"], cwd=root).stdout.strip()
     if current != head_ref:
-        raise RuntimeError(f"after checkout expected branch {head_ref!r}, got {current!r}")
+        raise PrHeadGateError(
+            f"after checkout expected branch {head_ref!r}, got {current!r}",
+            error_code="checkout_branch_mismatch",
+            head_ref=head_ref,
+            current_branch=current,
+            pr=pr,
+        )
 
     return {
         "head_ref": head_ref,
         "current_branch": current,
         "checked_out": True,
+        "pr_head_ok": True,
     }
 
 
@@ -392,6 +544,8 @@ def fetch_review_open(
     if head_info is not None:
         shaped["head_ref"] = head_info["head_ref"]
         shaped["current_branch"] = head_info["current_branch"]
+        shaped["pr_head_ok"] = True
+        shaped["ok"] = True
     return shaped
 
 
