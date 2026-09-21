@@ -1,6 +1,10 @@
 # Shared Ruff config for m4.2 product repos (sync into product checkout root).
 # Seeded from m4.2_advanced_middleware_api; owned in m4.2_middleware_devinfra.
 # Product root pyproject.toml keeps [project] / uv workspace — do not duplicate [tool.ruff] there.
+#
+# Ruff does not type-check or emit "missing third-party package" diagnostics for untyped fleet
+# deps (arctrl / fable_library). Those are silenced in mypy.ini and .pylintrc. isort
+# known-third-party below only keeps import classification correct.
 
 exclude = [
   ".venv",
@@ -43,6 +47,8 @@ max-complexity = 10
 
 [lint.isort]
 known-first-party = ["middleware"]
+# Untyped fleet deps — keep isort classifying them as third-party (not first-party).
+known-third-party = ["arctrl", "fable_library"]
 force-single-line = false
 combine-as-imports = true
 
