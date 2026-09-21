@@ -11,7 +11,7 @@ Not every file under `scripts/` is Dev Container-only. Personal-token helpers ar
 | ------------------------------------- | ---------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `quality-check.sh` / `quality-fix.sh` | Host or Dev Container  | Needs `uv`. Commit-stage also runs `npm run lint:md` (Node/`npm`; host: `npm install`). On the host, set `GITGUARDIAN_API_KEY` for ggshield if required. |
 | `run-container-structure-test.sh`     | Host or Dev Container  | Needs Docker + `container-structure-test`                                                                                                                |
-| `setup-git-hooks.sh` / `git-hooks/`   | Host or Dev Container  | Copies `pre-push` into `.git/hooks/`; no `git-lfs` required                                                                                              |
+| `setup-git-hooks.sh` / `git-hooks/`   | Host or Dev Container  | Dispatcher + `pre-push.d/50-quality`; no `git-lfs` required                                                                                              |
 | `load-versions-env.sh`                | Host or Dev Container  | Reads `versions.env`, writes `.python-version`                                                                                                           |
 | `scripts/ai/` (`m42-ai`)              | Host or Dev Container  | uv workspace member; `uv sync` then `uv run m42-ai` (needs `gh` + auth)                                                                                  |
 | `dev-tokens.sh` / `set-dev-tokens.sh` | **Dev Container only** | Store: `/commandhistory/tokens.env`                                                                                                                      |
@@ -43,15 +43,15 @@ restate line length, rule selects, ignore lists, or similar policy on the comman
 already defines them. Do not patch synced `.pre-commit-config.yaml` to carry those overlays. After syncing `.pylintrc`,
 products may drop a duplicate `--extension-pkg-allow-list=lxml` CLI flag — that allow-list lives in the rcfile.
 
-| Tool                    | IDE                                              | Hooks             | CI  | Notes                                                                            |
-| ----------------------- | ------------------------------------------------ | ----------------- | --- | -------------------------------------------------------------------------------- |
-| Ruff format/lint        | yes (`ruff.toml`)                                | yes               | yes | Primary IDE Python lint/format                                                   |
-| basedpyright / Pylance  | yes (`pyrightconfig.json`)                       | —                 | —   | Synced analysis fragment; product stubs via `stubPath`                           |
-| Prettier / markdownlint | yes (Prettier formatter; markdownlint extension) | yes               | yes | Shared `.markdownlint*` + Prettier; CI via `npm run format:md:check` / `lint:md` |
-| Mypy                    | **hooks + CI only**                              | yes (`mypy.ini`)  | yes | No shared IDE mypy settings — do not add a second config                         |
-| Pylint                  | **hooks + CI only**                              | yes (`.pylintrc`) | yes | Same as Mypy                                                                     |
-| Bandit                  | **hooks + CI only**                              | yes (`.bandit`)   | yes | Medium/high fail; see Bandit note below                                          |
-| pytest                  | IDE via `pyproject.toml` `testpaths`             | pre-push          | yes | Synced `pytestArgs` stay `[]` — do not hardcode roots in settings                |
+| Tool                    | IDE                                                 | Hooks             | CI  | Notes                                                                            |
+| ----------------------- | --------------------------------------------------- | ----------------- | --- | -------------------------------------------------------------------------------- |
+| Ruff format/lint        | yes (`ruff.toml`)                                   | yes               | yes | Primary IDE Python lint/format                                                   |
+| basedpyright / Pylance  | yes (`pyrightconfig.json`, `typeCheckingMode: off`) | —                 | —   | Language server only; type gate is mypy                                          |
+| Prettier / markdownlint | yes (Prettier formatter; markdownlint extension)    | yes               | yes | Shared `.markdownlint*` + Prettier; CI via `npm run format:md:check` / `lint:md` |
+| Mypy                    | **hooks + CI only**                                 | yes (`mypy.ini`)  | yes | No shared IDE mypy settings — do not add a second config                         |
+| Pylint                  | **hooks + CI only**                                 | yes (`.pylintrc`) | yes | Same as Mypy                                                                     |
+| Bandit                  | **hooks + CI only**                                 | yes (`.bandit`)   | yes | Medium/high fail; see Bandit note below                                          |
+| pytest                  | IDE via `pyproject.toml` `testpaths`                | pre-push          | yes | Synced `pytestArgs` stay `[]` — do not hardcode roots in settings                |
 
 **Bandit severity (named exception):** `.bandit` has no fail-on-severity key. Hooks use Bandit’s `-ll` (report MEDIUM+
 only). CI runs without `-ll`, logs all severities (JSON + wrapper), and still fails only on MEDIUM/HIGH — same fail bar
@@ -60,24 +60,22 @@ fail policy only on one surface.
 
 ## Files
 
-| Path                                                | Role                                                                                                                                         |
-| --------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
-| `.pre-commit-config.yaml`                           | Commit-stage + pre-push hooks — adopt **verbatim** after sync (see below)                                                                    |
-| `ruff.toml`                                         | Shared Ruff lint/format — **verbatim** sync (no product `extend` / ignore overlay)                                                           |
-| `mypy.ini`                                          | Shared Mypy strictness (path overlays via **env**, not by editing this file)                                                                 |
-| `.pylintrc`                                         | Shared Pylint (path overlays via CI / env; `extension-pkg-allow-list=lxml` for I1101)                                                        |
-| `pyrightconfig.json`                                | Shared basedpyright/Pylance (`venv`, `stubPath: stubs`, `scripts/ai` only) — **verbatim**                                                    |
-| `stubs/arctrl/`, `stubs/fable_library/`             | Shared incomplete stubs for untyped arctrl/fable — **verbatim** sync ([#67](https://github.com/fairagro/m4.2_middleware_devinfra/issues/67)) |
-| `stubs/README.md`                                   | Fleet vs product-local vs one-off stub/silence contract                                                                                      |
-| `scripts/quality-check.sh`                          | Run **commit-stage** hooks only (check)                                                                                                      |
-| `scripts/quality-fix.sh`                            | Run commit-stage **autofix** hooks only                                                                                                      |
-| `scripts/run-container-structure-test.sh`           | Templated Docker build + `container-structure-test`                                                                                          |
-| `scripts/setup-git-hooks.sh`                        | Install project `pre-push` from `scripts/git-hooks/`                                                                                         |
-| `scripts/git-hooks/`                                | Version-controlled `pre-push` (pre-commit pre-push stage)                                                                                    |
-| `.bandit`                                           | Bandit config (`bandit -c .bandit`)                                                                                                          |
-| `.markdownlint.json` (+ ignore / cli2)              | Markdownlint (also used by the markdownlint hook)                                                                                            |
-| `package.json` / `package-lock.json`                | Shared npm scripts + pins for Prettier/markdownlint (hooks + reusable CI) — **verbatim** sync                                                |
-| [`.vscode/settings.json`](../.vscode/settings.json) | Shared IDE baseline (interpreter, Ruff, empty `pytestArgs`, Prettier) — adopt **verbatim**                                                   |
+| Path                                                | Role                                                                                                            |
+| --------------------------------------------------- | --------------------------------------------------------------------------------------------------------------- |
+| `.pre-commit-config.yaml`                           | Commit-stage + pre-push hooks — adopt **verbatim** after sync (see below)                                       |
+| `ruff.toml`                                         | Shared Ruff lint/format — **verbatim** sync (no product `extend` / ignore overlay)                              |
+| `mypy.ini`                                          | Shared Mypy strictness + fleet arctrl/fable `ignore_missing_imports` (path overlays via **env**)                |
+| `.pylintrc`                                         | Shared Pylint (`ignored-modules` for arctrl/fable; `extension-pkg-allow-list=lxml`; path overlays via CI / env) |
+| `pyrightconfig.json`                                | Shared basedpyright/Pylance (`venv`, `scripts/ai`, `typeCheckingMode: off`) — **verbatim**                      |
+| `scripts/quality-check.sh`                          | Run **commit-stage** hooks only (check)                                                                         |
+| `scripts/quality-fix.sh`                            | Run commit-stage **autofix** hooks only                                                                         |
+| `scripts/run-container-structure-test.sh`           | Templated Docker build + `container-structure-test`                                                             |
+| `scripts/setup-git-hooks.sh`                        | Install dispatcher + `pre-push.d/50-quality` from `scripts/git-hooks/`                                          |
+| `scripts/git-hooks/`                                | Version-controlled `pre-push` dispatcher + `pre-push.d/`                                                        |
+| `.bandit`                                           | Bandit config (`bandit -c .bandit`)                                                                             |
+| `.markdownlint.json` (+ ignore / cli2)              | Markdownlint (also used by the markdownlint hook)                                                               |
+| `package.json` / `package-lock.json`                | Shared npm scripts + pins for Prettier/markdownlint (hooks + reusable CI) — **verbatim** sync                   |
+| [`.vscode/settings.json`](../.vscode/settings.json) | Shared IDE baseline (interpreter, Ruff, empty `pytestArgs`, Prettier) — adopt **verbatim**                      |
 
 **Local artifact excludes:** repo-root `dist/` (PyInstaller onedir, etc.) is gitignored and already skipped by Ruff /
 Mypy / Pylint / Bandit. Markdown/Node tools must match: synced `.markdownlint-cli2.jsonc`, `.markdownlintignore`, and
@@ -112,14 +110,13 @@ Product repos historically kept large `[tool.ruff]` / `[tool.mypy]` / `[tool.pyl
 Canonical copies live here as **fragment files** so sync (#13) can overwrite them without replacing product `[project]`
 / uv workspace sections.
 
-| Sync into products                          | Keep product-local                                                                                               |
-| ------------------------------------------- | ---------------------------------------------------------------------------------------------------------------- |
-| `ruff.toml`                                 | Root `pyproject.toml` `[project]`, `[tool.uv.*]`, deps (no product Ruff overlay)                                 |
-| `mypy.ini`                                  | Import-path overlays via **env** (e.g. `MYPYPATH` in CI/`product.env`), not `pyproject`                          |
-| `.pylintrc`                                 | Import-path overlays via CI input / env-driven invocation (`pylint_source_roots`)                                |
-| `pyrightconfig.json`                        | Product third-party stubs under `stubs/` (`stubPath`); no middleware `extraPaths`                                |
-| `stubs/arctrl/**`, `stubs/fable_library/**` | Put `stubs` on `MYPYPATH`; no `[mypy-arctrl*]` in synced `mypy.ini`                                              |
-| `.bandit`                                   | pytest / coverage tool tables ([#123](https://github.com/fairagro/m4.2_middleware_devinfra/issues/123) deferred) |
+| Sync into products   | Keep product-local                                                                                               |
+| -------------------- | ---------------------------------------------------------------------------------------------------------------- |
+| `ruff.toml`          | Root `pyproject.toml` `[project]`, `[tool.uv.*]`, deps (no product Ruff overlay)                                 |
+| `mypy.ini`           | Fleet `arctrl` / `fable_library` `ignore_missing_imports`; path overlays via **env** (`MYPYPATH`)                |
+| `.pylintrc`          | Fleet `ignored-modules` for arctrl/fable; path overlays via CI / env (`pylint_source_roots`)                     |
+| `pyrightconfig.json` | `typeCheckingMode: off` (LS = mypy); no middleware paths; no `stubPath`                                          |
+| `.bandit`            | pytest / coverage tool tables ([#123](https://github.com/fairagro/m4.2_middleware_devinfra/issues/123) deferred) |
 
 Shared hooks and reusable CI invoke `mypy --config-file mypy.ini` and `pylint --rcfile .pylintrc`. Those flags mean
 product `[tool.mypy]` / `[tool.pylint.*]` in `pyproject.toml` are **ignored**. Do **not** put path overlays into the
@@ -170,16 +167,15 @@ kubectl-not-found alerts stay enabled.
 [vscode-python#23714](https://github.com/microsoft/vscode-python/issues/23714)). Configure test roots only in that
 repo’s `pyproject.toml` (Devinfra: `scripts/ai/tests`; products: their `middleware/…/tests`).
 
-**Shared stubs (arctrl / fable_library):** sync [`stubs/arctrl/`](../stubs/arctrl/) and
-[`stubs/fable_library/`](../stubs/fable_library/) (see [`stubs/README.md`](../stubs/README.md)). Products MUST put
-`stubs` on `MYPYPATH` for hooks/CI. Do **not** add `[mypy-arctrl*]` / fable module overrides to synced `mypy.ini`, and
-drop `# type: ignore[import-untyped]` on those imports after sync. Product-local stubs (e.g. owslib/rdflib) may coexist
-under `stubs/` without being synced from Devinfra.
+**Untyped fleet deps (arctrl / fable_library):** silenced in synced tool fragments — [`mypy.ini`](../mypy.ini)
+(`ignore_missing_imports`), [`.pylintrc`](../.pylintrc) (`ignored-modules`), and [`ruff.toml`](../ruff.toml)
+(`known-third-party` for isort; Ruff has no third-party missing-import gate). Prefer those configs over call-site
+`# type: ignore[import-untyped]` for arctrl/fable. Do **not** ship a Devinfra `stubs/` tree.
 
 **Analysis (basedpyright / Pylance):** use synced [`pyrightconfig.json`](../pyrightconfig.json) **verbatim** — root
-`.venv`, `stubPath: stubs` (shared arctrl/fable stubs + any product-local stub dirs), and `extraPaths` only for
-`scripts/ai/src`. Do **not** add product `middleware/` (or other package) paths to that file — editable `uv` installs
-resolve them. Do **not** patch `python.analysis.extraPaths` / Cursor Pyright equivalents into synced
+`.venv`, `extraPaths` only for `scripts/ai/src`, and `typeCheckingMode: "off"` so the language server stays for IDE
+navigation while **mypy** owns type diagnostics (hooks + CI). Do **not** add product `middleware/` paths — editable `uv`
+installs resolve them. Do **not** patch `python.analysis.extraPaths` / Cursor Pyright equivalents into synced
 `.vscode/settings.json` after sync for product overlays ([`docs/sync.md`](sync.md)).
 
 Mypy, Pylint, and Bandit stay **hooks + CI only** in the shared baseline (see
@@ -203,13 +199,17 @@ Typical place: Dev Container **postCreate** (`scripts/devcontainer-post-create.s
 ./scripts/setup-git-hooks.sh
 ```
 
-Copies `scripts/git-hooks/pre-push` into `.git/hooks/`. Does **not** require, install, or manage Git LFS (does not
-delete other hooks). Invoked from Dev Container postCreate, or once after clone. Shared postCreate does **not** call
-product scripts such as `install-dev-hooks.sh`.
+Installs `.git/hooks/pre-push` (dispatcher) and `.git/hooks/pre-push.d/50-quality` from `scripts/git-hooks/`. Does
+**not** require, install, or manage Git LFS; does **not** delete other hooks or foreign `pre-push.d` fragments.
+Idempotent re-runs refresh only the shared-owned paths. Invoked from Dev Container postCreate, or once after clone.
+Shared postCreate does **not** hard-code product scripts such as `install-dev-hooks.sh`; optional product work uses
+`scripts/devcontainer-post-create.d/` (see [`docs/devcontainer.md`](devcontainer.md)).
 
-On `git push`, `pre-push` runs the shared pre-commit **pre-push** stage (pytest +
+On `git push`, the dispatcher runs `pre-push.d/*` in lexicographic order (e.g. product `10-git-lfs` then shared
+`50-quality`). The quality fragment runs the shared pre-commit **pre-push** stage (pytest +
 `scripts/run-container-structure-test.sh` from the #7 skeleton). Product Dockerfiles / CST YAML stay in consumers. Needs
-Docker/tests when those hooks are active.
+Docker/tests when those hooks are active. Products that need extra pre-push steps MUST drop numbered executables into
+`.git/hooks/pre-push.d/` via a product installer and MUST NOT replace the shared dispatcher wholesale.
 
 ### Pre-push pytest scope
 
@@ -237,8 +237,9 @@ Do **not** fork synced `.pre-commit-config.yaml` to restore system tests on ever
 on CI ([`docs/ci.md`](ci.md)).
 
 **Git LFS:** not part of the shared Devinfra image or hook installer. Products that need LFS own install and overlays
-entirely in the product repo; re-apply product-side after clone/rebuild when needed — see
-[`docs/devcontainer.md`](devcontainer.md). Do **not** edit synced Dev Container JSON `postCreate` for LFS.
+entirely in the product repo (including optional `pre-push.d` fragments and flat `post-*` hooks); restore after
+clone/rebuild via `scripts/devcontainer-post-create.d/` — see [`docs/devcontainer.md`](devcontainer.md). Do **not** edit
+synced Dev Container JSON `postCreate` for LFS.
 
 Manual without the git hook:
 
