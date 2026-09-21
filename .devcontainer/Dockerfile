@@ -23,6 +23,7 @@ ARG CST_VERSION
 ARG TRIVY_VERSION
 ARG RENOVATE_VERSION
 ARG NODE_VERSION
+ARG NPM_VERSION
 ARG OPENSPEC_VERSION
 ARG PRETTIER_VERSION
 ARG MARKDOWNLINT_CLI2_VERSION
@@ -118,6 +119,9 @@ RUN curl -fsSL "https://nodejs.org/dist/${NODE_VERSION}/node-${NODE_VERSION}-lin
         "node-${NODE_VERSION}-linux-x64/share" && \
         node --version && npm --version
 
+# Pin npm CLI independently of the Node tarball (NPM_VERSION from versions.env).
+RUN npm install -g "npm@${NPM_VERSION}" && npm --version
+
 # ── OpenSpec + Markdown + Renovate (global; bind-mount would hide local node_modules)
 RUN npm install -g \
         "@fission-ai/openspec@${OPENSPEC_VERSION}" \
@@ -192,8 +196,8 @@ RUN mkdir -p /commandhistory && \
         echo 'PROMPT_COMMAND="history -a${PROMPT_COMMAND:+; ${PROMPT_COMMAND}}"'; \
         } >> /etc/bash.bashrc
 
-# ── Switch to non-root user for uv tool installations
-USER vscode
+# ── Switch to non-root for uv installs (1000 = vscode in the Dev Container base image)
+USER 1000
 
 # ── Python (via uv; patch pin from versions.env → PYTHON_VERSION build-arg) ───
 RUN uv python install "${PYTHON_VERSION}"
