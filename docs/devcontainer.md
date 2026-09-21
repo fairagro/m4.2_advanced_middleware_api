@@ -48,16 +48,23 @@ On sync, Prettier + markdownlint-cli2 (and their extensions) **replace or supple
 format/lint setups. Prefer `signageos.signageos-vscode-sops` (Open VSX / Cursor) over `shipitsmarter.sops-edit`.
 
 **Git LFS** is not part of the shared image or shared hook installer. Products that need it (e.g. sql-to-arc) own
-install and hook overlays entirely in the product repo (independent of Devinfra). Shared `setup-git-hooks.sh` only
-installs the quality `pre-push` and does not remove or manage LFS hooks. Shared postCreate does **not** call product
-scripts such as `install-dev-hooks.sh` / `setup-git-lfs.sh`, and you MUST NOT edit synced JSON `postCreate` for LFS —
-re-apply LFS product-side after clone/rebuild when needed.
+install and hook overlays entirely in the product repo (independent of Devinfra). Shared `setup-git-hooks.sh` installs a
+**dispatcher** (`.git/hooks/pre-push`) plus shared `.git/hooks/pre-push.d/50-quality`; it does not remove foreign
+`pre-push.d` fragments or manage LFS `post-*` hooks. Products add numbered fragments under `pre-push.d/` (e.g.
+`10-git-lfs` before `50-quality`). Shared postCreate does **not** hard-code `install-dev-hooks.sh` / `setup-git-lfs.sh`;
+optional product work runs via **`scripts/devcontainer-post-create.d/*.sh`** (sorted, T-late, hard-fail if present and
+non-executable or non-zero). Do **not** edit synced JSON `postCreate` for LFS.
 
 ## Tool versions
 
 All toolchain pins live in repo-root [`versions.env`](../versions.env) (k8s tools, sops/age, jq/yq/xq, CST, Trivy,
-Renovate, Node/OpenSpec/Prettier/markdownlint, …). Distro packages (`jq`, `gnupg`, JRE, graphviz) come from apt without
-a separate pin.
+Renovate, Node/`NPM_VERSION`/OpenSpec/Prettier/markdownlint, …). Distro packages (`jq`, `gnupg`, JRE, graphviz) come
+from apt without a separate pin.
+
+**Node vs npm:** `NODE_VERSION` installs the official Node tarball (which bundles some npm). The image then pins the
+**npm CLI** with `npm install -g npm@${NPM_VERSION}` so the binary is Renovate-managed separately from Node. Ignore
+npm’s self-update notice until Renovate bumps `NPM_VERSION` to current; once the pin matches the latest advertised
+release, that notice should stop.
 
 [`.python-version`](../.python-version) is kept aligned with `PYTHON_VERSION` (via `scripts/load-versions-env.sh`, also
 run from postCreate).
@@ -69,6 +76,7 @@ gh --version
 openspec --version
 uv --version
 node --version
+npm --version
 sops --version
 trivy --version
 renovate --version
@@ -78,7 +86,7 @@ renovate --version
 
 | Area            | Tools                                                                                          |
 | --------------- | ---------------------------------------------------------------------------------------------- |
-| GitHub / Node   | `gh`, Node, OpenSpec, Prettier, markdownlint-cli2, Renovate                                    |
+| GitHub / Node   | `gh`, Node, pinned `npm`, OpenSpec, Prettier, markdownlint-cli2, Renovate                      |
 | Python          | `uv` + pinned Python; quality CLIs via `uv sync` / pre-commit (ruff, …)                        |
 | Query / lint    | `jq`, `yq`, `xq`, `yamlfmt`, `hadolint`                                                        |
 | K8s             | `kubectl`, `helm`, `minikube`                                                                  |
@@ -101,14 +109,14 @@ PATH string — Cursor agent shells leave it unexpanded, so `scripts/bin` wrappe
 in the prompt comes from `DEVCONTAINER_REPO_NAME` + synced `.devcontainer/starship.toml` (not from the `.venv` parent
 path, which is always `workspace`).
 
-| Need                            | Shared mechanism                                                                                                                                                                      |
-| ------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `.venv/bin` + `scripts/bin`     | `remoteEnv.PATH` + `VIRTUAL_ENV=/workspace/.venv` in synced `devcontainer.json`                                                                                                       |
-| Prompt repo identity            | `DEVCONTAINER_REPO_NAME` + synced [`.devcontainer/starship.toml`](../.devcontainer/starship.toml) (`STARSHIP_CONFIG`)                                                                 |
-| Short `kubectl` / `docker`      | Synced wrappers [`scripts/bin/k`](../scripts/bin/k) and [`scripts/bin/d`](../scripts/bin/d)                                                                                           |
-| Bash completion for `k` / `d`   | Shared image files under `/usr/share/bash-completion/completions/` (rebuild after Dockerfile change)                                                                                  |
-| Personal tokens                 | [`scripts/bin/gh`](../scripts/bin/gh) / [`git`](../scripts/bin/git) load `/commandhistory/tokens.env` on each invoke; `set-dev-tokens.sh` only **writes** the store (not process env) |
-| `.env.integration.enc` → `.env` | Shared postCreate decrypt (writes the file; does **not** auto-`source` into every shell)                                                                                              |
+| Need                            | Shared mechanism                                                                                                                                                          |
+| ------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `.venv/bin` + `scripts/bin`     | `remoteEnv.PATH` + `VIRTUAL_ENV=/workspace/.venv` in synced `devcontainer.json`                                                                                           |
+| Prompt repo identity            | `DEVCONTAINER_REPO_NAME` + synced [`.devcontainer/starship.toml`](../.devcontainer/starship.toml) (`STARSHIP_CONFIG`)                                                     |
+| Short `kubectl` / `docker`      | Synced wrappers [`scripts/bin/k`](../scripts/bin/k) and [`scripts/bin/d`](../scripts/bin/d)                                                                               |
+| Bash completion for `k` / `d`   | Shared image files under `/usr/share/bash-completion/completions/` (rebuild after Dockerfile change)                                                                      |
+| Personal tokens                 | Host `GH_TOKEN` / `GITGUARDIAN_API_KEY` via `remoteEnv` `${localEnv:…}`; wrappers load store (non-empty wins) then host; `set-dev-tokens.sh` **writes** store to override |
+| `.env.integration.enc` → `.env` | Shared postCreate decrypt (writes the file; does **not** auto-`source` into every shell)                                                                                  |
 
 Product-local `scripts/load-env.sh` and `setup-bashrc-load-env.sh` (or inline bashrc `source` lines) are **deprecated**.
 After sync of postCreate + wrappers + JSON, drop them in product adopt follow-ups (tracked from #58 / #65). Optional
@@ -167,11 +175,12 @@ Ensure on the **host**:
 
 Prefer the personal-token helpers (see root README **Personal tokens**):
 
-- Stored `GH_TOKEN` in `/commandhistory/tokens.env` (Linux Dev Container only) — **sole source** (process env does not
-  override the store)
-- Empty prompt skips until `source ./scripts/set-dev-tokens.sh` (that script **writes** the store; it does not export
-  tokens into every agent/IDE process)
-- `scripts/bin/gh` on `PATH` (after rebuild) applies the store then runs real `gh` — if `command -v gh` shows
+- Host tokens can arrive via `remoteEnv` `${localEnv:GH_TOKEN}` / `${localEnv:GITGUARDIAN_API_KEY}` (rebuild so this
+  applies)
+- Non-empty store in `/commandhistory/tokens.env` wins over host/process env; otherwise host/process is kept; prompt
+  only when still empty. Empty prompts are **not** persisted as skip markers
+- Override host: `source ./scripts/set-dev-tokens.sh` (force-prompt; **writes** non-empty values to the store)
+- `scripts/bin/gh` on `PATH` (after rebuild) applies store-then-host then runs real `gh` — if `command -v gh` shows
   `/usr/bin/gh`, the `remoteEnv.PATH` contract is broken (see bashrc-free section / #143), not a missing store
 
 Alternatively:
@@ -193,13 +202,17 @@ Runs `scripts/devcontainer-post-create.sh` once per create:
 - `uv sync --dev --all-packages` when `pyproject.toml` exists (dev dependency group + all uv workspace members; same
   flags as reusable code-quality CI). Stale `.venv` with a broken interpreter is removed first when detected.
 - `pre-commit install --hook-type pre-commit`
-- `./scripts/setup-git-hooks.sh` (project pre-push quality hook only; does not manage Git LFS or call product scripts)
+- `./scripts/setup-git-hooks.sh` (dispatcher + `pre-push.d/50-quality`; does not manage Git LFS or hard-code product
+  scripts)
 - import `public_gpg_keys/*.asc` when present (skip if absent)
 - optionally decrypt repo-root `.env.integration.enc` → `.env` when present (skip if `.env` already non-empty,
   ciphertext absent, or `sops`/keys unavailable; never fails create; does **not** patch bashrc to `source` `.env`)
 - soft-fail install of recommended IDE extensions via Cursor/VS Code remote CLI (shared product set: Docker/Helm/
   Python/Ruff/Pylint/Mypy, PlantUML, Kubernetes Tools, signageos SOPS, Prettier, markdownlint, … — same list as
   `devcontainer.json` and synced `.vscode/extensions.json`)
+- **T-late:** run `scripts/devcontainer-post-create.d/*` when present (sorted; hard-fail if not executable or non-zero;
+  skip cleanly if the directory is absent/empty). Product-owned, **not** synced — e.g. a thin drop-in that runs
+  `setup-git-lfs.sh`
 
 `PATH` with `/workspace/.venv/bin` and `/workspace/scripts/bin` first, plus `VIRTUAL_ENV=/workspace/.venv`, comes from
 `.devcontainer/devcontainer.json` (`remoteEnv`, literal `/workspace`) after rebuild — not from `~/.bashrc`.
