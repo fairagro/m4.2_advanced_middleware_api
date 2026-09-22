@@ -73,7 +73,8 @@ if [ -f "${repo_root}/pyproject.toml" ]; then
   fi
   # Match reusable-code-quality / product workspaces: dev group + all workspace members.
   # Stale .venv (broken interpreter) is removed above when needed — same idea as product uv-sync-dev.sh.
-  uv sync --dev --all-packages
+  # UV_MALWARE_CHECK: install-time OSV MAL block (preview); complements uv audit (docs/quality.md).
+  UV_MALWARE_CHECK=1 uv sync --dev --all-packages --preview-features malware-check
   if [ -d "${repo_root}/.venv/bin" ]; then
     export PATH="${repo_root}/.venv/bin:${PATH}"
   fi

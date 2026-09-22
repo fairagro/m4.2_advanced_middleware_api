@@ -90,12 +90,28 @@ repos:
         files: ^middleware/
         pass_filenames: false
 
+      - id: vulture
+        name: vulture unused code
+        # Confidence 100; no synced whitelist — FP → fix or # noqa in product code (docs/quality.md)
+        entry: uv run vulture middleware/ --min-confidence 100
+        language: system
+        files: ^middleware/
+        pass_filenames: false
+
       - id: import-linter
         name: import-linter contracts
         # Baseline `.importlinter.global` + optional `.importlinter` overlay (docs/quality.md)
         entry: bash scripts/run-import-linter.sh
         language: system
         files: ^middleware/
+        pass_filenames: false
+
+      - id: uv-audit
+        name: uv audit (lockfile CVEs)
+        # Frozen lockfile; optional product `.uv-audit-ignore` overlay — needs OSV network (docs/quality.md)
+        entry: ./scripts/run-uv-audit.sh
+        language: system
+        files: ^(uv\.lock|pyproject\.toml|\.uv-audit-ignore)$
         pass_filenames: false
 
       - id: markdownlint
