@@ -11,6 +11,8 @@ Not every file under `scripts/` is Dev Container-only. Personal-token helpers ar
 | ------------------------------------- | ---------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `quality-check.sh` / `quality-fix.sh` | Host or Dev Container  | Needs `uv`. Commit-stage also runs `npm run lint:md` (Node/`npm`; host: `npm install`). On the host, set `GITGUARDIAN_API_KEY` for ggshield if required. |
 | `run-container-structure-test.sh`     | Host or Dev Container  | Needs Docker + `container-structure-test`                                                                                                                |
+| `run-import-linter.sh`                | Host or Dev Container  | Needs `uv` + `import-linter`; soft-skips when `middleware/` absent                                                                                       |
+| `run-uv-audit.sh`                     | Host or Dev Container  | Needs `uv` + network to OSV; optional `.uv-audit-ignore`                                                                                                 |
 | `setup-git-hooks.sh` / `git-hooks/`   | Host or Dev Container  | Dispatcher + `pre-push.d/50-quality`; no `git-lfs` required                                                                                              |
 | `load-versions-env.sh`                | Host or Dev Container  | Reads `versions.env`, writes `.python-version`                                                                                                           |
 | `scripts/ai/` (`m42-ai`)              | Host or Dev Container  | uv workspace member; `uv sync` then `uv run m42-ai` (needs `gh` + auth)                                                                                  |
@@ -53,6 +55,7 @@ products may drop a duplicate `--extension-pkg-allow-list=lxml` CLI flag — tha
 | Bandit                  | **hooks + CI only**                                 | yes (`.bandit`)        | yes | Named IDE exception; medium/high fail — see Bandit note below                     |
 | Vulture                 | **hooks + CI only**                                 | — (CLI policy)         | yes | Named IDE exception; `--min-confidence 100`, no synced whitelist — see below      |
 | import-linter           | **hooks + CI only**                                 | `.importlinter.global` | yes | Named IDE exception; baseline + optional `.importlinter` overlay — see below      |
+| uv audit                | **hooks + CI only**                                 | — (CLI + overlay)      | yes | Named IDE exception; frozen lockfile CVE gate; needs OSV network — see below      |
 | pytest                  | IDE via `pyproject.toml` `testpaths`                | pre-push               | yes | Synced `pytestArgs` stay `[]` — do not hardcode roots in settings                 |
 
 **Bandit severity (named exception):** `.bandit` has no fail-on-severity key. Hooks use Bandit’s `-ll` (report MEDIUM+
@@ -65,6 +68,24 @@ and CI both run `uv run vulture <root> --min-confidence 100` with **no** synced 
 bar are fixed in product code (delete, use the symbol, or `# noqa`) — do **not** patch synced `.pre-commit-config.yaml`
 or lower fleet confidence after sync. Products must list `vulture` in their uv dependency set (same class as bandit /
 mypy / pylint). Ruff still owns unused **imports**; vulture owns unused **definitions**.
+
+**uv audit (named IDE exception):** primary **Python lockfile / env CVE gate** via `./scripts/run-uv-audit.sh`
+(`uv audit --frozen`). Hooks and reusable code-quality share that runner. Fail on any finding except advisory IDs listed
+in the product-owned overlay `.uv-audit-ignore` (one ID per line; sync `overlays` — never wiped). There is **no**
+CRITICAL/HIGH-only filter (unlike Trivy on images). `uv audit` is still **preview** on the fleet uv pin — needs network
+to OSV; escape hatch only: `SKIP=uv-audit`. See
+[Lockfile CVEs vs Trivy vs malware check](#lockfile-cves-vs-trivy-vs-malware-check).
+
+## Lockfile CVEs vs Trivy vs malware check
+
+| Gate                   | Surface                  | When                                                     | Fail policy                                |
+| ---------------------- | ------------------------ | -------------------------------------------------------- | ------------------------------------------ |
+| **uv audit**           | `uv.lock` / project deps | Commit-stage + `reusable-code-quality` (no image needed) | Any non-ignored advisory / adverse status  |
+| **Trivy**              | Container image / SBOM   | `reusable-check` Security Check (after image build)      | CRITICAL/HIGH                              |
+| **`UV_MALWARE_CHECK`** | Install/sync             | `uv sync` in code-quality + Dev Container post-create    | Abort sync on known OSV **MAL** advisories |
+
+Overlap on the same CVE across lock and image is OK — different layers. Do **not** disable Trivy because uv audit
+exists. Malware check is **not** a CVE audit substitute (known malware only; still preview).
 
 **import-linter (named IDE exception):** fleet **baseline** [`.importlinter.global`](../.importlinter.global) encodes
 Import-policy bits that are mechanical: `root_package = middleware`, `exclude_type_checking_imports = True`, and an
@@ -95,6 +116,7 @@ lazy imports solely to break cycles) stay principles / other tools / `/code-revi
 | `scripts/quality-fix.sh`                            | Run commit-stage **autofix** hooks only                                                                         |
 | `scripts/run-container-structure-test.sh`           | Templated Docker build + `container-structure-test`                                                             |
 | `scripts/run-import-linter.sh`                      | import-linter baseline + optional `.importlinter` overlay                                                       |
+| `scripts/run-uv-audit.sh`                           | Frozen `uv audit` + optional product `.uv-audit-ignore` (hooks + CI)                                            |
 | `.importlinter.global`                              | Fleet import-linter baseline (acyclic `middleware` siblings; TYPE_CHECKING excluded from graph)                 |
 | `.importlinter`                                     | Product overlay contracts (`layers` / `forbidden` / …) — sync **overlay**, never wiped                          |
 | `scripts/setup-git-hooks.sh`                        | Install dispatcher + `pre-push.d/50-quality` from `scripts/git-hooks/`                                          |
