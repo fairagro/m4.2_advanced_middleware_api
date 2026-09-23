@@ -110,6 +110,9 @@ Product application code under `middleware/` must pass via `uv run`. Prefer shar
   see `docs/quality.md`)
 - `./scripts/run-import-linter.sh` — import contracts (synced `.importlinter.global` baseline + optional `.importlinter`
   overlay; hooks + CI; no IDE gate; see `docs/quality.md`)
+- `./scripts/run-uv-audit.sh` — lockfile CVEs via `uv audit --frozen` (hooks + CI; no IDE gate; optional product
+  `.uv-audit-ignore`; needs OSV network — see `docs/quality.md`). Distinct from Trivy on images and from
+  `UV_MALWARE_CHECK` at `uv sync`
 
 Markdown must pass Prettier formatting and markdownlint (`.markdownlint.json` disables rules that fight Prettier).
 Typical scripts (see `package.json` where present):

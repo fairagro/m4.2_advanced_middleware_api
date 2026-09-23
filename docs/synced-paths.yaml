@@ -49,6 +49,7 @@ allow:
   - scripts/quality-fix.sh
   - scripts/run-container-structure-test.sh
   - scripts/run-import-linter.sh
+  - scripts/run-uv-audit.sh
   - scripts/setup-git-hooks.sh
   - scripts/update-dockerfile-pins.sh
   - scripts/prune-merged-branches.sh
@@ -94,6 +95,8 @@ exclude:
   - openspec/principles.md
   - AGENTS.md
   - .devcontainer/product.env
+  - .uv-audit-ignore
+  - .importlinter
 
 # Product-local overlays (MAY edit in consumers; never overwritten by sync).
 overlays:
@@ -101,4 +104,5 @@ overlays:
   - openspec/principles.md
   - AGENTS.md
   - .devcontainer/product.env
+  - .uv-audit-ignore
   - .importlinter

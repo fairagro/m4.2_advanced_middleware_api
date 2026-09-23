@@ -116,10 +116,11 @@ do not invent them. Never ask the user to paste a PAT into chat.
 After the [First hard gate](#first-hard-gate-when-a-pr-is-known) succeeds (do not dump raw GraphQL into context). The
 JSON already filters to **unresolved review threads from any author** (`unresolved_ai_threads` — key kept for compat)
 and **summary-only findings** (`summary_only_findings` / each entry in `ai_reviews`): Copilot/Bugbot/Cursor suppressed
-packing **and** first-party `/code-review` reports (`<!-- m42-ai:code-review -->` + findings table), not only the latest
-submission — Copilot “Suppressed comments” and code-review COMMENT bodies often have no thread and would be missed if a
-later review became “latest”. Optional `--review-id` scopes review bodies when the user gave a
-`/pull/N#pullrequestreview-ID` permalink. Docs: [`scripts/ai/README.md`](../../../scripts/ai/README.md).
+packing **and** first-party `/code-review` reports (`<!-- m42-ai:code-review -->` + Findings index table, with or
+without numbered human-readable blocks), not only the latest submission — Copilot “Suppressed comments” and code-review
+COMMENT bodies often have no thread and would be missed if a later review became “latest”. Optional `--review-id` scopes
+review bodies when the user gave a `/pull/N#pullrequestreview-ID` permalink. Docs:
+[`scripts/ai/README.md`](../../../scripts/ai/README.md).
 
 **Open work** (this is the only set you triage unless the user pasted a specific review URL):
 
