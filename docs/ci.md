@@ -143,6 +143,11 @@ default and may be omitted there.
 - **Vulnerabilities (gate):** `reusable-check` **Security Check** keeps failing on CRITICAL/HIGH vulns (SARIF upload
   unchanged). Do not treat license policy as a reason to relax vuln gates.
 
+**Python lockfile / env (separate gate):** `reusable-code-quality` runs `./scripts/run-uv-audit.sh`
+(`uv audit --frozen`) and enables `UV_MALWARE_CHECK` on `uv sync`. That is the fleet lockfile CVE / malware layer — not
+a substitute for Trivy on images. See
+[Lockfile CVEs vs Trivy vs malware check](quality.md#lockfile-cves-vs-trivy-vs-malware-check) in `docs/quality.md`.
+
 Bump the product `uses:` ref after this policy lands so callers pick up report-only Licence Check.
 
 ### Feature PR (Docker build + check)
@@ -341,6 +346,10 @@ custom `tag_prefix` breaks Helm `appVersion` lookup unless you also change Helm 
 | `pylint_source_roots` | `""`         | Optional comma-separated pylint `--source-roots`                                     |
 | `components`          | (optional)   | Accepted for caller compatibility; unused by this workflow                           |
 | `skip`                | `false`      | Successful no-op (keeps required check names green)                                  |
+
+**uv audit / malware check:** when `skip` is false, the job runs `uv sync` with `UV_MALWARE_CHECK=1` and
+`./scripts/run-uv-audit.sh` (frozen lockfile; optional caller `.uv-audit-ignore`). See
+[quality.md](quality.md#lockfile-cves-vs-trivy-vs-malware-check).
 
 **pytest vs pre-push:** this workflow runs `uv run pytest "${PKG}" …` **without** the synced pre-push marker filter
 (`-m "not system_external and not system_local"`). CI stays the broader gate; local push excludes `system_*` by default

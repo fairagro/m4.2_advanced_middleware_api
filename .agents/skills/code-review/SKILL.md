@@ -52,7 +52,8 @@ Local-only reviews never require GitHub auth.
 
    Use `paths` / `stats` from JSON. Full patch is omitted — open files as needed.
 
-2. **Review** (agent judgment — see Goals). Produce structured Markdown (summary + findings table).
+2. **Review** (agent judgment — see Goals). Produce structured Markdown (verdict + numbered findings + Findings index
+   table).
 
 3. **Write report**
 
@@ -110,17 +111,53 @@ when the GitHub author is a human login):
 <!-- m42-ai:code-review -->
 ```
 
-Suggested Markdown after the marker:
+Suggested Markdown after the marker (**dual layout** — human-readable blocks + machine table):
 
-- Short verdict (risks / open questions — not LGTM)
-- Findings table with columns **path**, **goal**, **severity**, **cost**, **note** (header row required; empty findings
-  → table omitted or a single “none” row is fine — without a `path` column, review-fixer ignores the body)
-- Optional: “defer via `/create-issue`” for Medium+
+1. Short verdict (risks / open questions — not LGTM)
+2. **Numbered findings** (primary scan on github.com — **not** a wide multi-column table, **not** `###` per finding):
+
+   ```markdown
+   1. **Short title**
+   - **Severity:** Medium · **Cost:** cheap · **Goal:** Correctness
+   - **Path:** `path/to/file.py` (`symbol_or_region`)
+   - **Note:** One or two sentences …
+   ```
+
+3. **Findings index** — compact Markdown table with columns **path**, **goal**, **severity**, **cost**, **note** (header
+   row required). Same findings as the numbered list (keep both in sync). `/review-fixer` extracts from this table’s
+   `path` column. Empty findings → omit the numbered list **and** the table.
+4. Optional: “defer via `/create-issue`” for Medium+
+
+Example (two findings):
+
+```markdown
+<!-- m42-ai:code-review -->
+
+## Verdict
+
+One Medium correctness gap; one Low docs nit.
+
+1. **Null PR head not handled**
+   - **Severity:** High · **Cost:** S · **Goal:** Correctness
+   - **Path:** `scripts/ai/src/m42_ai/review.py` (`fetch_review_open`)
+   - **Note:** GraphQL null `pullRequest` can crash shaping; fail closed with a clear error.
+2. **Stale workflow name in docs**
+   - **Severity:** Low · **Cost:** XS · **Goal:** Docs↔code
+   - **Path:** `docs/ci.md`
+   - **Note:** Section still names a removed workflow.
+
+## Findings index
+
+| path | goal | severity | cost | note |
+|------|------|----------|------|------|
+| `scripts/ai/src/m42_ai/review.py` (`fetch_review_open`) | Correctness | High | S | Null pullRequest not handled |
+| `docs/ci.md` | Docs↔code | Low | XS | Stale workflow name |
+```
 
 ## Relationship
 
-| Skill           | Role                                                                |
-| --------------- | ------------------------------------------------------------------- |
-| `/code-review`  | Produce first-party review of a diff / PR (marker + findings table) |
-| `/review-fixer` | Triage Copilot/Bugbot **and** `/code-review` summary findings       |
-| `/create-issue` | Open deferred issues (optional hand-off)                            |
+| Skill           | Role                                                                           |
+| --------------- | ------------------------------------------------------------------------------ |
+| `/code-review`  | Produce first-party review of a diff / PR (marker + numbered findings + table) |
+| `/review-fixer` | Triage Copilot/Bugbot **and** `/code-review` summary findings                  |
+| `/create-issue` | Open deferred issues (optional hand-off)                                       |
