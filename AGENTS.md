@@ -76,8 +76,7 @@ scripts/
 
 .devcontainer/product.env          # Product overlay: MYPYPATH, CST_BAKE_TARGET (not synced)
 
-stubs/                             # Type stubs until Devinfra #67 sync (arctrl, fable_library)
-pyrightconfig.json                 # stubPath + extraPaths (promote shared file #64)
+pyrightconfig.json                 # IDE: typeCheckingMode off; extraPaths for scripts/ai
 
 dev_environment/
 ├── start.sh              # Start Docker Compose with sops
@@ -97,7 +96,7 @@ uv run pytest middleware/api_client/tests/unit/ -v
 # Quality checks (synced fragments — see docs/quality.md)
 uv run ruff check --config ruff.toml middleware/
 uv run ruff format --check --diff --config ruff.toml middleware/
-export MYPYPATH=stubs:middleware/api/src:middleware/api_client/src:middleware/shared/src:middleware/api/tests/unit:middleware/api_client/tests/unit:middleware/shared/tests
+export MYPYPATH=middleware/api/src:middleware/api_client/src:middleware/shared/src:middleware/api/tests/unit:middleware/api_client/tests/unit:middleware/shared/tests
 uv run mypy --config-file mypy.ini middleware/
 uv run pylint --rcfile .pylintrc \
   --source-roots=middleware/api/src,middleware/api/tests/unit,middleware/api_client/tests/unit,middleware/shared/tests \
