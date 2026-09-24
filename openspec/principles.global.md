@@ -126,8 +126,11 @@ Typical scripts (see `package.json` where present):
 - `npm run lint:md` — `markdownlint-cli2`
 
 Opsx / vendor / synced first-party skills are Prettier-ignored (parity with markdownlint for non-product-authored trees;
-products must not rewrite synced skill Markdown). After product-owned Markdown edits: format first, then lint; remaining
-markdownlint findings must be fixed by hand (do not expand ignore lists to hide product prose).
+products must not rewrite synced skill Markdown). Product-owned `openspec/changes/**` (and other non-ignored
+`openspec/**` prose) stays Prettier-checked: `/opsx-propose` MUST run a scoped Prettier write on the new change
+directory before propose is complete (`openspec update` may overwrite that skill patch — re-apply or upstream). After
+other product-owned Markdown edits: format first, then lint; remaining markdownlint findings must be fixed by hand (do
+not expand ignore lists to hide product prose).
 
 Dockerfiles must pass **hadolint** (Dev Container / CI provide `hadolint`). Prefer fixing the Dockerfile over
 suppressions; document any necessary ignore with a one-line reason.
