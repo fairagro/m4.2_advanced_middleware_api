@@ -2,11 +2,11 @@
 creation_rules:
   - path_regex: \.enc\.yaml$|\.enc\.yml$|\.enc\.json$|\.enc\.toml$|\.enc\.ini$|\.key$
     pgp: >-
-      37D38A6C0248214B007B6C5685E825F3377228D6,
+      A9069D1B81C3565F3D6D09CDFCA14720C8BA146E,
       CC7B10CE8D78010ABB043F8DB1C462E90012ECFE
   - path_regex: \.env.*\.enc$
     input_type: dotenv
     output_type: dotenv
     pgp: >-
-      37D38A6C0248214B007B6C5685E825F3377228D6,
+      A9069D1B81C3565F3D6D09CDFCA14720C8BA146E,
       CC7B10CE8D78010ABB043F8DB1C462E90012ECFE
