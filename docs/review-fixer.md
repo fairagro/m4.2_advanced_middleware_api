@@ -21,6 +21,22 @@ Issue: [#5](https://github.com/fairagro/m4.2_middleware_devinfra/issues/5).
 - Follow-ups open via [`/create-issue`](create-issue.md): **linked** by default; `relation: sub-of #<issue_number>` only
   when the PR has `Fixes #<issue_number>` and the deferred item is remaining acceptance criteria of that issue.
 
+## GitHub Code Quality findings
+
+Unresolved review threads from **`github-code-quality[bot]`** are open work (any-author intake). Resolving those threads
+(`Dismissed.` / `Fixed in …` + `resolveReviewThread`) is **not** the same as the PR UI action **Dismiss finding**.
+
+| Action                                              | Effect                                                                                              |
+| --------------------------------------------------- | --------------------------------------------------------------------------------------------------- |
+| Fixer reply + thread resolve                        | Conversation thread collapses                                                                       |
+| Code Quality finding `state` / quality-gate unblock | **Not** updated by thread resolve — use **Dismiss finding** in the UI, or a real code fix + re-scan |
+
+`m42-ai review-open` soft-fetches the read-only findings REST API and may attach `code_quality_finding` (`number`,
+`state`, optional `rule_id`) onto correlatable CQ bot threads. There is **no** agent dismiss/write API today
+([#219](https://github.com/fairagro/m4.2_middleware_devinfra/issues/219)). Phase 1 MUST say manual dismiss (or re-scan
+after a real fix) is still required while linked findings stay `open`, and MUST NOT claim Remaining risk / open work is
+clear solely because those threads were resolved.
+
 ## Auth
 
 Same personal-token helpers — see root README **Personal tokens** and `scripts/bin/gh`.

@@ -11,6 +11,9 @@ Not every file under `scripts/` is Dev Container-only. Personal-token helpers ar
 | ------------------------------------- | ---------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `quality-check.sh` / `quality-fix.sh` | Host or Dev Container  | Needs `uv`. Commit-stage also runs `npm run lint:md` (Node/`npm`; host: `npm install`). On the host, set `GITGUARDIAN_API_KEY` for ggshield if required. |
 | `run-container-structure-test.sh`     | Host or Dev Container  | Needs Docker + `container-structure-test`                                                                                                                |
+| `run-quality-cli.sh`                  | Host or Dev Container  | `uv run --with-requirements scripts/quality-tools-pins.txt` for fleet quality CLIs                                                                       |
+| `run-import-linter.sh`                | Host or Dev Container  | Product `.importlinter`; soft-skips without `middleware/`; uses `run-quality-cli.sh`                                                                     |
+| `run-uv-audit.sh`                     | Host or Dev Container  | Needs `uv` + network to OSV; optional `.uv-audit-ignore`                                                                                                 |
 | `setup-git-hooks.sh` / `git-hooks/`   | Host or Dev Container  | Dispatcher + `pre-push.d/50-quality`; no `git-lfs` required                                                                                              |
 | `load-versions-env.sh`                | Host or Dev Container  | Reads `versions.env`, writes `.python-version`                                                                                                           |
 | `scripts/ai/` (`m42-ai`)              | Host or Dev Container  | uv workspace member; `uv sync` then `uv run m42-ai` (needs `gh` + auth)                                                                                  |
@@ -43,38 +46,86 @@ restate line length, rule selects, ignore lists, or similar policy on the comman
 already defines them. Do not patch synced `.pre-commit-config.yaml` to carry those overlays. After syncing `.pylintrc`,
 products may drop a duplicate `--extension-pkg-allow-list=lxml` CLI flag — that allow-list lives in the rcfile.
 
-| Tool                    | IDE                                                 | Hooks                  | CI  | Notes                                                                             |
-| ----------------------- | --------------------------------------------------- | ---------------------- | --- | --------------------------------------------------------------------------------- |
-| Ruff format/lint        | yes (`ruff.toml`)                                   | yes                    | yes | Primary IDE Python lint/format                                                    |
-| basedpyright / Pylance  | yes (`pyrightconfig.json`, `typeCheckingMode: off`) | —                      | —   | Language server only; type gate is mypy                                           |
-| Prettier / markdownlint | yes (Prettier formatter; markdownlint extension)    | yes                    | yes | Shared `.markdownlint*` + Prettier; CI via `npm run format:md:check` / `lint:md`  |
-| Mypy                    | yes (`mypy.ini` via `ms-python.mypy-type-checker`)  | yes (`mypy.ini`)       | yes | Same fragment + `.venv` as hooks/CI; open-file IDE vs whole-tree hooks is allowed |
-| Pylint                  | yes (`.pylintrc` via `ms-python.pylint`)            | yes (`.pylintrc`)      | yes | Same fragment + `.venv`; `--source-roots` stays CI/env (see below)                |
-| Bandit                  | **hooks + CI only**                                 | yes (`.bandit`)        | yes | Named IDE exception; medium/high fail — see Bandit note below                     |
-| Vulture                 | **hooks + CI only**                                 | — (CLI policy)         | yes | Named IDE exception; `--min-confidence 100`, no synced whitelist — see below      |
-| import-linter           | **hooks + CI only**                                 | `.importlinter.global` | yes | Named IDE exception; baseline + optional `.importlinter` overlay — see below      |
-| pytest                  | IDE via `pyproject.toml` `testpaths`                | pre-push               | yes | Synced `pytestArgs` stay `[]` — do not hardcode roots in settings                 |
+| Tool                    | IDE                                                 | Hooks             | CI  | Notes                                                                                     |
+| ----------------------- | --------------------------------------------------- | ----------------- | --- | ----------------------------------------------------------------------------------------- |
+| Ruff format/lint        | yes (`ruff.toml`)                                   | yes               | yes | Primary IDE Python lint/format                                                            |
+| basedpyright / Pylance  | yes (`pyrightconfig.json`, `typeCheckingMode: off`) | —                 | —   | Language server only; type gate is mypy                                                   |
+| Prettier / markdownlint | yes (Prettier formatter; markdownlint extension)    | yes               | yes | Shared `.markdownlint*` + Prettier; hooks + CI via `npm run format:md:check` / `lint:md`  |
+| Mypy                    | yes (`mypy.ini` via `ms-python.mypy-type-checker`)  | yes (`mypy.ini`)  | yes | Same fragment; hooks/CI via `run-quality-cli.sh` (fleet pin); IDE may use project `.venv` |
+| Pylint                  | yes (`.pylintrc` via `ms-python.pylint`)            | yes (`.pylintrc`) | yes | Same fragment; hooks/CI via `run-quality-cli.sh`; `--source-roots` stays CI/env           |
+| Bandit                  | **hooks + CI only**                                 | yes (`.bandit`)   | yes | Named IDE exception; medium/high fail — see Bandit note below                             |
+| Vulture                 | **hooks + CI only**                                 | — (CLI policy)    | yes | Named IDE exception; `--min-confidence 100`, no synced whitelist — see below              |
+| import-linter           | **hooks + CI only**                                 | `.importlinter`   | yes | Named IDE exception; **product-owned** config — see below                                 |
+| uv audit                | **hooks + CI only**                                 | — (CLI + overlay) | yes | Named IDE exception; frozen lockfile CVE gate; needs OSV network — see below              |
+| pytest                  | IDE via `pyproject.toml` `testpaths`                | pre-push          | yes | Synced `pytestArgs` stay `[]` — do not hardcode roots in settings                         |
 
 **Bandit severity (named exception):** `.bandit` has no fail-on-severity key. Hooks use Bandit’s `-ll` (report MEDIUM+
 only). CI runs without `-ll`, logs all severities (JSON + wrapper), and still fails only on MEDIUM/HIGH — same fail bar
 as hooks, matching [principles Code Quality](../openspec/principles.global.md#code-quality). Do not reintroduce a second
 fail policy only on one surface.
 
-**Vulture (named IDE exception):** unused-definition gate for `middleware/` (or reusable `python_package_root`). Hooks
-and CI both run `uv run vulture <root> --min-confidence 100` with **no** synced whitelist file. False positives at that
-bar are fixed in product code (delete, use the symbol, or `# noqa`) — do **not** patch synced `.pre-commit-config.yaml`
-or lower fleet confidence after sync. Products must list `vulture` in their uv dependency set (same class as bandit /
-mypy / pylint). Ruff still owns unused **imports**; vulture owns unused **definitions**.
+**Fleet quality CLIs (hooks + reusable CI):** ggshield, ruff, mypy, pylint, bandit, vulture, and import-linter run via
+[`scripts/quality-tools-pins.txt`](../scripts/quality-tools-pins.txt) (`bash scripts/run-quality-cli.sh` /
+`scripts/quality-tools-pins.txt`). Pins live in that synced requirements file (Renovate `pip_requirements`) — **not** in
+product `pyproject.toml`. Gates must not fail with `Failed to spawn` when a product omits those packages. Products
+**MAY** still list the same tools as optional project deps for IDE extensions; pytest and other test-only deps stay
+product-owned (`uv run pytest`).
 
-**import-linter (named IDE exception):** fleet **baseline** [`.importlinter.global`](../.importlinter.global) encodes
-Import-policy bits that are mechanical: `root_package = middleware`, `exclude_type_checking_imports = True`, and an
-`acyclic_siblings` contract for `middleware`. Hooks and CI run
-[`scripts/run-import-linter.sh`](../scripts/run-import-linter.sh) (same fail bar). Product **layers / forbidden /
-independence** contracts belong in **`.importlinter`** (sync `overlays` — never overwritten); the runner merges contract
-sections onto the baseline. Naming follows the fleet `*.global` + product-local pair (see
-[Synced `.global` + product overlay](../openspec/principles.global.md#synced-global--product-overlay) and
-[`docs/sync.md`](sync.md)). Absent `middleware/` (e.g. Devinfra itself) the runner soft-skips. Products must list
-`import-linter` in their uv dependency set.
+**Vulture (named IDE exception):** unused-definition gate for `middleware/` (or reusable `python_package_root`). Hooks
+and CI both run `bash scripts/run-quality-cli.sh vulture <root> --min-confidence 100` with **no** synced whitelist file.
+False positives at that bar are fixed in product code (delete, use the symbol, or `# noqa`) — do **not** patch synced
+`.pre-commit-config.yaml` or lower fleet confidence after sync. Ruff still owns unused **imports**; vulture owns unused
+**definitions**.
+
+**uv audit (named IDE exception):** primary **Python lockfile / env CVE gate** via `./scripts/run-uv-audit.sh`
+(`uv audit --frozen`). Hooks and reusable code-quality share that runner. Fail on any finding except advisory IDs listed
+in the product-owned overlay `.uv-audit-ignore` (one ID per line; sync `overlays` — never wiped). There is **no**
+CRITICAL/HIGH-only filter (unlike Trivy on images). `uv audit` is still **preview** on the fleet uv pin — needs network
+to OSV; escape hatch only: `SKIP=uv-audit`. See
+[Lockfile CVEs vs Trivy vs malware check](#lockfile-cves-vs-trivy-vs-malware-check).
+
+## Lockfile CVEs vs Trivy vs malware check
+
+| Gate                   | Surface                  | When                                                     | Fail policy                                |
+| ---------------------- | ------------------------ | -------------------------------------------------------- | ------------------------------------------ |
+| **uv audit**           | `uv.lock` / project deps | Commit-stage + `reusable-code-quality` (no image needed) | Any non-ignored advisory / adverse status  |
+| **Trivy**              | Container image / SBOM   | `reusable-check` Security Check (after image build)      | CRITICAL/HIGH                              |
+| **`UV_MALWARE_CHECK`** | Install/sync             | `uv sync` in code-quality + Dev Container post-create    | Abort sync on known OSV **MAL** advisories |
+
+Overlap on the same CVE across lock and image is OK — different layers. Do **not** disable Trivy because uv audit
+exists. Malware check is **not** a CVE audit substitute (known malware only; still preview).
+
+**import-linter (named IDE exception):** there is **no** synced import-linter **config** (no `.importlinter.global`) and
+**no** config-merge logic. A thin synced [`scripts/run-import-linter.sh`](../scripts/run-import-linter.sh) only checks
+paths and invokes the CLI. Every product repo **MUST** own a root **`.importlinter`** (sync `exclude` / `overlays` —
+never copied or wiped by Devinfra sync) that includes the fleet-required settings below, plus product-specific `root_*`
+and any `layers` / `forbidden` / `independence` contracts.
+
+**Required in every product `.importlinter`:**
+
+```ini
+[importlinter]
+exclude_type_checking_imports = True
+# Regular package:
+root_package = middleware
+# Or PEP 420 portions (list every installed middleware.* portion; do NOT add a path-mutating
+# middleware/__init__.py — Import policy):
+# root_packages =
+#     middleware.sql_to_arc
+#     middleware.shared
+#     middleware.api_client
+
+[importlinter:contract:middleware-acyclic-siblings]
+name = middleware sibling packages must be acyclic
+type = acyclic_siblings
+ancestors =
+    middleware
+```
+
+Hooks and reusable CI run [`scripts/run-import-linter.sh`](../scripts/run-import-linter.sh) (thin wrapper: soft-skip
+without `middleware/`, fail-closed without `.importlinter`, then `run-quality-cli.sh lint-imports …`). After a Devinfra
+sync that drops a previously synced `.importlinter.global`, delete that orphan in the product and keep only
+`.importlinter`.
 
 **pydeps:** optional local visualization only — **not** a pre-commit or CI fail gate.
 
@@ -84,25 +135,27 @@ lazy imports solely to break cycles) stay principles / other tools / `/code-revi
 
 ## Files
 
-| Path                                                | Role                                                                                                            |
-| --------------------------------------------------- | --------------------------------------------------------------------------------------------------------------- |
-| `.pre-commit-config.yaml`                           | Commit-stage + pre-push hooks — adopt **verbatim** after sync (see below)                                       |
-| `ruff.toml`                                         | Shared Ruff lint/format — **verbatim** sync (no product `extend` / ignore overlay)                              |
-| `mypy.ini`                                          | Shared Mypy strictness + fleet arctrl/fable `ignore_missing_imports` (path overlays via **env**)                |
-| `.pylintrc`                                         | Shared Pylint (`ignored-modules` for arctrl/fable; `extension-pkg-allow-list=lxml`; path overlays via CI / env) |
-| `pyrightconfig.json`                                | Shared basedpyright/Pylance (`venv`, `scripts/ai`, `typeCheckingMode: off`) — **verbatim**                      |
-| `scripts/quality-check.sh`                          | Run **commit-stage** hooks only (check)                                                                         |
-| `scripts/quality-fix.sh`                            | Run commit-stage **autofix** hooks only                                                                         |
-| `scripts/run-container-structure-test.sh`           | Templated Docker build + `container-structure-test`                                                             |
-| `scripts/run-import-linter.sh`                      | import-linter baseline + optional `.importlinter` overlay                                                       |
-| `.importlinter.global`                              | Fleet import-linter baseline (acyclic `middleware` siblings; TYPE_CHECKING excluded from graph)                 |
-| `.importlinter`                                     | Product overlay contracts (`layers` / `forbidden` / …) — sync **overlay**, never wiped                          |
-| `scripts/setup-git-hooks.sh`                        | Install dispatcher + `pre-push.d/50-quality` from `scripts/git-hooks/`                                          |
-| `scripts/git-hooks/`                                | Version-controlled `pre-push` dispatcher + `pre-push.d/`                                                        |
-| `.bandit`                                           | Bandit config (`bandit -c .bandit`)                                                                             |
-| `.markdownlint.json` (+ ignore / cli2)              | Markdownlint (also used by the markdownlint hook)                                                               |
-| `package.json` / `package-lock.json`                | Shared npm scripts + pins for Prettier/markdownlint (hooks + reusable CI) — **verbatim** sync                   |
-| [`.vscode/settings.json`](../.vscode/settings.json) | Shared IDE baseline (interpreter, Ruff, Mypy, Pylint, empty `pytestArgs`, Prettier) — adopt **verbatim**        |
+| Path                                                | Role                                                                                                                         |
+| --------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
+| `.pre-commit-config.yaml`                           | Commit-stage + pre-push hooks — adopt **verbatim** after sync (see below)                                                    |
+| `ruff.toml`                                         | Shared Ruff lint/format — **verbatim** sync (no product `extend` / ignore overlay)                                           |
+| `mypy.ini`                                          | Shared Mypy strictness + fleet arctrl/fable `ignore_missing_imports` (path overlays via **env**)                             |
+| `.pylintrc`                                         | Shared Pylint (`ignored-modules` for arctrl/fable; `extension-pkg-allow-list=lxml`; path overlays via CI / env)              |
+| `pyrightconfig.json`                                | Shared basedpyright/Pylance (`venv`, `scripts/ai`, `typeCheckingMode: off`) — **verbatim**                                   |
+| `scripts/quality-check.sh`                          | Run **commit-stage** hooks only (check)                                                                                      |
+| `scripts/quality-fix.sh`                            | Run commit-stage **autofix** hooks only                                                                                      |
+| `scripts/run-container-structure-test.sh`           | Templated Docker build + `container-structure-test`                                                                          |
+| `scripts/run-import-linter.sh`                      | Thin import-linter runner (product `.importlinter`; see above)                                                               |
+| `scripts/run-quality-cli.sh`                        | `uv run --with-requirements` wrapper for fleet quality CLIs                                                                  |
+| `scripts/quality-tools-pins.txt`                    | Fleet pins for ggshield/ruff/mypy/pylint/bandit/vulture/import-linter (hooks + CI)                                           |
+| `scripts/run-uv-audit.sh`                           | Frozen `uv audit` + optional product `.uv-audit-ignore` (hooks + CI)                                                         |
+| `.importlinter`                                     | Product-owned import-linter config (fleet-required settings in this doc) — **not** synced from Devinfra                      |
+| `scripts/setup-git-hooks.sh`                        | Install dispatcher + `pre-push.d/50-quality` from `scripts/git-hooks/`                                                       |
+| `scripts/git-hooks/`                                | Version-controlled `pre-push` dispatcher + `pre-push.d/`                                                                     |
+| `.bandit`                                           | Bandit config (`bandit -c .bandit`)                                                                                          |
+| `.markdownlint.json` (+ ignore / cli2)              | Markdownlint (also used by the markdownlint hook)                                                                            |
+| `package.json` / `package-lock.json`                | Shared npm scripts + pins for Prettier/markdownlint (`prettier-md` + `markdownlint` hooks + reusable CI) — **verbatim** sync |
+| [`.vscode/settings.json`](../.vscode/settings.json) | Shared IDE baseline (interpreter, Ruff, Mypy, Pylint, empty `pytestArgs`, Prettier) — adopt **verbatim**                     |
 
 **Local artifact excludes:** repo-root `dist/` (PyInstaller onedir, etc.) is gitignored and already skipped by Ruff /
 Mypy / Pylint / Bandit. Markdown/Node tools must match: synced `.markdownlint-cli2.jsonc`, `.markdownlintignore`, and
@@ -123,6 +176,9 @@ Examples already in the shared skeleton:
 
 - `check-yaml` excludes Go-templated Helm under `helm/**/templates/` and `helmchart/**/templates/` (and vendor skill
   trees) — safe when those paths are absent.
+- Commit-stage `prettier-md` (`npm run format:md:check`) and `markdownlint` (`npm run lint:md`) share the same `files` /
+  `exclude` class for `*.md` / `*.mdc` (parity with reusable CI). Escape hatch only: `SKIP=prettier-md` or
+  `SKIP=markdownlint` (same class as other Node markdown hooks — not the normal workflow).
 - CST bake target / image tag come from env (`CST_BAKE_*`), not from a product-hardcoded hook entry.
 - pytest uses product `pyproject.toml` discovery; the shared pre-push hook runs
   `uv run pytest -m "not system_external and not system_local"` (see [Pre-push pytest scope](#pre-push-pytest-scope)).

@@ -94,8 +94,30 @@ renovate --version
 | Containers      | DinD feature, `container-structure-test` (`cst`), `trivy`                                      |
 | Diagrams        | JRE + `graphviz` (PlantUML extension)                                                          |
 
-Python quality tools (ruff, mypy, pylint, bandit, vulture, import-linter, ggshield, pre-commit) are **project deps** via
-`uv`, not separate image binaries — same pattern as product repos.
+### Public GPG keys and SOPS recipients
+
+Per-repo (not synced) layout for encrypt / decrypt:
+
+| Path               | Role                                                                                             |
+| ------------------ | ------------------------------------------------------------------------------------------------ |
+| `public_gpg_keys/` | Armored public keys (`{FINGERPRINT}_{Name}.asc`); imported on create via the shared script below |
+| `.sops.yaml`       | `creation_rules` with PGP fingerprints for new ciphertext                                        |
+
+Shared tooling (synced): [`scripts/import-public-gpg-keys.sh`](../scripts/import-public-gpg-keys.sh) — postCreate calls
+it; soft-skips when no `.asc` files exist. Do **not** put `.sops.yaml` or `public_gpg_keys/**` on the sync allowlist.
+
+After adding or replacing a recipient fingerprint in `.sops.yaml`, someone who can decrypt MUST run `sops updatekeys` on
+each existing enc file (e.g. `.env.integration.enc`, `dev_environment/secrets.enc.yaml`). New recipients cannot read old
+ciphertext until that step. Product follow-ups for Jorge’s new key (`A9069D1B…`): API
+[#496](https://github.com/fairagro/m4.2_advanced_middleware_api/issues/496), sql_to_arc
+[#227](https://github.com/fairagro/m4.2_sql_to_arc/issues/227), harvester
+[#324](https://github.com/fairagro/m4.2_middleware_harvester/issues/324).
+
+Python quality CLIs (ruff, mypy, pylint, bandit, vulture, import-linter, ggshield) for **hooks and reusable CI** come
+from synced [`scripts/quality-tools-pins.txt`](../scripts/quality-tools-pins.txt) via
+[`scripts/run-quality-cli.sh`](../scripts/run-quality-cli.sh) — products do **not** need them in `pyproject.toml` for
+gates to spawn. IDE extensions **MAY** still use the same tools from the project `.venv` when listed as optional deps.
+`pre-commit`, pytest, and app/runtime deps stay project-owned via `uv`.
 
 ## Bashrc-free shell init (no `load-env.sh`)
 
@@ -204,7 +226,7 @@ Runs `scripts/devcontainer-post-create.sh` once per create:
 - `pre-commit install --hook-type pre-commit`
 - `./scripts/setup-git-hooks.sh` (dispatcher + `pre-push.d/50-quality`; does not manage Git LFS or hard-code product
   scripts)
-- import `public_gpg_keys/*.asc` when present (skip if absent)
+- import public GPG keys via `scripts/import-public-gpg-keys.sh` when present (`public_gpg_keys/*.asc`; skip if absent)
 - optionally decrypt repo-root `.env.integration.enc` → `.env` when present (skip if `.env` already non-empty,
   ciphertext absent, or `sops`/keys unavailable; never fails create; does **not** patch bashrc to `source` `.env`)
 - soft-fail install of recommended IDE extensions via Cursor/VS Code remote CLI (shared product set: Docker/Helm/
