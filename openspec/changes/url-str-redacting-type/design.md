@@ -2,23 +2,18 @@
 
 ## Context
 
-See `proposal.md` for motivation. Today `GitContextConfig.repo_url` is
-`SecretStr` (fully opaque on `str()`), while producers such as
-`authenticated_repo_url` and `get_repo_url(authenticated=True)` still return
-plain `str`. Git stderr and exception text remain plain strings, so
-`redact_url_userinfo` plus exception `__str__` hooks and the logging filter stay
-necessary. `UrlStr` sits in `middleware.shared` (api and shared may use it;
-shared must not depend on api).
+See `proposal.md` for motivation. Today `GitContextConfig.repo_url` is `SecretStr` (fully opaque on `str()`), while
+producers such as `authenticated_repo_url` and `get_repo_url(authenticated=True)` still return plain `str`. Git stderr
+and exception text remain plain strings, so `redact_url_userinfo` plus exception `__str__` hooks and the logging filter
+stay necessary. `UrlStr` sits in `middleware.shared` (api and shared may use it; shared must not depend on api).
 
 ## Goals / Non-Goals
 
 **Goals:**
 
 - Typed default-safe stringification for authenticated remotes (host/path visible).
-- Migrate Git remote producers/holders to `UrlStr`; call `.unredacted()` only at
-  Git invocation boundaries.
-- Keep defense-in-depth regex redaction for free-form text (Git stderr, logs,
-  CouchDB event messages).
+- Migrate Git remote producers/holders to `UrlStr`; call `.unredacted()` only at Git invocation boundaries.
+- Keep defense-in-depth regex redaction for free-form text (Git stderr, logs, CouchDB event messages).
 
 **Non-Goals:**
 
@@ -34,27 +29,23 @@ shared must not depend on api).
 Implement a small immutable wrapper in `middleware.shared.security`:
 
 - `__str__` / `__repr__` → `redact_url_userinfo(raw)`
-- `unredacted() -> str` → raw URL (name preferred over `get_secret_value` to
-  emphasize partial, not full, secrecy)
+- `unredacted() -> str` → raw URL (name preferred over `get_secret_value` to emphasize partial, not full, secrecy)
 - Equality / hashing on the raw URL
-- Optional Pydantic core schema so it can appear on models (same role as
-  `SecretStr` on `GitContextConfig.repo_url`)
+- Optional Pydantic core schema so it can appear on models (same role as `SecretStr` on `GitContextConfig.repo_url`)
 
-**Alternative considered:** Keep `SecretStr` for remotes — rejected because ops
-lose host/path in logs. **Alternative:** Only regex at sinks — rejected as the
-source of the ad-hoc call-site sprawl.
+**Alternative considered:** Keep `SecretStr` for remotes — rejected because ops lose host/path in logs. **Alternative:**
+Only regex at sinks — rejected as the source of the ad-hoc call-site sprawl.
 
 ### 2. Return type of authentication helpers is `UrlStr`
 
 - `GitCliSettings.authenticated_repo_url` → `UrlStr`
-- `RemoteGitProvider.get_repo_url(..., authenticated=True)` → `UrlStr` (or
-  `UrlStr | str` only if unauthenticated path stays `str`; prefer always
-  `UrlStr` when authenticated flag is True)
+- `RemoteGitProvider.get_repo_url(..., authenticated=True)` → `UrlStr` (or `UrlStr | str` only if unauthenticated path
+  stays `str`; prefer always `UrlStr` when authenticated flag is True)
 - `ConsolidatedGitConfig.catalog_repo_url` → `UrlStr`
 - `GitContextConfig.repo_url: UrlStr` replacing `SecretStr`
 
-Config fields that store **non-authenticated** base URLs (`url`, `repo_url`
-without token) remain `str` until authentication is applied.
+Config fields that store **non-authenticated** base URLs (`url`, `repo_url` without token) remain `str` until
+authentication is applied.
 
 ### 3. Defense-in-depth layers stay
 
@@ -64,25 +55,24 @@ UrlStr (owned values)
 redact_url_userinfo on free text (Git stderr, exceptions, logging, CouchDB events)
 ```
 
-Do not delete existing sink redaction in this change unless a call site becomes
-provably redundant and tests still cover the sink.
+Do not delete existing sink redaction in this change unless a call site becomes provably redundant and tests still cover
+the sink.
 
 ### 4. Principles / AGENTS
 
-Extend Type Safety in `openspec/principles.md`: credential-bearing URLs use
-`UrlStr`; tokens/passwords stay `SecretStr`. Add `url-str` to AGENTS
-Spec-to-Code Mapping.
+Extend Type Safety in `openspec/principles.md`: credential-bearing URLs use `UrlStr`; tokens/passwords stay `SecretStr`.
+Add `url-str` to AGENTS Spec-to-Code Mapping.
 
 ## Risks / Trade-offs
 
-- [Git still embeds raw URL in stderr] → Keep regex redaction; document that
-  `UrlStr` does not cover third-party exception text.
-- [Callers forget `.unredacted()` and Git auth fails] → Type checkers + focused
-  unit tests at clone/ls-remote/push boundaries; fail loud in tests.
-- [Pydantic / serialization surprises] → Mirror SecretStr patterns for dump;
-  never serialize unredacted into logs or API responses.
-- [Wider return-type churn in tests] → Prefer updating helpers once; adjust
-  asserts to compare `.unredacted()` or `str(url)`.
+- [Git still embeds raw URL in stderr] → Keep regex redaction; document that `UrlStr` does not cover third-party
+  exception text.
+- [Callers forget `.unredacted()` and Git auth fails] → Type checkers + focused unit tests at clone/ls-remote/push
+  boundaries; fail loud in tests.
+- [Pydantic / serialization surprises] → Mirror SecretStr patterns for dump; never serialize unredacted into logs or API
+  responses.
+- [Wider return-type churn in tests] → Prefer updating helpers once; adjust asserts to compare `.unredacted()` or
+  `str(url)`.
 
 ## Migration Plan
 
@@ -94,5 +84,4 @@ Spec-to-Code Mapping.
 
 ## Open Questions
 
-None — accessor name `unredacted()` and keeping sink redaction are fixed by the
-proposal discussion.
+None — accessor name `unredacted()` and keeping sink redaction are fixed by the proposal discussion.

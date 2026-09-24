@@ -10,9 +10,8 @@ compatibility: Python 3.12+, pydantic v2, middleware.shared
 
 # ConfigWrapper — Usage Reference
 
-`ConfigWrapper` (from `middleware.shared.config`) wraps a YAML file and adds
-environment variable and Docker secret overrides. A component's `Config` class
-extends `ConfigBase` and is populated via `Config.from_config_wrapper(wrapper)`.
+`ConfigWrapper` (from `middleware.shared.config`) wraps a YAML file and adds environment variable and Docker secret
+overrides. A component's `Config` class extends `ConfigBase` and is populated via `Config.from_config_wrapper(wrapper)`.
 
 ---
 
@@ -45,23 +44,22 @@ Nested fields use `_` as path separator:
 
 ## Type Coercion (env / secret values are always strings)
 
-| String value | Parsed as |
-| --- | --- |
-| `"true"` / `"True"` / `"TRUE"` | `True` (bool) |
+| String value                      | Parsed as      |
+| --------------------------------- | -------------- |
+| `"true"` / `"True"` / `"TRUE"`    | `True` (bool)  |
 | `"false"` / `"False"` / `"FALSE"` | `False` (bool) |
-| `"123"` | `123` (int) |
-| `"3.14"` | `3.14` (float) |
-| `""` (empty) | `None` |
-| anything else | `str` |
+| `"123"`                           | `123` (int)    |
+| `"3.14"`                          | `3.14` (float) |
+| `""` (empty)                      | `None`         |
+| anything else                     | `str`          |
 
 ---
 
 ## Extending ConfigBase
 
-`ConfigBase` is an optional convenience base class from `middleware.shared`
-that bundles config options shared across FAIRagro middleware components. You
-can subclass it to inherit those fields, or use plain `pydantic.BaseModel` if
-your component doesn't need them.
+`ConfigBase` is an optional convenience base class from `middleware.shared` that bundles config options shared across
+FAIRagro middleware components. You can subclass it to inherit those fields, or use plain `pydantic.BaseModel` if your
+component doesn't need them.
 
 ```python
 from typing import Annotated
@@ -83,17 +81,15 @@ class Config(ConfigBase):  # or BaseModel if ConfigBase fields aren't needed
 
 ## ConfigBase vs plain BaseModel
 
-**Use `ConfigBase`** (from `middleware.shared`) only for **top-level component
-configs** — i.e., the `Config` class that is loaded from a YAML file via
-`ConfigWrapper`. It adds `log_level`, `otel`, and `from_config_wrapper`.
+**Use `ConfigBase`** (from `middleware.shared`) only for **top-level component configs** — i.e., the `Config` class that
+is loaded from a YAML file via `ConfigWrapper`. It adds `log_level`, `otel`, and `from_config_wrapper`.
 
 ---
 
 ## ConfigBase (optional convenience base)
 
-`ConfigBase` from `middleware.shared` is a FAIRagro-specific convenience class.
-Use it when your component should share the standard logging and OpenTelemetry
-fields; skip it for components that don't need them.
+`ConfigBase` from `middleware.shared` is a FAIRagro-specific convenience class. Use it when your component should share
+the standard logging and OpenTelemetry fields; skip it for components that don't need them.
 
 Inherited fields:
 
@@ -112,19 +108,17 @@ otel: OtelConfig  # OpenTelemetry settings
 
 ## Secrets Handling
 
-- `SecretStr` fields: access the value as `.get_secret_value()` only at the
-  point of use (e.g., when creating a DB engine). Never pass them to `str()`
-  or log them directly.
+- `SecretStr` fields: access the value as `.get_secret_value()` only at the point of use (e.g., when creating a DB
+  engine). Never pass them to `str()` or log them directly.
 
-- Docker secrets: mount files to `/run/secrets/`; the wrapper resolves them
-  automatically using the full key name (lowercase).
+- Docker secrets: mount files to `/run/secrets/`; the wrapper resolves them automatically using the full key name
+  (lowercase).
 
 ---
 
 ## Typing Rule
 
-All `ConfigBase`/`BaseModel` subclasses **must be fully typed** — `dict[str, Any]`
-and bare `Any` fields are forbidden.
+All `ConfigBase`/`BaseModel` subclasses **must be fully typed** — `dict[str, Any]` and bare `Any` fields are forbidden.
 
 When a config field holds a nested config, declare its **concrete Pydantic type**:
 
@@ -142,10 +136,9 @@ config: Annotated[InspireToArcConfig, Field(description="Inspire plugin configur
 
 <!-- All defaults belong in the `Config` class — never in application code. -->
 
-If application code needs a fallback value (e.g. `sys.maxsize`, a hardcoded
-constant, or a magic number), that value belongs as a Pydantic field default
-in the relevant `Config` class instead. This makes the default visible,
-overridable via env/secret/YAML, and documented.
+If application code needs a fallback value (e.g. `sys.maxsize`, a hardcoded constant, or a magic number), that value
+belongs as a Pydantic field default in the relevant `Config` class instead. This makes the default visible, overridable
+via env/secret/YAML, and documented.
 
 ```python
 # ✗ Wrong — default hidden in application code, not overridable

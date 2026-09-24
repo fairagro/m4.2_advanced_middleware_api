@@ -31,20 +31,19 @@ ArcManager.sync_to_gitlab(rdi, arc)  (see openspec/specs/arc-store/)
    method. Shared CouchDB and Celery logic therefore remains in one place.
 
 3. **Mode enforcement through `TaskDispatcher` presence** — API mode requires a dispatcher and worker mode must not have
-   one. Calling `create_or_update_arc` without its dispatcher raises `BusinessLogicError`, exposing accidental
-   misuse.
+   one. Calling `create_or_update_arc` without its dispatcher raises `BusinessLogicError`, exposing accidental misuse.
 
 4. **Extract `identifier` once during wire validation** — `RoCratePayload` validates `@context`, `@graph`, root `./`,
-   and a non-empty `identifier`; validators also read `name` and `description`, leaving other root properties
-   unchanged. The contract is in the adjacent `spec.md`.
+   and a non-empty `identifier`; validators also read `name` and `description`, leaving other root properties unchanged.
+   The contract is in the adjacent `spec.md`.
 
 5. **Content-hash idempotency, including harvest retry** — `DocumentStore.store_arc` marks identical content as
    unchanged, avoiding redundant tasks and commits. In one harvest, same identifier and hash returns `UPDATED`; a
    different hash raises `DuplicateArcError` rather than overwriting.
 
 6. **Derive harvest statistics at finalization** — Storage stamps `last_harvest_id`, `first_harvest_id`, and
-   `last_changed_harvest_id`; `HarvestManager` uses `DocumentStore.get_harvest_statistics` at the terminal
-   transition. No per-ARC harvest counter writes occur during ingest.
+   `last_changed_harvest_id`; `HarvestManager` uses `DocumentStore.get_harvest_statistics` at the terminal transition.
+   No per-ARC harvest counter writes occur during ingest.
 
 7. **Cross process boundaries as JSON dictionaries** — arctrl objects carry .NET interop state and cannot safely be
    pickled. The worker reparses raw JSON into an ARC.
@@ -53,5 +52,4 @@ ArcManager.sync_to_gitlab(rdi, arc)  (see openspec/specs/arc-store/)
    `ARC.from_rocrate_json_string` runs in the Celery worker so the API can store and return promptly.
 
 9. **Derive display metadata in `GitRepo`** — `git_project_metadata_from_arc` derives GitLab labels when `GitRepo` calls
-   `GitlabGitProvider.ensure_repo_exists`. Ingest stores the full document and passes only `rdi` as middleware
-   context.
+   `GitlabGitProvider.ensure_repo_exists`. Ingest stores the full document and passes only `rdi` as middleware context.

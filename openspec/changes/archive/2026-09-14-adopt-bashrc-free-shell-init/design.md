@@ -4,8 +4,8 @@ See `proposal.md` — Why. On `main` after Devinfra sync: synced `.devcontainer/
 `remoteEnv.PATH` to `.venv/bin` + `scripts/bin`, has no `postStartCommand`, and Compose optionally loads
 `.devcontainer/product.env` (`required: false`). Shared `scripts/devcontainer-post-create.sh` decrypts
 `.env.integration.enc` → `.env` (file only). Product still ships `scripts/load-env.sh` (PATH / MYPYPATH / CST aliases /
-ggshield nudge / SOPS decrypt+source / `dev-tokens.sh`). `setup-bashrc-load-env.sh` is already gone. Golden rule: do
-not hand-edit allowlisted synced blobs; `product.env` and `AGENTS.md` are overlays.
+ggshield nudge / SOPS decrypt+source / `dev-tokens.sh`). `setup-bashrc-load-env.sh` is already gone. Golden rule: do not
+hand-edit allowlisted synced blobs; `product.env` and `AGENTS.md` are overlays.
 
 Product domain specs under `openspec/specs/` are unchanged (`skip_specs: true`).
 
@@ -53,12 +53,12 @@ auto-source. Personal tokens stay on `scripts/bin/gh|git` + `set-dev-tokens.sh`.
 
 ## Risks / Trade-offs
 
-| Risk | Mitigation |
-| ---- | ---------- |
+| Risk                                              | Mitigation                                                                       |
+| ------------------------------------------------- | -------------------------------------------------------------------------------- |
 | Fresh container without rebuild misses `env_file` | Document recreate Dev Container after merge; Compose already wires `product.env` |
-| Contributors still source deleted `load-env.sh` | AGENTS/README point at bashrc-free table; delete fails loudly |
-| Loss of `kda`/`kga`/`ksn` aliases | Accept fleet contract (`k`/`d` wrappers only); no product wrapper sprawl |
-| Tests expect env vars already in shell | Existing conftest / dotenv patterns; postCreate still materializes `.env` |
+| Contributors still source deleted `load-env.sh`   | AGENTS/README point at bashrc-free table; delete fails loudly                    |
+| Loss of `kda`/`kga`/`ksn` aliases                 | Accept fleet contract (`k`/`d` wrappers only); no product wrapper sprawl         |
+| Tests expect env vars already in shell            | Existing conftest / dotenv patterns; postCreate still materializes `.env`        |
 
 ## Migration Plan
 

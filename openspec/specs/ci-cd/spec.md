@@ -2,10 +2,9 @@
 
 ## Purpose
 
-GitHub Actions SHALL validate pull requests, build and verify release
-artifacts, publish independently to external registries, and report security
-findings. The pipelines preserve a deployable `main` branch and provide
-traceable Docker, Helm, and Python package releases.
+GitHub Actions SHALL validate pull requests, build and verify release artifacts, publish independently to external
+registries, and report security findings. The pipelines preserve a deployable `main` branch and provide traceable
+Docker, Helm, and Python package releases.
 
 ## Requirements
 
@@ -13,8 +12,7 @@ traceable Docker, Helm, and Python package releases.
 
 ### Requirement: Detect pull-request changes
 
-The pull-request workflow MUST detect files changed on every pull request
-targeting `main`.
+The pull-request workflow MUST detect files changed on every pull request targeting `main`.
 
 #### Scenario: A pull request targets main
 
@@ -24,8 +22,8 @@ targeting `main`.
 
 ### Requirement: Always report required checks
 
-Every configured required GitHub status check MUST produce a status result for
-every pull request targeting `main`; a required check MUST NOT be skipped.
+Every configured required GitHub status check MUST produce a status result for every pull request targeting `main`; a
+required check MUST NOT be skipped.
 
 #### Scenario: A docs-only pull request is validated
 
@@ -35,21 +33,18 @@ every pull request targeting `main`; a required check MUST NOT be skipped.
 
 ### Requirement: Short-circuit non-code pull requests
 
-When a pull request changes only non-code files, required checks MUST complete
-successfully without builds, tests, or scans, and non-required jobs MUST be
-skipped.
+When a pull request changes only non-code files, required checks MUST complete successfully without builds, tests, or
+scans, and non-required jobs MUST be skipped.
 
 #### Scenario: A pull request changes only documentation, specs, or Helm YAML
 
 - **GIVEN** no relevant code file changed
 - **WHEN** pull-request validation runs
-- **THEN** required checks succeed through no-op execution and all build and
-  scan jobs are skipped
+- **THEN** required checks succeed through no-op execution and all build and scan jobs are skipped
 
 ### Requirement: Validate code pull requests
 
-When relevant code files change, every required check MUST run normally and a
-failure MUST block the pull-request merge.
+When relevant code files change, every required check MUST run normally and a failure MUST block the pull-request merge.
 
 #### Scenario: A code-quality check fails for a code change
 
@@ -59,8 +54,7 @@ failure MUST block the pull-request merge.
 
 ### Requirement: Define required checks
 
-The required status checks MUST be named `Container Structure Tests` and
-`Code Quality Check`.
+The required status checks MUST be named `Container Structure Tests` and `Code Quality Check`.
 
 #### Scenario: GitHub evaluates required statuses
 
@@ -72,8 +66,7 @@ The required status checks MUST be named `Container Structure Tests` and
 
 ### Requirement: Enforce Ruff formatting
 
-The code-quality workflow MUST verify Ruff formatting and fail if committed code
-differs from Ruff's formatted output.
+The code-quality workflow MUST verify Ruff formatting and fail if committed code differs from Ruff's formatted output.
 
 #### Scenario: Formatting drift is committed
 
@@ -83,8 +76,7 @@ differs from Ruff's formatted output.
 
 ### Requirement: Enforce Ruff and Pylint rules
 
-The code-quality workflow MUST run Ruff linting and Pylint and fail on any
-violation.
+The code-quality workflow MUST run Ruff linting and Pylint and fail on any violation.
 
 #### Scenario: A lint rule is violated
 
@@ -104,20 +96,18 @@ The code-quality workflow MUST run MyPy and fail on every type error.
 
 ### Requirement: Enforce Bandit severity policy
 
-The code-quality workflow MUST log low-severity Bandit findings without
-failing and MUST fail for findings above low severity.
+The code-quality workflow MUST log low-severity Bandit findings without failing and MUST fail for findings above low
+severity.
 
 #### Scenario: Bandit reports low and medium findings
 
 - **GIVEN** Bandit reports a low-severity finding and a medium-severity finding
 - **WHEN** code quality runs
-- **THEN** the low finding is logged and the workflow fails because of the
-  medium finding
+- **THEN** the low finding is logged and the workflow fails because of the medium finding
 
 ### Requirement: Run the test suite
 
-The code-quality workflow MUST run the full pytest suite and fail when any test
-fails.
+The code-quality workflow MUST run the full pytest suite and fail when any test fails.
 
 #### Scenario: A test fails
 
@@ -129,8 +119,8 @@ fails.
 
 ### Requirement: Calculate semantic versions
 
-Release workflows MUST calculate a semantic version from the latest relevant
-Git tag and a selected `major`, `minor`, or `patch` bump.
+Release workflows MUST calculate a semantic version from the latest relevant Git tag and a selected `major`, `minor`, or
+`patch` bump.
 
 #### Scenario: A patch bump is requested
 
@@ -140,8 +130,7 @@ Git tag and a selected `major`, `minor`, or `patch` bump.
 
 ### Requirement: Separate Docker and Helm tag namespaces
 
-Docker and Helm versions MUST be calculated independently from `docker-v*` and
-`chart-v*` tag namespaces, respectively.
+Docker and Helm versions MUST be calculated independently from `docker-v*` and `chart-v*` tag namespaces, respectively.
 
 #### Scenario: Docker and Helm have different latest versions
 
@@ -161,9 +150,8 @@ A release from `main` MUST use a final `MAJOR.MINOR.PATCH` version.
 
 ### Requirement: Version feature releases
 
-A Docker or Helm release from `feature/*` MUST use
-`MAJOR.MINOR.PATCH-rc.{branch-label}.{run_number}`, where the branch label
-replaces slashes and underscores with hyphens.
+A Docker or Helm release from `feature/*` MUST use `MAJOR.MINOR.PATCH-rc.{branch-label}.{run_number}`, where the branch
+label replaces slashes and underscores with hyphens.
 
 #### Scenario: Release a slash-containing feature branch
 
@@ -173,8 +161,8 @@ replaces slashes and underscores with hyphens.
 
 ### Requirement: Create monotonically ordered release tags
 
-Every release MUST create a Git tag with a lexically monotone ordering prefix
-across all releases; a `YYYYMMDDhhmmss` prefix is valid.
+Every release MUST create a Git tag with a lexically monotone ordering prefix across all releases; a `YYYYMMDDhhmmss`
+prefix is valid.
 
 #### Scenario: Two releases are created sequentially
 
@@ -184,8 +172,7 @@ across all releases; a `YYYYMMDDhhmmss` prefix is valid.
 
 ### Requirement: Format Docker release tags
 
-Docker Git tags MUST use
-`{ordering-prefix}-docker-v{major}.{minor}.{patch}[-rc.{branch-label}.{run_number}]`.
+Docker Git tags MUST use `{ordering-prefix}-docker-v{major}.{minor}.{patch}[-rc.{branch-label}.{run_number}]`.
 
 #### Scenario: Create a Docker pre-release tag
 
@@ -195,8 +182,7 @@ Docker Git tags MUST use
 
 ### Requirement: Format Helm release tags
 
-Helm Git tags MUST use
-`{ordering-prefix}-chart-v{major}.{minor}.{patch}[-rc.{branch-label}.{run_number}]`.
+Helm Git tags MUST use `{ordering-prefix}-chart-v{major}.{minor}.{patch}[-rc.{branch-label}.{run_number}]`.
 
 #### Scenario: Create a final Helm tag
 
@@ -206,8 +192,7 @@ Helm Git tags MUST use
 
 ### Requirement: Name GitHub Releases from tags
 
-The GitHub Release name MUST equal its Git tag with the ordering-prefix and
-following hyphen removed.
+The GitHub Release name MUST equal its Git tag with the ordering-prefix and following hyphen removed.
 
 #### Scenario: Publish a tagged Docker release
 
@@ -217,8 +202,7 @@ following hyphen removed.
 
 ### Requirement: Support immutable release asset attachment
 
-The release workflow MUST create releases and attach their assets even when
-release immutability is enabled.
+The release workflow MUST create releases and attach their assets even when release immutability is enabled.
 
 #### Scenario: Repository releases are immutable
 
@@ -230,8 +214,8 @@ release immutability is enabled.
 
 ### Requirement: Sequence final Docker releases
 
-A manually dispatched final Docker release from `main` MUST run code quality,
-build, check, and release jobs in that order.
+A manually dispatched final Docker release from `main` MUST run code quality, build, check, and release jobs in that
+order.
 
 #### Scenario: Dispatch a final Docker release
 
@@ -241,9 +225,8 @@ build, check, and release jobs in that order.
 
 ### Requirement: Run pre-release Docker pipelines
 
-A manually dispatched Docker pre-release on any branch MUST run the same
-quality, build, check, and release pipeline but MUST NOT create a GitHub
-Release entry.
+A manually dispatched Docker pre-release on any branch MUST run the same quality, build, check, and release pipeline but
+MUST NOT create a GitHub Release entry.
 
 #### Scenario: Dispatch a feature Docker pre-release
 
@@ -263,8 +246,8 @@ DockerHub and GHCR image uploads MUST run as independent jobs.
 
 ### Requirement: Verify images before publishing
 
-The workflow MUST run container structure tests and Trivy scans before an image
-is pushed, and MUST NOT push a broken image.
+The workflow MUST run container structure tests and Trivy scans before an image is pushed, and MUST NOT push a broken
+image.
 
 #### Scenario: Container structure testing fails
 
@@ -274,8 +257,8 @@ is pushed, and MUST NOT push a broken image.
 
 ### Requirement: Generate and scan SBOMs
 
-The workflow MUST generate an SBOM for every image, scan both image and SBOM
-for vulnerabilities, and upload SARIF results to GitHub Security.
+The workflow MUST generate an SBOM for every image, scan both image and SBOM for vulnerabilities, and upload SARIF
+results to GitHub Security.
 
 #### Scenario: Build a Docker image
 
@@ -297,8 +280,7 @@ A Helm release MUST calculate its semantic version independently of Docker.
 
 ### Requirement: Publish Helm OCI charts
 
-The Helm release workflow MUST package and publish the chart to the DockerHub
-OCI registry.
+The Helm release workflow MUST package and publish the chart to the DockerHub OCI registry.
 
 #### Scenario: Release a chart
 
@@ -308,8 +290,8 @@ OCI registry.
 
 ### Requirement: Apply branch versioning to Helm
 
-Helm releases MUST use final versions on `main` and the defined feature-branch
-pre-release version strategy on `feature/*`.
+Helm releases MUST use final versions on `main` and the defined feature-branch pre-release version strategy on
+`feature/*`.
 
 #### Scenario: Release a feature chart
 
@@ -319,8 +301,8 @@ pre-release version strategy on `feature/*`.
 
 ### Requirement: Preserve Chart.yaml version
 
-The CI pipeline MUST derive the Helm chart version from Git tags and MUST NOT
-modify the `version` field in `Chart.yaml`.
+The CI pipeline MUST derive the Helm chart version from Git tags and MUST NOT modify the `version` field in
+`Chart.yaml`.
 
 #### Scenario: Package a versioned chart
 
@@ -332,8 +314,7 @@ modify the `version` field in `Chart.yaml`.
 
 ### Requirement: Provide image usage instructions
 
-Every GitHub Release body MUST include exact `docker pull` commands and
-registry links for published images.
+Every GitHub Release body MUST include exact `docker pull` commands and registry links for published images.
 
 #### Scenario: Publish a Docker GitHub Release
 
@@ -343,8 +324,8 @@ registry links for published images.
 
 ### Requirement: Provide image metadata
 
-Every GitHub Release body MUST include a technical metadata table with image
-architecture and its corresponding SHA256 digest.
+Every GitHub Release body MUST include a technical metadata table with image architecture and its corresponding SHA256
+digest.
 
 #### Scenario: Publish a Docker GitHub Release (2)
 
@@ -354,8 +335,7 @@ architecture and its corresponding SHA256 digest.
 
 ### Requirement: Attach SPDX SBOMs
 
-Every GitHub Release MUST include its corresponding SPDX SBOM as a release
-asset.
+Every GitHub Release MUST include its corresponding SPDX SBOM as a release asset.
 
 #### Scenario: Finalize a release
 
@@ -365,8 +345,7 @@ asset.
 
 ### Requirement: Document local Docker builds
 
-Every GitHub Release body MUST document how to build the image locally from
-the specific release tag.
+Every GitHub Release body MUST document how to build the image locally from the specific release tag.
 
 #### Scenario: A user reads a release page
 
@@ -378,8 +357,7 @@ the specific release tag.
 
 ### Requirement: Run scheduled and branch CodeQL analysis
 
-CodeQL MUST analyze Python and GitHub Actions on every push to `feature/*` and
-on a weekly schedule.
+CodeQL MUST analyze Python and GitHub Actions on every push to `feature/*` and on a weekly schedule.
 
 #### Scenario: Push to a feature branch
 
@@ -411,8 +389,8 @@ CodeQL MUST upload its results to GitHub Security.
 
 ### Requirement: Publish both Python packages
 
-The workflow MUST publish packages for `middleware/api_client` and
-`middleware/shared` to PyPI whenever a Docker image is successfully pushed.
+The workflow MUST publish packages for `middleware/api_client` and `middleware/shared` to PyPI whenever a Docker image
+is successfully pushed.
 
 #### Scenario: A Docker image is pushed
 
@@ -422,8 +400,7 @@ The workflow MUST publish packages for `middleware/api_client` and
 
 ### Requirement: Publish packages for all releases
 
-Both final `main` releases and feature-branch pre-releases MUST publish to
-PyPI.
+Both final `main` releases and feature-branch pre-releases MUST publish to PyPI.
 
 #### Scenario: Publish a feature release
 
@@ -433,8 +410,7 @@ PyPI.
 
 ### Requirement: Gate package publishing on security checks
 
-Package publishing MUST begin only after `reusable-check.yml` security scans
-have passed.
+Package publishing MUST begin only after `reusable-check.yml` security scans have passed.
 
 #### Scenario: Security checks fail
 
@@ -444,8 +420,8 @@ have passed.
 
 ### Requirement: Use required PyPI distribution names
 
-The API client package MUST be named `fairagro-middleware-api-client`, and the
-shared package MUST be named `fairagro-middleware-shared`.
+The API client package MUST be named `fairagro-middleware-api-client`, and the shared package MUST be named
+`fairagro-middleware-shared`.
 
 #### Scenario: Build package metadata
 
@@ -455,22 +431,19 @@ shared package MUST be named `fairagro-middleware-shared`.
 
 ### Requirement: Build complete Python distributions
 
-Both packages MUST include wheels, source distributions, complete README usage
-instructions, license information, author and homepage metadata, and all
-dependencies declared in `pyproject.toml`.
+Both packages MUST include wheels, source distributions, complete README usage instructions, license information, author
+and homepage metadata, and all dependencies declared in `pyproject.toml`.
 
 #### Scenario: Inspect package artifacts
 
 - **GIVEN** package distributions were built
 - **WHEN** their metadata and contents are inspected
-- **THEN** each contains the required distributions, documentation, licensing,
-  metadata, and dependencies
+- **THEN** each contains the required distributions, documentation, licensing, metadata, and dependencies
 
 ### Requirement: Align package numeric versions
 
-Python packages MUST use the same numeric semantic version as the Docker image:
-`MAJOR.MINOR.PATCH` on `main`, and `MAJOR.MINOR.PATCH.dev{RUN_NUMBER}` for
-feature pre-releases.
+Python packages MUST use the same numeric semantic version as the Docker image: `MAJOR.MINOR.PATCH` on `main`, and
+`MAJOR.MINOR.PATCH.dev{RUN_NUMBER}` for feature pre-releases.
 
 #### Scenario: Build a feature package release
 
@@ -480,9 +453,8 @@ feature pre-releases.
 
 ### Requirement: Document released Python packages
 
-When a GitHub Release is created, it MUST list the packages as artifacts,
-provide exact-version `pip install` commands, and include fallback local
-installation instructions.
+When a GitHub Release is created, it MUST list the packages as artifacts, provide exact-version `pip install` commands,
+and include fallback local installation instructions.
 
 #### Scenario: Create a final GitHub Release
 
@@ -494,8 +466,7 @@ installation instructions.
 
 ### Requirement: Isolate external uploads
 
-Each DockerHub, GHCR, and PyPI external upload MUST be a standalone job
-independent of other upload jobs.
+Each DockerHub, GHCR, and PyPI external upload MUST be a standalone job independent of other upload jobs.
 
 #### Scenario: One external publisher is unavailable
 
@@ -515,17 +486,15 @@ An external upload failure MUST NOT make the release unsuccessful.
 
 ### Requirement: Warn about incomplete release uploads
 
-When a GitHub Release is created, its body MUST document successful artifacts
-and MUST include a warning for every failed external upload, including missing
-credentials treated as an upload failure.
+When a GitHub Release is created, its body MUST document successful artifacts and MUST include a warning for every
+failed external upload, including missing credentials treated as an upload failure.
 
 #### Scenario: DockerHub credentials are absent
 
 - **GIVEN** DockerHub credentials are unavailable during a final release
 - **WHEN** build and verification complete
-- **THEN** the DockerHub push is skipped, the completed build and tests remain
-  valid, and the GitHub Release body warns that DockerHub upload did not occur
-  while documenting only successfully uploaded artifacts
+- **THEN** the DockerHub push is skipped, the completed build and tests remain valid, and the GitHub Release body warns
+  that DockerHub upload did not occur while documenting only successfully uploaded artifacts
 
 #### Scenario: PyPI credentials are absent
 
@@ -535,8 +504,7 @@ credentials treated as an upload failure.
 
 ### Requirement: Fail before artifacts on version calculation errors
 
-If a version cannot be calculated from Git history, the pipeline MUST fail
-before building and MUST produce no artifact.
+If a version cannot be calculated from Git history, the pipeline MUST fail before building and MUST produce no artifact.
 
 #### Scenario: No valid version baseline exists
 
@@ -546,8 +514,7 @@ before building and MUST produce no artifact.
 
 ### Requirement: Tag feature releases without GitHub Releases
 
-A feature-branch release MUST create its Git tag for version tracking even
-though it creates no GitHub Release entry.
+A feature-branch release MUST create its Git tag for version tracking even though it creates no GitHub Release entry.
 
 #### Scenario: Complete a feature release
 

@@ -72,16 +72,16 @@ asyncio.run(main())
 
 ## Configuration Options
 
-| Option | Type | Required | Default | Description |
-| ------ | ---- | -------- | ------- | ----------- |
-| `log_level` | string | No | INFO | Logging level (DEBUG, INFO, WARNING, ERROR, CRITICAL) |
-| `api_url` | string | Yes | - | Base URL of the Middleware API |
-| `client_cert_path` | string | No | null | Path to client certificate (PEM format) |
-| `client_key_path` | string | No | null | Path to client private key (PEM format) |
-| `ca_cert_path` | string | No | null | Path to CA certificate for server verification |
-| `timeout` | float | No | 30.0 | Request timeout in seconds |
-| `verify_ssl` | bool | No | true | Enable SSL certificate verification |
-| `max_concurrency` | int | No | 10 | Maximum concurrent API requests (also default for `harvest_arcs`) |
+| Option             | Type   | Required | Default | Description                                                       |
+| ------------------ | ------ | -------- | ------- | ----------------------------------------------------------------- |
+| `log_level`        | string | No       | INFO    | Logging level (DEBUG, INFO, WARNING, ERROR, CRITICAL)             |
+| `api_url`          | string | Yes      | -       | Base URL of the Middleware API                                    |
+| `client_cert_path` | string | No       | null    | Path to client certificate (PEM format)                           |
+| `client_key_path`  | string | No       | null    | Path to client private key (PEM format)                           |
+| `ca_cert_path`     | string | No       | null    | Path to CA certificate for server verification                    |
+| `timeout`          | float  | No       | 30.0    | Request timeout in seconds                                        |
+| `verify_ssl`       | bool   | No       | true    | Enable SSL certificate verification                               |
+| `max_concurrency`  | int    | No       | 10      | Maximum concurrent API requests (also default for `harvest_arcs`) |
 
 ## API Methods
 
@@ -137,3 +137,4 @@ try:
     )
 except ApiClientError as e:
     print(f"API Error: {e}")
+```

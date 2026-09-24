@@ -733,9 +733,10 @@ class ApiClient:
         Raises:
             NotImplementedError: Always — pending server-side support.
         """
+        _ = (self, rdi, status, limit, offset)
         raise NotImplementedError(
-            "list_harvests requires server-side changes (status filter, guaranteed "
-            "newest-first sort order). See GitHub issue #242."
+            f"{type(self).__name__}.list_harvests requires server-side changes "
+            "(status filter, guaranteed newest-first sort order). See GitHub issue #242."
         )
 
     async def get_harvest(self, harvest_id: str) -> HarvestResult:
@@ -908,6 +909,6 @@ class ApiClient:
         """Async context manager entry."""
         return self
 
-    async def __aexit__(self, exc_type: Any, exc_val: Any, exc_tb: Any) -> None:
+    async def __aexit__(self, _exc_type: Any, _exc_val: Any, _exc_tb: Any) -> None:
         """Async context manager exit — closes the client."""
         await self.aclose()

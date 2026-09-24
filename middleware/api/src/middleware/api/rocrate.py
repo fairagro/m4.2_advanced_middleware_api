@@ -2,9 +2,12 @@
 
 from pydantic import ValidationError
 
-from middleware.api.business_logic.exceptions import InvalidJsonSemanticError
 from middleware.shared.api_models.common.rocrate import RoCratePayload
 from middleware.shared.json_types import RoCrateContent
+
+
+class RocrateParseError(ValueError):
+    """RO-Crate payload failed structural (Pydantic) validation."""
 
 
 def parse_rocrate(arc: RoCratePayload | RoCrateContent) -> RoCratePayload:
@@ -13,6 +16,9 @@ def parse_rocrate(arc: RoCratePayload | RoCrateContent) -> RoCratePayload:
     Lightweight structural validation only (``RoCratePayload`` / Pydantic). Does
     not call arctrl — that parse is deferred to the Celery worker (see
     ``arc-manager`` spec).
+
+    Raises:
+        RocrateParseError: When ``arc`` is not a valid ``RoCratePayload`` wire shape.
     """
     if isinstance(arc, RoCratePayload):
         return arc
@@ -20,7 +26,7 @@ def parse_rocrate(arc: RoCratePayload | RoCrateContent) -> RoCratePayload:
         return RoCratePayload.model_validate(arc)
     except ValidationError as exc:
         message = _first_validation_message(exc)
-        raise InvalidJsonSemanticError(message) from exc
+        raise RocrateParseError(message) from exc
 
 
 def _first_validation_message(exc: ValidationError) -> str:

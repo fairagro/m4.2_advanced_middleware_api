@@ -89,8 +89,8 @@ Set via `.env` file or shell environment:
 
 ### System Tests: Load Dev Secrets Into Current Shell
 
-Some system tests require secrets (e.g. `COUCHDB_USER`, `COUCHDB_PASSWORD`, `GITLAB_API_TOKEN`) to be present
-in the current shell environment. Use:
+Some system tests require secrets (e.g. `COUCHDB_USER`, `COUCHDB_PASSWORD`, `GITLAB_API_TOKEN`) to be present in the
+current shell environment. Use:
 
 ```bash
 source scripts/load-dev-secrets.sh

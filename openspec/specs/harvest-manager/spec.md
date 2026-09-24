@@ -37,10 +37,10 @@ on mismatch without revealing the stored client ID.
 
 ### Requirement: Derive and persist terminal statistics
 
-When finalizing, the system SHALL derive statistics through `DocumentStore.get_harvest_statistics` for ARC
-documents with matching `metadata.last_harvest_id`. It MUST classify them as new, updated, or unchanged with
-`first_harvest_id` and `last_changed_harvest_id`, mark the harvest complete, and record the resulting snapshot.
-Statistics MUST be complete for harvests whose ARC count exceeds the document store's default query page size.
+When finalizing, the system SHALL derive statistics through `DocumentStore.get_harvest_statistics` for ARC documents
+with matching `metadata.last_harvest_id`. It MUST classify them as new, updated, or unchanged with `first_harvest_id`
+and `last_changed_harvest_id`, mark the harvest complete, and record the resulting snapshot. Statistics MUST be complete
+for harvests whose ARC count exceeds the document store's default query page size.
 
 #### Scenario: Finalize before all uploads arrive
 
@@ -57,12 +57,10 @@ Statistics MUST be complete for harvests whose ARC count exceeds the document st
 
 ### Requirement: Guard terminal state transitions
 
-The system SHALL transition a harvest through an explicit operation to one of
-`COMPLETED`, `CANCELLED`, or `FAILED`. Only `RUNNING` harvests MAY transition to
-a **different** terminal status. Requesting `COMPLETED` when the harvest is
-already `COMPLETED` MUST succeed as an idempotent no-op (no document rewrite)
-so catalog finalize can be re-enqueued. Any other non-`RUNNING` current status
-MUST raise `ConflictError` with the current status.
+The system SHALL transition a harvest through an explicit operation to one of `COMPLETED`, `CANCELLED`, or `FAILED`.
+Only `RUNNING` harvests MAY transition to a **different** terminal status. Requesting `COMPLETED` when the harvest is
+already `COMPLETED` MUST succeed as an idempotent no-op (no document rewrite) so catalog finalize can be re-enqueued.
+Any other non-`RUNNING` current status MUST raise `ConflictError` with the current status.
 
 #### Scenario: Transition an already terminal harvest to another status
 
@@ -90,25 +88,20 @@ MUST raise `ConflictError` with the current status.
 
 ### Requirement: Finalize ArcStore catalog on harvest completion
 
-When a harvest transitions to `COMPLETED`, the system SHALL request ArcStore
-`finalize(rdi=…)` for that harvest’s RDI (via an asynchronous worker task).
-Harvest status transition to `COMPLETED` MUST NOT wait for the Git push to
-finish. The system MUST record distinct catalog events for publish success and
-failure so operators can distinguish “harvest complete” from “RDI catalog
-flushed”. The system MUST enqueue finalize on harvest `COMPLETED` even when
-statistics show no new or updated ARCs (bootstrap after switching backends and
-retry after a failed finalize). When finalize runs, byte-stable comparison
-still governs whether a Git push occurs. Worker task payloads MAY include
-`harvest_id` for correlation only; catalog membership is always “all current
-ARCs for the RDI”.
+When a harvest transitions to `COMPLETED`, the system SHALL request ArcStore `finalize(rdi=…)` for that harvest’s RDI
+(via an asynchronous worker task). Harvest status transition to `COMPLETED` MUST NOT wait for the Git push to finish.
+The system MUST record distinct catalog events for publish success and failure so operators can distinguish “harvest
+complete” from “RDI catalog flushed”. The system MUST enqueue finalize on harvest `COMPLETED` even when statistics show
+no new or updated ARCs (bootstrap after switching backends and retry after a failed finalize). When finalize runs,
+byte-stable comparison still governs whether a Git push occurs. Worker task payloads MAY include `harvest_id` for
+correlation only; catalog membership is always “all current ARCs for the RDI”.
 
 #### Scenario: Complete harvest enqueues catalog finalize
 
-- **GIVEN** a running harvest for RDI `edal` with the consolidated backend
-  configured and at least one new or updated ARC
+- **GIVEN** a running harvest for RDI `edal` with the consolidated backend configured and at least one new or updated
+  ARC
 - **WHEN** the harvest is completed
-- **THEN** the harvest status becomes `COMPLETED` and a finalize task for
-  `edal` is enqueued
+- **THEN** the harvest status becomes `COMPLETED` and a finalize task for `edal` is enqueued
 
 #### Scenario: Unchanged harvest still enqueues catalog finalize
 
@@ -121,50 +114,44 @@ ARCs for the RDI”.
 
 - **GIVEN** `git_repo` is configured
 - **WHEN** a harvest completes
-- **THEN** finalize is still invoked and succeeds as a no-op without failing
-  the harvest transition
+- **THEN** finalize is still invoked and succeeds as a no-op without failing the harvest transition
 
 #### Scenario: Catalog push failure is observable
 
 - **GIVEN** finalize fails permanently after harvest `COMPLETED`
 - **WHEN** the worker records the outcome
-- **THEN** a catalog-failure event is stored and the harvest remains
-  `COMPLETED` (retry of finalize is allowed without re-opening the harvest)
+- **THEN** a catalog-failure event is stored and the harvest remains `COMPLETED` (retry of finalize is allowed without
+  re-opening the harvest)
 
 #### Scenario: Transient catalog push does not record failure before retry
 
 - **GIVEN** finalize raises a retryable store error after harvest `COMPLETED`
 - **WHEN** the worker re-raises for Celery retry
-- **THEN** no `CATALOG_PUSH_FAILED` event is appended (matching per-ARC
-  `GIT_PUSH_*` handling); a later successful attempt MAY record only
-  `CATALOG_PUSH_SUCCESS`
+- **THEN** no `CATALOG_PUSH_FAILED` event is appended (matching per-ARC `GIT_PUSH_*` handling); a later successful
+  attempt MAY record only `CATALOG_PUSH_SUCCESS`
 
 #### Scenario: Re-complete after dispatch failure re-enqueues finalize
 
-- **GIVEN** a harvest already in `COMPLETED` (status persisted) whose Celery
-  finalize dispatch failed
+- **GIVEN** a harvest already in `COMPLETED` (status persisted) whose Celery finalize dispatch failed
 - **WHEN** the client requests `COMPLETED` again for that harvest
 - **THEN** the harvest document is not rewritten
 - **AND** a finalize task for that RDI is enqueued again
 
 ### Requirement: Surface partial-push skips on catalog success events
 
-When the worker records a harvest catalog success event (`CATALOG_PUSH_SUCCESS`)
-after consolidated catalog finalize, and the finalize outcome reports one or
-more skipped ARCs, the event message MUST include the number of Datasets
-included, the number of skips, and a bounded list of skipped `arc_id` values so
-operators can see omissions without reading worker logs. When there are no
-skips, the success message MAY omit skip details. Permanent finalize failures
-continue to record `CATALOG_PUSH_FAILED` as today. The system MUST NOT add a
-new catalog event type solely for partial success in this change.
+When the worker records a harvest catalog success event (`CATALOG_PUSH_SUCCESS`) after consolidated catalog finalize,
+and the finalize outcome reports one or more skipped ARCs, the event message MUST include the number of Datasets
+included, the number of skips, and a bounded list of skipped `arc_id` values so operators can see omissions without
+reading worker logs. When there are no skips, the success message MAY omit skip details. Permanent finalize failures
+continue to record `CATALOG_PUSH_FAILED` as today. The system MUST NOT add a new catalog event type solely for partial
+success in this change.
 
 #### Scenario: Success event mentions skipped ARCs
 
-- **GIVEN** a harvest-scoped catalog finalize that published (or left unchanged)
-  a catalog while skipping one or more ARCs
+- **GIVEN** a harvest-scoped catalog finalize that published (or left unchanged) a catalog while skipping one or more
+  ARCs
 - **WHEN** the worker appends `CATALOG_PUSH_SUCCESS` to that harvest
-- **THEN** the event message includes the skip count and at least one skipped
-  `arc_id`
+- **THEN** the event message includes the skip count and at least one skipped `arc_id`
 
 #### Scenario: Success with no skips stays concise
 

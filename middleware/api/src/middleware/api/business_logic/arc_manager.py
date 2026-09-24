@@ -20,7 +20,7 @@ from middleware.api.business_logic.task_payloads import ArcSyncTask
 from middleware.api.document_store import DocumentStore, DuplicateArcError
 from middleware.api.document_store.arc_document import ArcEvent, ArcEventType
 from middleware.api.document_store.harvest_document import CatalogPushEventType, HarvestCatalogEvent
-from middleware.api.rocrate import parse_rocrate
+from middleware.api.rocrate import RocrateParseError, parse_rocrate
 from middleware.api.utils import calculate_arc_id
 from middleware.shared.api_models.common.models import ArcOperationResult, ArcResponse, ArcStatus
 from middleware.shared.api_models.common.rocrate import RoCratePayload
@@ -129,7 +129,10 @@ class ArcManager:
         ) as span:
             logger.info("[%s] Starting ARC creation/update: rdi=%s", client_id, rdi)
             try:
-                rocrate = parse_rocrate(arc)
+                try:
+                    rocrate = parse_rocrate(arc)
+                except RocrateParseError as exc:
+                    raise InvalidJsonSemanticError(str(exc)) from exc
                 arc_content = rocrate.model_dump(by_alias=True)
                 doc_result = await self._doc_store.store_arc(
                     rdi,
@@ -299,7 +302,10 @@ class ArcManager:
             logger.info("Starting GitLab sync for RDI: %s", rdi)
             arc_id: str | None = None
             try:
-                rocrate = parse_rocrate(arc)
+                try:
+                    rocrate = parse_rocrate(arc)
+                except RocrateParseError as exc:
+                    raise InvalidJsonSemanticError(str(exc)) from exc
                 arc_id = calculate_arc_id(rocrate.identifier, rdi)
                 arc_content = rocrate.model_dump(by_alias=True)
                 span.set_attribute("arc_id", arc_id)

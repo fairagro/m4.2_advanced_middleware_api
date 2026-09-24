@@ -3,13 +3,13 @@
 ## Why
 
 `CouchDB.get_harvest_statistics` loads ARC documents through `find_projected` with a single call capped at
-`default_query_limit` (default **100**) (see [#345](https://github.com/fairagro/m4.2_advanced_middleware_api/issues/345)).
-Harvests with more than 100 ARCs last seen get **under-counted** terminal statistics (`arcs_new`, `arcs_updated`,
-`arcs_unchanged`, `arcs_submitted`).
+`default_query_limit` (default **100**) (see
+[#345](https://github.com/fairagro/m4.2_advanced_middleware_api/issues/345)). Harvests with more than 100 ARCs last seen
+get **under-counted** terminal statistics (`arcs_new`, `arcs_updated`, `arcs_unchanged`, `arcs_submitted`).
 
-That is incorrect on its own and becomes operationally dangerous with the consolidated Git catalog: completion
-flows that rely on accurate change counts can mis-classify a harvest as having no new/updated ARCs and skip or
-delay catalog finalize, leaving `{rdi}.json` stale on the shared remote.
+That is incorrect on its own and becomes operationally dangerous with the consolidated Git catalog: completion flows
+that rely on accurate change counts can mis-classify a harvest as having no new/updated ARCs and skip or delay catalog
+finalize, leaving `{rdi}.json` stale on the shared remote.
 
 ## What Changes
 
@@ -18,11 +18,11 @@ delay catalog finalize, leaving `{rdi}.json` stale on the shared remote.
 - Aggregate statistics across pages; preserve existing classification rules (`first_harvest_id`,
   `last_changed_harvest_id`).
 - Add unit tests with more than `default_query_limit` ARC documents for one harvest id.
-- Document-store and harvest-manager specs gain explicit requirements for complete statistics beyond the default
-  query cap.
+- Document-store and harvest-manager specs gain explicit requirements for complete statistics beyond the default query
+  cap.
 
-Non-goals: changing how ARCs are classified; altering HTTP harvest API shapes; replacing Mango with a different
-index strategy in this change.
+Non-goals: changing how ARCs are classified; altering HTTP harvest API shapes; replacing Mango with a different index
+strategy in this change.
 
 ## Capabilities
 
@@ -33,8 +33,8 @@ index strategy in this change.
 ### Modified Capabilities
 
 - `document-store`: `get_harvest_statistics` MUST scan all matching ARC docs, not just the first query page.
-- `harvest-manager`: terminal statistics MUST reflect every ARC last seen in the harvest, including when count
-  exceeds `default_query_limit`.
+- `harvest-manager`: terminal statistics MUST reflect every ARC last seen in the harvest, including when count exceeds
+  `default_query_limit`.
 
 ## Impact
 
