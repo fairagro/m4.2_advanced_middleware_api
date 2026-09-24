@@ -59,10 +59,10 @@ do not invent them. Never ask the user to paste a PAT into chat.
    Use `issue_type`, `labels`, `triage`, `body`, `comments`, and `url` from that JSON (fall back to `gh issue view`
    including comments only if the CLI is unavailable).
 
-2. **Issue comments are part of triage.** When `comments` is non-empty, read them (oldest → newest) and fold clarifications,
-   lock-ins, and acceptance-criteria edits into the problem statement / done-when. **If comments contradict each other
-   (or the body), the newer comment wins** (`created_at` later). Do not ignore comments that change deletion rules,
-   scope, or type/routing.
+2. **Issue comments are part of triage.** When `comments` is non-empty, read them (oldest → newest) and fold
+   clarifications, lock-ins, and acceptance-criteria edits into the problem statement / done-when. **If comments
+   contradict each other (or the body), the newer comment wins** (`created_at` later). Do not ignore comments that
+   change deletion rules, scope, or type/routing.
 
 3. Determine:
    - org issue type: `Bug|Security|Feature|Task|Discussion|Refactoring` (from `issue_type` when set)
@@ -178,9 +178,9 @@ not count):
 uv run --project scripts/ai m42-ai issue-start --issue <issue_number> [--slug <slug>]
 ```
 
-`issue-start` ensures branch `{channel}/issue-<issue_number>-<slug>` (checkout/create from `main` if needed), refuses when there
-are no commits ahead of the base, pushes, and opens a **draft** PR with `Fixes #<issue_number>`. It does **not** create
-empty commits. See [`scripts/ai/README.md`](../../../scripts/ai/README.md).
+`issue-start` ensures branch `{channel}/issue-<issue_number>-<slug>` (checkout/create from `main` if needed), refuses
+when there are no commits ahead of the base, pushes, and opens a **draft** PR with `Fixes #<issue_number>`. It does
+**not** create empty commits. See [`scripts/ai/README.md`](../../../scripts/ai/README.md).
 
 If a draft PR already exists, skip create. Always prefer `m42-ai pr-strip-footer --pr <n>` after create (or when a
 footer may have been injected) instead of hand-editing with ad-hoc `gh` regexes.

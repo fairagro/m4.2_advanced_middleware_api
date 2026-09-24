@@ -11,10 +11,15 @@
     "dockerfile",
     "devcontainer",
     "pep621",
+    "pip_requirements",
     "npm",
     "github-actions",
     "custom.regex"
   ],
+
+  "pip_requirements": {
+    "managerFilePatterns": ["/^scripts\\/quality-tools-pins\\.txt$/"]
+  },
 
   "rangeStrategy": "auto",
 

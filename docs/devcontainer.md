@@ -94,8 +94,12 @@ renovate --version
 | Containers      | DinD feature, `container-structure-test` (`cst`), `trivy`                                      |
 | Diagrams        | JRE + `graphviz` (PlantUML extension)                                                          |
 
-Python quality tools (ruff, mypy, pylint, bandit, vulture, import-linter, ggshield, pre-commit) are **project deps** via
-`uv`, not separate image binaries — same pattern as product repos.
+Python quality CLIs (ruff, mypy, pylint, bandit, vulture, import-linter, ggshield) for **hooks and reusable CI** come
+from synced [`scripts/quality-tools-pins.txt`](../scripts/quality-tools-pins.txt) via
+[`scripts/run-quality-cli.sh`](../scripts/run-quality-cli.sh) — products do **not** need them in `pyproject.toml` for
+gates to spawn. IDE extensions
+**MAY** still use the same tools from the project `.venv` when listed as optional deps. `pre-commit`, pytest, and
+app/runtime deps stay project-owned via `uv`.
 
 ## Bashrc-free shell init (no `load-env.sh`)
 

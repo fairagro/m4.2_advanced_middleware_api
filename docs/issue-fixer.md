@@ -1,11 +1,11 @@
 # Issue-fixer conventions
 
-Shared `/issue-fixer` triages a GitHub issue, explores when needed, and implements on
-`{channel}/issue-<n>-<slug>` (`build` / `ci` / `docs` — see skill). **Feature /
-Refactoring** use OpenSpec (propose → apply → draft PR → archive as last `go`), except a **clearly docs-only** slice
-(Markdown/MDC and/or code comments — **not** if a skill file is touched, and **not** Markdown under `openspec/specs/` or
-`openspec/changes/`). **Task**, **Bug**, and cheap **Security** stay on the fast path (no OpenSpec unless asked, or a
-skill file is in scope). No auto-commit of fix commits; draft PR only after real commits exist. Canonical skill:
+Shared `/issue-fixer` triages a GitHub issue, explores when needed, and implements on `{channel}/issue-<n>-<slug>`
+(`build` / `ci` / `docs` — see skill). **Feature / Refactoring** use OpenSpec (propose → apply → draft PR → archive as
+last `go`), except a **clearly docs-only** slice (Markdown/MDC and/or code comments — **not** if a skill file is
+touched, and **not** Markdown under `openspec/specs/` or `openspec/changes/`). **Task**, **Bug**, and cheap **Security**
+stay on the fast path (no OpenSpec unless asked, or a skill file is in scope). No auto-commit of fix commits; draft PR
+only after real commits exist. Canonical skill:
 [`.agents/skills/issue-fixer/SKILL.md`](../.agents/skills/issue-fixer/SKILL.md). Devinfra is source of truth — products
 must not fork the skill (sync allowlist).
 
