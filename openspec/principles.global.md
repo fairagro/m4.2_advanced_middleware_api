@@ -122,10 +122,12 @@ Markdown must pass Prettier formatting and markdownlint (`.markdownlint.json` di
 Typical scripts (see `package.json` where present):
 
 - `npm run format:md` / `npm run format:md:check` — Prettier write / check for `**/*.{md,mdc}`
+- `npm run format:md:skills` — Devinfra only: format synced first-party skill Markdown (bypasses `.prettierignore`)
 - `npm run lint:md` — `markdownlint-cli2`
 
-After OpenSpec or other bulk Markdown edits: format first, then lint; remaining markdownlint findings must be fixed by
-hand (do not expand ignore lists to hide them).
+Opsx / vendor / synced first-party skills are Prettier-ignored (parity with markdownlint for non-product-authored trees;
+products must not rewrite synced skill Markdown). After product-owned Markdown edits: format first, then lint; remaining
+markdownlint findings must be fixed by hand (do not expand ignore lists to hide product prose).
 
 Dockerfiles must pass **hadolint** (Dev Container / CI provide `hadolint`). Prefer fixing the Dockerfile over
 suppressions; document any necessary ignore with a one-line reason.

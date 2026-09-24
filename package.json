@@ -5,6 +5,7 @@
   "scripts": {
     "format:md": "prettier --write \"**/*.{md,mdc}\"",
     "format:md:check": "prettier --check \"**/*.{md,mdc}\"",
+    "format:md:skills": "prettier --write --ignore-path /dev/null \".agents/skills/{review-fixer,create-issue,code-review,issue-fixer,arctrl}/**/*.{md,mdc}\"",
     "lint:md": "markdownlint-cli2"
   },
   "devDependencies": {
