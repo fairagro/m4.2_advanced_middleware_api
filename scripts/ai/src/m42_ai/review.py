@@ -320,11 +320,70 @@ def _parse_code_review_table_row(
     return {"path": path, "line": None, "text": " — ".join(bits) if bits else path}
 
 
-def extract_code_review_findings(body: str) -> list[dict[str, str | None]]:
-    """Parse the Markdown findings table from a marked `/code-review` report."""
-    if not is_code_review_report(body):
-        return []
-    lines = body.splitlines()
+_FINDING_START_RE = re.compile(r"^\s*\d+\.\s+")
+_PATH_BULLET_RE = re.compile(r"^\s*-\s+\*\*Path:\*\*\s+(.+?)\s*$", re.IGNORECASE)
+_FIELD_BULLET_RE = re.compile(
+    r"^\s*-\s+\*\*(Severity|Cost|Goal|Note):\*\*\s*(.*)$",
+    re.IGNORECASE,
+)
+
+
+def _normalize_code_review_path(raw: str) -> str:
+    """Strip backticks and optional `` (`symbol`) `` suffix from a Path bullet value."""
+    s = raw.strip()
+    tick = re.search(r"`([^`]+)`", s)
+    if tick:
+        return tick.group(1).strip()
+    return re.sub(r"\s*\([^)]*\)\s*$", "", s).strip()
+
+
+def _extract_code_review_numbered_findings(lines: list[str]) -> list[dict[str, str | None]]:
+    """Parse ``N. **Title**`` blocks with ``- **Path:**`` bullets (current skill template)."""
+    items: list[dict[str, str | None]] = []
+    i = 0
+    while i < len(lines):
+        if not _FINDING_START_RE.match(lines[i]):
+            i += 1
+            continue
+        block: list[str] = [lines[i]]
+        i += 1
+        while i < len(lines):
+            line = lines[i]
+            if _FINDING_START_RE.match(line) or re.match(r"^#{1,6}\s+", line):
+                break
+            block.append(line)
+            i += 1
+        path: str | None = None
+        goal = ""
+        severity = ""
+        note = ""
+        for bl in block[1:]:
+            pm = _PATH_BULLET_RE.match(bl)
+            if pm:
+                path = _normalize_code_review_path(pm.group(1))
+                continue
+            fm = _FIELD_BULLET_RE.match(bl)
+            if not fm:
+                continue
+            key = fm.group(1).lower()
+            val = fm.group(2).strip()
+            if key == "severity":
+                severity = val.split("·", maxsplit=1)[0].strip()
+                gm = re.search(r"\*\*Goal:\*\*\s*([^·\n]+)", bl, re.IGNORECASE)
+                if gm:
+                    goal = gm.group(1).strip()
+            elif key == "goal":
+                goal = val.split("·", maxsplit=1)[0].strip()
+            elif key == "note":
+                note = val
+        if path:
+            bits = [b for b in (goal, severity, note) if b]
+            items.append({"path": path, "line": None, "text": " — ".join(bits) if bits else path})
+    return items
+
+
+def _extract_code_review_table_findings(lines: list[str]) -> list[dict[str, str | None]]:
+    """Legacy Findings index / table-only reports (``path`` header column)."""
     header = _find_path_table_header(lines)
     if header is None:
         return []
@@ -346,8 +405,19 @@ def extract_code_review_findings(body: str) -> list[dict[str, str | None]]:
     return items
 
 
+def extract_code_review_findings(body: str) -> list[dict[str, str | None]]:
+    """Parse numbered Path findings from a marked `/code-review` report (legacy table fallback)."""
+    if not is_code_review_report(body):
+        return []
+    lines = body.splitlines()
+    numbered = _extract_code_review_numbered_findings(lines)
+    if numbered:
+        return numbered
+    return _extract_code_review_table_findings(lines)
+
+
 def extract_summary_findings(body: str) -> list[dict[str, str | None]]:
-    """Suppressed Copilot packing **or** code-review findings table."""
+    """Suppressed Copilot packing **or** code-review numbered/table findings."""
     if is_code_review_report(body):
         return extract_code_review_findings(body)
     return extract_suppressed_comments(body)
