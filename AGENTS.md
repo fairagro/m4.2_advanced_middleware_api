@@ -68,7 +68,6 @@ scripts/
 ├── ai/                            # m42-ai (synced): uv run --project scripts/ai m42-ai …
 ├── quality-*.sh / setup-git-hooks.sh / load-versions-env.sh  # Synced Dev DX
 ├── devcontainer-post-create.sh    # Synced shared postCreate (decrypt .env; uv sync; hooks)
-├── install-dev-hooks.sh           # Product: venv/hook repair (not a sync patch)
 ├── update-dockerfile-pins.sh      # Synced: Dockerfile apk + inline pip pins
 ├── bin/{gh,git,k,d}               # PATH wrappers (tokens via set-dev-tokens; k/d aliases)
 └── git-hooks/
@@ -109,7 +108,7 @@ uv run bandit -r middleware/ -c .bandit -ll
 ./scripts/quality-fix.sh
 
 # Repair hooks / venv after path drift
-./scripts/install-dev-hooks.sh
+uv sync --dev --all-packages && ./scripts/setup-git-hooks.sh
 
 # Refresh Dockerfile apk + inline pip pins (not versions.env — Renovate + sync)
 ./scripts/update-dockerfile-pins.sh
@@ -180,7 +179,7 @@ config2 = Config(
 2. Bashrc-free shell init ([Devinfra #58](https://github.com/fairagro/m4.2_middleware_devinfra/issues/58)): synced
    `remoteEnv.PATH` prepends `.venv/bin` + `scripts/bin`; product overlays (`MYPYPATH`, `CST_BAKE_TARGET`) live in
    `.devcontainer/product.env` — do **not** reintroduce `load-env.sh` / bashrc mutation
-3. After path/venv drift: `scripts/install-dev-hooks.sh` (`uv sync --dev --all-packages` + hooks)
+3. After path/venv drift: `uv sync --dev --all-packages` then `scripts/setup-git-hooks.sh`
 4. Do **not** hand-edit allowlisted synced paths (including postCreate / `devcontainer.json`)
 
 **Bake / CST (Wave C):** Root `docker-bake.hcl` target `api` builds via synced `docker/Dockerfile.product-app.base` +
@@ -273,8 +272,8 @@ Agents are expected to maintain high code quality by addressing issues reported 
   commit-stage hooks), or `uv run pre-commit run --all-files`, or terminal `git commit`. CI quality steps call Devinfra
   `reusable-code-quality.yml` (product `with:` overlays for `MYPYPATH` / pylint `--source-roots`; may SHA-pin until
   upstream inputs land on `main`). Note: Cursor Source Control may skip git hooks (≥3.15.6: forces
-  `core.hooksPath=/dev/null`). Dev Container `remoteEnv` prepends `scripts/bin` so SCM uses `scripts/cursor-git.sh`,
-  which strips that pin. Terminal `git` is unaffected. Remove once Cursor fixes #167719.
+  `core.hooksPath=/dev/null`). Dev Container `remoteEnv` prepends `scripts/bin` so SCM uses `scripts/bin/git`, which
+  strips that pin. Terminal `git` is unaffected. Remove once Cursor fixes #167719.
 - Avoid partially staging a Python file (`MM` in `git status`): pre-commit may auto-format the index, then roll back
   when the stash conflicts with unstaged edits — leaving format failures invisible in the editor.
 - If `uv run ruff ...` fails before Ruff starts and shows `packaging.version.InvalidVersion` from `hatch-vcs`, the
@@ -463,7 +462,7 @@ Before making changes, consider:
 
 - Should I use `uv` or another tool? → Always `uv`
 - Are client certificates required? → No, they're optional
-- Should I modify `.git/hooks/` directly? → No — `scripts/setup-git-hooks.sh` or `scripts/install-dev-hooks.sh`
+- Should I modify `.git/hooks/` directly? → No — `scripts/setup-git-hooks.sh`
 - What Python version? → `versions.env` (`PYTHON_VERSION`; syncs `.python-version`)
 - What Alpine / tool versions? → repo-root `versions.env`
 - How to run tests? → `uv run pytest ...`
