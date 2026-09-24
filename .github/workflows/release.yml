@@ -37,8 +37,8 @@ jobs:
   code-quality:
     name: Code Quality
     needs: validate-branch
-    # SHA pin until fairagro/m4.2_middleware_devinfra#72 lands on main.
-    uses: fairagro/m4.2_middleware_devinfra/.github/workflows/reusable-code-quality.yml@a061d6fb85afc8dfd54083ff58bf788744dcdca8
+    # SHA pin: Devinfra tip that includes #222 (quality CLI --with-requirements / run-quality-cli.sh).
+    uses: fairagro/m4.2_middleware_devinfra/.github/workflows/reusable-code-quality.yml@371ac9cefdf4c36ddc906d3ddff9e92e0b7af0cf
     with:
       python_package_root: middleware
       components: '["api"]'

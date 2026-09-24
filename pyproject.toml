@@ -14,17 +14,12 @@ dependencies = [
 dev = [
   "fastapi[standard]>=0.136.0",
   "httpx>=0.28.1",
-  "pylint>=4.0.4",
   "pytest>=9.0.3",
   "pytest-asyncio>=1.1.0",
   "pytest-cov>=7.0.0",
   "pytest-env>=1.2.0",
   "pytest-mock>=3.10.0",
-  "mypy>=1.20.1",
-  "bandit>=1.7.0",
-  "ruff>=0.15.10",
   "pre-commit>=4.0.0",
-  "ggshield>=1.51.0",
   "respx>=0.23.1",
   "testcontainers>=4.14.2",
   # Starlette TestClient (FastAPI API tests) uses httpx2 when installed; avoids
@@ -45,16 +40,8 @@ members = [
     "middleware/tools",
 ]
 
-# ggshield 1.51 pins outdated transitive deps; overrides align with workspace
-# requirements and resolve Dependabot advisories without dropping ggshield.
-[tool.uv]
-override-dependencies = [
-    "cryptography>=45.0.6",
-    "pyjwt>=2.12.0",
-    "requests>=2.33.0",
-    "python-dotenv>=1.2.2",
-]
-
+# Fleet quality CLIs (ruff/mypy/pylint/bandit/vulture/import-linter/ggshield) spawn via
+# scripts/run-quality-cli.sh + scripts/quality-tools-pins.txt — not product dependency-groups.
 # Quality tool config lives in synced fragments (ruff.toml, mypy.ini, .pylintrc).
 # See docs/quality.md — do not reintroduce [tool.ruff] / [tool.mypy] / [tool.pylint.*] here.
 
