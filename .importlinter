@@ -1,9 +1,18 @@
 # Product-owned import-linter config (not synced). Fleet-required settings: docs/quality.md
 #
+# Inventory (top-level middleware.* portions / intended roles) — issue #482:
+#   middleware.shared      — ConfigWrapper, API models, tracing, security helpers
+#   middleware.api_client  — HTTP client for API consumers (optional)
+#   middleware.api         — FastAPI app, business_logic, arc_store, document_store, worker
+#   middleware.tools       — omitted (no installable portion under middleware/tools/src)
+#
+# Cross-portion rules mirror openspec/principles.md (Module Dependency Rules):
+#   api may → shared, api_client; shared ↛ api|api_client; api_client may → shared, ↛ api.
+# Encoded as `forbidden` (not `independence` between api/api_client — api→api_client is allowed).
+#
 # PEP 420: grimp cannot use ancestors = middleware (namespace). Ancestors are the
 # installed portions instead — same contract type acyclic_siblings as the fleet template.
 # Do not add a path-mutating middleware/__init__.py (Import policy).
-# middleware.tools is omitted (no installable portion tree under middleware/tools/src).
 
 [importlinter]
 exclude_type_checking_imports = True
@@ -19,3 +28,20 @@ ancestors =
     middleware.api
     middleware.api_client
     middleware.shared
+
+[importlinter:contract:shared-isolation]
+name = shared must not import api or api_client
+type = forbidden
+source_modules =
+    middleware.shared
+forbidden_modules =
+    middleware.api
+    middleware.api_client
+
+[importlinter:contract:api-client-not-api]
+name = api_client must not import api
+type = forbidden
+source_modules =
+    middleware.api_client
+forbidden_modules =
+    middleware.api
