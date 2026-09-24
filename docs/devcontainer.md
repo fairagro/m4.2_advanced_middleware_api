@@ -159,8 +159,12 @@ Prettier and markdownlint-cli2 are installed **globally in the image**. Pins: `P
 ```bash
 npm run format:md
 npm run format:md:check
+npm run format:md:skills   # Devinfra only: synced first-party skill Markdown (bypasses .prettierignore)
 npm run lint:md
 ```
+
+Opsx / vendor / synced first-party skills are listed in `.prettierignore` (see [`docs/quality.md`](quality.md)); product
+`format:md:check` must not rewrite those trees.
 
 ## Trivy / Renovate (local CLIs)
 

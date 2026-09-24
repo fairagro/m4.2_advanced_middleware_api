@@ -1,4 +1,6 @@
-# Vendor / local — OpenSpec opsx Markdown is NOT ignored (format + lint + AI fix).
+# Vendor / generated / synced agent Markdown — products must not rewrite.
+# Opsx / OpenSpec-managed trees: same class as `.markdownlintignore` (non-product-authored).
+# First-party synced skills: format only in Devinfra (`npm run format:md:skills`); SoT via sync.
 .venv/
 node_modules/
 dist/
@@ -7,4 +9,14 @@ LICENSE
 .agents/skills/docker/
 .agents/skills/hadolint/
 .agents/skills/uv/
+.agents/skills/review-fixer/
+.agents/skills/create-issue/
+.agents/skills/code-review/
+.agents/skills/issue-fixer/
+.agents/skills/arctrl/
+.cursor/commands/opsx-*.md
+.cursor/skills/openspec-*/
+.cursor/rules/openspec-*.mdc
+.github/prompts/opsx-*
+.github/skills/openspec-*/
 package-lock.json
