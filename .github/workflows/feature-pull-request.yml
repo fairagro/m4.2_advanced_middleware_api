@@ -44,7 +44,7 @@ jobs:
     with:
       python_package_root: middleware
       components: '["api"]'
-      mypy_path: stubs:middleware/api/src:middleware/api_client/src:middleware/shared/src:middleware/api/tests/unit:middleware/api_client/tests/unit:middleware/shared/tests
+      mypy_path: middleware/api/src:middleware/api_client/src:middleware/shared/src:middleware/api/tests/unit:middleware/api_client/tests/unit:middleware/shared/tests
       pylint_source_roots: middleware/api/src,middleware/api/tests/unit,middleware/api_client/tests/unit,middleware/shared/tests
       skip: ${{ needs.detect-changes.outputs.code != 'true' }}
     secrets: inherit
