@@ -46,18 +46,18 @@ restate line length, rule selects, ignore lists, or similar policy on the comman
 already defines them. Do not patch synced `.pre-commit-config.yaml` to carry those overlays. After syncing `.pylintrc`,
 products may drop a duplicate `--extension-pkg-allow-list=lxml` CLI flag — that allow-list lives in the rcfile.
 
-| Tool                    | IDE                                                 | Hooks             | CI  | Notes                                                                                     |
-| ----------------------- | --------------------------------------------------- | ----------------- | --- | ----------------------------------------------------------------------------------------- |
-| Ruff format/lint        | yes (`ruff.toml`)                                   | yes               | yes | Primary IDE Python lint/format                                                            |
-| basedpyright / Pylance  | yes (`pyrightconfig.json`, `typeCheckingMode: off`) | —                 | —   | Language server only; type gate is mypy                                                   |
-| Prettier / markdownlint | yes (Prettier formatter; markdownlint extension)    | yes               | yes | Shared `.markdownlint*` + Prettier; hooks + CI via `npm run format:md:check` / `lint:md`  |
-| Mypy                    | yes (`mypy.ini` via `ms-python.mypy-type-checker`)  | yes (`mypy.ini`)  | yes | Same fragment; hooks/CI via `run-quality-cli.sh` (fleet pin); IDE may use project `.venv` |
-| Pylint                  | yes (`.pylintrc` via `ms-python.pylint`)            | yes (`.pylintrc`) | yes | Same fragment; hooks/CI via `run-quality-cli.sh`; `--source-roots` stays CI/env           |
-| Bandit                  | **hooks + CI only**                                 | yes (`.bandit`)   | yes | Named IDE exception; medium/high fail — see Bandit note below                             |
-| Vulture                 | **hooks + CI only**                                 | — (CLI policy)    | yes | Named IDE exception; `--min-confidence 100`, no synced whitelist — see below              |
-| import-linter           | **hooks + CI only**                                 | `.importlinter`   | yes | Named IDE exception; **product-owned** config — see below                                 |
-| uv audit                | **hooks + CI only**                                 | — (CLI + overlay) | yes | Named IDE exception; frozen lockfile CVE gate; needs OSV network — see below              |
-| pytest                  | IDE via `pyproject.toml` `testpaths`                | pre-push          | yes | Synced `pytestArgs` stay `[]` — do not hardcode roots in settings                         |
+| Tool                    | IDE                                                 | Hooks                | CI  | Notes                                                                                      |
+| ----------------------- | --------------------------------------------------- | -------------------- | --- | ------------------------------------------------------------------------------------------ |
+| Ruff format/lint        | yes (`ruff.toml`)                                   | yes                  | yes | Primary IDE Python lint/format                                                             |
+| basedpyright / Pylance  | yes (`pyrightconfig.json`, `typeCheckingMode: off`) | —                    | —   | Language server only; type gate is mypy                                                    |
+| Prettier / markdownlint | yes (Prettier formatter; markdownlint extension)    | yes (Prettier write) | yes | Shared configs; commit-stage Prettier autofix + re-stage; CI `format:md:check` / `lint:md` |
+| Mypy                    | yes (`mypy.ini` via `ms-python.mypy-type-checker`)  | yes (`mypy.ini`)     | yes | Same fragment; hooks/CI via `run-quality-cli.sh` (fleet pin); IDE may use project `.venv`  |
+| Pylint                  | yes (`.pylintrc` via `ms-python.pylint`)            | yes (`.pylintrc`)    | yes | Same fragment; hooks/CI via `run-quality-cli.sh`; `--source-roots` stays CI/env            |
+| Bandit                  | **hooks + CI only**                                 | yes (`.bandit`)      | yes | Named IDE exception; medium/high fail — see Bandit note below                              |
+| Vulture                 | **hooks + CI only**                                 | — (CLI policy)       | yes | Named IDE exception; `--min-confidence 100`, no synced whitelist — see below               |
+| import-linter           | **hooks + CI only**                                 | `.importlinter`      | yes | Named IDE exception; **product-owned** config — see below                                  |
+| uv audit                | **hooks + CI only**                                 | — (CLI + overlay)    | yes | Named IDE exception; frozen lockfile CVE gate; needs OSV network — see below               |
+| pytest                  | IDE via `pyproject.toml` `testpaths`                | pre-push             | yes | Synced `pytestArgs` stay `[]` — do not hardcode roots in settings                          |
 
 **Bandit severity (named exception):** `.bandit` has no fail-on-severity key. Hooks use Bandit’s `-ll` (report MEDIUM+
 only). CI runs without `-ll`, logs all severities (JSON + wrapper), and still fails only on MEDIUM/HIGH — same fail bar
@@ -190,11 +190,11 @@ Examples already in the shared skeleton:
 
 - `check-yaml` excludes Go-templated Helm under `helm/**/templates/` and `helmchart/**/templates/` (and vendor skill
   trees) — safe when those paths are absent.
-- Commit-stage `prettier-md` (`npm run format:md:check`) and `markdownlint` (`npm run lint:md`) share the same `files` /
-  `exclude` class for `*.md` / `*.mdc` (parity with reusable CI). Escape hatch only: `SKIP=prettier-md` or
-  `SKIP=markdownlint` (same class as other Node markdown hooks — not the normal workflow). `./scripts/quality-fix.sh`
-  runs `npm run format:md` (write) after the mutating pre-commit hooks so the check hook and fix script stay aligned —
-  Prettier is check-only in `.pre-commit-config.yaml`, not a rewrite hook.
+- Commit-stage `prettier-md` (`npm run format:md` write) and `markdownlint` (`npm run lint:md`) share the same `files` /
+  `exclude` class for `*.md` / `*.mdc`. Escape hatch only: `SKIP=prettier-md` or `SKIP=markdownlint` (same class as
+  other Node markdown hooks — not the normal workflow). Like `ruff-format`, Prettier rewrites on commit; re-stage
+  changed Markdown. Reusable code-quality / `./scripts/quality-check.sh` stay on `npm run format:md:check` (gate is
+  check-only). `./scripts/quality-fix.sh` runs the `prettier-md` hook with the other autofix hooks.
 - CST bake target / image tag come from env (`CST_BAKE_*`), not from a product-hardcoded hook entry.
 - pytest uses product `pyproject.toml` discovery; the shared pre-push hook runs
   `uv run pytest -m "not system_external and not system_local"` (see [Pre-push pytest scope](#pre-push-pytest-scope)).

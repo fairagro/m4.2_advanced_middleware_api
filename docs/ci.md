@@ -365,8 +365,8 @@ adopter follow-up: [harvester#299](https://github.com/fairagro/m4.2_middleware_h
 
 **Markdown (Prettier / markdownlint):** when `skip` is false, the job requires root `package.json` + `package-lock.json`
 (synced from Devinfra), installs Node from the caller’s `versions.env` (`NODE_VERSION`), runs `npm ci`, then
-`npm run format:md:check` and `npm run lint:md` against the same shared configs as commit-stage hooks. Missing manifests
-fail the job (no soft-skip).
+`npm run format:md:check` and `npm run lint:md` against the same shared configs as commit-stage hooks (commit-stage
+Prettier writes via `format:md`; CI stays check-only). Missing manifests fail the job (no soft-skip).
 
 Python version comes from the caller’s `versions.env` (`PYTHON_VERSION`) plus matching `.python-version` — there is no
 version override input.

@@ -29,13 +29,13 @@ echo "Starting Code Quality Fixes (pre-commit autofix hooks)..."
 echo "================================="
 
 # Hooks that rewrite files (same IDs / config as .pre-commit-config.yaml).
-# ruff-fix exits 1 when it rewrote files — expected for a fix script.
-# prettier-md is check-only in pre-commit; write via npm below (respects .prettierignore).
+# ruff-fix / prettier-md exit 1 when they rewrote files — expected for a fix script.
 autofix_hooks=(
   trailing-whitespace
   end-of-file-fixer
   ruff-fix
   ruff-format
+  prettier-md
 )
 
 worst_code=0
@@ -49,20 +49,6 @@ for hook in "${autofix_hooks[@]}"; do
     worst_code="${code}"
   fi
 done
-
-# Prettier write is not a mutating pre-commit hook (prettier-md is format:md:check only).
-# Without this, trailing-whitespace/EOF can leave Markdown that still fails the commit gate.
-if [ -f "${repo_root}/package.json" ] && command -v npm >/dev/null 2>&1; then
-  echo -e "${YELLOW}prettier format:md (write)...${NC}"
-  set +e
-  npm run format:md
-  prettier_code=$?
-  set -e
-  if [ "${prettier_code}" -ne 0 ]; then
-    echo -e "${RED}prettier format:md failed (exit ${prettier_code}).${NC}"
-    exit "${prettier_code}"
-  fi
-fi
 
 if [ "${worst_code}" -eq 0 ]; then
   echo -e "${GREEN}Autofix hooks completed (no further changes).${NC}"
