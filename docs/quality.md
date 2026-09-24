@@ -171,6 +171,11 @@ Devinfra is SoT (`npm run format:md:skills` bypasses the ignore); products must 
 Product-owned `openspec/**` prose stays Prettier-checked (not ignored). Old guidance that opsx Markdown was “NOT
 ignored” for Prettier is obsolete.
 
+**OpenSpec propose → Prettier:** `/opsx-propose` / `.cursor/skills/openspec-propose/SKILL.md` MUST finish with a scoped
+Prettier write on `openspec/changes/<name>/` so new change artifacts pass `format:md:check` without a second manual
+format turn. Do not ignore `openspec/changes/**` to silence that gate. Note: `openspec update` may regenerate opsx
+skills/commands and wipe the skill patch — re-apply or upstream after update.
+
 ## Shared pre-commit config (verbatim sync)
 
 [`.pre-commit-config.yaml`](../.pre-commit-config.yaml) is on the sync allowlist
