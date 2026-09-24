@@ -11,6 +11,9 @@ from m42_ai.gh import GhError, repo_owner_name, run_gh, run_git
 
 AI_AUTHOR_RE = re.compile(r"copilot|bugbot|cursor", re.IGNORECASE)
 
+# GitHub Code Quality review-bot login (PR review threads; distinct from finding dismiss).
+CODE_QUALITY_AUTHORS = frozenset({"github-code-quality"})
+
 # Stable marker for first-party `/code-review` COMMENT bodies (often under a human login).
 CODE_REVIEW_MARKER = "<!-- m42-ai:code-review -->"
 
@@ -47,6 +50,174 @@ mutation($id:ID!) {
   }
 }
 """
+
+
+def is_code_quality_author(login: str | None) -> bool:
+    """True when the login is the GitHub Code Quality PR review bot."""
+    if not login:
+        return False
+    return login.strip().lower() in CODE_QUALITY_AUTHORS
+
+
+def fetch_code_quality_findings(
+    owner: str,
+    repo: str,
+    *,
+    cwd: Path | None = None,
+) -> list[dict[str, Any]]:
+    """Soft-fail GET of repository Code Quality findings (read-only REST).
+
+    Returns [] on any failure (missing API, auth, network). Never raises for API errors.
+    """
+    root = cwd or Path.cwd()
+    try:
+        proc = run_gh(
+            [
+                "api",
+                "-H",
+                "Accept: application/vnd.github+json",
+                "-H",
+                "X-GitHub-Api-Version: 2022-11-28",
+                f"/repos/{owner}/{repo}/code-quality/findings",
+            ],
+            cwd=root,
+        )
+    except GhError:
+        return []
+    try:
+        data = json.loads(proc.stdout or "[]")
+    except json.JSONDecodeError:
+        return []
+    if isinstance(data, list):
+        return [f for f in data if isinstance(f, dict)]
+    return []
+
+
+def _normalize_repo_path(path: str | None) -> str:
+    if not path:
+        return ""
+    return path.strip().lstrip("./").replace("\\", "/")
+
+
+def _finding_rule_bits(finding: dict[str, Any]) -> tuple[str, str]:
+    rule = finding.get("rule") if isinstance(finding.get("rule"), dict) else {}
+    rid = str(rule.get("id") or "").strip().lower()
+    title = str(rule.get("title") or "").strip().lower()
+    return rid, title
+
+
+def _finding_message_text(finding: dict[str, Any]) -> str:
+    msg = finding.get("message")
+    if isinstance(msg, dict):
+        return str(msg.get("text") or msg.get("markdown") or "").strip().lower()
+    return str(msg or "").strip().lower()
+
+
+def _findings_matching_path(findings: list[dict[str, Any]], norm_path: str) -> list[dict[str, Any]]:
+    matches: list[dict[str, Any]] = []
+    for finding in findings:
+        loc = finding.get("location") if isinstance(finding.get("location"), dict) else {}
+        fpath = _normalize_repo_path(str(loc.get("path") or ""))
+        if fpath == norm_path:
+            matches.append(finding)
+    return matches
+
+
+def _score_finding_against_body(finding: dict[str, Any], body_l: str) -> int:
+    """Heuristic score for how well a finding matches a review-comment body."""
+    rid, title = _finding_rule_bits(finding)
+    msg = _finding_message_text(finding)
+    score = 0
+    if title and title in body_l:
+        score += 3
+    if rid and rid in body_l:
+        score += 2
+    if title:
+        heading = title.split()[0]
+        if heading and f"## {heading}" in body_l:
+            score += 2
+        elif title.replace(" ", "") in body_l.replace(" ", ""):
+            score += 1
+    if msg:
+        frag = msg[:40].strip()
+        if len(frag) >= 12 and frag in body_l:
+            score += 2
+        for token in re.findall(r"'([^']+)'|\"([^\"]+)\"|`([^`]+)`", body_l):
+            name = next((t for t in token if t), "")
+            if name and name in msg:
+                score += 2
+                break
+    return score
+
+
+def _finding_summary(finding: dict[str, Any]) -> dict[str, Any]:
+    rid, _title = _finding_rule_bits(finding)
+    out: dict[str, Any] = {
+        "number": finding.get("number"),
+        "state": finding.get("state"),
+    }
+    if rid:
+        out["rule_id"] = rid
+    return out
+
+
+def _pick_unique_best(
+    scored: list[tuple[int, dict[str, Any]]],
+    path_matches: list[dict[str, Any]],
+) -> dict[str, Any] | None:
+    """Choose one finding from scored path matches, or None if ambiguous."""
+    best_score, best = scored[0]
+    if best_score <= 0:
+        return path_matches[0] if len(path_matches) == 1 else None
+    tied = [f for s, f in scored if s == best_score]
+    return best if len(tied) == 1 else None
+
+
+def correlate_code_quality_finding(
+    *,
+    path: str | None,
+    body: str,
+    findings: list[dict[str, Any]],
+) -> dict[str, Any] | None:
+    """Return a single best matching finding summary, or None if none/ambiguous.
+
+    Match order: path agreement required; then prefer rule title in body heading / message
+    overlap; if multiple path-only matches remain without a unique rule/message hit → None.
+    """
+    norm_path = _normalize_repo_path(path)
+    if not norm_path or not findings:
+        return None
+
+    path_matches = _findings_matching_path(findings, norm_path)
+    if not path_matches:
+        return None
+
+    body_l = (body or "").lower()
+    scored = [(_score_finding_against_body(f, body_l), f) for f in path_matches]
+    scored.sort(key=lambda t: t[0], reverse=True)
+    chosen = _pick_unique_best(scored, path_matches)
+    return _finding_summary(chosen) if chosen is not None else None
+
+
+def enrich_threads_with_code_quality_findings(
+    threads: list[dict[str, Any]],
+    findings: list[dict[str, Any]],
+) -> None:
+    """Mutate CQ-bot threads in place with ``code_quality_finding`` when correlatable."""
+    if not findings:
+        return
+    for thread in threads:
+        author = (thread.get("first_comment") or {}).get("author")
+        if not is_code_quality_author(author):
+            continue
+        body = (thread.get("first_comment") or {}).get("body") or ""
+        match = correlate_code_quality_finding(
+            path=thread.get("path"),
+            body=body,
+            findings=findings,
+        )
+        if match is not None:
+            thread["code_quality_finding"] = match
 
 
 def is_ai_author(login: str | None) -> bool:
@@ -321,6 +492,7 @@ def shape_review_open(
     payload: dict[str, Any],
     *,
     review_id: int | None = None,
+    code_quality_findings: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
     """Turn raw GraphQL into agent-facing open-work JSON (no policy decisions)."""
     repo = (payload.get("data") or {}).get("repository") or {}
@@ -351,6 +523,9 @@ def shape_review_open(
             },
             "comment_count": len(comments),
         })
+
+    if code_quality_findings:
+        enrich_threads_with_code_quality_findings(threads_out, code_quality_findings)
 
     all_reviews = list(pr["reviews"]["nodes"])
     # Finder reviews: bot AI authors and/or `/code-review` marker (often human login).
@@ -537,8 +712,13 @@ def fetch_review_open(
     payload = json.loads(proc.stdout)
     if payload.get("errors"):
         raise RuntimeError(f"GraphQL errors: {payload['errors']}")
+    findings = fetch_code_quality_findings(owner, repo, cwd=root)
     try:
-        shaped = shape_review_open(payload, review_id=review_id)
+        shaped = shape_review_open(
+            payload,
+            review_id=review_id,
+            code_quality_findings=findings or None,
+        )
     except RuntimeError:
         raise RuntimeError(f"pullRequest is null for {owner}/{repo}#{pr} (wrong number or no access)") from None
     if head_info is not None:

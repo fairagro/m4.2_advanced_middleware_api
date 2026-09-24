@@ -20,6 +20,10 @@ def _graphql_payload() -> str:
     return json.dumps(data)
 
 
+def _is_code_quality_findings_api(args: list[str]) -> bool:
+    return any(isinstance(a, str) and a.endswith("/code-quality/findings") for a in args)
+
+
 def test_ensure_pr_head_checkouts_when_clean_wrong_branch(tmp_path: Path) -> None:
     state = {"branch": "main"}
 
@@ -126,6 +130,8 @@ def test_fetch_review_open_includes_head_fields(tmp_path: Path) -> None:
             return MagicMock(stdout="")
         if args[:2] == ["api", "graphql"]:
             return MagicMock(stdout=_graphql_payload())
+        if _is_code_quality_findings_api(args):
+            return MagicMock(stdout="[]")
         raise AssertionError(args)
 
     with (

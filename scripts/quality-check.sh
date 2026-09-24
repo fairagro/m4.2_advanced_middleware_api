@@ -46,7 +46,7 @@ code=$?
 # Format gate without mutating (the ruff-format hook rewrites; skipped above).
 if [ -d middleware ]; then
   echo -e "${YELLOW}ruff format --check middleware/...${NC}"
-  uv run ruff format --check --config ruff.toml middleware/
+  bash scripts/run-quality-cli.sh ruff format --check --config ruff.toml middleware/
   fmt_code=$?
   # Keep the first non-zero exit (pre-commit) so CI does not only see the format gate code.
   if [ "${fmt_code}" -ne 0 ] && [ "${code}" -eq 0 ]; then

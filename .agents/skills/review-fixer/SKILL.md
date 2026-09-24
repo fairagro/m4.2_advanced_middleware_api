@@ -116,10 +116,14 @@ do not invent them. Never ask the user to paste a PAT into chat.
 After the [First hard gate](#first-hard-gate-when-a-pr-is-known) succeeds (do not dump raw GraphQL into context). The
 JSON already filters to **unresolved review threads from any author** (`unresolved_ai_threads` — key kept for compat)
 and **summary-only findings** (`summary_only_findings` / each entry in `ai_reviews`): Copilot/Bugbot/Cursor suppressed
-packing **and** first-party `/code-review` reports (`<!-- m42-ai:code-review -->` + findings table), not only the latest
-submission — Copilot “Suppressed comments” and code-review COMMENT bodies often have no thread and would be missed if a
-later review became “latest”. Optional `--review-id` scopes review bodies when the user gave a
-`/pull/N#pullrequestreview-ID` permalink. Docs: [`scripts/ai/README.md`](../../../scripts/ai/README.md).
+packing **and** first-party `/code-review` reports (`<!-- m42-ai:code-review -->` + Findings index table, with or
+without numbered human-readable blocks), not only the latest submission — Copilot “Suppressed comments” and code-review
+COMMENT bodies often have no thread and would be missed if a later review became “latest”. Optional `--review-id` scopes
+review bodies when the user gave a `/pull/N#pullrequestreview-ID` permalink. CQ bot threads MAY include
+`code_quality_finding` (`number`, `state`, optional `rule_id`) when `review-open` correlated the read-only findings API
+— treat `state: open` as gate risk even after thread resolve (see
+[GitHub Code Quality](../../../docs/review-fixer.md#github-code-quality-findings)). Docs:
+[`scripts/ai/README.md`](../../../scripts/ai/README.md).
 
 **Open work** (this is the only set you triage unless the user pasted a specific review URL):
 
@@ -307,6 +311,13 @@ non-nit this run** (integer), and **Remaining risk** (integer, merge channel). I
 explicitly that the **review cycle should stop** (abort criterion). If Fixed non-nit ≥ 1, do **not** abort — note that
 another finder pass is allowed after the fixes land. If any `fix` — “paused for your commit” with a suggested message.
 Do not claim Fixed replies are done yet.
+
+**GitHub Code Quality:** Threads from `github-code-quality` (see `code_quality_finding` on `review-open` JSON when
+enriched) are still open work, but **thread resolve ≠ Code Quality Dismiss finding**. After `dismiss` / `fix` +
+`resolveReviewThread` on those threads, Phase 1 MUST explicitly state that **manual Dismiss finding** in the PR UI (or a
+real code fix + re-scan) is still required while a linked finding stays `state: open` (or when enrichment is missing but
+CQ findings may remain open). Do **not** claim Remaining risk / open work is clear solely because those conversation
+threads were resolved. There is no agent dismiss API yet (#219).
 
 **End of Phase 2:** which Fixed replies/resolves succeeded and the SHA used; repeat **Fixed non-nit this run** and
 whether the cycle should stop or may continue.
