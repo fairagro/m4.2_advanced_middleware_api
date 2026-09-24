@@ -9,18 +9,18 @@ Issue: [#171](https://github.com/fairagro/m4.2_middleware_devinfra/issues/171) (
 
 ## Relationship
 
-| Skill           | Role                                                                        |
-| --------------- | --------------------------------------------------------------------------- |
-| `/code-review`  | **Produce** a first-party review (numbered findings + Findings index table) |
-| `/review-fixer` | **Consume** Copilot/Bugbot threads **and** `/code-review` summaries         |
-| `/create-issue` | Optional hand-off for Medium+ deferrals                                     |
+| Skill           | Role                                                                       |
+| --------------- | -------------------------------------------------------------------------- |
+| `/code-review`  | **Produce** a first-party review (numbered findings with **Path** bullets) |
+| `/review-fixer` | **Consume** Copilot/Bugbot threads **and** `/code-review` summaries        |
+| `/create-issue` | Optional hand-off for Medium+ deferrals                                    |
 
 ## Inputs / outputs
 
 - **Local:** `m42-ai code-review-context --base main` → review → `code-review-report-write` → `/tmp/code-review-*.md`
-  (no GitHub write). Report body MUST start with `<!-- m42-ai:code-review -->`, use **numbered finding blocks** for
-  humans, and include a compact **Findings index** Markdown table (`path` column) for `/review-fixer` (same findings in
-  both). Legacy table-only bodies remain readable by the extractor.
+  (no GitHub write). Report body MUST start with `<!-- m42-ai:code-review -->` and use **numbered finding blocks** with
+  a **Path** bullet each (no Findings index table). `/review-fixer` extracts from those Path bullets; legacy table-only
+  bodies remain readable by the extractor.
 - **PR:** same checklist; `code-review-publish --pr N` submits a formal COMMENT Pull Request Review
   (`gh pr review --comment`). Falls back to a conversation comment only if review submit fails.
 
