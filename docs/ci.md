@@ -143,6 +143,11 @@ default and may be omitted there.
 - **Vulnerabilities (gate):** `reusable-check` **Security Check** keeps failing on CRITICAL/HIGH vulns (SARIF upload
   unchanged). Do not treat license policy as a reason to relax vuln gates.
 
+**Python lockfile / env (separate gate):** `reusable-code-quality` runs `./scripts/run-uv-audit.sh`
+(`uv audit --frozen`) and enables `UV_MALWARE_CHECK` on `uv sync`. That is the fleet lockfile CVE / malware layer — not
+a substitute for Trivy on images. See
+[Lockfile CVEs vs Trivy vs malware check](quality.md#lockfile-cves-vs-trivy-vs-malware-check) in `docs/quality.md`.
+
 Bump the product `uses:` ref after this policy lands so callers pick up report-only Licence Check.
 
 ### Feature PR (Docker build + check)
@@ -334,13 +339,25 @@ custom `tag_prefix` breaks Helm `appVersion` lookup unless you also change Helm 
 
 ### `reusable-code-quality.yml`
 
-| Input                 | Default      | Purpose                                                                              |
-| --------------------- | ------------ | ------------------------------------------------------------------------------------ |
-| `python_package_root` | `middleware` | Path for ruff / pylint / mypy / bandit / vulture / pytest (import-linter via runner) |
-| `mypy_path`           | `""`         | Optional colon-separated `MYPYPATH` (stubs + src roots); empty = default             |
-| `pylint_source_roots` | `""`         | Optional comma-separated pylint `--source-roots`                                     |
-| `components`          | (optional)   | Accepted for caller compatibility; unused by this workflow                           |
-| `skip`                | `false`      | Successful no-op (keeps required check names green)                                  |
+| Input                 | Default                     | Purpose                                                                                                                     |
+| --------------------- | --------------------------- | --------------------------------------------------------------------------------------------------------------------------- |
+| `python_package_root` | `middleware`                | Path for ruff / pylint / mypy / bandit / vulture / pytest (import-linter uses product `.importlinter`)                      |
+| `mypy_path`           | `""`                        | Optional colon-separated `MYPYPATH`; empty → load `MYPYPATH=` from `quality_env_file` when present                          |
+| `pylint_source_roots` | `""`                        | Optional comma-separated pylint `--source-roots`; empty → load `PYLINT_SOURCE_ROOTS=` from `quality_env_file` when present  |
+| `quality_env_file`    | `.devcontainer/product.env` | Product-owned env file for those keys (soft-skip if missing). Prefer this over duplicating literals in every caller `with:` |
+| `components`          | (optional)                  | Accepted for caller compatibility; unused by this workflow                                                                  |
+| `skip`                | `false`                     | Successful no-op (keeps required check names green)                                                                         |
+
+**Single-source path overlays:** put `MYPYPATH=` and optionally `PYLINT_SOURCE_ROOTS=` in `.devcontainer/product.env`
+(product overlay — not synced). Omit empty `mypy_path` / `pylint_source_roots` from caller workflows so CI and local
+hooks share one file. Non-empty workflow inputs still override the file. Synced
+[`scripts/run-quality-cli.sh`](../scripts/run-quality-cli.sh) re-reads the same file on each invoke when those vars are
+unset (Compose `env_file` alone only applies at container create — see [devcontainer.md](devcontainer.md)). Product
+adopter follow-up: [harvester#299](https://github.com/fairagro/m4.2_middleware_harvester/issues/299).
+
+**uv audit / malware check:** when `skip` is false, the job runs `uv sync` with `UV_MALWARE_CHECK=1` and
+`./scripts/run-uv-audit.sh` (frozen lockfile; optional caller `.uv-audit-ignore`). See
+[quality.md](quality.md#lockfile-cves-vs-trivy-vs-malware-check).
 
 **pytest vs pre-push:** this workflow runs `uv run pytest "${PKG}" …` **without** the synced pre-push marker filter
 (`-m "not system_external and not system_local"`). CI stays the broader gate; local push excludes `system_*` by default
