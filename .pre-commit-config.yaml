@@ -108,8 +108,8 @@ repos:
         pass_filenames: false
 
       - id: prettier-md
-        name: prettier format:md:check
-        entry: npm run format:md:check
+        name: prettier format:md
+        entry: npm run format:md
         language: system
         files: \.(md|mdc)$
         pass_filenames: false

@@ -32,8 +32,8 @@ NC='\033[0m'
 
 # Mutating commit-stage hooks — quality-fix.sh / git commit; not this check script.
 # pre-commit SKIP is a comma-separated list of hook ids.
-# ruff-format writes files; verify formatting separately with --check below.
-export SKIP="${SKIP:+${SKIP},}trailing-whitespace,end-of-file-fixer,ruff-fix,ruff-format"
+# ruff-format / prettier-md write files; verify formatting separately with --check below.
+export SKIP="${SKIP:+${SKIP},}trailing-whitespace,end-of-file-fixer,ruff-fix,ruff-format,prettier-md"
 
 echo "Starting Code Quality Checks (pre-commit, commit stage, non-mutating)..."
 echo "=================================="
@@ -43,7 +43,7 @@ set +e
 uv run pre-commit run --all-files
 code=$?
 
-# Format gate without mutating (the ruff-format hook rewrites; skipped above).
+# Format gate without mutating (the ruff-format / prettier-md hooks rewrite; skipped above).
 if [ -d middleware ]; then
   echo -e "${YELLOW}ruff format --check middleware/...${NC}"
   bash scripts/run-quality-cli.sh ruff format --check --config ruff.toml middleware/
@@ -51,6 +51,14 @@ if [ -d middleware ]; then
   # Keep the first non-zero exit (pre-commit) so CI does not only see the format gate code.
   if [ "${fmt_code}" -ne 0 ] && [ "${code}" -eq 0 ]; then
     code="${fmt_code}"
+  fi
+fi
+if [ -f "${repo_root}/package.json" ] && command -v npm >/dev/null 2>&1; then
+  echo -e "${YELLOW}prettier format:md:check...${NC}"
+  npm run format:md:check
+  prettier_code=$?
+  if [ "${prettier_code}" -ne 0 ] && [ "${code}" -eq 0 ]; then
+    code="${prettier_code}"
   fi
 fi
 set -e
