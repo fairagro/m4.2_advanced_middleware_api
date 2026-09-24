@@ -6,28 +6,26 @@ The API component of the advanced middleware that accepts ARCs in RO-Create form
 
 ### Required GitHub Secrets
 
-The following secrets must be configured in **Settings → Secrets and variables → Actions**
-before the CI/CD pipelines can publish artefacts.
+The following secrets must be configured in **Settings → Secrets and variables → Actions** before the CI/CD pipelines
+can publish artefacts.
 
-| Secret | Used by | Required | Description |
-| ------ | ------- | -------- | ----------- |
-| `RENOVATE_TOKEN` | `renovate.yml` | Yes | Fine-grained PAT for the Renovate bot. Needs: Contents (R/W), Pull requests (R/W), Workflows (R/W), Issues (R/W), Metadata (R). |
-| `DOCKERHUB_USER` | `reusable-release.yml`, `helm-release.yml` | Optional | DockerHub username. If absent, Docker pushes are skipped. |
-| `DOCKERHUB_TOKEN` | `reusable-release.yml`, `helm-release.yml` | Optional | DockerHub access token. If absent, Docker pushes are skipped. |
-| `PYPI_TOKEN` | `reusable-release.yml` | Optional | PyPI API token for publishing `fairagro-middleware-shared` and `fairagro-middleware-api-client` on final releases. If absent, PyPI publish is skipped. |
-| `TEST_PYPI_TOKEN` | `reusable-release.yml` | Optional | TestPyPI API token for pre-release publishes from feature branches. If absent, TestPyPI publish is skipped. |
+| Secret            | Used by                                    | Required | Description                                                                                                                                            |
+| ----------------- | ------------------------------------------ | -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `RENOVATE_TOKEN`  | `renovate.yml`                             | Yes      | Fine-grained PAT for the Renovate bot. Needs: Contents (R/W), Pull requests (R/W), Workflows (R/W), Issues (R/W), Metadata (R).                        |
+| `DOCKERHUB_USER`  | `reusable-release.yml`, `helm-release.yml` | Optional | DockerHub username. If absent, Docker pushes are skipped.                                                                                              |
+| `DOCKERHUB_TOKEN` | `reusable-release.yml`, `helm-release.yml` | Optional | DockerHub access token. If absent, Docker pushes are skipped.                                                                                          |
+| `PYPI_TOKEN`      | `reusable-release.yml`                     | Optional | PyPI API token for publishing `fairagro-middleware-shared` and `fairagro-middleware-api-client` on final releases. If absent, PyPI publish is skipped. |
+| `TEST_PYPI_TOKEN` | `reusable-release.yml`                     | Optional | TestPyPI API token for pre-release publishes from feature branches. If absent, TestPyPI publish is skipped.                                            |
 
 > `GITHUB_TOKEN` is provided automatically by GitHub Actions and does not need to be configured.
 
 ### Local personal tokens (not committed)
 
-`GH_TOKEN` and `GITGUARDIAN_API_KEY` are prompted on a TTY when missing
-(`gh` / `git` via `scripts/bin`, or `./scripts/quality-check.sh`). Empty input
-skips and is remembered. Re-prompt with `./scripts/set-dev-tokens.sh` (or
-`source` it to export in the current shell). They are stored in
-`/commandhistory/tokens.env` in the Dev Container (bashhistory volume — survives
-rebuilds) or `~/.config/middleware-api/tokens.env` on a local clone. Dev Container
-PATH already includes `.venv/bin` and `scripts/bin`; product env overlays
-(`MYPYPATH`, `CST_BAKE_TARGET`) live in `.devcontainer/product.env`.
+`GH_TOKEN` and `GITGUARDIAN_API_KEY` are prompted on a TTY when missing (`gh` / `git` via `scripts/bin`, or
+`./scripts/quality-check.sh`). Empty input skips and is remembered. Re-prompt with `./scripts/set-dev-tokens.sh` (or
+`source` it to export in the current shell). They are stored in `/commandhistory/tokens.env` in the Dev Container
+(bashhistory volume — survives rebuilds) or `~/.config/middleware-api/tokens.env` on a local clone. Dev Container PATH
+already includes `.venv/bin` and `scripts/bin`; product env overlays (`MYPYPATH`, `CST_BAKE_TARGET`) live in
+`.devcontainer/product.env`.
 
 Do not put personal PATs in `.env.integration.enc` — that file is team-shared.

@@ -17,8 +17,8 @@ Client (may retry on ConnectError)
 
 ## Key Decisions
 
-1. **Identical re-submit returns `200`, not `409`** — A client that loses the original response can retry normally. `200
-   UPDATED` lets API clients safely retry a transport failure without treating a successful submission as
+1. **Identical re-submit returns `200`, not `409`** — A client that loses the original response can retry normally.
+   `200 UPDATED` lets API clients safely retry a transport failure without treating a successful submission as
    catastrophic harvest failure.
 
 2. **Conflicting content remains `409`** — ARC content for one identifier is immutable within a harvest. Clients that

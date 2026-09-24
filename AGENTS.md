@@ -1,22 +1,22 @@
 # AGENTS.md - Instructions for AI Assistants
 
-This file contains critical context about the FAIRagro Advanced Middleware API
-project for AI assistants (GitHub Copilot, Claude, etc.).
+This file contains critical context about the FAIRagro Advanced Middleware API project for AI assistants (GitHub
+Copilot, Claude, etc.).
 
 ## 📋 Tech Stack
 
-| Component | Version | Details |
-| --------- | ------- | ------- |
-| Python | `versions.env` → `PYTHON_VERSION` | Patch pin; `.python-version` mirrored (Renovate + `load-versions-env.sh`) |
-| Alpine | `versions.env` → `ALPINE_VERSION` | Patch pin; minor derived for `python:*-alpine*` / apk |
-| Toolchain | `versions.env` | uv, pip, kubectl, helm, … (see file) |
-| FastAPI | Latest | REST API framework |
-| Pydantic | V2 | Configuration validation |
-| Celery | Latest | Async task queue (GitLab sync worker) |
-| CouchDB | Latest | Fast document store (ARC + harvest metadata) |
-| RabbitMQ | Latest | Message broker for Celery |
-| Docker | Latest | Containerization |
-| uv | Latest | Python package manager |
+| Component | Version                           | Details                                                                   |
+| --------- | --------------------------------- | ------------------------------------------------------------------------- |
+| Python    | `versions.env` → `PYTHON_VERSION` | Patch pin; `.python-version` mirrored (Renovate + `load-versions-env.sh`) |
+| Alpine    | `versions.env` → `ALPINE_VERSION` | Patch pin; minor derived for `python:*-alpine*` / apk                     |
+| Toolchain | `versions.env`                    | uv, pip, kubectl, helm, … (see file)                                      |
+| FastAPI   | Latest                            | REST API framework                                                        |
+| Pydantic  | V2                                | Configuration validation                                                  |
+| Celery    | Latest                            | Async task queue (GitLab sync worker)                                     |
+| CouchDB   | Latest                            | Fast document store (ARC + harvest metadata)                              |
+| RabbitMQ  | Latest                            | Message broker for Celery                                                 |
+| Docker    | Latest                            | Containerization                                                          |
+| uv        | Latest                            | Python package manager                                                    |
 
 ## 📁 Project Structure
 
@@ -175,26 +175,24 @@ config2 = Config(
 
 **Setup Process**:
 
-1. Synced `scripts/devcontainer-post-create.sh` (Dev Container `postCreateCommand`) runs
-   `uv sync --dev --all-packages`, installs pre-commit / `setup-git-hooks.sh`, and decrypts
-   `.env.integration.enc` → `.env` (file only — no bashrc auto-source)
-2. Bashrc-free shell init ([Devinfra #58](https://github.com/fairagro/m4.2_middleware_devinfra/issues/58)):
-   synced `remoteEnv.PATH` prepends `.venv/bin` + `scripts/bin`; product overlays
-   (`MYPYPATH`, `CST_BAKE_TARGET`) live in `.devcontainer/product.env` — do **not** reintroduce
-   `load-env.sh` / bashrc mutation
+1. Synced `scripts/devcontainer-post-create.sh` (Dev Container `postCreateCommand`) runs `uv sync --dev --all-packages`,
+   installs pre-commit / `setup-git-hooks.sh`, and decrypts `.env.integration.enc` → `.env` (file only — no bashrc
+   auto-source)
+2. Bashrc-free shell init ([Devinfra #58](https://github.com/fairagro/m4.2_middleware_devinfra/issues/58)): synced
+   `remoteEnv.PATH` prepends `.venv/bin` + `scripts/bin`; product overlays (`MYPYPATH`, `CST_BAKE_TARGET`) live in
+   `.devcontainer/product.env` — do **not** reintroduce `load-env.sh` / bashrc mutation
 3. After path/venv drift: `scripts/install-dev-hooks.sh` (`uv sync --dev --all-packages` + hooks)
 4. Do **not** hand-edit allowlisted synced paths (including postCreate / `devcontainer.json`)
 
-**Bake / CST (Wave C):** Root `docker-bake.hcl` target `api` builds via synced
-`docker/Dockerfile.product-app.base` + thin `docker/Dockerfile.api`. Local smoke:
-`source versions.env` (or `scripts/load-versions-env.sh`) then
-`docker buildx bake api`. Pre-push CST uses `CST_BAKE_TARGET=api` (from
-`.devcontainer/product.env` / shell env when the Bake file exists).
+**Bake / CST (Wave C):** Root `docker-bake.hcl` target `api` builds via synced `docker/Dockerfile.product-app.base` +
+thin `docker/Dockerfile.api`. Local smoke: `source versions.env` (or `scripts/load-versions-env.sh`) then
+`docker buildx bake api`. Pre-push CST uses `CST_BAKE_TARGET=api` (from `.devcontainer/product.env` / shell env when the
+Bake file exists).
 
-**CI callers:** Feature/pre-release/release use Devinfra
-`reusable-{code-quality,build,release}`; check temporarily uses product-local
-`reusable-check-local.yml` until [devinfra#74](https://github.com/fairagro/m4.2_middleware_devinfra/issues/74).
-Do **not** hand-edit allowlisted synced paths.
+**CI callers:** Feature/pre-release/release use Devinfra `reusable-{code-quality,build,release}`; check temporarily uses
+product-local `reusable-check-local.yml` until
+[devinfra#74](https://github.com/fairagro/m4.2_middleware_devinfra/issues/74). Do **not** hand-edit allowlisted synced
+paths.
 
 **Git LFS:** not used (no tracking in `.gitattributes`, no `setup-git-lfs.sh`, no LFS hooks).
 
@@ -249,55 +247,43 @@ uv run pytest middleware/shared/tests/unit/test_config_wrapper.py::test_parse_pr
 
 ## ✨ Code Quality Standards
 
-Agents are expected to maintain high code quality by addressing issues reported
-by the project's configured tools: **Ruff, Pylance, MyPy, Pylint, and Bandit**.
+Agents are expected to maintain high code quality by addressing issues reported by the project's configured tools:
+**Ruff, Pylance, MyPy, Pylint, and Bandit**.
 
-- **Automatic Fixes**: Actively check for and fix code smells, warnings, and
-  notices.
-- **Real Fixes vs. Suppression**: Issues must be resolved with actual code
-  changes. Using comments to suppress warnings (e.g., `# noqa`,
-  `# type: ignore`, `# pylint: disable`) is an **option of last resort**.
-- **When to Suppress**: Only suppress if a fix is technically impossible or
-  would result in unnecessarily complex or unreadable code.
-- **Comprehensive Coverage**: Fix all reported issues, including low-severity
-  notices and warnings, not just critical errors.
+- **Automatic Fixes**: Actively check for and fix code smells, warnings, and notices.
+- **Real Fixes vs. Suppression**: Issues must be resolved with actual code changes. Using comments to suppress warnings
+  (e.g., `# noqa`, `# type: ignore`, `# pylint: disable`) is an **option of last resort**.
+- **When to Suppress**: Only suppress if a fix is technically impossible or would result in unnecessarily complex or
+  unreadable code.
+- **Comprehensive Coverage**: Fix all reported issues, including low-severity notices and warnings, not just critical
+  errors.
 
 ### Ruff Execution Consistency
 
-- Keep Ruff behavior identical in Cursor/VS Code, pre-commit, and GitHub Actions
-  by using the same scope (`middleware/`), the same **workspace-root** config
-  (`ruff.toml` — not `middleware/*/pyproject.toml`), and the same binary
-  (`.venv/bin/ruff` via `uv run ruff --config ruff.toml`).
-- Editor: `.vscode/settings.json` must set `ruff.path` to
-  `${workspaceFolder}/.venv/bin/ruff`, `ruff.configuration` to
-  `${workspaceFolder}/ruff.toml`, and `ruff.configurationPreference` to
-  `editorOnly`. Do **not** set `ruff.path` to `["uv", "run", "ruff"]` — those
-  entries are treated as executables, so `uv` would be launched as Ruff and
-  Problems stays empty.
-- Do **not** put `[tool.ruff]` back into root or package `pyproject.toml`
-  (fragments are the single source — see `docs/quality.md`).
-- Lint diagnostics appear in Problems; **format** drift does not (Ruff applies
-  format via Format on Save / `ruff format`). Before commit, run
-  `./scripts/quality-fix.sh` then `./scripts/quality-check.sh` (both wrap
-  pre-commit commit-stage hooks), or `uv run pre-commit run --all-files`, or
-  terminal `git commit`. CI quality steps call Devinfra
-  `reusable-code-quality.yml` (product `with:` overlays for `MYPYPATH` /
-  pylint `--source-roots`; may SHA-pin until upstream inputs land on `main`).
-  Note: Cursor Source Control may skip git hooks (≥3.15.6: forces
-  `core.hooksPath=/dev/null`). Dev Container `remoteEnv` prepends
-  `scripts/bin` so SCM uses `scripts/cursor-git.sh`, which strips that pin.
-  Terminal `git` is unaffected. Remove once Cursor fixes #167719.
-- Avoid partially staging a Python file (`MM` in `git status`): pre-commit may
-  auto-format the index, then roll back when the stash conflicts with unstaged
-  edits — leaving format failures invisible in the editor.
-- If `uv run ruff ...` fails before Ruff starts and shows
-  `packaging.version.InvalidVersion` from `hatch-vcs`, the failure is in
-  package version resolution, not Ruff itself.
-- In that case, verify `tool.hatch.version.raw-options` in
-  `middleware/*/pyproject.toml` can parse repository tags used by CI/release
-  workflows.
-- Agent / no-TTY `GH_TOKEN` shadow: `env -u GH_TOKEN gh …` /
-  `env -u GH_TOKEN uv run --project scripts/ai m42-ai …` (devinfra#69).
+- Keep Ruff behavior identical in Cursor/VS Code, pre-commit, and GitHub Actions by using the same scope
+  (`middleware/`), the same **workspace-root** config (`ruff.toml` — not `middleware/*/pyproject.toml`), and the same
+  binary (`.venv/bin/ruff` via `uv run ruff --config ruff.toml`).
+- Editor: `.vscode/settings.json` must set `ruff.path` to `${workspaceFolder}/.venv/bin/ruff`, `ruff.configuration` to
+  `${workspaceFolder}/ruff.toml`, and `ruff.configurationPreference` to `editorOnly`. Do **not** set `ruff.path` to
+  `["uv", "run", "ruff"]` — those entries are treated as executables, so `uv` would be launched as Ruff and Problems
+  stays empty.
+- Do **not** put `[tool.ruff]` back into root or package `pyproject.toml` (fragments are the single source — see
+  `docs/quality.md`).
+- Lint diagnostics appear in Problems; **format** drift does not (Ruff applies format via Format on Save /
+  `ruff format`). Before commit, run `./scripts/quality-fix.sh` then `./scripts/quality-check.sh` (both wrap pre-commit
+  commit-stage hooks), or `uv run pre-commit run --all-files`, or terminal `git commit`. CI quality steps call Devinfra
+  `reusable-code-quality.yml` (product `with:` overlays for `MYPYPATH` / pylint `--source-roots`; may SHA-pin until
+  upstream inputs land on `main`). Note: Cursor Source Control may skip git hooks (≥3.15.6: forces
+  `core.hooksPath=/dev/null`). Dev Container `remoteEnv` prepends `scripts/bin` so SCM uses `scripts/cursor-git.sh`,
+  which strips that pin. Terminal `git` is unaffected. Remove once Cursor fixes #167719.
+- Avoid partially staging a Python file (`MM` in `git status`): pre-commit may auto-format the index, then roll back
+  when the stash conflicts with unstaged edits — leaving format failures invisible in the editor.
+- If `uv run ruff ...` fails before Ruff starts and shows `packaging.version.InvalidVersion` from `hatch-vcs`, the
+  failure is in package version resolution, not Ruff itself.
+- In that case, verify `tool.hatch.version.raw-options` in `middleware/*/pyproject.toml` can parse repository tags used
+  by CI/release workflows.
+- Agent / no-TTY `GH_TOKEN` shadow: `env -u GH_TOKEN gh …` / `env -u GH_TOKEN uv run --project scripts/ai m42-ai …`
+  (devinfra#69).
 
 ## 📚 File Modifications Pattern
 
@@ -311,15 +297,12 @@ When editing files:
 ## 🏗️ Architecture & Design
 
 **Read [`openspec/principles.global.md`](openspec/principles.global.md) first**, then
-[`openspec/principles.md`](openspec/principles.md). Global owns Type Safety /
-Supported environment / shared Values; local owns stack, module graph, and
-scaling. Do not restate or weaken what is in `.global`.
+[`openspec/principles.md`](openspec/principles.md). Global owns Type Safety / Supported environment / shared Values;
+local owns stack, module graph, and scaling. Do not restate or weaken what is in `.global`.
 
-Specs follow [OpenSpec](https://openspec.dev/): current behaviour lives in
-`openspec/specs/<domain>/`; proposed work lives in `openspec/changes/`.
-Use `/opsx-propose` for new work. Stable architecture notes may accompany a
-capability as `design.md`. Project conventions for agents live in
-`openspec/config.yaml` and this file (Spec-to-Code Mapping).
+Specs follow [OpenSpec](https://openspec.dev/): current behaviour lives in `openspec/specs/<domain>/`; proposed work
+lives in `openspec/changes/`. Use `/opsx-propose` for new work. Stable architecture notes may accompany a capability as
+`design.md`. Project conventions for agents live in `openspec/config.yaml` and this file (Spec-to-Code Mapping).
 
 Before generating or modifying code, read the relevant specs:
 
@@ -327,104 +310,93 @@ Before generating or modifying code, read the relevant specs:
 
 - **[`openspec/principles.global.md`](openspec/principles.global.md)** — Shared foundation (synced).
 - **[`openspec/principles.md`](openspec/principles.md)** — Product overlay (stack, modules, scaling).
-- **[`openspec/specs/ci-cd/`](openspec/specs/ci-cd/)** — GitHub Actions: PR validation, Docker/Helm releases, CodeQL scanning.
+- **[`openspec/specs/ci-cd/`](openspec/specs/ci-cd/)** — GitHub Actions: PR validation, Docker/Helm releases, CodeQL
+  scanning.
 
 **API capabilities** (`openspec/specs/`):
 
-- **[`openspec/specs/arc-upload/`](openspec/specs/arc-upload/)** — HTTP contract
-  for `POST /v3/arcs`: standalone ARC submission (rdi from request body);
-  content-hash idempotent, retry-safe.
-- **[`openspec/specs/harvest-arc-upload/`](openspec/specs/harvest-arc-upload/)**
-  — HTTP contract for `POST /v3/harvests/{harvest_id}/arcs`: harvest-scoped
-  submission; identical re-submit → `200`, conflicting content → `409`.
-- **[`openspec/specs/arc-manager/`](openspec/specs/arc-manager/)** —
-  `ArcManager.create_or_update_arc` business logic: CouchDB storage,
-  content-hash + harvest-scoped idempotency, Celery dispatch. Shared by both
-  upload endpoints and accessible from the worker context.
-- **[`openspec/specs/arc-store/`](openspec/specs/arc-store/)** — `ArcStore`
-  Git-backend interface: `GitRepo` (primary) and `GitlabApi` (deprecated),
-  error classification, and credential injection.
-- **[`openspec/specs/document-store/`](openspec/specs/document-store/)** —
-  CouchDB persistence layer, race-condition-safe initialization, and
-  content-hash idempotency.
-- **[`openspec/specs/arc-content-hash/`](openspec/specs/arc-content-hash/)** —
-  RO-Crate canonicalization contract for `content_hash` (volatile timestamps,
-  `@graph` / reference-list order, Keywords multisets).
-- **[`openspec/specs/harvest-manager/`](openspec/specs/harvest-manager/)** —
-  Harvest run lifecycle, ownership validation, and progress tracking.
-- **[`openspec/specs/admission-control/`](openspec/specs/admission-control/)** —
-  Process-local concurrent request admission: at capacity → `503` +
-  `Retry-After` (probes exempt).
-- **[`openspec/changes/helm-gateway-httproute/`](openspec/changes/helm-gateway-httproute/)**
-  (`helm-httproute` capability) — Optional Gateway API `HTTPRoute` in the product
-  Helm chart (dual-path with Ingress; cluster-agnostic `parentRefs`; no chart-owned
-  public hostname cert). Archives to `openspec/specs/helm-httproute/`.
+- **[`openspec/specs/arc-upload/`](openspec/specs/arc-upload/)** — HTTP contract for `POST /v3/arcs`: standalone ARC
+  submission (rdi from request body); content-hash idempotent, retry-safe.
+- **[`openspec/specs/harvest-arc-upload/`](openspec/specs/harvest-arc-upload/)** — HTTP contract for
+  `POST /v3/harvests/{harvest_id}/arcs`: harvest-scoped submission; identical re-submit → `200`, conflicting content →
+  `409`.
+- **[`openspec/specs/arc-manager/`](openspec/specs/arc-manager/)** — `ArcManager.create_or_update_arc` business logic:
+  CouchDB storage, content-hash + harvest-scoped idempotency, Celery dispatch. Shared by both upload endpoints and
+  accessible from the worker context.
+- **[`openspec/specs/arc-store/`](openspec/specs/arc-store/)** — `ArcStore` Git-backend interface: `GitRepo` (primary)
+  and `GitlabApi` (deprecated), error classification, and credential injection.
+- **[`openspec/specs/document-store/`](openspec/specs/document-store/)** — CouchDB persistence layer,
+  race-condition-safe initialization, and content-hash idempotency.
+- **[`openspec/specs/arc-content-hash/`](openspec/specs/arc-content-hash/)** — RO-Crate canonicalization contract for
+  `content_hash` (volatile timestamps, `@graph` / reference-list order, Keywords multisets).
+- **[`openspec/specs/harvest-manager/`](openspec/specs/harvest-manager/)** — Harvest run lifecycle, ownership
+  validation, and progress tracking.
+- **[`openspec/specs/admission-control/`](openspec/specs/admission-control/)** — Process-local concurrent request
+  admission: at capacity → `503` + `Retry-After` (probes exempt).
+- **[`openspec/changes/helm-gateway-httproute/`](openspec/changes/helm-gateway-httproute/)** (`helm-httproute`
+  capability) — Optional Gateway API `HTTPRoute` in the product Helm chart (dual-path with Ingress; cluster-agnostic
+  `parentRefs`; no chart-owned public hostname cert). Archives to `openspec/specs/helm-httproute/`.
 
 **API Client capabilities:**
 
-- **[`openspec/specs/harvest-client/`](openspec/specs/harvest-client/)** —
-  Harvest lifecycle: parallel ARC submission, per-item error collection
-  (`HarvestError`, `HarvestErrorType`), typed statistics (`HarvestStatistics`),
-  and compatibility shim for issue #240.
+- **[`openspec/specs/harvest-client/`](openspec/specs/harvest-client/)** — Harvest lifecycle: parallel ARC submission,
+  per-item error collection (`HarvestError`, `HarvestErrorType`), typed statistics (`HarvestStatistics`), and
+  compatibility shim for issue #240.
 
 **Shared capabilities:**
 
-- **[`openspec/specs/harvest-report/`](openspec/specs/harvest-report/)** —
-  Format-neutral harvest-run accumulator with repository scope counting and
-  pluggable serializers (JSON-LD first): `HarvestReport`, `RepositoryScope`,
+- **[`openspec/specs/harvest-report/`](openspec/specs/harvest-report/)** — Format-neutral harvest-run accumulator with
+  repository scope counting and pluggable serializers (JSON-LD first): `HarvestReport`, `RepositoryScope`,
   `RepositoryReport`, `HarvestIssue`.
 
-For the AI agent workflow documentation, see [`docs/ai_workflow.md`](docs/ai_workflow.md).
-For Copilot/Bugbot review triage, see [`docs/ai_review_policy.md`](docs/ai_review_policy.md),
+For the AI agent workflow documentation, see [`docs/ai_workflow.md`](docs/ai_workflow.md). For Copilot/Bugbot review
+triage, see [`docs/ai_review_policy.md`](docs/ai_review_policy.md),
 [`docs/surface-quality-bar.global.md`](docs/surface-quality-bar.global.md) /
-[`docs/surface-quality-bar.md`](docs/surface-quality-bar.md), and `/review-fixer`
-(plus `/create-issue`, `/issue-fixer`; plumbing via `uv run --project scripts/ai m42-ai …`).
+[`docs/surface-quality-bar.md`](docs/surface-quality-bar.md), and `/review-fixer` (plus `/create-issue`, `/issue-fixer`;
+plumbing via `uv run --project scripts/ai m42-ai …`).
 
 ### Spec-to-Code Mapping
 
-This table maps each OpenSpec domain to the primary source file(s) it describes.
-Agents (`/opsx-apply` and default Agent mode) use it to locate affected code.
+This table maps each OpenSpec domain to the primary source file(s) it describes. Agents (`/opsx-apply` and default Agent
+mode) use it to locate affected code.
 
-| Spec domain | Primary source file(s) |
-| ----------- | ---------------------- |
-| `openspec/specs/arc-manager/` | `middleware/api/src/middleware/api/business_logic/arc_manager.py` |
-| `openspec/specs/arc-store/` | `middleware/api/src/middleware/api/arc_store/git_repo/`, `gitlab_api/` (deprecated), `consolidated_git/`, `factory.py`, `resolution.py`, `arc_store_config.py`, `git_cli_settings.py`, `git_context.py`, `git_cache_cleanup.py` |
-| `openspec/specs/url-str/` | `middleware/shared/src/middleware/shared/security/url_str.py`, `url_redact.py` |
-| `openspec/specs/document-store/` | `middleware/api/src/middleware/api/document_store/couchdb_client.py`, `couchdb.py` |
-| `openspec/specs/arc-content-hash/` | `middleware/api/src/middleware/api/document_store/content_hash.py` |
-| `openspec/specs/harvest-manager/` | `middleware/api/src/middleware/api/business_logic/harvest_manager.py` |
-| `openspec/specs/arc-upload/` | `middleware/api/src/middleware/api/api/v3/arcs.py` |
-| `openspec/specs/harvest-arc-upload/` | `middleware/api/src/middleware/api/api/v3/harvests.py` |
-| `openspec/specs/admission-control/` | `middleware/api/src/middleware/api/api/admission_control.py`, `fastapi_app.py` |
-| `openspec/specs/harvest-client/` | `middleware/api_client/src/middleware/api_client/api_client.py`, `models.py` |
-| `openspec/specs/harvest-report/` | `middleware/shared/src/middleware/shared/report/`, `ns/harvest-report/` |
-| `openspec/specs/ci-cd/` | `.github/workflows/` (see domain design for workflow files) |
-| `openspec/specs/helm-httproute/` | `helmchart/fairagro-advanced-middleware-api-chart/templates/httproute.yaml`, `values.yaml` (`api.httpRoute`), `templates/NOTES.txt`; template overlay `helmchart/test_deploy/values-httproute.yaml` |
+| Spec domain                          | Primary source file(s)                                                                                                                                                                                                          |
+| ------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `openspec/specs/arc-manager/`        | `middleware/api/src/middleware/api/business_logic/arc_manager.py`                                                                                                                                                               |
+| `openspec/specs/arc-store/`          | `middleware/api/src/middleware/api/arc_store/git_repo/`, `gitlab_api/` (deprecated), `consolidated_git/`, `factory.py`, `resolution.py`, `arc_store_config.py`, `git_cli_settings.py`, `git_context.py`, `git_cache_cleanup.py` |
+| `openspec/specs/url-str/`            | `middleware/shared/src/middleware/shared/security/url_str.py`, `url_redact.py`                                                                                                                                                  |
+| `openspec/specs/document-store/`     | `middleware/api/src/middleware/api/document_store/couchdb_client.py`, `couchdb.py`                                                                                                                                              |
+| `openspec/specs/arc-content-hash/`   | `middleware/api/src/middleware/api/document_store/content_hash.py`                                                                                                                                                              |
+| `openspec/specs/harvest-manager/`    | `middleware/api/src/middleware/api/business_logic/harvest_manager.py`                                                                                                                                                           |
+| `openspec/specs/arc-upload/`         | `middleware/api/src/middleware/api/api/v3/arcs.py`                                                                                                                                                                              |
+| `openspec/specs/harvest-arc-upload/` | `middleware/api/src/middleware/api/api/v3/harvests.py`                                                                                                                                                                          |
+| `openspec/specs/admission-control/`  | `middleware/api/src/middleware/api/api/admission_control.py`, `fastapi_app.py`                                                                                                                                                  |
+| `openspec/specs/harvest-client/`     | `middleware/api_client/src/middleware/api_client/api_client.py`, `models.py`                                                                                                                                                    |
+| `openspec/specs/harvest-report/`     | `middleware/shared/src/middleware/shared/report/`, `ns/harvest-report/`                                                                                                                                                         |
+| `openspec/specs/ci-cd/`              | `.github/workflows/` (see domain design for workflow files)                                                                                                                                                                     |
+| `openspec/specs/helm-httproute/`     | `helmchart/fairagro-advanced-middleware-api-chart/templates/httproute.yaml`, `values.yaml` (`api.httpRoute`), `templates/NOTES.txt`; template overlay `helmchart/test_deploy/values-httproute.yaml`                             |
 
 ---
 
 ## AI code review (Copilot + Bugbot)
 
-Finders (GitHub Copilot code review, Cursor Bugbot) may re-review every push.
-That is intentional: real bugs sometimes appear only on a later pass.
+Finders (GitHub Copilot code review, Cursor Bugbot) may re-review every push. That is intentional: real bugs sometimes
+appear only on a later pass.
 
-They are **not** a merge gate. Merge when **risk** findings are gone, not when
-the PR has zero AI comments.
+They are **not** a merge gate. Merge when **risk** findings are gone, not when the PR has zero AI comments.
 
-| Layer | Artifact | Job |
-| ----- | -------- | --- |
-| Finder | `.github/copilot-instructions.md`, `.cursor/BUGBOT.md` | Load `docs/ai_review_policy.md`; report reachable bugs |
-| Policy | `docs/ai_review_policy.md` | Severity, practicality, cost, nit-budget, types |
-| Path map | `docs/surface-quality-bar.global.md` + local `docs/surface-quality-bar.md` | Path→surface rows for fixer triage |
-| Fixer | `/review-fixer` (`.agents/skills/review-fixer/`) | Re-evaluate each thread → fix, dismiss, or one follow-up issue |
+| Layer    | Artifact                                                                   | Job                                                            |
+| -------- | -------------------------------------------------------------------------- | -------------------------------------------------------------- |
+| Finder   | `.github/copilot-instructions.md`, `.cursor/BUGBOT.md`                     | Load `docs/ai_review_policy.md`; report reachable bugs         |
+| Policy   | `docs/ai_review_policy.md`                                                 | Severity, practicality, cost, nit-budget, types                |
+| Path map | `docs/surface-quality-bar.global.md` + local `docs/surface-quality-bar.md` | Path→surface rows for fixer triage                             |
+| Fixer    | `/review-fixer` (`.agents/skills/review-fixer/`)                           | Re-evaluate each thread → fix, dismiss, or one follow-up issue |
 
-Do not widen types (`T | None`, `Any`, `object`) or add `if x is None` when the
-type already excludes `None`. Prefer a narrower type over the finder’s patch.
-Do not hide `Any`/`object` behind a type alias.
+Do not widen types (`T | None`, `Any`, `object`) or add `if x is None` when the type already excludes `None`. Prefer a
+narrower type over the finder’s patch. Do not hide `Any`/`object` behind a type alias.
 
-Supported environment: Linux Dev Container (and GitHub Actions Linux). Dismiss
-macOS / Windows / Homebrew / unofficial host-PATH review findings
-(`openspec/principles.global.md`).
+Supported environment: Linux Dev Container (and GitHub Actions Linux). Dismiss macOS / Windows / Homebrew / unofficial
+host-PATH review findings (`openspec/principles.global.md`).
 
 ---
 
@@ -470,8 +442,8 @@ macOS / Windows / Homebrew / unofficial host-PATH review findings
 
 - Standardized Ruff checks to run against `middleware/` in pre-commit and CI.
 - Fixed formatting drift in Markdown-embedded Python snippets (e.g., `middleware/api_client/README.md`).
-- Clarified that Ruff failures can be caused by `hatch-vcs` version parsing
-  during `uv run`, and documented how to diagnose it.
+- Clarified that Ruff failures can be caused by `hatch-vcs` version parsing during `uv run`, and documented how to
+  diagnose it.
 
 ### Session 7: Spec-Driven Development Setup
 
@@ -492,26 +464,24 @@ Before making changes, consider:
 
 - Should I use `uv` or another tool? → Always `uv`
 - Are client certificates required? → No, they're optional
-- Should I modify `.git/hooks/` directly? → No — `scripts/setup-git-hooks.sh`
-  or `scripts/install-dev-hooks.sh`
+- Should I modify `.git/hooks/` directly? → No — `scripts/setup-git-hooks.sh` or `scripts/install-dev-hooks.sh`
 - What Python version? → `versions.env` (`PYTHON_VERSION`; syncs `.python-version`)
 - What Alpine / tool versions? → repo-root `versions.env`
 - How to run tests? → `uv run pytest ...`
 - Where do specs live? → `openspec/specs/<domain>/` (propose changes via `/opsx-propose`)
 - Copilot/Bugbot comments? → `/review-fixer` (policy in `docs/ai_review_policy.md`); do not loop until 0 comments
-- Personal `GH_TOKEN` / `GITGUARDIAN_API_KEY`? → TTY prompt (empty = skip);
-  `source ./scripts/set-dev-tokens.sh` to set later; store is
-  `/commandhistory/tokens.env` in the Dev Container (not the git worktree);
-  agent shells: `env -u GH_TOKEN …` if a stale token shadows the store (#69)
-- Vendor skills? → `.agents/skills/{gh,docker,hadolint,uv}` (`gh skill update`);
-  do not hand-edit. First-party synced: `arctrl`, review/create/issue-fixer
+- Personal `GH_TOKEN` / `GITGUARDIAN_API_KEY`? → TTY prompt (empty = skip); `source ./scripts/set-dev-tokens.sh` to set
+  later; store is `/commandhistory/tokens.env` in the Dev Container (not the git worktree); agent shells:
+  `env -u GH_TOKEN …` if a stale token shadows the store (#69)
+- Vendor skills? → `.agents/skills/{gh,docker,hadolint,uv}` (`gh skill update`); do not hand-edit. First-party synced:
+  `arctrl`, review/create/issue-fixer
 - Agent GitHub plumbing? → `uv run --project scripts/ai m42-ai …`
-- Synced paths? → `docs/synced-paths.yaml` (canonical allowlist); never hand-edit
-  allowlisted files — fix upstream or split `.global`/local
+- Synced paths? → `docs/synced-paths.yaml` (canonical allowlist); never hand-edit allowlisted files — fix upstream or
+  split `.global`/local
 - `uv sync` in this workspace? → always `--dev --all-packages` (shared postCreate)
 - Shell / MYPYPATH / CST? → `.devcontainer/product.env` + `scripts/bin` (no `load-env.sh` / bashrc)
+
 ---
 
-**Last Updated**: 2026-09-14
-**Maintainer Notes**: Keep this file updated when architectural decisions change.
-  Synced Devinfra Wave A paths: do not hand-edit; land shared changes upstream.
+**Last Updated**: 2026-09-14 **Maintainer Notes**: Keep this file updated when architectural decisions change. Synced
+Devinfra Wave A paths: do not hand-edit; land shared changes upstream.

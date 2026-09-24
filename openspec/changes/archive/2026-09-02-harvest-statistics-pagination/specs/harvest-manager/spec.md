@@ -4,10 +4,10 @@
 
 ### Requirement: Derive and persist terminal statistics
 
-When finalizing, the system SHALL derive statistics through `DocumentStore.get_harvest_statistics` for ARC
-documents with matching `metadata.last_harvest_id`. It MUST classify them as new, updated, or unchanged with
-`first_harvest_id` and `last_changed_harvest_id`, mark the harvest complete, and record the resulting snapshot.
-Statistics MUST be complete for harvests whose ARC count exceeds the document store's default query page size.
+When finalizing, the system SHALL derive statistics through `DocumentStore.get_harvest_statistics` for ARC documents
+with matching `metadata.last_harvest_id`. It MUST classify them as new, updated, or unchanged with `first_harvest_id`
+and `last_changed_harvest_id`, mark the harvest complete, and record the resulting snapshot. Statistics MUST be complete
+for harvests whose ARC count exceeds the document store's default query page size.
 
 #### Scenario: Finalize before all uploads arrive
 

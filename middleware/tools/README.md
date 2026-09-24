@@ -73,9 +73,8 @@ python rocrate2arc.py my_research_rocrate.json restored_research.arc
 
 ## Performance Profiling
 
-The `rocrate2arc.py` tool includes built-in profiling that generates detailed
-performance statistics. After running the conversion, check the `profile.stats`
-file and the console output for the top 20 most time-consuming operations.
+The `rocrate2arc.py` tool includes built-in profiling that generates detailed performance statistics. After running the
+conversion, check the `profile.stats` file and the console output for the top 20 most time-consuming operations.
 
 ## Dependencies
 
@@ -87,8 +86,8 @@ file and the console output for the top 20 most time-consuming operations.
 
 ## Development
 
-This package is part of the FAIRagro Advanced Middleware project and is used for
-testing and development of ARC conversion workflows.
+This package is part of the FAIRagro Advanced Middleware project and is used for testing and development of ARC
+conversion workflows.
 
 ## License
 

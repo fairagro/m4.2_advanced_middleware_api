@@ -2,9 +2,8 @@
 
 ## Overview
 
-Migrate from Redis-based state management to CouchDB-based ARC storage with
-comprehensive event-logging, harvest-run tracking, and intelligent change
-detection.
+Migrate from Redis-based state management to CouchDB-based ARC storage with comprehensive event-logging, harvest-run
+tracking, and intelligent change detection.
 
 ## Goals
 
@@ -245,10 +244,8 @@ Worker fetches full ARC from CouchDB using arc_id.
 #### [MODIFY] Files to update
 
 - [docker-compose.yml](../../dev_environment/compose.yaml) - Remove Redis service
-- [middleware/api/pyproject.toml](../../middleware/api/pyproject.toml) -
-  Remove redis dependencies
-- `middleware/worker/pyproject.toml` (historical path) - Remove redis
-  dependencies
+- [middleware/api/pyproject.toml](../../middleware/api/pyproject.toml) - Remove redis dependencies
+- `middleware/worker/pyproject.toml` (historical path) - Remove redis dependencies
 
 ### 6.2 API Cleanup
 

@@ -15,8 +15,8 @@ PR that introduced Compose `env_file` closed without merge.
 - Confirm synced pieces already on `main` (no hand-edit): `devcontainer.json` `remoteEnv.PATH`, no `postStartCommand`,
   `scripts/bin/{k,d}`, postCreate decrypt.
 
-**BREAKING** (DX only): interactive shells no longer auto-`source` `.env` or run ggshield prompts via bashrc; use
-`.env` file on disk (postCreate) and `scripts/bin` / `set-dev-tokens.sh` for tokens.
+**BREAKING** (DX only): interactive shells no longer auto-`source` `.env` or run ggshield prompts via bashrc; use `.env`
+file on disk (postCreate) and `scripts/bin` / `set-dev-tokens.sh` for tokens.
 
 ## Capabilities
 

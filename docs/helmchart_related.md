@@ -4,16 +4,19 @@
 
 The chart can expose the API in two independently flagged ways:
 
-| Path | Values | Role today |
-| ---- | ------ | ---------- |
-| Classic Ingress | `api.ingress.enabled` | Local minikube smoke; optional nginx client mTLS (`api.ingress.mtlsEnabled`) and Ingress TLS Secrets from `api.tls.*` |
+| Path                    | Values                  | Role today                                                                                                                                                                                                                                              |
+| ----------------------- | ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Classic Ingress         | `api.ingress.enabled`   | Local minikube smoke; optional nginx client mTLS (`api.ingress.mtlsEnabled`) and Ingress TLS Secrets from `api.tls.*`                                                                                                                                   |
 | Gateway API `HTTPRoute` | `api.httpRoute.enabled` | Attach to a platform-owned parent (typically `ListenerSet` `fairagro-https` in `kube-gateway-api`). Server TLS for `*.fairagro.net` stays on the platform ListenerSet / wildcard cert — the chart does **not** create a `Certificate` for that hostname |
 
-Defaults leave both off (`enabled: false`). Deploy overlays supply cluster-specific `parentRefs` and `hostnames`; chart defaults stay cluster-agnostic (no elise/fizz/draven/gangplank hardcoding).
+Defaults leave both off (`enabled: false`). Deploy overlays supply cluster-specific `parentRefs` and `hostnames`; chart
+defaults stay cluster-agnostic (no elise/fizz/draven/gangplank hardcoding).
 
-**ListenerSet allowlist:** the Helm release namespace must be allowed by the target ListenerSet (current platform inventories use `fairagro-advanced-middleware`). Routes from other namespaces are not accepted.
+**ListenerSet allowlist:** the Helm release namespace must be allowed by the target ListenerSet (current platform
+inventories use `fairagro-advanced-middleware`). Routes from other namespaces are not accepted.
 
-**Client mTLS cutover** to NGINX Gateway Fabric is a **platform** follow-up. Until then, keep Ingress (with mTLS) if clients need cert auth; HTTPRoute can run in parallel for Gateway TLS exposure.
+**Client mTLS cutover** to NGINX Gateway Fabric is a **platform** follow-up. Until then, keep Ingress (with mTLS) if
+clients need cert auth; HTTPRoute can run in parallel for Gateway TLS exposure.
 
 **Render check (no live Gateway):**
 
@@ -26,20 +29,20 @@ Minikube installs continue to use `helmchart/test_deploy/values.yaml` (Ingress o
 
 ### IDE: Helm templates vs YAML
 
-Chart `templates/*.yaml` files are Helm Go templates. Red Hat YAML false-positives on `{{ … }}`
-are fixed by treating those paths as language `helm` (Kubernetes Tools) plus suppressing the
-extension’s missing-kubeconfig toast when no cluster is configured. That belongs in **synced
-Devinfra** `.vscode` / Dev Container settings — not product-local forks of allowlisted paths.
+Chart `templates/*.yaml` files are Helm Go templates. Red Hat YAML false-positives on `{{ … }}` are fixed by treating
+those paths as language `helm` (Kubernetes Tools) plus suppressing the extension’s missing-kubeconfig toast when no
+cluster is configured. That belongs in **synced Devinfra** `.vscode` / Dev Container settings — not product-local forks
+of allowlisted paths.
 
 ## Helm chart testing
 
-This section is about a local test installation of the middleware api using helm.
-The needed tools are included in the dev container.
+This section is about a local test installation of the middleware api using helm. The needed tools are included in the
+dev container.
 
 ### Preparations
 
-Some files need for the test installation can be found in the folder `helmchart/advanced-middleware-api`.
-First we will need to create a temporary self-signed server certificate in this folder:
+Some files need for the test installation can be found in the folder `helmchart/advanced-middleware-api`. First we will
+need to create a temporary self-signed server certificate in this folder:
 
 ```bash
 FQDN=chart-example.local
@@ -136,7 +139,8 @@ sops exec-env dev_environment/secrets.enc.yaml \
     --set couchdb.auth.password=\"\$COUCHDB_PASSWORD\""
 ```
 
-Note that the value file `helmchart/test_deploy/values.yaml` references the local docker image `fairagro-advanced-middleware-api:test`.
+Note that the value file `helmchart/test_deploy/values.yaml` references the local docker image
+`fairagro-advanced-middleware-api:test`.
 
 ### Test the api service
 

@@ -194,8 +194,9 @@ async def test_finalize_empty_rdi_still_publishes_empty_catalog(
     doc_store = MagicMock()
 
     async def _iter_arcs(_rdi: str) -> AsyncIterator[tuple[str, dict[str, Any]]]:
-        return
-        yield  # pragma: no cover — async generator with no items
+        # Empty async generator (no items).
+        for _ in ():
+            yield ("", {})  # pragma: no cover
 
     doc_store.iter_arc_contents_by_rdi = MagicMock(side_effect=_iter_arcs)
     store = ConsolidatedGitArcStore(consolidated_config, doc_store)

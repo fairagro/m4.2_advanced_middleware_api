@@ -14,6 +14,12 @@ dependencies = [
 dev = [
   "fastapi[standard]>=0.136.0",
   "httpx>=0.28.1",
+  # IDE extensions (Problems / format): must stay in the project .venv.
+  # Hooks/CI still spawn via scripts/run-quality-cli.sh + quality-tools-pins.txt
+  # (gates must not depend on these being listed here).
+  "ruff>=0.15.10",
+  "mypy>=1.20.1",
+  "pylint>=4.0.4",
   "pytest>=9.0.3",
   "pytest-asyncio>=1.1.0",
   "pytest-cov>=7.0.0",
@@ -40,9 +46,10 @@ members = [
     "middleware/tools",
 ]
 
-# Fleet quality CLIs (ruff/mypy/pylint/bandit/vulture/import-linter/ggshield) spawn via
-# scripts/run-quality-cli.sh + scripts/quality-tools-pins.txt — not product dependency-groups.
-# Quality tool config lives in synced fragments (ruff.toml, mypy.ini, .pylintrc).
+# Fleet quality CLIs for hooks/CI: scripts/run-quality-cli.sh + quality-tools-pins.txt.
+# IDE extensions (ruff / mypy / pylint) also need those three in dependency-groups.dev
+# so they exist in the project .venv — pins file alone does not feed the IDE.
+# Quality tool *config* lives in synced fragments (ruff.toml, mypy.ini, .pylintrc).
 # See docs/quality.md — do not reintroduce [tool.ruff] / [tool.mypy] / [tool.pylint.*] here.
 
 [tool.pyright]
