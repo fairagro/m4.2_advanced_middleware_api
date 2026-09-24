@@ -48,6 +48,28 @@ One High correctness gap.
 | docs/ci.md | Docs | Low | XS | Stale workflow name |
 """
 
+CODE_REVIEW_DUAL_BODY = f"""{CODE_REVIEW_MARKER}
+## Verdict
+
+One High correctness gap; one Low docs nit.
+
+1. **Null PR head not handled**
+   - **Severity:** High · **Cost:** S · **Goal:** Correctness
+   - **Path:** `scripts/ai/src/m42_ai/review.py` (`fetch_review_open`)
+   - **Note:** GraphQL null pullRequest can crash shaping.
+2. **Stale workflow name in docs**
+   - **Severity:** Low · **Cost:** XS · **Goal:** Docs
+   - **Path:** `docs/ci.md`
+   - **Note:** Section still names a removed workflow.
+
+## Findings index
+
+| path | goal | severity | cost | note |
+|------|------|----------|------|------|
+| scripts/ai/src/m42_ai/review.py | Correctness | High | S | Null pullRequest not handled |
+| docs/ci.md | Docs | Low | XS | Stale workflow name |
+"""
+
 
 def _payload() -> dict:
     data = json.loads(FIXTURE.read_text(encoding="utf-8"))
@@ -161,6 +183,18 @@ def test_extract_code_review_findings() -> None:
     assert "High" in (items[0]["text"] or "")
     assert "Null pullRequest" in (items[0]["text"] or "")
     assert items[1]["path"] == "docs/ci.md"
+
+
+def test_extract_code_review_findings_dual_layout() -> None:
+    """Numbered blocks + Findings index table: extract from the table (legacy table-only still works)."""
+    items = extract_code_review_findings(CODE_REVIEW_DUAL_BODY)
+    assert len(items) == 2
+    assert items[0]["path"] == "scripts/ai/src/m42_ai/review.py"
+    assert "High" in (items[0]["text"] or "")
+    assert items[1]["path"] == "docs/ci.md"
+    # Dual and legacy table-only bodies must yield the same paths for review-fixer.
+    legacy = extract_code_review_findings(CODE_REVIEW_BODY)
+    assert [i["path"] for i in items] == [i["path"] for i in legacy]
 
 
 def test_shape_includes_human_code_review_summary() -> None:

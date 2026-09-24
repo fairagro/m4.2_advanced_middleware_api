@@ -11,10 +11,10 @@ and scaling notes live in the local `principles.md` (or product capability specs
 
 When a shared file needs a product-specific companion that sync must not wipe, use this naming pair:
 
-| Role                                   | Name shape                                                                                                       | Sync                                                                    |
-| -------------------------------------- | ---------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------- |
-| Fleet SoT (identical in every product) | `*.global` / `*.global.*` (e.g. `principles.global.md`, `surface-quality-bar.global.md`, `.importlinter.global`) | On `docs/synced-paths.yaml` **`allow`** — do not hand-edit in consumers |
-| Product extension / overlay            | Same basename **without** `.global` (e.g. `principles.md`, `surface-quality-bar.md`, `.importlinter`)            | On **`overlays`** (never overwritten by sync)                           |
+| Role                                   | Name shape                                                                               | Sync                                                                    |
+| -------------------------------------- | ---------------------------------------------------------------------------------------- | ----------------------------------------------------------------------- |
+| Fleet SoT (identical in every product) | `*.global` / `*.global.*` (e.g. `principles.global.md`, `surface-quality-bar.global.md`) | On `docs/synced-paths.yaml` **`allow`** — do not hand-edit in consumers |
+| Product extension / overlay            | Same basename **without** `.global` (e.g. `principles.md`, `surface-quality-bar.md`)     | On **`overlays`** (never overwritten by sync)                           |
 
 Do **not** invent alternate suffixes such as `.product` for this split. Other overlay styles (env/CI inputs, nested
 `.gitignore`, verbatim-only fragments with no product twin) stay as documented in `docs/sync.md`.
@@ -100,16 +100,27 @@ Product application code under `middleware/` must pass via `uv run`. Prefer shar
 (`ruff.toml`, `mypy.ini`, `.pylintrc`, `.bandit`); otherwise use the project's equivalent config (e.g. root
 `pyproject.toml` tool tables). Do not invent a second quality policy channel. Example invocations with shared fragments:
 
-- `uv run ruff format --check --config ruff.toml middleware/` — formatting
-- `uv run ruff check --config ruff.toml middleware/` — linting
-- `uv run mypy --config-file mypy.ini middleware/` — static type checking
-- `uv run pylint --rcfile .pylintrc middleware/` — style and code smells
-- `uv run bandit -r middleware/ -c .bandit -ll` — security (hooks: MEDIUM+ only via `-ll`). CI may omit `-ll` to log LOW
-  while still failing only on MEDIUM/HIGH — same fail bar; see `docs/quality.md` when that file is synced
-- `uv run vulture middleware/ --min-confidence 100` — unused definitions (hooks + CI; no IDE gate; no synced whitelist;
-  see `docs/quality.md`)
-- `./scripts/run-import-linter.sh` — import contracts (synced `.importlinter.global` baseline + optional `.importlinter`
-  overlay; hooks + CI; no IDE gate; see `docs/quality.md`)
+- `bash scripts/run-quality-cli.sh ruff format --check --config ruff.toml middleware/`
+  — formatting
+- `bash scripts/run-quality-cli.sh ruff check --config ruff.toml middleware/` —
+  linting
+- `bash scripts/run-quality-cli.sh mypy --config-file mypy.ini middleware/` —
+  static type checking
+- `bash scripts/run-quality-cli.sh pylint --rcfile .pylintrc middleware/` — style
+  and code smells
+- `bash scripts/run-quality-cli.sh bandit -r middleware/ -c .bandit -ll` — security
+  (hooks: MEDIUM+ only via `-ll`). CI may omit `-ll` to log LOW while still failing only on MEDIUM/HIGH — same fail bar;
+  see `docs/quality.md` when that file is synced
+- `bash scripts/run-quality-cli.sh vulture middleware/ --min-confidence 100` —
+  unused definitions (hooks + CI; no IDE gate; no synced whitelist; see `docs/quality.md`)
+- `./scripts/run-import-linter.sh` — import contracts (product-owned `.importlinter` with fleet-required settings;
+  hooks + CI; no IDE gate; see `docs/quality.md`)
+- `./scripts/run-uv-audit.sh` — lockfile CVEs via `uv audit --frozen` (hooks + CI; no IDE gate; optional product
+  `.uv-audit-ignore`; needs OSV network — see `docs/quality.md`). Distinct from Trivy on images and from
+  `UV_MALWARE_CHECK` at `uv sync`
+
+Fleet quality CLI pins live in synced `scripts/quality-tools-pins.txt` (not product `pyproject.toml`); hooks/CI
+use `scripts/run-quality-cli.sh`.
 
 Markdown must pass Prettier formatting and markdownlint (`.markdownlint.json` disables rules that fight Prettier).
 Typical scripts (see `package.json` where present):
