@@ -1,0 +1,53 @@
+# Thin workflow_dispatch caller for Devinfra reusable-registry-retry (#34 / product #443).
+# Retries DockerHub and/or GHCR for an *existing* Docker/Helm release (no new semver/tag).
+# Operator docs: docs/ci.md (Registry retry).
+name: Registry Retry
+
+permissions:
+  contents: write
+  packages: write
+
+on:
+  workflow_dispatch:
+    inputs:
+      git_tag:
+        description: "Existing release git tag (gh release list / git tag --sort=-creatordate)"
+        required: true
+        type: string
+      release_kind:
+        description: "docker or helm (must match the tag kind)"
+        required: true
+        type: choice
+        options:
+          - docker
+          - helm
+      retry_dockerhub:
+        description: "Retry push to DockerHub"
+        type: boolean
+        default: false
+      retry_ghcr:
+        description: "Retry push to GHCR"
+        type: boolean
+        default: true
+
+concurrency:
+  group: ${{ github.workflow }}-${{ inputs.git_tag }}
+  cancel-in-progress: false
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
+jobs:
+  retry:
+    uses: fairagro/m4.2_middleware_devinfra/.github/workflows/reusable-registry-retry.yml@main
+    with:
+      git_tag: ${{ inputs.git_tag }}
+      release_kind: ${{ inputs.release_kind }}
+      retry_dockerhub: ${{ inputs.retry_dockerhub }}
+      retry_ghcr: ${{ inputs.retry_ghcr }}
+      components: '["api"]'
+      image_base_name: fairagro-advanced-middleware
+      chart_name: fairagro-advanced-middleware-api-chart
+      dockerhub_namespace: zalf
+      ghcr_namespace: fairagro
+    secrets: inherit
