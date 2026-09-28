@@ -49,15 +49,17 @@ the current event log. It MUST apply the shared HTTP outcome mapping in `arc-man
 - **WHEN** the request is processed
 - **THEN** the endpoint follows the applicable behavior in `arc-manager/`
 
-### Requirement: Reject standalone upload when consolidated Git store is configured
+### Requirement: Standalone upload uses per-ARC store only
 
-When the deployment’s ArcStore backend is the consolidated Git catalog store, standalone ARC create endpoints
-(`POST /v1/arcs`, `POST /v2/arcs`, and `POST /v3/arcs`) SHALL reject the request with HTTP `400` (or another documented
-4xx) before staging content in CouchDB or scheduling Git sync. Harvest-scoped ARC submission
-(`POST /v3/harvests/{harvest_id}/arcs`) remains the supported ingestion path for that backend.
+Standalone ARC create endpoints (`POST /v1/arcs`, `POST /v2/arcs`, and `POST /v3/arcs`) MUST always be accepted when the
+API is otherwise healthy. They MUST stage content and schedule per-ARC Git sync via the required `arc_store` slot. They
+MUST NOT publish or finalize the consolidated RDI catalog. API models exposed in OpenAPI/Swagger MUST describe that
+standalone uploads update the per-ARC store only and do not update the consolidated catalog.
 
-#### Scenario: Standalone ARC rejected under consolidated store
+#### Scenario: Standalone accepted with consolidated_store configured
 
-- **GIVEN** `consolidated_git` is the configured ArcStore backend
-- **WHEN** a client calls `POST /v1/arcs`, `POST /v2/arcs`, or `POST /v3/arcs`
-- **THEN** the API returns HTTP `400` and does not stage or publish catalog content for that request
+- **GIVEN** both `arc_store` and `consolidated_store` are configured
+- **WHEN** a client calls `POST /v3/arcs`
+- **THEN** the API accepts the request (subject to normal validation)
+- **AND** schedules per-ARC sync via `arc_store`
+- **AND** does not enqueue catalog finalize for that request
