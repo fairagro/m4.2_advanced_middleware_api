@@ -26,11 +26,12 @@ Lock-ins live on GitHub #517 comments (newer than the original issue body).
 
 ### 1. Two typed config slots (not an array)
 
-**Choice:** Required `arc_store` (`git_repo` | deprecated `gitlab_api`) + optional `consolidated_store` (catalog
-settings; type optional/implied).
+**Choice:** Required `arc_store` (nested `git_repo` | deprecated `gitlab_api` selects the backend — no `type` field) +
+optional `consolidated_store` (catalog settings under `consolidated_git`; slot name selects the role).
 
 **Why:** Roles already differ (sync vs finalize, ARC events vs harvest catalog events). An array implies equal peers and
-a success policy we do not need.
+a success policy we do not need. Nesting the backend settings key under the slot reuses the historical “type at the
+config key” idea without a redundant `type:` discriminator.
 
 **Alternatives:** Homogeneous `arc_stores[]` + policy (rejected); primary/secondary named pair without shared settings
 type (rejected — use two slots + shared `GitCliSettings` type).

@@ -43,10 +43,25 @@ class ArcTaskTicket(ApiResponse):
 
 
 class CreateOrUpdateArcsRequest(BaseModel):
-    """Request model for creating or updating ARCs."""
+    """Request model for creating or updating ARCs.
 
-    rdi: Annotated[str, Field(description="Research Data Infrastructure identifier")]
-    arcs: Annotated[list[dict], Field(description="List of ARC definitions in RO-Crate JSON format")]
+    Standalone uploads update the per-ARC store only and do not update the
+    consolidated RDI catalog.
+    """
+
+    rdi: Annotated[
+        str,
+        Field(description="Research Data Infrastructure identifier"),
+    ]
+    arcs: Annotated[
+        list[dict],
+        Field(
+            description=(
+                "List of ARC definitions in RO-Crate JSON format. Standalone create "
+                "updates the per-ARC store only and does not update the consolidated catalog."
+            )
+        ),
+    ]
 
 
 class CreateOrUpdateArcsResponse(ApiResponse):

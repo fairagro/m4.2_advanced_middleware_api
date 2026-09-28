@@ -7,15 +7,8 @@ from typing import Annotated, ClassVar, Self
 from cryptography import x509
 from pydantic import ConfigDict, Field, field_validator, model_validator
 
-from middleware.api.arc_store.arc_store_config import ArcStoreConfig, GitRepoArcStoreConfig
-from middleware.api.arc_store.consolidated_git import ConsolidatedGitConfig
+from middleware.api.arc_store.arc_store_config import ArcStoreConfig, ConsolidatedStoreConfig
 from middleware.api.arc_store.git_repo import GitRepoConfig
-from middleware.api.arc_store.gitlab_api import GitlabApiConfig
-from middleware.api.arc_store.legacy_config import (
-    OBSOLETE_TOP_LEVEL_CONSOLIDATED_GIT,
-    OBSOLETE_TOP_LEVEL_GIT_REPO,
-    OBSOLETE_TOP_LEVEL_GITLAB_API,
-)
 from middleware.api.arc_store.resolution import validate_arc_store_config
 from middleware.api.business_logic.config import HarvestConfig
 from middleware.api.document_store.config import CouchDBConfig
@@ -52,30 +45,13 @@ class Config(ConfigBase):
         x509.ObjectIdentifier("1.3.6.1.4.1.64609.1.1")
     )
 
-    git_repo: Annotated[
-        GitRepoConfig | None,
-        Field(
-            description="[Obsolete] GitRepo storage backend; use arc_store.type instead",
-            deprecated=OBSOLETE_TOP_LEVEL_GIT_REPO,
-        ),
-    ] = None
-    gitlab_api: Annotated[
-        GitlabApiConfig | None,
-        Field(
-            description="[Obsolete] GitLab API storage backend; use arc_store.type instead",
-            deprecated=OBSOLETE_TOP_LEVEL_GITLAB_API,
-        ),
-    ] = None
-    consolidated_git: Annotated[
-        ConsolidatedGitConfig | None,
-        Field(
-            description="[Obsolete] Consolidated catalog ArcStore; use arc_store.type instead",
-            deprecated=OBSOLETE_TOP_LEVEL_CONSOLIDATED_GIT,
-        ),
-    ] = None
     arc_store: Annotated[
-        ArcStoreConfig | None,
-        Field(description="Preferred ArcStore backend selector (type + nested settings)"),
+        ArcStoreConfig,
+        Field(description="Required per-ARC ArcStore backend (git_repo | deprecated gitlab_api)"),
+    ]
+    consolidated_store: Annotated[
+        ConsolidatedStoreConfig | None,
+        Field(description="Optional consolidated catalog ArcStore (shared RDI catalog)"),
     ] = None
     couchdb: Annotated[CouchDBConfig, Field(description="CouchDB configuration")]
 
@@ -139,18 +115,10 @@ class Config(ConfigBase):
         raise TypeError("client_auth_oid must be a string or x509.ObjectIdentifier")
 
     @model_validator(mode="after")
-    def validate_mutual_exclusivity(self) -> Self:
-        """Validate storage backend and GitLab topic mapping."""
+    def validate_storage_backends(self) -> Self:
+        """Validate dual-slot ArcStore config and GitLab topic mapping."""
         validate_arc_store_config(self)
-        # Prefer ``__dict__`` so unset deprecated top-level keys do not warn on access.
-        git_repo = self.__dict__.get("git_repo")
-        if git_repo is not None and self.known_rdis:
-            validated_topics = GitRepoConfig.validate_rdi_gitlab_topics_for_known_rdis(
-                self.known_rdis,
-                git_repo.rdi_gitlab_topics,
-            )
-            self.git_repo = git_repo.model_copy(update={"rdi_gitlab_topics": validated_topics})
-        if isinstance(self.arc_store, GitRepoArcStoreConfig) and self.known_rdis:
+        if self.arc_store.git_repo is not None and self.known_rdis:
             git_repo = self.arc_store.git_repo
             validated_topics = GitRepoConfig.validate_rdi_gitlab_topics_for_known_rdis(
                 self.known_rdis,

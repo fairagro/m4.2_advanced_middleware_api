@@ -3,29 +3,31 @@
 ### Requirement: Dual ArcStore configuration slots
 
 Configuration MUST provide a **required** `arc_store` slot for per-ARC Git persistence and MAY provide an **optional**
-`consolidated_store` slot for the shared RDI catalog. The `arc_store` slot MUST accept only `git_repo` or deprecated
-`gitlab_api` (discriminator `type`). The `consolidated_store` slot MUST configure consolidated catalog settings only;
-its `type` MAY be omitted and MUST be treated as consolidated catalog when present. Configuring `arc_store.type` as
-`consolidated_git` MUST fail validation. Top-level `git_repo`, `gitlab_api`, and `consolidated_git` keys MUST NOT be
-accepted. Each slot MAY carry its own `git` CLI settings object using the shared Git CLI settings type.
+`consolidated_store` slot for the shared RDI catalog. The `arc_store` backend MUST be selected by which nested settings
+key is set: `git_repo` or deprecated `gitlab_api` (exactly one). There MUST NOT be a separate `type` discriminator field
+on either slot. The `consolidated_store` slot MUST configure consolidated catalog settings under `consolidated_git`
+(slot name selects the catalog role). Putting catalog settings under `arc_store` MUST fail validation. Top-level
+`git_repo`, `gitlab_api`, and `consolidated_git` MUST NOT be model fields (they are not accepted as configuration).
+Config that relies only on those obsolete keys MUST fail because the required `arc_store` slot is missing. Each slot MAY
+carry its own `git` CLI settings object using the shared Git CLI settings type.
 
 #### Scenario: Accept GitRepo plus optional catalog
 
-- **GIVEN** `arc_store.type` is `git_repo` with nested settings and `consolidated_store` is set
+- **GIVEN** `arc_store.git_repo` is set with nested settings and `consolidated_store` is set
 - **WHEN** configuration is validated
 - **THEN** validation succeeds and both slots are available to the runtime
 
-#### Scenario: Reject consolidated type under arc_store
+#### Scenario: Reject catalog settings under arc_store
 
-- **GIVEN** `arc_store.type` is `consolidated_git`
+- **GIVEN** `arc_store` contains only `consolidated_git` (no `git_repo` / `gitlab_api`)
 - **WHEN** configuration is validated
 - **THEN** validation fails before the API or worker starts
 
-#### Scenario: Reject obsolete top-level store keys
+#### Scenario: Obsolete top-level store keys are not configuration
 
-- **GIVEN** a top-level `git_repo`, `gitlab_api`, or `consolidated_git` key is present
+- **GIVEN** only a top-level `git_repo`, `gitlab_api`, or `consolidated_git` key is provided (no `arc_store`)
 - **WHEN** configuration is validated
-- **THEN** validation fails
+- **THEN** validation fails because required `arc_store` is missing
 
 ### Requirement: Role-based ArcStore operations
 

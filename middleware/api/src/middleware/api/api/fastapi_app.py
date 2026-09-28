@@ -73,10 +73,12 @@ if "pytest" in sys.modules:
         "couchdb": {
             "url": "http://localhost:5984",
         },
-        "git_repo": {
-            "url": "https://localhost/",
-            "branch": "dummy",
-            "group": "dummy-group",
+        "arc_store": {
+            "git_repo": {
+                "url": "https://localhost/",
+                "branch": "dummy",
+                "group": "dummy-group",
+            },
         },
     })
 else:
@@ -167,6 +169,7 @@ class Api:
             broker_health_checker=broker_health_checker,
             worker_health_checker=CeleryWorkerHealthChecker(api_celery_app),
             arc_store=self.business_logic.arc_store,
+            consolidated_store=self.business_logic.consolidated_store,
         )
         self.common_deps = CommonApiDependencies(self._config)
 

@@ -3,7 +3,7 @@
 Tests cover:
 - RDI identifier validation
 - Client authentication OID parsing
-- Backend mutual exclusivity (git_repo vs gitlab_api)
+- Dual-slot ArcStore validation
 - YAML configuration file loading
 """
 
@@ -16,8 +16,6 @@ from cryptography import x509
 from pydantic import ValidationError
 
 from middleware.api.config import Config
-
-pytestmark = pytest.mark.filterwarnings("ignore:gitlab_api configuration is deprecated.*:DeprecationWarning")
 
 
 def _git_repo(tmp_path: Path, group: str = "g") -> dict[str, str | dict[str, str]]:
@@ -35,13 +33,21 @@ def _git_repo(tmp_path: Path, group: str = "g") -> dict[str, str | dict[str, str
     }
 
 
+def _arc_store(tmp_path: Path, **git_repo_overrides: object) -> dict[str, object]:
+    git_repo = _git_repo(tmp_path)
+    git_repo.update(git_repo_overrides)  # type: ignore[arg-type]
+    return {"git_repo": git_repo}
+
+
 def test_config_validate_rdi_gitlab_topics_requires_full_mapping(tmp_path: Path) -> None:
     """Every known RDI must have a GitLab topic mapping when git_repo is configured."""
     config_data = {
         "known_rdis": ["bonares", "edal"],
-        "git_repo": {
-            **_git_repo(tmp_path),
-            "rdi_gitlab_topics": {"edal": "e!DAL"},
+        "arc_store": {
+            "git_repo": {
+                **_git_repo(tmp_path),
+                "rdi_gitlab_topics": {"edal": "e!DAL"},
+            },
         },
         "couchdb": {"url": "http://localhost:5984"},
         "celery": {"broker_url": "memory://", "result_backend": "cache+memory://"},
@@ -54,9 +60,11 @@ def test_config_validate_rdi_gitlab_topics_rejects_unknown_keys(tmp_path: Path) 
     """GitLab topic mapping keys must be a subset of known_rdis."""
     config_data = {
         "known_rdis": ["edal"],
-        "git_repo": {
-            **_git_repo(tmp_path),
-            "rdi_gitlab_topics": {"edal": "e!DAL", "bonares": "bonares"},
+        "arc_store": {
+            "git_repo": {
+                **_git_repo(tmp_path),
+                "rdi_gitlab_topics": {"edal": "e!DAL", "bonares": "bonares"},
+            },
         },
         "couchdb": {"url": "http://localhost:5984"},
         "celery": {"broker_url": "memory://", "result_backend": "cache+memory://"},
@@ -67,10 +75,9 @@ def test_config_validate_rdi_gitlab_topics_rejects_unknown_keys(tmp_path: Path) 
 
 def test_config_validate_known_rdis_valid(tmp_path: Path) -> None:
     """Test valid known RDIs."""
-    # We need a minimal valid config
     config_data = {
         "known_rdis": ["valid-rdi", "rdi.123", "under_score"],
-        "git_repo": _git_repo(tmp_path),
+        "arc_store": _arc_store(tmp_path),
         "couchdb": {"url": "http://localhost:5984"},
         "celery": {"broker_url": "memory://", "result_backend": "cache+memory://"},
     }
@@ -82,7 +89,7 @@ def test_config_validate_known_rdis_invalid(tmp_path: Path) -> None:
     """Test invalid known RDIs."""
     config_data = {
         "known_rdis": ["invalid rdi"],  # space not allowed
-        "git_repo": _git_repo(tmp_path),
+        "arc_store": _arc_store(tmp_path),
         "couchdb": {"url": "http://localhost:5984"},
         "celery": {"broker_url": "memory://", "result_backend": "cache+memory://"},
     }
@@ -96,7 +103,7 @@ def test_config_parse_client_auth_oid_str(tmp_path: Path) -> None:
     oid_str = "1.2.3.4"
     config_data = {
         "client_auth_oid": oid_str,
-        "git_repo": _git_repo(tmp_path),
+        "arc_store": _arc_store(tmp_path),
         "couchdb": {"url": "http://localhost:5984"},
         "celery": {"broker_url": "memory://", "result_backend": "cache+memory://"},
     }
@@ -110,7 +117,7 @@ def test_config_parse_client_auth_oid_obj(tmp_path: Path) -> None:
     oid = x509.ObjectIdentifier("1.2.3.4")
     config_data = {
         "client_auth_oid": oid,
-        "git_repo": _git_repo(tmp_path),
+        "arc_store": _arc_store(tmp_path),
         "couchdb": {"url": "http://localhost:5984"},
         "celery": {"broker_url": "memory://", "result_backend": "cache+memory://"},
     }
@@ -122,7 +129,7 @@ def test_config_parse_client_auth_oid_invalid_type(tmp_path: Path) -> None:
     """Test invalid OID type."""
     config_data = {
         "client_auth_oid": 1234,
-        "git_repo": _git_repo(tmp_path),
+        "arc_store": _arc_store(tmp_path),
         "couchdb": {"url": "http://localhost:5984"},
         "celery": {"broker_url": "memory://", "result_backend": "cache+memory://"},
     }
@@ -131,28 +138,27 @@ def test_config_parse_client_auth_oid_invalid_type(tmp_path: Path) -> None:
     assert "client_auth_oid must be a string or x509.ObjectIdentifier" in str(exc.value)
 
 
-def test_config_mutual_exclusivity_none() -> None:
-    """Test failure when neither backend is configured."""
+def test_config_requires_arc_store() -> None:
+    """Test failure when arc_store is missing."""
     config_data: dict[str, Any] = {
         "couchdb": {"url": "http://localhost:5984"},
         "celery": {"broker_url": "memory://", "result_backend": "cache+memory://"},
     }
     with pytest.raises(ValidationError) as exc:
         Config.model_validate(config_data)
-    assert "One of arc_store or git_repo, gitlab_api, consolidated_git must be configured" in str(exc.value)
+    assert "arc_store" in str(exc.value)
 
 
-def test_config_mutual_exclusivity_both(tmp_path: Path) -> None:
-    """Test failure when both backends are configured."""
+def test_config_rejects_legacy_only_top_level_backends(tmp_path: Path) -> None:
+    """Top-level store keys alone are not enough; required arc_store is missing."""
     config_data = {
         "git_repo": _git_repo(tmp_path),
         "gitlab_api": {"url": "https://gitlab.com", "token": "t", "group": "g", "branch": "b"},
         "couchdb": {"url": "http://localhost:5984"},
         "celery": {"broker_url": "memory://", "result_backend": "cache+memory://"},
     }
-    with pytest.raises(ValidationError) as exc:
+    with pytest.raises(ValidationError, match="arc_store"):
         Config.model_validate(config_data)
-    assert "Only one ArcStore backend can be configured" in str(exc.value)
 
 
 def test_config_from_yaml_file_not_found() -> None:
@@ -167,10 +173,11 @@ def test_config_from_yaml_file_success(tmp_path: Path) -> None:
     config_yaml = textwrap.dedent(
         f"""
         log_level: DEBUG
-        git_repo:
-          url: {tmp_path.as_uri()}
-          group: my-group
-          path: {tmp_path}
+        arc_store:
+          git_repo:
+            url: {tmp_path.as_uri()}
+            group: my-group
+            path: {tmp_path}
         couchdb:
           url: http://localhost:5984
         celery:
@@ -179,20 +186,6 @@ def test_config_from_yaml_file_success(tmp_path: Path) -> None:
         """
     )
     config_file.write_text(config_yaml)
-
     config = Config.from_yaml_file(config_file)
     assert config.log_level == "DEBUG"
-    assert config.git_repo is not None
-    assert config.git_repo.url == tmp_path.as_uri()
-
-
-def test_config_accepts_missing_deprecated_celery_result_backend(tmp_path: Path) -> None:
-    """Test that deprecated celery.result_backend is optional."""
-    config_data = {
-        "git_repo": _git_repo(tmp_path),
-        "couchdb": {"url": "http://localhost:5984"},
-        "celery": {"broker_url": "memory://"},
-    }
-
-    config = Config.model_validate(config_data)
-    assert config.celery.model_dump().get("result_backend") is None
+    assert config.arc_store.git_repo is not None

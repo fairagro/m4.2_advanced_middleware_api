@@ -4,18 +4,11 @@
 
 config:
   log_level: DEBUG
-  # ArcStore backend: set exactly one in your overlay (chart does not ship a live
-  # default — Helm deep-merges maps, so a default git_repo would collide with
-  # arc_store / consolidated_git and force git_repo: null in every overlay).
+  # Dual-slot ArcStore: required arc_store + optional consolidated_store.
+  # Chart does not ship a live default (Helm deep-merges maps).
   #
-  # Preferred (feature/consolidated_arc_store+):
+  # Required per-ARC store (backend selected by nested key):
   # arc_store:
-  #   type: consolidated_git
-  #   consolidated_git:
-  #     repo_url: https://datahub-dev.ipk-gatersleben.de/group/catalog.git
-  #     # token / branch / cache_dir via env or nested fields as needed
-  # arc_store:
-  #   type: git_repo
   #   git_repo:
   #     url: https://datahub-dev.ipk-gatersleben.de
   #     group: FAIRagro-advanced-middleware-dev
@@ -28,10 +21,14 @@ config:
   #       publisso: Publisso
   #       thunen_atlas: "Thunen Atlas"
   #
-  # Legacy top-level keys (obsolete once arc_store is used):
-  # git_repo: { url: ..., group: ..., rdi_gitlab_topics: { ... } }
-  # gitlab_api: { url: ..., group: ..., ... }
-  # consolidated_git: { repo_url: ..., ... }
+  # Optional consolidated catalog:
+  # consolidated_store:
+  #   consolidated_git:
+  #     repo_url: https://datahub-dev.ipk-gatersleben.de/group/catalog.git
+  #     # token / branch / cache_dir via env or nested fields as needed
+  #
+  # Top-level git_repo / gitlab_api / consolidated_git are no longer accepted
+  # (hard cut — see NOTES.txt).
   known_rdis:
     - bonares
     - edal

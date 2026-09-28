@@ -13,7 +13,6 @@ from middleware.api.business_logic import (
     BusinessLogicError,
     BusinessLogicFactory,
     InvalidJsonSemanticError,
-    InvalidRequestError,
     SetupError,
     TransientError,
 )
@@ -70,6 +69,15 @@ def mock_broker_health_checker() -> MagicMock:
 
 
 @pytest.fixture
+def mock_consolidated_store() -> MagicMock:
+    """Mock consolidated catalog ArcStore."""
+    store = MagicMock()
+    store.finalize = AsyncMock(return_value=CatalogFinalizeResult(pushed=False))
+    store.shutdown = AsyncMock()
+    return store
+
+
+@pytest.fixture
 def mock_config() -> MagicMock:
     """Mock Config."""
     config = MagicMock()
@@ -84,12 +92,30 @@ def api_logic(
     mock_doc_store: MagicMock,
     api_ports: BusinessLogicPorts,
 ) -> BusinessLogic:
-    """BusinessLogic in API mode."""
+    """BusinessLogic in API mode without consolidated_store."""
     return BusinessLogic(
         config=mock_config,
         store=mock_store,
         doc_store=mock_doc_store,
         ports=api_ports,
+    )
+
+
+@pytest.fixture
+def api_logic_with_catalog(
+    mock_config: MagicMock,
+    mock_store: MagicMock,
+    mock_consolidated_store: MagicMock,
+    mock_doc_store: MagicMock,
+    api_ports: BusinessLogicPorts,
+) -> BusinessLogic:
+    """BusinessLogic in API mode with consolidated_store configured."""
+    return BusinessLogic(
+        config=mock_config,
+        store=mock_store,
+        doc_store=mock_doc_store,
+        ports=api_ports,
+        consolidated_store=mock_consolidated_store,
     )
 
 
@@ -107,34 +133,48 @@ def api_ports(
 
 @pytest.fixture
 def worker_logic(mock_config: MagicMock, mock_store: MagicMock, mock_doc_store: MagicMock) -> BusinessLogic:
-    """BusinessLogic in Worker mode."""
+    """BusinessLogic in Worker mode without consolidated_store."""
     return BusinessLogic(config=mock_config, store=mock_store, doc_store=mock_doc_store)
 
 
+@pytest.fixture
+def worker_logic_with_catalog(
+    mock_config: MagicMock,
+    mock_store: MagicMock,
+    mock_consolidated_store: MagicMock,
+    mock_doc_store: MagicMock,
+) -> BusinessLogic:
+    """BusinessLogic in Worker mode with consolidated_store configured."""
+    return BusinessLogic(
+        config=mock_config,
+        store=mock_store,
+        doc_store=mock_doc_store,
+        consolidated_store=mock_consolidated_store,
+    )
+
+
 @pytest.mark.asyncio
-async def test_api_mode_skips_per_arc_sync_for_catalog_backend(
-    api_logic: BusinessLogic,
+async def test_api_mode_always_schedules_per_arc_sync(
+    api_logic_with_catalog: BusinessLogic,
     mock_doc_store: MagicMock,
     mock_task_dispatcher: MagicMock,
-    mock_store: MagicMock,
+    mock_consolidated_store: MagicMock,
 ) -> None:
-    """Consolidated catalog backend skips per-ARC Celery sync on ingest."""
-    mock_store.publishes_per_arc_git = False
+    """With consol. configured, ingest still schedules per-ARC sync (not catalog)."""
     mock_doc_store.store_arc.return_value = ArcStoreResult(arc_id="arc_id", is_new=True, has_changes=True)
 
-    await api_logic.create_or_update_arc("test-rdi", minimal_rocrate_dict("ABC"), "client")
+    await api_logic_with_catalog.create_or_update_arc("test-rdi", minimal_rocrate_dict("ABC"), "client")
 
-    mock_task_dispatcher.dispatch_sync_arc.assert_not_called()
+    mock_task_dispatcher.dispatch_sync_arc.assert_called_once()
+    mock_consolidated_store.create_or_update.assert_not_called()
 
 
 @pytest.mark.asyncio
-async def test_transition_harvest_enqueues_finalize_for_catalog_backend(
-    api_logic: BusinessLogic,
+async def test_transition_harvest_enqueues_finalize_when_consolidated_configured(
+    api_logic_with_catalog: BusinessLogic,
     mock_task_dispatcher: MagicMock,
-    mock_store: MagicMock,
 ) -> None:
-    """Completing a harvest enqueues catalog finalize when backend uses harvest scope."""
-    mock_store.publishes_per_arc_git = False
+    """Completing a harvest enqueues catalog finalize when consolidated_store is set."""
     harvest = HarvestDocument(
         doc_id="harvest-1",
         rdi="edal",
@@ -147,24 +187,22 @@ async def test_transition_harvest_enqueues_finalize_for_catalog_backend(
         update={"status": HarvestStatus.COMPLETED, "statistics": HarvestStatistics(arcs_new=1, arcs_submitted=1)},
     )
     with patch.object(
-        api_logic._harvest_manager,  # noqa: SLF001
+        api_logic_with_catalog._harvest_manager,  # noqa: SLF001
         "transition_harvest",
         AsyncMock(return_value=completed),
     ):
-        result = await api_logic.transition_harvest(harvest, HarvestStatus.COMPLETED, "client")
+        result = await api_logic_with_catalog.transition_harvest(harvest, HarvestStatus.COMPLETED, "client")
 
     assert result.status == HarvestStatus.COMPLETED
     mock_task_dispatcher.dispatch_finalize_catalog.assert_called_once()
 
 
 @pytest.mark.asyncio
-async def test_transition_harvest_enqueues_finalize_for_per_arc_backend(
+async def test_transition_harvest_skips_finalize_without_consolidated_store(
     api_logic: BusinessLogic,
     mock_task_dispatcher: MagicMock,
-    mock_store: MagicMock,
 ) -> None:
-    """Per-ARC backends still enqueue finalize (worker no-op) per harvest-manager spec."""
-    mock_store.publishes_per_arc_git = True
+    """Without consolidated_store, harvest COMPLETED does not enqueue finalize."""
     harvest = HarvestDocument(
         doc_id="harvest-1",
         rdi="edal",
@@ -181,17 +219,15 @@ async def test_transition_harvest_enqueues_finalize_for_per_arc_backend(
     ):
         await api_logic.transition_harvest(harvest, HarvestStatus.COMPLETED, "client")
 
-    mock_task_dispatcher.dispatch_finalize_catalog.assert_called_once()
+    mock_task_dispatcher.dispatch_finalize_catalog.assert_not_called()
 
 
 @pytest.mark.asyncio
 async def test_transition_harvest_enqueues_finalize_for_unchanged_catalog_harvest(
-    api_logic: BusinessLogic,
+    api_logic_with_catalog: BusinessLogic,
     mock_task_dispatcher: MagicMock,
-    mock_store: MagicMock,
 ) -> None:
     """Unchanged consolidating harvests still enqueue finalize (bootstrap/retry)."""
-    mock_store.publishes_per_arc_git = False
     harvest = HarvestDocument(
         doc_id="harvest-1",
         rdi="edal",
@@ -202,18 +238,18 @@ async def test_transition_harvest_enqueues_finalize_for_unchanged_catalog_harves
     )
     completed = harvest.model_copy(update={"status": HarvestStatus.COMPLETED})
     with patch.object(
-        api_logic._harvest_manager,  # noqa: SLF001
+        api_logic_with_catalog._harvest_manager,  # noqa: SLF001
         "transition_harvest",
         AsyncMock(return_value=completed),
     ):
-        await api_logic.transition_harvest(harvest, HarvestStatus.COMPLETED, "client")
+        await api_logic_with_catalog.transition_harvest(harvest, HarvestStatus.COMPLETED, "client")
 
     mock_task_dispatcher.dispatch_finalize_catalog.assert_called_once()
 
 
 @pytest.mark.asyncio
 async def test_transition_already_completed_reenqueues_finalize(
-    api_logic: BusinessLogic,
+    api_logic_with_catalog: BusinessLogic,
     mock_task_dispatcher: MagicMock,
     mock_doc_store: MagicMock,
 ) -> None:
@@ -227,7 +263,7 @@ async def test_transition_already_completed_reenqueues_finalize(
         statistics=HarvestStatistics(arcs_submitted=1, arcs_unchanged=1),
     )
 
-    result = await api_logic.transition_harvest(harvest, HarvestStatus.COMPLETED, "client")
+    result = await api_logic_with_catalog.transition_harvest(harvest, HarvestStatus.COMPLETED, "client")
 
     assert result.status == HarvestStatus.COMPLETED
     mock_doc_store.update_harvest.assert_not_called()
@@ -238,36 +274,30 @@ async def test_transition_already_completed_reenqueues_finalize(
 
 
 @pytest.mark.asyncio
-async def test_finalize_catalog_skips_events_for_per_arc_backend(
+async def test_finalize_catalog_requires_consolidated_store(
     worker_logic: BusinessLogic,
-    mock_store: MagicMock,
-    mock_doc_store: MagicMock,
 ) -> None:
-    """Per-ARC backends must not record misleading CATALOG_PUSH_* harvest events."""
-    mock_store.publishes_per_arc_git = True
-    mock_store.finalize = AsyncMock(return_value=CatalogFinalizeResult(pushed=False))
-    mock_doc_store.update_harvest = AsyncMock()
-
-    pushed = await worker_logic.finalize_catalog("test-rdi", harvest_id="harvest-1")
-
-    assert pushed is False
-    mock_doc_store.update_harvest.assert_not_called()
+    """finalize_catalog fails closed when consolidated_store is absent."""
+    with pytest.raises(BusinessLogicError, match="consolidated_store"):
+        await worker_logic.finalize_catalog("test-rdi", harvest_id="harvest-1")
 
 
 @pytest.mark.asyncio
 async def test_finalize_catalog_records_success_event_for_catalog_backend(
-    worker_logic: BusinessLogic,
+    worker_logic_with_catalog: BusinessLogic,
     mock_store: MagicMock,
+    mock_consolidated_store: MagicMock,
     mock_doc_store: MagicMock,
 ) -> None:
     """Consolidated catalog finalize records CATALOG_PUSH_SUCCESS on the harvest."""
-    mock_store.publishes_per_arc_git = False
-    mock_store.finalize = AsyncMock(return_value=CatalogFinalizeResult(pushed=True, dataset_count=3))
+    mock_consolidated_store.finalize = AsyncMock(return_value=CatalogFinalizeResult(pushed=True, dataset_count=3))
     mock_doc_store.update_harvest = AsyncMock()
 
-    pushed = await worker_logic.finalize_catalog("test-rdi", harvest_id="harvest-1")
+    pushed = await worker_logic_with_catalog.finalize_catalog("test-rdi", harvest_id="harvest-1")
 
     assert pushed is True
+    mock_consolidated_store.finalize.assert_awaited_once_with(rdi="test-rdi")
+    mock_store.finalize.assert_not_called()
     mock_doc_store.update_harvest.assert_called_once()
     patch = mock_doc_store.update_harvest.call_args.args[1]
     assert patch["append_catalog_event"]["type"] == "CATALOG_PUSH_SUCCESS"
@@ -277,13 +307,12 @@ async def test_finalize_catalog_records_success_event_for_catalog_backend(
 
 @pytest.mark.asyncio
 async def test_finalize_catalog_success_message_includes_skip_summary(
-    worker_logic: BusinessLogic,
-    mock_store: MagicMock,
+    worker_logic_with_catalog: BusinessLogic,
+    mock_consolidated_store: MagicMock,
     mock_doc_store: MagicMock,
 ) -> None:
     """Partial-push skips must appear on CATALOG_PUSH_SUCCESS for harvest visibility."""
-    mock_store.publishes_per_arc_git = False
-    mock_store.finalize = AsyncMock(
+    mock_consolidated_store.finalize = AsyncMock(
         return_value=CatalogFinalizeResult(
             pushed=True,
             dataset_count=2,
@@ -292,7 +321,7 @@ async def test_finalize_catalog_success_message_includes_skip_summary(
     )
     mock_doc_store.update_harvest = AsyncMock()
 
-    pushed = await worker_logic.finalize_catalog("test-rdi", harvest_id="harvest-1")
+    pushed = await worker_logic_with_catalog.finalize_catalog("test-rdi", harvest_id="harvest-1")
 
     assert pushed is True
     message = mock_doc_store.update_harvest.call_args.args[1]["append_catalog_event"]["message"]
@@ -303,13 +332,12 @@ async def test_finalize_catalog_success_message_includes_skip_summary(
 
 @pytest.mark.asyncio
 async def test_finalize_catalog_success_message_uses_singular_dataset(
-    worker_logic: BusinessLogic,
-    mock_store: MagicMock,
+    worker_logic_with_catalog: BusinessLogic,
+    mock_consolidated_store: MagicMock,
     mock_doc_store: MagicMock,
 ) -> None:
     """Single published dataset should use singular wording in the success event."""
-    mock_store.publishes_per_arc_git = False
-    mock_store.finalize = AsyncMock(
+    mock_consolidated_store.finalize = AsyncMock(
         return_value=CatalogFinalizeResult(
             pushed=True,
             dataset_count=1,
@@ -318,7 +346,7 @@ async def test_finalize_catalog_success_message_uses_singular_dataset(
     )
     mock_doc_store.update_harvest = AsyncMock()
 
-    pushed = await worker_logic.finalize_catalog("test-rdi", harvest_id="harvest-1")
+    pushed = await worker_logic_with_catalog.finalize_catalog("test-rdi", harvest_id="harvest-1")
 
     assert pushed is True
     message = mock_doc_store.update_harvest.call_args.args[1]["append_catalog_event"]["message"]
@@ -328,34 +356,32 @@ async def test_finalize_catalog_success_message_uses_singular_dataset(
 
 @pytest.mark.asyncio
 async def test_finalize_catalog_transient_error_skips_failure_event(
-    worker_logic: BusinessLogic,
-    mock_store: MagicMock,
+    worker_logic_with_catalog: BusinessLogic,
+    mock_consolidated_store: MagicMock,
     mock_doc_store: MagicMock,
 ) -> None:
     """Transient finalize failures must not append CATALOG_PUSH_FAILED before Celery retry."""
-    mock_store.publishes_per_arc_git = False
-    mock_store.finalize = AsyncMock(side_effect=ArcStoreTransientError("git unreachable"))
+    mock_consolidated_store.finalize = AsyncMock(side_effect=ArcStoreTransientError("git unreachable"))
     mock_doc_store.update_harvest = AsyncMock()
 
     with pytest.raises(TransientError, match="git unreachable"):
-        await worker_logic.finalize_catalog("test-rdi", harvest_id="harvest-1")
+        await worker_logic_with_catalog.finalize_catalog("test-rdi", harvest_id="harvest-1")
 
     mock_doc_store.update_harvest.assert_not_called()
 
 
 @pytest.mark.asyncio
 async def test_finalize_catalog_permanent_error_records_failure_event(
-    worker_logic: BusinessLogic,
-    mock_store: MagicMock,
+    worker_logic_with_catalog: BusinessLogic,
+    mock_consolidated_store: MagicMock,
     mock_doc_store: MagicMock,
 ) -> None:
     """Permanent catalog push failures record CATALOG_PUSH_FAILED on the harvest."""
-    mock_store.publishes_per_arc_git = False
-    mock_store.finalize = AsyncMock(side_effect=ArcStoreError("invalid catalog"))
+    mock_consolidated_store.finalize = AsyncMock(side_effect=ArcStoreError("invalid catalog"))
     mock_doc_store.update_harvest = AsyncMock()
 
     with pytest.raises(BusinessLogicError, match="catalog finalize failed"):
-        await worker_logic.finalize_catalog("test-rdi", harvest_id="harvest-1")
+        await worker_logic_with_catalog.finalize_catalog("test-rdi", harvest_id="harvest-1")
 
     mock_doc_store.update_harvest.assert_called_once()
     patch = mock_doc_store.update_harvest.call_args.args[1]
@@ -364,25 +390,45 @@ async def test_finalize_catalog_permanent_error_records_failure_event(
 
 @pytest.mark.asyncio
 async def test_finalize_catalog_redacts_oauth_token_in_failure_event(
-    worker_logic: BusinessLogic,
-    mock_store: MagicMock,
+    worker_logic_with_catalog: BusinessLogic,
+    mock_consolidated_store: MagicMock,
     mock_doc_store: MagicMock,
 ) -> None:
     """CATALOG_PUSH_FAILED messages must not persist oauth2 credentials in CouchDB."""
-    mock_store.publishes_per_arc_git = False
     # Plain Exception: no ArcStoreError/BusinessLogicError.__str__ redaction.
-    mock_store.finalize = AsyncMock(
+    mock_consolidated_store.finalize = AsyncMock(
         side_effect=RuntimeError("push failed: https://oauth2:secret-token@gitlab.example.com/group/catalog.git")
     )
     mock_doc_store.update_harvest = AsyncMock()
 
     with pytest.raises(BusinessLogicError, match="catalog finalize failed"):
-        await worker_logic.finalize_catalog("test-rdi", harvest_id="harvest-1")
+        await worker_logic_with_catalog.finalize_catalog("test-rdi", harvest_id="harvest-1")
 
     patch = mock_doc_store.update_harvest.call_args.args[1]
     message = patch["append_catalog_event"]["message"]
     assert "secret-token" not in message
     assert "https://***@gitlab.example.com" in message
+
+
+@pytest.mark.asyncio
+async def test_shutdown_closes_both_stores(
+    mock_config: MagicMock,
+    mock_store: MagicMock,
+    mock_consolidated_store: MagicMock,
+    mock_doc_store: MagicMock,
+) -> None:
+    """Shutdown releases both ArcStore slots when consolidated_store is present."""
+    mock_doc_store.close = AsyncMock()
+    logic = BusinessLogic(
+        config=mock_config,
+        store=mock_store,
+        doc_store=mock_doc_store,
+        consolidated_store=mock_consolidated_store,
+    )
+    await logic.shutdown()
+    mock_store.shutdown.assert_awaited_once()
+    mock_consolidated_store.shutdown.assert_awaited_once()
+    mock_doc_store.close.assert_awaited_once()
 
 
 @pytest.mark.asyncio
@@ -418,36 +464,37 @@ async def test_api_mode_create_or_update_success(
 
 
 @pytest.mark.asyncio
-async def test_api_mode_rejects_standalone_when_unsupported(
-    api_logic: BusinessLogic, mock_store: MagicMock, mock_doc_store: MagicMock, mock_task_dispatcher: MagicMock
+async def test_api_mode_standalone_always_accepted(
+    api_logic_with_catalog: BusinessLogic,
+    mock_doc_store: MagicMock,
+    mock_task_dispatcher: MagicMock,
 ) -> None:
-    """Standalone create_or_update_arc must fail before CouchDB when backend forbids it."""
-    mock_store.supports_standalone_upload = False
+    """Standalone create_or_update_arc succeeds even when consolidated_store is configured."""
+    mock_doc_store.store_arc.return_value = ArcStoreResult(arc_id="arc_id", is_new=True, has_changes=True)
     arc_data = minimal_rocrate_dict("ABC")
 
-    with pytest.raises(InvalidRequestError, match="Standalone ARC upload is not supported"):
-        await api_logic.create_or_update_arc("test-rdi", arc_data, "client")
+    result = await api_logic_with_catalog.create_or_update_arc("test-rdi", arc_data, "client")
 
-    mock_doc_store.store_arc.assert_not_called()
-    mock_task_dispatcher.dispatch_sync_arc.assert_not_called()
+    assert result.arc.id == "arc_id"
+    mock_doc_store.store_arc.assert_called_once()
+    mock_task_dispatcher.dispatch_sync_arc.assert_called_once()
+    mock_task_dispatcher.dispatch_finalize_catalog.assert_not_called()
 
 
 @pytest.mark.asyncio
-async def test_api_mode_allows_harvest_when_standalone_unsupported(
-    api_logic: BusinessLogic, mock_store: MagicMock, mock_doc_store: MagicMock, mock_task_dispatcher: MagicMock
+async def test_api_mode_harvest_scoped_with_consolidated_still_syncs(
+    api_logic_with_catalog: BusinessLogic, mock_doc_store: MagicMock, mock_task_dispatcher: MagicMock
 ) -> None:
-    """Harvest-scoped upload remains allowed when standalone upload is unsupported."""
-    mock_store.supports_standalone_upload = False
-    mock_store.publishes_per_arc_git = False
+    """Harvest-scoped upload schedules per-ARC sync when consolidated_store is set."""
     mock_doc_store.store_arc.return_value = ArcStoreResult(arc_id="arc_id", is_new=True, has_changes=True)
     mock_doc_store.get_harvest = AsyncMock(return_value=MagicMock(client_id="client"))
     arc_data = minimal_rocrate_dict("ABC")
 
-    result = await api_logic.create_or_update_arc("test-rdi", arc_data, "client", harvest_id="harvest-1")
+    result = await api_logic_with_catalog.create_or_update_arc("test-rdi", arc_data, "client", harvest_id="harvest-1")
 
     assert result.arc.id == "arc_id"
     mock_doc_store.store_arc.assert_called_once()
-    mock_task_dispatcher.dispatch_sync_arc.assert_not_called()
+    mock_task_dispatcher.dispatch_sync_arc.assert_called_once()
 
 
 @pytest.mark.asyncio
@@ -599,9 +646,9 @@ def test_factory_create_api_mode() -> None:
 
     with (
         patch("middleware.api.business_logic.business_logic_factory.CouchDB"),
-        patch("middleware.api.business_logic.business_logic_factory.create_arc_store") as mock_create,
+        patch("middleware.api.business_logic.business_logic_factory.create_arc_stores") as mock_create,
     ):
-        mock_create.return_value = MagicMock()
+        mock_create.return_value = (MagicMock(), None)
         bl = BusinessLogicFactory.create(
             config,
             mode="api",

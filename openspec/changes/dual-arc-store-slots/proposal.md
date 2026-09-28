@@ -8,9 +8,9 @@ explore.
 ## What Changes
 
 - **BREAKING:** Replace “exactly one ArcStore backend” with two config roles:
-  - **required** `arc_store` — per-ARC only (`git_repo` | deprecated `gitlab_api`); `type: consolidated_git` under
-    `arc_store` is **invalid**
-  - **optional** `consolidated_store` — catalog only (`consolidated_git` settings; `type` MAY be omitted / implied)
+  - **required** `arc_store` — per-ARC only; backend selected by nested `git_repo:` or deprecated `gitlab_api:` (no
+    `type` field); catalog settings under `arc_store` are **invalid**
+  - **optional** `consolidated_store` — catalog only (`consolidated_git:` settings; slot name selects the role)
 - **BREAKING:** Drop obsolete top-level `git_repo` / `gitlab_api` / `consolidated_git` keys (no compat window). Helm
   values, config-secret, and docs migrate in this change.
 - Per-slot optional `git:` blocks sharing the same `GitCliSettings` type (no single top-level merge into both).
@@ -41,8 +41,8 @@ explore.
 
 ## Impact
 
-- Code: `arc_store/{factory,resolution,legacy_config,arc_store_config}.py`, API/worker `config.py`,
-  `BusinessLogicFactory`, `ArcManager`, `ApiHealthService`, Helm chart values/config-secret/NOTES
+- Code: `arc_store/{factory,resolution,arc_store_config}.py`, API/worker `config.py`, `BusinessLogicFactory`,
+  `ArcManager`, `ApiHealthService`, Helm chart values/config-secret/NOTES
 - Deployments using top-level store keys or `arc_store.type: consolidated_git` alone must migrate
 - OpenSpec main specs listed above; related tests and Swagger descriptions
 - Related issues: #517 (this), #518, #519, #182, #334 (legacy path largely subsumed)

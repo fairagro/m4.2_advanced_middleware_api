@@ -62,14 +62,16 @@ class BusinessLogic:
         store: ArcStore,
         doc_store: DocumentStore,
         ports: BusinessLogicPorts | None = None,
+        consolidated_store: ArcStore | None = None,
     ) -> None:
         """Initialize the BusinessLogic.
 
         Args:
             config: Middleware API configuration.
-            store: ArcStore for GitLab persistence.
+            store: Per-ARC ArcStore for GitLab persistence.
             doc_store: DocumentStore for CouchDB persistence.
             ports: Optional infrastructure adapters for API mode integrations.
+            consolidated_store: Optional consolidated catalog ArcStore.
         """
         resolved_ports = ports or BusinessLogicPorts()
         self._config = config
@@ -81,6 +83,7 @@ class BusinessLogic:
             store=store,
             doc_store=doc_store,
             task_dispatcher=resolved_ports.task_dispatcher,
+            consolidated_store=consolidated_store,
         )
 
     @property
@@ -100,8 +103,13 @@ class BusinessLogic:
 
     @property
     def arc_store(self) -> ArcStore:
-        """Underlying arc store instance (used by health checks)."""
+        """Underlying per-ARC arc store instance (used by health checks)."""
         return self._arc_manager.store
+
+    @property
+    def consolidated_store(self) -> ArcStore | None:
+        """Optional consolidated catalog store (used by health checks)."""
+        return self._arc_manager.consolidated_store
 
     async def get_metadata(self, arc_id: str) -> ArcMetadata | None:
         """Get metadata for an ARC.
@@ -199,20 +207,25 @@ class BusinessLogic:
 
         Delegates status/ownership/statistics updates to
         ``HarvestManager.transition_harvest``. When ``target_status`` is
-        ``COMPLETED`` and a task dispatcher is configured, always enqueues
-        ``dispatch_finalize_catalog``. Empty/unchanged harvests still enqueue;
-        the store skips commit/push when catalog bytes already match the remote
-        (needed for bootstrap after switching backends and for retry after a
-        failed finalize). Re-POSTing ``COMPLETED`` on an already-``COMPLETED``
-        harvest is an idempotent no-op on the document and re-enqueues finalize
-        (recovery when the prior Celery dispatch failed after the status write).
+        ``COMPLETED``, a task dispatcher is configured, **and**
+        ``consolidated_store`` is set, enqueues ``dispatch_finalize_catalog``.
+        Empty/unchanged harvests still enqueue when consol. is present; the store
+        skips commit/push when catalog bytes already match the remote (needed for
+        bootstrap and retry after a failed finalize). Re-POSTing ``COMPLETED`` on
+        an already-``COMPLETED`` harvest is an idempotent no-op on the document
+        and re-enqueues finalize when consol. is configured (recovery when the
+        prior Celery dispatch failed after the status write).
 
         Prefer this method from HTTP handlers over calling
         ``harvest_manager.transition_harvest`` directly so finalize enqueue stays
         consistent.
         """
         updated = await self._harvest_manager.transition_harvest(harvest, target_status, client_id)
-        if target_status == HarvestStatus.COMPLETED and self._ports.task_dispatcher is not None:
+        if (
+            target_status == HarvestStatus.COMPLETED
+            and self._ports.task_dispatcher is not None
+            and self._arc_manager.consolidated_store is not None
+        ):
             self._ports.task_dispatcher.dispatch_finalize_catalog(
                 CatalogFinalizeTask(
                     rdi=updated.rdi,
