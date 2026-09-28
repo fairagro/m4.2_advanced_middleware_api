@@ -1,9 +1,9 @@
 """Preferred ``arc_store`` / ``consolidated_store`` configuration blocks."""
 
 from enum import StrEnum
-from typing import Annotated, Self
+from typing import Annotated, ClassVar, Self
 
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from middleware.api.arc_store.consolidated_git.config import ConsolidatedGitConfig
 from middleware.api.arc_store.git_cli_settings import GitCliSettings
@@ -12,11 +12,10 @@ from middleware.api.arc_store.gitlab_api.store import GitlabApiConfig
 
 
 class ArcStoreBackendType(StrEnum):
-    """Configured ArcStore implementation."""
+    """Configured per-ARC ArcStore implementation."""
 
     GIT_REPO = "git_repo"
     GITLAB_API = "gitlab_api"
-    CONSOLIDATED_GIT = "consolidated_git"
 
 
 class ArcStoreConfig(BaseModel):
@@ -25,6 +24,8 @@ class ArcStoreConfig(BaseModel):
     Backend is selected by which nested settings key is set (``git_repo`` or
     deprecated ``gitlab_api``) — no separate ``type`` field.
     """
+
+    model_config: ClassVar[ConfigDict] = ConfigDict(extra="forbid")
 
     git: Annotated[
         GitCliSettings | None,
@@ -60,6 +61,8 @@ class ConsolidatedStoreConfig(BaseModel):
     The slot name selects the catalog backend; nested settings live under
     ``consolidated_git`` (no separate ``type`` field).
     """
+
+    model_config: ClassVar[ConfigDict] = ConfigDict(extra="forbid")
 
     git: Annotated[
         GitCliSettings | None,

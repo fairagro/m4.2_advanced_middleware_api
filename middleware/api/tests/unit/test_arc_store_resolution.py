@@ -50,12 +50,25 @@ def test_accept_git_repo_plus_optional_catalog() -> None:
 
 
 def test_reject_consolidated_under_arc_store() -> None:
-    """Catalog settings under arc_store do not select a per-ARC backend."""
-    with pytest.raises(ValidationError, match="exactly one of 'git_repo' or 'gitlab_api'"):
+    """Catalog settings under arc_store are not permitted on the per-ARC slot."""
+    with pytest.raises(ValidationError, match="Extra inputs are not permitted"):
         Config.from_data({
             "couchdb": _minimal_couchdb(),
             "celery": _minimal_celery(),
             "arc_store": {
+                "consolidated_git": {"repo_url": "file:///tmp/catalog.git"},
+            },
+        })
+
+
+def test_reject_consolidated_alongside_git_repo_under_arc_store() -> None:
+    """Catalog keys under arc_store are forbidden even when a per-ARC backend is set."""
+    with pytest.raises(ValidationError, match="Extra inputs are not permitted"):
+        Config.from_data({
+            "couchdb": _minimal_couchdb(),
+            "celery": _minimal_celery(),
+            "arc_store": {
+                **_git_repo_arc_store(),
                 "consolidated_git": {"repo_url": "file:///tmp/catalog.git"},
             },
         })
@@ -101,7 +114,7 @@ def test_arc_store_config_requires_exactly_one_backend_key() -> None:
             "git_repo": {"url": "https://gitlab.example/repo.git", "group": "fairagro"},
             "gitlab_api": {"url": "https://gitlab.example", "token": "x", "group": "g"},
         })
-    with pytest.raises(ValidationError, match="exactly one"):
+    with pytest.raises(ValidationError, match="Extra inputs are not permitted"):
         _ARC_STORE_CONFIG.validate_python({
             "consolidated_git": {"repo_url": "file:///tmp/catalog.git"},
         })
