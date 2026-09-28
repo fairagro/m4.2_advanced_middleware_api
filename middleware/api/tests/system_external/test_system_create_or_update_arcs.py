@@ -64,7 +64,7 @@ async def test_create_arcs(
 
 def _verify_gitlab_project(gitlab_api: Gitlab, config: dict[str, Any], json_info: dict[str, Any]) -> bool:
     """Verify that the project was created in GitLab and contains the expected file."""
-    group_name = config["gitlab_api"]["group"].lower()
+    group_name = config["arc_store"]["gitlab_api"]["group"].lower()
     group = gitlab_api.groups.get(group_name)
     arc_id = hashlib.sha256(f"{json_info['identifier']}:rdi-1".encode()).hexdigest()
     try:
@@ -202,7 +202,7 @@ def _get_latest_commit_sha(
 
     Returns ``None`` when the project does not yet exist or has no commits.
     """
-    group_name = config["gitlab_api"]["group"].lower()
+    group_name = config["arc_store"]["gitlab_api"]["group"].lower()
     try:
         group = gitlab_api.groups.get(group_name)
         projects = group.projects.list(search=arc_id)
