@@ -42,9 +42,3 @@ def create_arc_stores(config: ArcStoreConfigSource, doc_store: DocumentStore) ->
         msg = f"Expected ConsolidatedGitConfig for consolidated_store, got {consol_settings.__class__.__name__}"
         raise TypeError(msg)
     return arc_store, ConsolidatedGitArcStore(consol_settings, doc_store)
-
-
-def create_arc_store(config: ArcStoreConfigSource, doc_store: DocumentStore) -> ArcStore:
-    """Build only the required per-ARC ArcStore (compat helper for health fallback)."""
-    arc_store, _ = create_arc_stores(config, doc_store)
-    return arc_store

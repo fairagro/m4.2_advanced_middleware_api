@@ -92,17 +92,6 @@ holds latest ARC bodies only; harvest cannot filter catalog membership).
 - **WHEN** `finalize` is invoked for an RDI
 - **THEN** the call succeeds without writing a consolidated catalog file
 
-### Requirement: Skip per-ARC Git sync for the consolidated backend
-
-When the consolidated Git backend is configured, harvest ARC ingestion SHALL persist ARC bodies in the document store
-only and MUST NOT enqueue per-ARC Git synchronization tasks. Catalog publication happens exclusively via `finalize`.
-
-#### Scenario: Changed ARC does not enqueue per-ARC Git sync
-
-- **GIVEN** `consolidated_git` is configured
-- **WHEN** a harvest submits a new or changed ARC
-- **THEN** the ARC is stored in CouchDB and no per-ARC Git sync task is dispatched
-
 ### Requirement: Publish a byte-stable consolidated RDI catalog file on finalize
 
 On `finalize` for an RDI, the consolidated Git backend SHALL rebuild the catalog file `{rdi}.json` as a top-level JSON
@@ -233,16 +222,16 @@ bodies for the RDI.
 
 ### Requirement: Dual-slot Git backend health checks
 
-When global Git-backend health checks are enabled, the system MUST include a check for the required `arc_store`. When
-`consolidated_store` is also configured, the system MUST include a separate check for that store. There MUST NOT be a
-separate feature flag solely to disable the consolidated health check. Aggregate global health status MUST fail when any
-included check is false (same aggregation as other health services).
+When global Git-backend health checks are enabled, the system MUST include a check keyed `git_backend` for the required
+`arc_store` slot. When `consolidated_store` is also configured, the system MUST include a separate check keyed
+`consolidated_store`. There MUST NOT be a separate feature flag solely to disable the consolidated health check.
+Aggregate global health status MUST fail when any included check is false (same aggregation as other health services).
 
 #### Scenario: Both backends appear when consol. configured
 
 - **GIVEN** git-backend global health is enabled and both slots are configured
 - **WHEN** `/v3/health` runs
-- **THEN** the response includes distinct checks for `arc_store` and `consolidated_store`
+- **THEN** the response includes distinct checks for `git_backend` and `consolidated_store`
 - **AND** if either is false, overall health is ERROR
 
 ### Requirement: Classify consolidated Git failures
