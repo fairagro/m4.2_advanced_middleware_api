@@ -170,8 +170,9 @@ key is set: `git_repo` or deprecated `gitlab_api` (exactly one). There MUST NOT 
 on either slot. The `consolidated_store` slot MUST configure consolidated catalog settings under `consolidated_git`
 (slot name selects the catalog role). Putting catalog settings under `arc_store` MUST fail validation. Top-level
 `git_repo`, `gitlab_api`, and `consolidated_git` MUST NOT be model fields (they are not accepted as configuration).
-Config that relies only on those obsolete keys MUST fail because the required `arc_store` slot is missing. Each slot MAY
-carry its own `git` CLI settings object using the shared Git CLI settings type.
+Config that relies only on those keys MUST fail (required `arc_store` missing and/or unknown top-level fields
+forbidden). API and worker config models MUST reject unknown top-level fields (`extra="forbid"`). Each slot MAY carry
+its own `git` CLI settings object using the shared Git CLI settings type.
 
 #### Scenario: Accept GitRepo plus optional catalog
 
@@ -189,7 +190,13 @@ carry its own `git` CLI settings object using the shared Git CLI settings type.
 
 - **GIVEN** only a top-level `git_repo`, `gitlab_api`, or `consolidated_git` key is provided (no `arc_store`)
 - **WHEN** configuration is validated
-- **THEN** validation fails because required `arc_store` is missing
+- **THEN** validation fails (unknown top-level fields and/or missing required `arc_store`)
+
+#### Scenario: Reject unknown top-level fields alongside dual slots
+
+- **GIVEN** `arc_store` is configured and an unknown top-level field is also present
+- **WHEN** configuration is validated
+- **THEN** validation fails before the API or worker starts
 
 ### Requirement: Role-based ArcStore operations
 

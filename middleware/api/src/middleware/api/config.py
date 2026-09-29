@@ -8,7 +8,6 @@ from cryptography import x509
 from pydantic import ConfigDict, Field, field_validator, model_validator
 
 from middleware.api.arc_store.arc_store_config import ArcStoreConfig, ConsolidatedStoreConfig
-from middleware.api.arc_store.git_repo import GitRepoConfig
 from middleware.api.arc_store.resolution import validate_arc_store_config
 from middleware.api.business_logic.config import HarvestConfig
 from middleware.api.document_store.config import CouchDBConfig
@@ -86,7 +85,7 @@ class Config(ConfigBase):
         bool, Field(description="Require client certificate for API access (set to false for development)")
     ] = True
 
-    model_config: ClassVar[ConfigDict] = ConfigDict(arbitrary_types_allowed=True)
+    model_config: ClassVar[ConfigDict] = ConfigDict(arbitrary_types_allowed=True, extra="forbid")
 
     @field_validator("known_rdis")
     @classmethod
@@ -117,14 +116,5 @@ class Config(ConfigBase):
     @model_validator(mode="after")
     def validate_storage_backends(self) -> Self:
         """Validate dual-slot ArcStore config and GitLab topic mapping."""
-        validate_arc_store_config(self)
-        if self.arc_store.git_repo is not None and self.known_rdis:
-            git_repo = self.arc_store.git_repo
-            validated_topics = GitRepoConfig.validate_rdi_gitlab_topics_for_known_rdis(
-                self.known_rdis,
-                git_repo.rdi_gitlab_topics,
-            )
-            self.arc_store = self.arc_store.model_copy(
-                update={"git_repo": git_repo.model_copy(update={"rdi_gitlab_topics": validated_topics})}
-            )
+        self.arc_store = validate_arc_store_config(self, known_rdis=self.known_rdis)
         return self

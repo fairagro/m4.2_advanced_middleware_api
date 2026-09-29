@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from middleware.api.arc_store import ArcStore
 from middleware.api.arc_store.arc_store_config import ArcStoreBackendType
-from middleware.api.arc_store.consolidated_git import ConsolidatedGitArcStore, ConsolidatedGitConfig
+from middleware.api.arc_store.consolidated_git import ConsolidatedGitArcStore
 from middleware.api.arc_store.git_repo import GitRepo, GitRepoConfig
 from middleware.api.arc_store.gitlab_api import GitlabApi, GitlabApiConfig
 from middleware.api.arc_store.resolution import (
@@ -38,7 +38,4 @@ def create_arc_stores(config: ArcStoreConfigSource, doc_store: DocumentStore) ->
     consol_settings = resolve_consolidated_store_settings(config)
     if consol_settings is None:
         return arc_store, None
-    if not isinstance(consol_settings, ConsolidatedGitConfig):
-        msg = f"Expected ConsolidatedGitConfig for consolidated_store, got {consol_settings.__class__.__name__}"
-        raise TypeError(msg)
     return arc_store, ConsolidatedGitArcStore(consol_settings, doc_store)

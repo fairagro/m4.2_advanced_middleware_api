@@ -116,6 +116,7 @@ class ApiHealthService:
         except Exception as e:  # noqa: BLE001
             logger.error("Git backend health check failed: %s", e)
             results.setdefault("git_backend", False)
-            if self._config.consolidated_store is not None or self._consolidated_store is not None:
+            # Config is the single source of truth for whether consol. was requested.
+            if self._config.consolidated_store is not None:
                 results.setdefault("consolidated_store", False)
             return results

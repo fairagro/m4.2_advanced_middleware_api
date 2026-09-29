@@ -22,10 +22,29 @@ class ArcStoreConfigSource(Protocol):
     consolidated_store: ConsolidatedStoreConfig | None
 
 
-def validate_arc_store_config(config: ArcStoreConfigSource) -> None:
-    """Ensure required ``arc_store`` resolves and optional consol. settings are valid."""
+def normalize_git_repo_rdi_gitlab_topics(arc_store: ArcStoreConfig, known_rdis: list[str]) -> ArcStoreConfig:
+    """Return ``arc_store`` with ``rdi_gitlab_topics`` validated for ``known_rdis`` when applicable."""
+    if arc_store.git_repo is None or not known_rdis:
+        return arc_store
+    git_repo = arc_store.git_repo
+    validated_topics = GitRepoConfig.validate_rdi_gitlab_topics_for_known_rdis(
+        known_rdis,
+        git_repo.rdi_gitlab_topics,
+    )
+    return arc_store.model_copy(
+        update={"git_repo": git_repo.model_copy(update={"rdi_gitlab_topics": validated_topics})}
+    )
+
+
+def validate_arc_store_config(config: ArcStoreConfigSource, *, known_rdis: list[str]) -> ArcStoreConfig:
+    """Validate dual-slot ArcStore config and normalize GitLab topic mapping.
+
+    Returns:
+        The (possibly updated) ``arc_store`` with validated ``rdi_gitlab_topics``.
+    """
     resolve_arc_store_backend(config)
     resolve_consolidated_store_settings(config)
+    return normalize_git_repo_rdi_gitlab_topics(config.arc_store, known_rdis)
 
 
 def resolve_arc_store_backend(

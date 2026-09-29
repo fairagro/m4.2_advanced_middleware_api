@@ -75,8 +75,8 @@ def test_reject_consolidated_alongside_git_repo_under_arc_store() -> None:
 
 
 def test_obsolete_top_level_alone_fails_missing_arc_store() -> None:
-    """Top-level store keys are not model fields; without arc_store validation fails."""
-    with pytest.raises(ValidationError, match="arc_store"):
+    """Former top-level store keys are unknown fields and/or leave arc_store missing."""
+    with pytest.raises(ValidationError, match="Extra inputs are not permitted|arc_store"):
         Config.from_data({
             "couchdb": _minimal_couchdb(),
             "celery": _minimal_celery(),
@@ -84,16 +84,15 @@ def test_obsolete_top_level_alone_fails_missing_arc_store() -> None:
         })
 
 
-def test_obsolete_top_level_ignored_when_arc_store_present() -> None:
-    """Unknown top-level extras are ignored when required arc_store is valid."""
-    config = Config.from_data({
-        "couchdb": _minimal_couchdb(),
-        "celery": _minimal_celery(),
-        "arc_store": _git_repo_arc_store(),
-        "consolidated_git": {"repo_url": "file:///tmp/catalog.git"},
-    })
-    assert config.consolidated_store is None
-    assert not has_consolidated_store(config)
+def test_unknown_top_level_rejected_when_arc_store_present() -> None:
+    """Unknown top-level fields fail under extra=forbid even with a valid arc_store."""
+    with pytest.raises(ValidationError, match="Extra inputs are not permitted"):
+        Config.from_data({
+            "couchdb": _minimal_couchdb(),
+            "celery": _minimal_celery(),
+            "arc_store": _git_repo_arc_store(),
+            "consolidated_git": {"repo_url": "file:///tmp/catalog.git"},
+        })
 
 
 def test_arc_store_required() -> None:

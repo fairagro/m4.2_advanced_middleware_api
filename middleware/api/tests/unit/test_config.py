@@ -150,14 +150,14 @@ def test_config_requires_arc_store() -> None:
 
 
 def test_config_rejects_legacy_only_top_level_backends(tmp_path: Path) -> None:
-    """Top-level store keys alone are not enough; required arc_store is missing."""
+    """Former top-level store keys alone fail (unknown fields and/or missing arc_store)."""
     config_data = {
         "git_repo": _git_repo(tmp_path),
         "gitlab_api": {"url": "https://gitlab.com", "token": "t", "group": "g", "branch": "b"},
         "couchdb": {"url": "http://localhost:5984"},
         "celery": {"broker_url": "memory://", "result_backend": "cache+memory://"},
     }
-    with pytest.raises(ValidationError, match="arc_store"):
+    with pytest.raises(ValidationError, match="Extra inputs are not permitted|arc_store"):
         Config.model_validate(config_data)
 
 

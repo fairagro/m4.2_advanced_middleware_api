@@ -1,11 +1,10 @@
 """Configuration models for worker-related components."""
 
-from typing import Annotated, Self
+from typing import Annotated, ClassVar, Self
 
-from pydantic import BaseModel, Field, SecretStr, model_validator
+from pydantic import BaseModel, ConfigDict, Field, SecretStr, model_validator
 
 from middleware.api.arc_store.arc_store_config import ArcStoreConfig, ConsolidatedStoreConfig
-from middleware.api.arc_store.git_repo import GitRepoConfig
 from middleware.api.arc_store.resolution import validate_arc_store_config
 from middleware.api.business_logic.config import HarvestConfig
 from middleware.api.document_store.config import CouchDBConfig
@@ -32,6 +31,8 @@ class CeleryConfig(BaseModel):
 class WorkerConfig(ConfigBase):
     """Worker runtime configuration projection from the shared flat config file."""
 
+    model_config: ClassVar[ConfigDict] = ConfigDict(extra="forbid")
+
     known_rdis: Annotated[
         list[str],
         Field(description="Known RDI identifiers (used to validate GitLab topic mapping)"),
@@ -51,14 +52,5 @@ class WorkerConfig(ConfigBase):
     @model_validator(mode="after")
     def validate_git_repo_rdi_gitlab_topics(self) -> Self:
         """Validate dual-slot ArcStore config and GitLab topic mapping."""
-        validate_arc_store_config(self)
-        if self.arc_store.git_repo is not None and self.known_rdis:
-            git_repo = self.arc_store.git_repo
-            validated_topics = GitRepoConfig.validate_rdi_gitlab_topics_for_known_rdis(
-                self.known_rdis,
-                git_repo.rdi_gitlab_topics,
-            )
-            self.arc_store = self.arc_store.model_copy(
-                update={"git_repo": git_repo.model_copy(update={"rdi_gitlab_topics": validated_topics})}
-            )
+        self.arc_store = validate_arc_store_config(self, known_rdis=self.known_rdis)
         return self
