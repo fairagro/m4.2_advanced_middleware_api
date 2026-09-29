@@ -20,11 +20,13 @@ are gone.
 
 **Abort criterion:** When this run’s output shows **Fixed non-nit this run: 0**, the review cycle **stops**. Do not ask
 for another Copilot/Bugbot pass or another `/review-fixer` just because threads/comments remain, Remaining risk is
-already 0, or you only dismissed / fixed nits. **Fixed non-nit this run** = count of this run’s `fix` actions that are
-not nits (Risk step 4, or step-5 cheap + High practicality + Medium+). Risk (merge) still = Blocker/High **and**
+already 0, or you only dismissed / fixed nits (including **only** size-neutral/size-reducing Low fixes). **Fixed non-nit
+this run** = count of this run’s `fix` actions that are not nits (Risk step 4, or step-5 cheap + High practicality +
+Medium+). Size-neutral Low fixes do **not** increment Fixed non-nit. Risk (merge) still = Blocker/High **and**
 practicality not Low/None — report it, but it does **not** drive the abort. If Fixed non-nit ≥ 1, do **not** claim the
-cycle should stop. Optional: **at most one** deliberate nit-only pass while nit-budget remains even when Fixed non-nit
-would be 0; after that pass, stop. Resume only for new non-nit-fixable open work or an explicit human request.
+cycle should stop. Optional: **at most one** deliberate nit-only pass while **additive** nit-budget remains even when
+Fixed non-nit would be 0; after that pass, stop. Resume only for new non-nit-fixable open work or an explicit human
+request.
 
 ## Input
 
@@ -141,10 +143,12 @@ Ignore resolved threads completely (do not reply on them again).
 
 If `open_work_empty` is true (no unresolved threads and no summary-only findings), say so in one sentence and stop.
 
-**Nit-budget (soft PR lifetime):** Before fixing nits, sum prior `nit-lines this run: N` from fixer replies already on
-this PR (thread replies + PR conversation). Cap is **~15** for `prior + this run`. Not reset per `/review-fixer`
-invocation; not gated by Copilot/Bugbot review round. Risk and step-5 fixes do not consume the budget. Every nit `fix`
-reply must include `nit-lines this run: N`. See `docs/ai_review_policy.md`.
+**Nit-budget (soft PR lifetime):** Before fixing **additive** nits, sum prior `nit-lines this run: N` from fixer replies
+already on this PR (thread replies + PR conversation). Cap is **~15** for `prior + this run` **new** production lines.
+Not reset per `/review-fixer` invocation; not gated by Copilot/Bugbot review round. Risk and step-5 fixes do not consume
+the budget. **Size-neutral or size-reducing** correct this-PR Low fixes (net ≤0 prod lines, no new abstraction) always
+`fix` and do **not** consume budget — reply with `nit-lines this run: 0`. Every nit `fix` reply must include
+`nit-lines this run: N`. See `docs/ai_review_policy.md`.
 
 ## Per-thread procedure
 
@@ -161,7 +165,7 @@ cost: cheap|expensive — prod lines ~N, new abstraction yes/no, type wider yes/
 risk: high|not
 action: fix|dismiss|follow-up
 reason: (optional — required when synced path: "synced → Devinfra" / overlay)
-budget: nit-in-budget|nit-regression|nit-exhausted|n/a-risk
+budget: nit-in-budget|nit-size-neutral|nit-regression|nit-exhausted|n/a-risk
 ```
 
 **Synced paths (product consumers):** Before any `fix`, match the finding’s primary path against
@@ -218,12 +222,16 @@ Decision order (stop at first match) — same as the policy:
      missing contrary to sync docs — `dismiss` (practicality Low). **Nit-budget does not override** the surface quality
      bar (e.g. linked git worktrees, host-only installs, BSD/`base64` quirks, “versions.env without Product app pins”).
      See `docs/ai_review_policy.md` and `docs/surface-quality-bar.global.md`.
-   - Cheap + prior PR nit spend + this run’s nit lines still ≤ ~15 and **no** new abstraction → `fix`
-   - Or the nit is on code the previous fixer pass introduced → `fix` if cheap (counts toward the PR total)
+   - If the cheapest correct fix is **size-neutral or size-reducing** (net ≤0 production lines; no new abstraction) →
+     `fix` (does not consume budget; `nit-lines this run: 0`)
+   - Cheap + prior PR **additive** nit spend + this run’s additive nit lines still ≤ ~15 and **no** new abstraction →
+     `fix`
+   - Or the nit is on code the previous fixer pass introduced → `fix` if cheap (counts toward the PR total when it adds
+     lines)
    - Else → `dismiss` (Low) or `follow-up` (Medium+ only when expensive or practicality is not High)
 
-Sum prior `nit-lines this run: N` from existing fixer replies on the PR, then add lines you introduce for nits **this
-run**.
+Sum prior `nit-lines this run: N` from existing fixer replies on the PR, then add lines you introduce for **additive**
+nits **this run** (size-neutral/`0` replies do not inflate spend).
 
 ## Implement fixes
 
