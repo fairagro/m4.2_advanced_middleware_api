@@ -6,10 +6,10 @@ via `/review-fixer`.
 
 Two channels:
 
-| Channel                                                  | Re-review                 | Must fix                                      |
-| -------------------------------------------------------- | ------------------------- | --------------------------------------------- |
-| **Risk** (Blocker/High, practicality not Low)            | stays open every round    | yes, if the finding is correct and in this PR |
-| **Nit** (Low, or Medium with expensive/out-of-scope fix) | finders may still comment | only while nit-budget remains                 |
+| Channel                                                  | Re-review                 | Must fix                                                                          |
+| -------------------------------------------------------- | ------------------------- | --------------------------------------------------------------------------------- |
+| **Risk** (Blocker/High, practicality not Low)            | stays open every round    | yes, if the finding is correct and in this PR                                     |
+| **Nit** (Low, or Medium with expensive/out-of-scope fix) | finders may still comment | always if size-neutral/size-reducing; else only while additive nit-budget remains |
 
 Merge criterion: no open **risk** findings. Dismissed nit threads are not a merge blocker. Do not loop until “0 Copilot
 comments”.
@@ -19,15 +19,18 @@ Low/None. Copilot/Bugbot banners (“Needs a closer look”, “Changes recommen
 `severity × practicality`; Medium + High practicality is often a step-5 fix but is **not** risk.
 
 **Fixed non-nit this run** means the count of open-work items in **this** `/review-fixer` invocation with action `fix`
-that are **not** nits: Risk (step 4) and step-5 (cheap + High practicality + Medium+) fixes. Nit-budget fixes,
-dismissals, and follow-ups do **not** count. The count is per run (not accumulated across the PR).
+that are **not** nits: Risk (step 4) and step-5 (cheap + High practicality + Medium+) fixes. **Additive** nit-budget
+fixes, dismissals, and follow-ups do **not** count. **Size-neutral or size-reducing** Low `fix` actions also do **not**
+count (they are still nits for classification, but exempt from budget). The count is per run (not accumulated across the
+PR).
 
 **Review-cycle abort criterion:** After a `/review-fixer` run reports **Fixed non-nit this run: 0**, **stop the cycle**
 — do not request another finder pass or another `/review-fixer` solely because comments remain, Remaining risk is
-already 0, or only nits/dismissals happened. If **Fixed non-nit this run ≥ 1**, the cycle may continue (another finder
-pass is allowed after the fixes land). Optional exception: **at most one** deliberate nit-only pass while nit-budget
-remains even when Fixed non-nit would be 0; after that pass (or if skipped), the same abort applies. Resume when new
-open work appears that the fixer would non-nit-fix, or a human explicitly asks.
+already 0, or only nits/dismissals happened (including runs that **only** applied size-neutral/size-reducing Low fixes).
+If **Fixed non-nit this run ≥ 1**, the cycle may continue (another finder pass is allowed after the fixes land).
+Optional exception: **at most one** deliberate nit-only pass while **additive** nit-budget remains even when Fixed
+non-nit would be 0; after that pass (or if skipped), the same abort applies. Resume when new open work appears that the
+fixer would non-nit-fix, or a human explicitly asks.
 
 ---
 
@@ -133,8 +136,11 @@ Stop at the first matching step.
    supported cadence — they never become step 5 via “misleads operators”. Synced paths in consumers are already handled
    by the synced-path gate after step 2 — do not take this step against allowlisted synced files.
 6. **Nit.** Otherwise treat as a nit:
-   - Cheap + **PR nit total** (prior soft spend + this run) still ≤ ~15 and **no** new abstraction → `fix`
-   - Or the nit is on code the **previous fixer pass** introduced → `fix` if cheap (still counts toward the PR total)
+   - If the cheapest correct fix is **size-neutral or size-reducing** (net ≤0 production lines; no new abstraction) →
+     always `fix` (does **not** consume nit-budget; record `nit-lines this run: 0`)
+   - Cheap + **PR additive nit total** (prior soft spend + this run) still ≤ ~15 and **no** new abstraction → `fix`
+   - Or the nit is on code the **previous fixer pass** introduced → `fix` if cheap (still counts toward the PR total
+     when it adds lines)
    - Else → `dismiss` (Low) or `follow-up` (Medium+ only, typically when expensive or practicality is not High)
 
 If the cheaper fix is unclear, default to `dismiss` rather than adding a layer.
@@ -266,24 +272,30 @@ A **nit** is a correct (or plausible) finding that is **not** high risk and does
 Exotic edges on shared Devinfra / agent plumbing (surface bar → practicality Low) are **not** eligible nit-fixes —
 `dismiss` even when cheap. Nit-budget only applies after the surface bar says the path is in scope.
 
-Budget (fixer only) is a **soft lifetime cap per PR** of **~15 new production lines** from nit-fixes (never a new
-abstraction). It is **not** gated on Copilot/Bugbot review round — later rounds often surface Low nits after earlier
-Medium/risk findings — and it is **not** reset on each `/review-fixer` run.
+Budget (fixer only) is a **soft lifetime cap per PR** of **~15 new production lines** from **additive** nit-fixes (never
+a new abstraction). It is **not** gated on Copilot/Bugbot review round — later rounds often surface Low nits after
+earlier Medium/risk findings — and it is **not** reset on each `/review-fixer` run.
+
+**Size-neutral / size-reducing exemption:** When the cheapest correct fix for a correct, this-PR Low finding is net
+**zero or fewer** production lines (delete dead code, fold duplicates without a new abstraction, comment/docstring-only
+with no behaviour change), always `fix`. That fix does **not** consume nit-budget and does **not** increment Fixed
+non-nit this run. Record `nit-lines this run: 0` on the reply.
 
 **Soft tracking** (good enough; not audit-grade):
 
-1. Before spending on nits, sum every `nit-lines this run: N` (integer N) already posted in fixer replies on this PR
-   (review-thread replies and PR conversation comments). That sum is **prior spend**.
-2. This run may fix cheap nits while `prior spend + lines added this run for nits` ≤ ~15.
+1. Before spending on **additive** nits, sum every `nit-lines this run: N` (integer N) already posted in fixer replies
+   on this PR (review-thread replies and PR conversation comments). That sum is **prior spend** (`0` entries do not
+   inflate it).
+2. This run may fix cheap **additive** nits while `prior spend + lines added this run for additive nits` ≤ ~15.
 3. Cheap nits on surface **introduced by the previous fixer pass** (regression) may be fixed; they **count toward** the
-   same PR total.
-4. When the PR total would exceed ~15 → `dismiss` remaining Low nits (or `follow-up` for Medium+ per the decision
-   order).
+   same PR total when they add production lines.
+4. When the PR additive total would exceed ~15 → `dismiss` remaining **additive** Low nits (or `follow-up` for Medium+
+   per the decision order). Size-neutral/size-reducing Low findings remain `fix`.
 5. Risk findings and step-5 (cheap + High practicality + Medium+) findings are **never** budgeted away and **do not**
    consume nit-line budget.
 6. Every nit `fix` reply MUST include `nit-lines this run: N` for the production lines added for nits in **this** run
-   (use `0` only if the nit fix truly added no prod lines, e.g. comment-only). Prefer one aggregate line on the last nit
-   reply or on a summary PR comment when several nits were fixed in the same run.
+   (use `0` when the fix added no prod lines, including size-neutral/size-reducing). Prefer one aggregate line on the
+   last nit reply or on a summary PR comment when several nits were fixed in the same run.
 
 ---
 

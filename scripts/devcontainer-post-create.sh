@@ -158,7 +158,7 @@ extensions=(
   ms-python.debugpy
   ms-python.vscode-python-envs
   ms-python.pylint
-  ms-python.mypy-type-checker
+  ms-python.mypy-type-checker@2026.4.0
   charliermarsh.ruff
   mhutchie.git-graph
   donjayamanne.githistory

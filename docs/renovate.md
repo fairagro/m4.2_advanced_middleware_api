@@ -83,6 +83,11 @@ The **npm CLI** itself is pinned as `NPM_VERSION` in `versions.env` (regex custo
 grouped under **npm toolchain** with Prettier / markdownlint-cli2 / OpenSpec / Renovate CLI). It is independent of
 `NODE_VERSION` (Node tarball). Bump npm in Devinfra via Renovate; do not hand-edit the pin in product checkouts.
 
+**Grouping:** all Renovate updates that touch `versions.env` or `.python-version` share one PR group
+(`versions.env toolchain pins`), including former per-datasource splits (GitHub release CLIs, npm/pypi pins,
+`node-version`, …). Other managers (Actions, Dockerfiles outside those files) keep their own groups. Product Renovate
+still has those files **disabled** (bump in Devinfra, then sync).
+
 From the repo root (no PR creation):
 
 ```bash

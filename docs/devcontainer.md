@@ -260,7 +260,10 @@ Runs `scripts/devcontainer-post-create.sh` once per create:
   ciphertext absent, or `sops`/keys unavailable; never fails create; does **not** patch bashrc to `source` `.env`)
 - soft-fail install of recommended IDE extensions via Cursor/VS Code remote CLI (shared product set: Docker/Helm/
   Python/Ruff/Pylint/Mypy, PlantUML, Kubernetes Tools, signageos SOPS, Prettier, markdownlint, … — same list as
-  `devcontainer.json` and synced `.vscode/extensions.json`)
+  `devcontainer.json` and synced `.vscode/extensions.json`). **Mypy type-checker is pinned to `2026.4.0`** for
+  Cursor/OSS until upstream fixes the missing `vscode_common_python_lsp` bundle
+  ([#266](https://github.com/fairagro/m4.2_middleware_devinfra/issues/266) /
+  [#267](https://github.com/fairagro/m4.2_middleware_devinfra/issues/267)).
 - **T-late:** run `scripts/devcontainer-post-create.d/*` when present (sorted; hard-fail if not executable or non-zero;
   skip cleanly if the directory is absent/empty). Product-owned, **not** synced — e.g. a thin drop-in that runs
   `setup-git-lfs.sh`

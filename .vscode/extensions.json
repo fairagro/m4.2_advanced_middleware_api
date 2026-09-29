@@ -1,7 +1,9 @@
 {
-  // Shared VS Code / Cursor recommendations — MUST match
+  // Shared VS Code / Cursor recommendations — MUST match publisher.name IDs in
   // .devcontainer/devcontainer.json customizations.vscode.extensions and the
   // postCreate install list in scripts/devcontainer-post-create.sh.
+  // Schema is publisher.name only (no @version). Cursor/OSS mypy pin 2026.4.0
+  // lives on the Dev Container / postCreate install entries (see #266/#267).
   "recommendations": [
     "jeff-hykin.better-dockerfile-syntax",
     "ms-azuretools.vscode-docker",
