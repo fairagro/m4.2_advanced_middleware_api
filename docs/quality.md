@@ -278,6 +278,12 @@ Markdown/JSON/YAML. Helm chart templates under `helmchart/**/templates/` and `he
 (`vs-kubernetes.suppress-kubeconfig-not-found-alerts`) because Dev Containers often have no cluster config —
 kubectl-not-found alerts stay enabled.
 
+**Cursor / OSS VS Code mypy extension pin:** Dev Container / postCreate install `ms-python.mypy-type-checker@2026.4.0`
+(`.vscode/extensions.json` recommendations stay unversioned `publisher.name` — schema forbids `@version`). **2026.6.0**
+fails to start its LSP on Cursor with `ModuleNotFoundError: No module named 'vscode_common_python_lsp'`
+([microsoft/vscode-mypy#551](https://github.com/microsoft/vscode-mypy/issues/551)). Unpin or raise when a fixed VSIX is
+on Open VSX — tracked as [#267](https://github.com/fairagro/m4.2_middleware_devinfra/issues/267).
+
 **pytest discovery:** keep `"python.testing.pytestArgs": []` (or omit the key). Non-empty args become CLI paths and
 **override** each checkout’s `[tool.pytest.ini_options] testpaths` (see
 [vscode-python#23714](https://github.com/microsoft/vscode-python/issues/23714)). Configure test roots only in that
