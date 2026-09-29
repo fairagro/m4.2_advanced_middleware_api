@@ -10,10 +10,23 @@ from ..common.rocrate import RoCratePayload
 
 
 class CreateArcRequest(BaseModel):
-    """Request model for creating or updating a single ARC."""
+    """Request model for creating or updating a single ARC.
+
+    Standalone uploads stage content and schedule per-ARC Git sync via ``arc_store``
+    only. They do not publish or finalize the consolidated RDI catalog; use a harvest
+    and harvest completion for catalog updates when ``consolidated_store`` is configured.
+    """
 
     rdi: Annotated[str, Field(description="Research Data Infrastructure identifier")]
-    arc: Annotated[RoCratePayload, Field(description="ARC definition in RO-Crate JSON format")]
+    arc: Annotated[
+        RoCratePayload,
+        Field(
+            description=(
+                "ARC definition in RO-Crate JSON format. Standalone create updates the "
+                "per-ARC store only and does not update the consolidated catalog."
+            )
+        ),
+    ]
 
 
 class BaseStatusResponse(BaseModel):

@@ -46,12 +46,14 @@ def git_repo_config(git_server_root: Path, git_repo_cache_dir: Path, oid: x509.O
         "known_rdis": ["rdi-1"],
         "client_auth_oid": oid.dotted_string,
         "require_client_cert": True,
-        "git_repo": {
-            "url": f"file://{git_server_root}",
-            "group": "test-group",
-            "branch": "main",
-            "cache_dir": str(git_repo_cache_dir),
-            "rdi_gitlab_topics": {"rdi-1": "rdi-1"},
+        "arc_store": {
+            "git_repo": {
+                "url": f"file://{git_server_root}",
+                "group": "test-group",
+                "branch": "main",
+                "cache_dir": str(git_repo_cache_dir),
+                "rdi_gitlab_topics": {"rdi-1": "rdi-1"},
+            },
         },
         "celery": {
             "broker_url": "memory://",

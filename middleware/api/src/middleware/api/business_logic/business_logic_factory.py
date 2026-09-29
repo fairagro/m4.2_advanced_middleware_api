@@ -3,7 +3,7 @@
 import logging
 from typing import Literal
 
-from middleware.api.arc_store.factory import create_arc_store
+from middleware.api.arc_store.factory import create_arc_stores
 from middleware.api.business_logic.business_logic import BusinessLogic
 from middleware.api.business_logic.config import BusinessLogicFactoryConfig
 from middleware.api.business_logic.ports import BrokerHealthChecker, BusinessLogicPorts, TaskDispatcher
@@ -35,7 +35,7 @@ class BusinessLogicFactory:
             BusinessLogic: Initialized logic implementation.
         """
         doc_store = CouchDB(config.couchdb)
-        store = create_arc_store(config, doc_store)
+        store, consolidated_store = create_arc_stores(config, doc_store)
 
         if mode == "api" and task_dispatcher is None:
             raise ValueError("API mode requires a configured task_dispatcher")
@@ -48,4 +48,5 @@ class BusinessLogicFactory:
                 task_dispatcher=task_dispatcher,
                 broker_health_checker=broker_health_checker,
             ),
+            consolidated_store=consolidated_store,
         )

@@ -11,13 +11,14 @@ from middleware.api.config import Config
 pytestmark = pytest.mark.filterwarnings("ignore:gitlab_api configuration is deprecated.*:DeprecationWarning")
 
 
-def test_factory_creates_api_mode() -> None:
-    """Test factory creates API mode BusinessLogic with injected adapters."""
-    config_data = {
+def _config_data() -> dict[str, object]:
+    return {
         "log_level": "DEBUG",
-        "git_repo": {
-            "url": "https://gitlab.com",
-            "group": "test-group",
+        "arc_store": {
+            "git_repo": {
+                "url": "https://gitlab.com",
+                "group": "test-group",
+            },
         },
         "couchdb": {
             "url": "http://localhost:5984",
@@ -27,16 +28,20 @@ def test_factory_creates_api_mode() -> None:
             "result_backend": "cache+memory://",
         },
     }
-    config = Config.from_data(config_data)
+
+
+def test_factory_creates_api_mode() -> None:
+    """Test factory creates API mode BusinessLogic with injected adapters."""
+    config = Config.from_data(_config_data())
     task_dispatcher = MagicMock()
     broker_health_checker = MagicMock()
 
     with (
         patch("middleware.api.business_logic.business_logic_factory.CouchDB") as mock_couch,
-        patch("middleware.api.business_logic.business_logic_factory.create_arc_store") as mock_create_arc_store,
+        patch("middleware.api.business_logic.business_logic_factory.create_arc_stores") as mock_create,
     ):
         mock_store = MagicMock()
-        mock_create_arc_store.return_value = mock_store
+        mock_create.return_value = (mock_store, None)
         bl = BusinessLogicFactory.create(
             config,
             mode="api",
@@ -50,26 +55,40 @@ def test_factory_creates_api_mode() -> None:
         assert bl._broker_health_checker == broker_health_checker  # noqa: SLF001
         assert bl._doc_store == mock_couch.return_value  # noqa: SLF001
         assert bl._arc_manager._store == mock_store  # noqa: SLF001
-        mock_create_arc_store.assert_called_once_with(config, mock_couch.return_value)
+        assert bl._arc_manager.consolidated_store is None  # noqa: SLF001
+        mock_create.assert_called_once_with(config, mock_couch.return_value)
+
+
+def test_factory_creates_api_mode_with_consolidated_store() -> None:
+    """Test factory wires optional consolidated_store into ArcManager."""
+    data = _config_data()
+    data["consolidated_store"] = {
+        "consolidated_git": {"repo_url": "file:///tmp/catalog.git"},
+    }
+    config = Config.from_data(data)
+    task_dispatcher = MagicMock()
+
+    with (
+        patch("middleware.api.business_logic.business_logic_factory.CouchDB"),
+        patch("middleware.api.business_logic.business_logic_factory.create_arc_stores") as mock_create,
+    ):
+        mock_store = MagicMock()
+        mock_consol = MagicMock()
+        mock_create.return_value = (mock_store, mock_consol)
+        bl = BusinessLogicFactory.create(
+            config,
+            mode="api",
+            task_dispatcher=task_dispatcher,
+            broker_health_checker=MagicMock(),
+        )
+
+        assert bl._arc_manager._store == mock_store  # noqa: SLF001
+        assert bl._arc_manager.consolidated_store is mock_consol  # noqa: SLF001
 
 
 def test_factory_api_mode_requires_dispatcher() -> None:
     """Test factory fails fast if API mode has no task dispatcher."""
-    config_data = {
-        "log_level": "DEBUG",
-        "git_repo": {
-            "url": "https://gitlab.com",
-            "group": "test-group",
-        },
-        "couchdb": {
-            "url": "http://localhost:5984",
-        },
-        "celery": {
-            "broker_url": "memory://",
-            "result_backend": "cache+memory://",
-        },
-    }
-    config = Config.from_data(config_data)
+    config = Config.from_data(_config_data())
 
     with pytest.raises(ValueError, match="task_dispatcher"):
         BusinessLogicFactory.create(config, mode="api")
@@ -77,28 +96,14 @@ def test_factory_api_mode_requires_dispatcher() -> None:
 
 def test_factory_creates_worker_mode() -> None:
     """Test factory creates Worker mode BusinessLogic without task sender."""
-    config_data = {
-        "log_level": "DEBUG",
-        "git_repo": {
-            "url": "https://gitlab.com",
-            "group": "test-group",
-        },
-        "couchdb": {
-            "url": "http://localhost:5984",
-        },
-        "celery": {
-            "broker_url": "memory://",
-            "result_backend": "cache+memory://",
-        },
-    }
-    config = Config.from_data(config_data)
+    config = Config.from_data(_config_data())
 
     with (
         patch("middleware.api.business_logic.business_logic_factory.CouchDB") as mock_couch,
-        patch("middleware.api.business_logic.business_logic_factory.create_arc_store") as mock_create_arc_store,
+        patch("middleware.api.business_logic.business_logic_factory.create_arc_stores") as mock_create,
     ):
         mock_store = MagicMock()
-        mock_create_arc_store.return_value = mock_store
+        mock_create.return_value = (mock_store, None)
         bl = BusinessLogicFactory.create(config, mode="worker")
 
         assert isinstance(bl, BusinessLogic)
@@ -106,37 +111,23 @@ def test_factory_creates_worker_mode() -> None:
         assert bl._arc_manager._dispatcher is None  # noqa: SLF001
         assert bl._doc_store == mock_couch.return_value  # noqa: SLF001
         assert bl._arc_manager._store == mock_store  # noqa: SLF001
-        mock_create_arc_store.assert_called_once_with(config, mock_couch.return_value)
+        mock_create.assert_called_once_with(config, mock_couch.return_value)
 
 
 def test_factory_git_repo_config() -> None:
-    """Test factory delegates ArcStore construction to create_arc_store."""
-    config_data = {
-        "log_level": "DEBUG",
-        "git_repo": {
-            "url": "https://github.com",
-            "group": "test-group",
-        },
-        "couchdb": {
-            "url": "http://localhost:5984",
-        },
-        "celery": {
-            "broker_url": "memory://",
-            "result_backend": "cache+memory://",
-        },
-    }
-    config = Config.from_data(config_data)
+    """Test factory delegates ArcStore construction to create_arc_stores."""
+    config = Config.from_data(_config_data())
 
     with (
         patch("middleware.api.business_logic.business_logic_factory.CouchDB") as mock_couch,
-        patch("middleware.api.business_logic.business_logic_factory.create_arc_store") as mock_create_arc_store,
+        patch("middleware.api.business_logic.business_logic_factory.create_arc_stores") as mock_create,
     ):
         mock_store = MagicMock()
-        mock_create_arc_store.return_value = mock_store
+        mock_create.return_value = (mock_store, None)
         bl = BusinessLogicFactory.create(config, mode="worker")
 
         assert isinstance(bl, BusinessLogic)
         # pylint: disable=protected-access
         assert bl._arc_manager._store == mock_store  # noqa: SLF001
-        mock_create_arc_store.assert_called_once_with(config, mock_couch.return_value)
+        mock_create.assert_called_once_with(config, mock_couch.return_value)
         assert bl._doc_store == mock_couch.return_value  # noqa: SLF001

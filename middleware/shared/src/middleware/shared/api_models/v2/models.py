@@ -16,10 +16,22 @@ class HealthResponse(BaseModel):
 
 
 class CreateOrUpdateArcRequest(BaseModel):
-    """Request model for creating or updating a single ARC."""
+    """Request model for creating or updating a single ARC.
+
+    Standalone uploads update the per-ARC store only and do not update the
+    consolidated RDI catalog.
+    """
 
     rdi: Annotated[str, Field(description="Research Data Infrastructure identifier")]
-    arc: Annotated[RoCratePayload, Field(description="ARC definition in RO-Crate JSON format")]
+    arc: Annotated[
+        RoCratePayload,
+        Field(
+            description=(
+                "ARC definition in RO-Crate JSON format. Standalone create updates the "
+                "per-ARC store only and does not update the consolidated catalog."
+            )
+        ),
+    ]
 
 
 class CreateOrUpdateArcResponse(ApiResponse):

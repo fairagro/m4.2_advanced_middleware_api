@@ -25,10 +25,12 @@ def _minimal_config(**overrides: object) -> Config:
         "log_level": "DEBUG",
         "celery": {"broker_url": "memory://"},
         "couchdb": {"url": "http://localhost:5984"},
-        "git_repo": {
-            "url": "https://localhost/",
-            "branch": "dummy",
-            "group": "dummy-group",
+        "arc_store": {
+            "git_repo": {
+                "url": "https://localhost/",
+                "branch": "dummy",
+                "group": "dummy-group",
+            },
         },
     }
     data.update(overrides)

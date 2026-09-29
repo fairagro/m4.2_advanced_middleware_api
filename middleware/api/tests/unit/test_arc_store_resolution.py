@@ -1,14 +1,18 @@
-"""Tests for ArcStore backend resolution and config validation."""
-
-import warnings
+"""Tests for dual-slot ArcStore resolution and config validation."""
 
 import pytest
 from pydantic import TypeAdapter, ValidationError
 
-from middleware.api.arc_store.arc_store_config import ArcStoreBackendType, ArcStoreConfig
+from middleware.api.arc_store.arc_store_config import ArcStoreBackendType, ArcStoreConfig, ConsolidatedStoreConfig
 from middleware.api.arc_store.consolidated_git import ConsolidatedGitConfig
-from middleware.api.arc_store.resolution import is_consolidated_backend, resolve_arc_store_backend
+from middleware.api.arc_store.git_repo import GitRepoConfig
+from middleware.api.arc_store.resolution import (
+    has_consolidated_store,
+    resolve_arc_store_backend,
+    resolve_consolidated_store_settings,
+)
 from middleware.api.config import Config
+from middleware.api.worker.config import WorkerConfig
 
 _ARC_STORE_CONFIG: TypeAdapter[ArcStoreConfig] = TypeAdapter(ArcStoreConfig)
 
@@ -21,135 +25,141 @@ def _minimal_celery() -> dict[str, str]:
     return {"broker_url": "memory://"}
 
 
-def test_arc_store_type_consolidated_git() -> None:
-    """Preferred arc_store.type selects consolidated backend."""
+def _git_repo_arc_store() -> dict[str, object]:
+    return {
+        "git_repo": {"url": "https://gitlab.example/repo.git", "group": "fairagro"},
+    }
+
+
+def test_accept_git_repo_plus_optional_catalog() -> None:
+    """Required arc_store plus optional consolidated_store validates."""
     config = Config.from_data({
         "couchdb": _minimal_couchdb(),
         "celery": _minimal_celery(),
-        "arc_store": {
-            "type": "consolidated_git",
+        "arc_store": _git_repo_arc_store(),
+        "consolidated_store": {
             "consolidated_git": {"repo_url": "file:///tmp/catalog.git"},
         },
     })
-    with warnings.catch_warnings(record=True) as caught:
-        warnings.simplefilter("always", DeprecationWarning)
-        backend_type, settings = resolve_arc_store_backend(config)
-        obsolete = [
-            w
-            for w in caught
-            if issubclass(w.category, DeprecationWarning)
-            and ("obsolete" in str(w.message).lower() or str(w.message) == "deprecated")
-        ]
-    assert obsolete == []
-    assert backend_type == ArcStoreBackendType.CONSOLIDATED_GIT
-    assert isinstance(settings, ConsolidatedGitConfig)
-    assert is_consolidated_backend(config)
-
-
-def test_legacy_gitlab_api_resolve_does_not_warn_about_unset_git_repo() -> None:
-    """Accessing unset deprecated siblings must not emit deprecation noise."""
-    with warnings.catch_warnings(record=True):
-        warnings.simplefilter("ignore", DeprecationWarning)
-        config = Config.from_data({
-            "couchdb": _minimal_couchdb(),
-            "celery": _minimal_celery(),
-            "gitlab_api": {
-                "url": "https://gitlab.example",
-                "group": "fairagro",
-                "token": "x",
-            },
-        })
-    with warnings.catch_warnings(record=True) as caught:
-        warnings.simplefilter("always", DeprecationWarning)
-        backend_type, _ = resolve_arc_store_backend(config)
-        messages = [str(w.message) for w in caught if issubclass(w.category, DeprecationWarning)]
-    assert backend_type == ArcStoreBackendType.GITLAB_API
-    assert any("Top-level gitlab_api is obsolete" in msg for msg in messages)
-    assert not any("git_repo" in msg for msg in messages)
-
-
-def test_legacy_git_repo_still_works() -> None:
-    """Obsolete top-level git_repo remains accepted."""
-    with warnings.catch_warnings(record=True):
-        warnings.simplefilter("ignore", DeprecationWarning)
-        config = Config.from_data({
-            "couchdb": _minimal_couchdb(),
-            "celery": _minimal_celery(),
-            "git_repo": {"url": "https://gitlab.example/repo.git", "group": "fairagro"},
-        })
-    with warnings.catch_warnings(record=True) as caught:
-        warnings.simplefilter("always", DeprecationWarning)
-        backend_type, _ = resolve_arc_store_backend(config)
-        obsolete = [w for w in caught if "Top-level git_repo is obsolete" in str(w.message)]
-    assert len(obsolete) == 1
+    backend_type, settings = resolve_arc_store_backend(config)
     assert backend_type == ArcStoreBackendType.GIT_REPO
+    assert isinstance(settings, GitRepoConfig)
+    assert has_consolidated_store(config)
+    consol = resolve_consolidated_store_settings(config)
+    assert isinstance(consol, ConsolidatedGitConfig)
+    assert consol.repo_url == "file:///tmp/catalog.git"
 
 
-def test_legacy_null_sibling_does_not_count_as_configured() -> None:
-    """Explicit null legacy keys must not block another legacy backend."""
-    with warnings.catch_warnings(record=True):
-        warnings.simplefilter("ignore", DeprecationWarning)
-        config = Config.from_data({
-            "couchdb": _minimal_couchdb(),
-            "celery": _minimal_celery(),
-            "git_repo": {"url": "https://gitlab.example/repo.git", "group": "fairagro"},
-            "gitlab_api": None,
-            "consolidated_git": None,
-        })
-    with warnings.catch_warnings(record=True) as caught:
-        warnings.simplefilter("always", DeprecationWarning)
-        backend_type, _ = resolve_arc_store_backend(config)
-        messages = [str(w.message) for w in caught if issubclass(w.category, DeprecationWarning)]
-    assert backend_type == ArcStoreBackendType.GIT_REPO
-    assert sum("Top-level git_repo is obsolete" in msg for msg in messages) == 1
-    assert not any("gitlab_api" in msg and "obsolete" in msg for msg in messages)
-
-
-def test_legacy_only_null_backends_rejected() -> None:
-    """Legacy keys set only to null are not a configured backend."""
-    with pytest.raises(ValueError, match="must be configured"):
+def test_reject_consolidated_under_arc_store() -> None:
+    """Catalog settings under arc_store are not permitted on the per-ARC slot."""
+    with pytest.raises(ValidationError, match="Extra inputs are not permitted"):
         Config.from_data({
             "couchdb": _minimal_couchdb(),
             "celery": _minimal_celery(),
-            "git_repo": None,
-            "gitlab_api": None,
-            "consolidated_git": None,
-        })
-
-
-def test_arc_store_with_null_legacy_key_accepted() -> None:
-    """arc_store plus explicit null legacy keys is still a single backend."""
-    config = Config.from_data({
-        "couchdb": _minimal_couchdb(),
-        "celery": _minimal_celery(),
-        "git_repo": None,
-        "arc_store": {
-            "type": "consolidated_git",
-            "consolidated_git": {"repo_url": "file:///tmp/catalog.git"},
-        },
-    })
-    backend_type, _ = resolve_arc_store_backend(config)
-    assert backend_type == ArcStoreBackendType.CONSOLIDATED_GIT
-
-
-def test_reject_dual_arc_store_and_legacy() -> None:
-    """arc_store plus legacy top-level key is invalid."""
-    with pytest.raises(ValueError, match="not both"):
-        Config.from_data({
-            "couchdb": _minimal_couchdb(),
-            "celery": _minimal_celery(),
-            "git_repo": {"url": "https://gitlab.example/repo.git", "group": "fairagro"},
             "arc_store": {
-                "type": "consolidated_git",
                 "consolidated_git": {"repo_url": "file:///tmp/catalog.git"},
             },
         })
 
 
-def test_arc_store_config_requires_nested_block() -> None:
-    """arc_store.type must include matching nested settings."""
-    with pytest.raises(ValidationError, match="consolidated_git"):
-        _ARC_STORE_CONFIG.validate_python({"type": "consolidated_git"})
+def test_reject_consolidated_alongside_git_repo_under_arc_store() -> None:
+    """Catalog keys under arc_store are forbidden even when a per-ARC backend is set."""
+    with pytest.raises(ValidationError, match="Extra inputs are not permitted"):
+        Config.from_data({
+            "couchdb": _minimal_couchdb(),
+            "celery": _minimal_celery(),
+            "arc_store": {
+                **_git_repo_arc_store(),
+                "consolidated_git": {"repo_url": "file:///tmp/catalog.git"},
+            },
+        })
+
+
+def test_obsolete_top_level_alone_fails_missing_arc_store() -> None:
+    """Former top-level store keys are unknown fields and/or leave arc_store missing."""
+    with pytest.raises(ValidationError, match="Extra inputs are not permitted|arc_store"):
+        Config.from_data({
+            "couchdb": _minimal_couchdb(),
+            "celery": _minimal_celery(),
+            "git_repo": {"url": "https://gitlab.example/repo.git", "group": "fairagro"},
+        })
+
+
+def test_unknown_top_level_rejected_when_arc_store_present() -> None:
+    """Unknown top-level fields fail under API Config extra=forbid even with a valid arc_store."""
+    with pytest.raises(ValidationError, match="Extra inputs are not permitted"):
+        Config.from_data({
+            "couchdb": _minimal_couchdb(),
+            "celery": _minimal_celery(),
+            "arc_store": _git_repo_arc_store(),
+            "consolidated_git": {"repo_url": "file:///tmp/catalog.git"},
+        })
+
+
+def test_worker_config_ignores_api_only_keys() -> None:
+    """Shared flat YAML may include API-only fields; WorkerConfig ignores them."""
+    config = WorkerConfig.from_data({
+        "couchdb": _minimal_couchdb(),
+        "celery": _minimal_celery(),
+        "arc_store": _git_repo_arc_store(),
+        "client_auth_oid": "1.3.6.1.4.1.64609.1.1",
+        "require_client_cert": True,
+        "health_checks": {"global_health_check_git_backend": False},
+    })
+    assert config.arc_store.git_repo is not None
+
+
+def test_arc_store_required() -> None:
+    """Missing arc_store fails validation."""
+    with pytest.raises(ValidationError):
+        Config.from_data({
+            "couchdb": _minimal_couchdb(),
+            "celery": _minimal_celery(),
+        })
+
+
+def test_arc_store_config_requires_exactly_one_backend_key() -> None:
+    """ArcStoreConfig rejects empty / dual / catalog-only nested keys."""
+    with pytest.raises(ValidationError, match="exactly one"):
+        _ARC_STORE_CONFIG.validate_python({})
+    with pytest.raises(ValidationError, match="exactly one"):
+        _ARC_STORE_CONFIG.validate_python({
+            "git_repo": {"url": "https://gitlab.example/repo.git", "group": "fairagro"},
+            "gitlab_api": {"url": "https://gitlab.example", "token": "x", "group": "g"},
+        })
+    with pytest.raises(ValidationError, match="Extra inputs are not permitted"):
+        _ARC_STORE_CONFIG.validate_python({
+            "consolidated_git": {"repo_url": "file:///tmp/catalog.git"},
+        })
+
+
+def test_consolidated_store_shared_git_settings_merge() -> None:
+    """consolidated_store.git supplies defaults; nested block overrides."""
+    config = Config.from_data({
+        "couchdb": _minimal_couchdb(),
+        "celery": _minimal_celery(),
+        "arc_store": _git_repo_arc_store(),
+        "consolidated_store": {
+            "git": {"branch": "develop", "user_name": "Shared Git"},
+            "consolidated_git": {
+                "repo_url": "file:///tmp/catalog.git",
+                "branch": "main",
+            },
+        },
+    })
+    settings = resolve_consolidated_store_settings(config)
+    assert isinstance(settings, ConsolidatedGitConfig)
+    assert settings.branch == "main"
+    assert settings.user_name == "Shared Git"
+
+
+def test_consolidated_store_needs_no_type() -> None:
+    """consolidated_store has no type field; slot name selects catalog."""
+    assert "type" not in ConsolidatedStoreConfig.model_fields
+    slot = ConsolidatedStoreConfig.model_validate({
+        "consolidated_git": {"repo_url": "file:///tmp/catalog.git"},
+    })
+    assert slot.consolidated_git.repo_url == "file:///tmp/catalog.git"
 
 
 def test_arc_store_shared_git_settings_merge() -> None:
@@ -158,15 +168,15 @@ def test_arc_store_shared_git_settings_merge() -> None:
         "couchdb": _minimal_couchdb(),
         "celery": _minimal_celery(),
         "arc_store": {
-            "type": "consolidated_git",
             "git": {"branch": "develop", "user_name": "Shared Git"},
-            "consolidated_git": {
-                "repo_url": "file:///tmp/catalog.git",
+            "git_repo": {
+                "url": "https://gitlab.example/repo.git",
+                "group": "fairagro",
                 "branch": "main",
             },
         },
     })
     _, settings = resolve_arc_store_backend(config)
-    assert isinstance(settings, ConsolidatedGitConfig)
+    assert isinstance(settings, GitRepoConfig)
     assert settings.branch == "main"
     assert settings.user_name == "Shared Git"

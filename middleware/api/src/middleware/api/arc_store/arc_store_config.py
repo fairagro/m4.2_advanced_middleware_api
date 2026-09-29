@@ -1,9 +1,9 @@
-"""Preferred ``arc_store`` configuration block and backend type discriminator."""
+"""Preferred ``arc_store`` / ``consolidated_store`` configuration blocks."""
 
 from enum import StrEnum
-from typing import Annotated, Literal
+from typing import Annotated, ClassVar, Self
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from middleware.api.arc_store.consolidated_git.config import ConsolidatedGitConfig
 from middleware.api.arc_store.git_cli_settings import GitCliSettings
@@ -12,17 +12,21 @@ from middleware.api.arc_store.gitlab_api.store import GitlabApiConfig
 
 
 class ArcStoreBackendType(StrEnum):
-    """Configured ArcStore implementation."""
+    """Configured per-ARC ArcStore implementation."""
 
     GIT_REPO = "git_repo"
     GITLAB_API = "gitlab_api"
-    CONSOLIDATED_GIT = "consolidated_git"
 
 
-class GitRepoArcStoreConfig(BaseModel):
-    """ArcStore config when ``type`` is ``git_repo``."""
+class ArcStoreConfig(BaseModel):
+    """Required per-ARC ArcStore slot.
 
-    type: Literal[ArcStoreBackendType.GIT_REPO] = ArcStoreBackendType.GIT_REPO
+    Backend is selected by which nested settings key is set (``git_repo`` or
+    deprecated ``gitlab_api``) — no separate ``type`` field.
+    """
+
+    model_config: ClassVar[ConfigDict] = ConfigDict(extra="forbid")
+
     git: Annotated[
         GitCliSettings | None,
         Field(
@@ -32,20 +36,34 @@ class GitRepoArcStoreConfig(BaseModel):
             ),
         ),
     ] = None
-    git_repo: Annotated[GitRepoConfig, Field(description="Per-ARC GitRepo backend settings")]
+    git_repo: Annotated[
+        GitRepoConfig | None,
+        Field(description="Per-ARC GitRepo backend settings (selects git_repo backend)"),
+    ] = None
+    gitlab_api: Annotated[
+        GitlabApiConfig | None,
+        Field(description="Deprecated GitLab API backend settings (selects gitlab_api backend)"),
+    ] = None
+
+    @model_validator(mode="after")
+    def exactly_one_backend(self) -> Self:
+        """Require exactly one of ``git_repo`` or ``gitlab_api``."""
+        has_git_repo = self.git_repo is not None
+        has_gitlab_api = self.gitlab_api is not None
+        if has_git_repo == has_gitlab_api:
+            raise ValueError("arc_store must set exactly one of 'git_repo' or 'gitlab_api'")
+        return self
 
 
-class GitlabApiArcStoreConfig(BaseModel):
-    """ArcStore config when ``type`` is ``gitlab_api``."""
+class ConsolidatedStoreConfig(BaseModel):
+    """Optional consolidated catalog slot (``consolidated_store``).
 
-    type: Literal[ArcStoreBackendType.GITLAB_API] = ArcStoreBackendType.GITLAB_API
-    gitlab_api: Annotated[GitlabApiConfig, Field(description="GitLab API backend settings")]
+    The slot name selects the catalog backend; nested settings live under
+    ``consolidated_git`` (no separate ``type`` field).
+    """
 
+    model_config: ClassVar[ConfigDict] = ConfigDict(extra="forbid")
 
-class ConsolidatedGitArcStoreConfig(BaseModel):
-    """ArcStore config when ``type`` is ``consolidated_git``."""
-
-    type: Literal[ArcStoreBackendType.CONSOLIDATED_GIT] = ArcStoreBackendType.CONSOLIDATED_GIT
     git: Annotated[
         GitCliSettings | None,
         Field(
@@ -59,9 +77,3 @@ class ConsolidatedGitArcStoreConfig(BaseModel):
         ConsolidatedGitConfig,
         Field(description="Shared-repo consolidated catalog backend settings"),
     ]
-
-
-ArcStoreConfig = Annotated[
-    GitRepoArcStoreConfig | GitlabApiArcStoreConfig | ConsolidatedGitArcStoreConfig,
-    Field(discriminator="type"),
-]

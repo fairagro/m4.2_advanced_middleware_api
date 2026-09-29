@@ -54,7 +54,9 @@ if "pytest" in sys.modules or not config_path.is_file():
     loaded_config = WorkerConfig.from_data({
         "couchdb": {"url": "http://localhost:5984"},
         "celery": {"broker_url": "memory://"},
-        "git_repo": {"url": "http://localhost", "group": "test"},  # nosec
+        "arc_store": {
+            "git_repo": {"url": "http://localhost", "group": "test"},  # nosec
+        },
     })
 else:
     loaded_config = WorkerConfig.from_yaml_file(config_path)

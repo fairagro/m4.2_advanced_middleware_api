@@ -34,3 +34,10 @@
    - hostname: {{ . }}
 {{- end }}
 {{- end }}
+
+ArcStore config migration (dual-slot):
+  - Required: config.arc_store with nested git_repo: (or deprecated gitlab_api:).
+  - Optional: config.consolidated_store with nested consolidated_git:.
+  - Removed: top-level git_repo / gitlab_api / consolidated_git, and
+    arc_store.type / consolidated_store.type. Former catalog-only deploys must
+    add a per-ARC arc_store.git_repo alongside consolidated_store.

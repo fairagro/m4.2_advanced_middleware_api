@@ -103,16 +103,20 @@ class ArcStore(ABC):
 
     @property
     def publishes_per_arc_git(self) -> bool:
-        """Whether ``create_or_update`` pushes one Git project per ARC.
+        """Whether this backend's ``create_or_update`` pushes one Git project per ARC.
 
-        Consolidated catalog backends return False so callers skip per-ARC
-        ``GIT_PUSH_*`` events.
+        Dual-slot orchestration always syncs via the per-ARC store; catalog backends
+        return False as a capability marker (not a call-site gate).
         """
         return True
 
     @property
     def supports_standalone_upload(self) -> bool:
-        """Whether standalone ARC create (``/v1/arcs``, ``/v2/arcs``, ``/v3/arcs``) is allowed."""
+        """Whether this backend is suitable as a standalone per-ARC destination.
+
+        Dual-slot orchestration no longer gates ``/v1|/v2|/v3/arcs`` on this flag;
+        catalog backends return False as a capability marker.
+        """
         return True
 
     async def _finalize(self, *, rdi: str) -> CatalogFinalizeResult:  # noqa: PLR6301, ARG002

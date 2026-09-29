@@ -14,7 +14,6 @@ from pydantic import HttpUrl, SecretStr
 
 from middleware.api.api.fastapi_app import Api
 from middleware.api.api.legacy.task_types import SyncTaskResult, SyncTaskStatus
-from middleware.api.arc_store.git_repo import GitRepoConfig
 from middleware.api.arc_store.gitlab_api import GitlabApi, GitlabApiConfig
 from middleware.api.business_logic import BusinessLogic
 from middleware.api.business_logic.ports import BusinessLogicPorts
@@ -36,10 +35,11 @@ log_level: DEBUG
 known_rdis: []
 otel:
     endpoint: null
-git_repo:
-  url: http://localhost
-  group: test-group
-  branch: main
+arc_store:
+  git_repo:
+    url: http://localhost
+    group: test-group
+    branch: main
 celery:
   broker_url: amqp://guest:guest@localhost:5672//
 """
@@ -63,12 +63,14 @@ def config(oid: x509.ObjectIdentifier, known_rdis: list[str]) -> Config:
         log_level="DEBUG",
         client_auth_oid=oid,
         known_rdis=known_rdis,
-        git_repo=GitRepoConfig(
-            url="http://localhost:8080",
-            group="test-group",
-            branch="main",
-            rdi_gitlab_topics={"rdi-1": "rdi-1", "rdi-2": "rdi-2"},
-        ),
+        arc_store={
+            "git_repo": {
+                "url": "http://localhost:8080",
+                "group": "test-group",
+                "branch": "main",
+                "rdi_gitlab_topics": {"rdi-1": "rdi-1", "rdi-2": "rdi-2"},
+            },
+        },
         celery=CeleryConfig(
             broker_url=SecretStr("amqp://guest:guest@localhost:5672//"),
         ),
