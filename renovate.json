@@ -398,6 +398,12 @@
       "matchPackageNames": ["alpine"],
       "matchUpdateTypes": ["minor", "major"],
       "enabled": false
+    },
+    {
+      "description": "Bundle all versions.env (+ .python-version mirror) pin bumps into one PR (overrides earlier datasource groupNames for these files only)",
+      "matchFileNames": ["versions.env", ".python-version"],
+      "groupName": "versions.env toolchain pins",
+      "separateMinorPatch": false
     }
   ],
 
