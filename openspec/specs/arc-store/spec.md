@@ -170,9 +170,10 @@ key is set: `git_repo` or deprecated `gitlab_api` (exactly one). There MUST NOT 
 on either slot. The `consolidated_store` slot MUST configure consolidated catalog settings under `consolidated_git`
 (slot name selects the catalog role). Putting catalog settings under `arc_store` MUST fail validation. Top-level
 `git_repo`, `gitlab_api`, and `consolidated_git` MUST NOT be model fields (they are not accepted as configuration).
-Config that relies only on those keys MUST fail (required `arc_store` missing and/or unknown top-level fields
-forbidden). API and worker config models MUST reject unknown top-level fields (`extra="forbid"`). Each slot MAY carry
-its own `git` CLI settings object using the shared Git CLI settings type.
+Config that relies only on those keys MUST fail on the API config model (required `arc_store` missing and/or unknown
+top-level fields forbidden). The API `Config` model MUST reject unknown top-level fields (`extra="forbid"`). The worker
+`WorkerConfig` projection MUST ignore API-only keys from the same shared flat file (it is not a second full schema).
+Each slot MAY carry its own `git` CLI settings object using the shared Git CLI settings type.
 
 #### Scenario: Accept GitRepo plus optional catalog
 
@@ -194,9 +195,15 @@ its own `git` CLI settings object using the shared Git CLI settings type.
 
 #### Scenario: Reject unknown top-level fields alongside dual slots
 
-- **GIVEN** `arc_store` is configured and an unknown top-level field is also present
+- **GIVEN** API `Config` validation with `arc_store` configured and an unknown top-level field also present
 - **WHEN** configuration is validated
-- **THEN** validation fails before the API or worker starts
+- **THEN** validation fails before the API starts
+
+#### Scenario: Worker projection ignores API-only keys
+
+- **GIVEN** the shared flat config includes API-only fields such as `client_auth_oid` plus a valid `arc_store`
+- **WHEN** `WorkerConfig` is validated
+- **THEN** validation succeeds and API-only fields are ignored
 
 ### Requirement: Role-based ArcStore operations
 

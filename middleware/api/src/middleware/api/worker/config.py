@@ -1,8 +1,8 @@
 """Configuration models for worker-related components."""
 
-from typing import Annotated, ClassVar, Self
+from typing import Annotated, Self
 
-from pydantic import BaseModel, ConfigDict, Field, SecretStr, model_validator
+from pydantic import BaseModel, Field, SecretStr, model_validator
 
 from middleware.api.arc_store.arc_store_config import ArcStoreConfig, ConsolidatedStoreConfig
 from middleware.api.arc_store.resolution import validate_arc_store_config
@@ -29,9 +29,11 @@ class CeleryConfig(BaseModel):
 
 
 class WorkerConfig(ConfigBase):
-    """Worker runtime configuration projection from the shared flat config file."""
+    """Worker runtime configuration projection from the shared flat config file.
 
-    model_config: ClassVar[ConfigDict] = ConfigDict(extra="forbid")
+    The same YAML is validated by API ``Config`` (``extra="forbid"``). This model
+    keeps only worker-needed fields and ignores API-only keys (e.g. ``client_auth_oid``).
+    """
 
     known_rdis: Annotated[
         list[str],

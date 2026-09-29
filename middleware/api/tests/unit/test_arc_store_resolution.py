@@ -12,6 +12,7 @@ from middleware.api.arc_store.resolution import (
     resolve_consolidated_store_settings,
 )
 from middleware.api.config import Config
+from middleware.api.worker.config import WorkerConfig
 
 _ARC_STORE_CONFIG: TypeAdapter[ArcStoreConfig] = TypeAdapter(ArcStoreConfig)
 
@@ -85,7 +86,7 @@ def test_obsolete_top_level_alone_fails_missing_arc_store() -> None:
 
 
 def test_unknown_top_level_rejected_when_arc_store_present() -> None:
-    """Unknown top-level fields fail under extra=forbid even with a valid arc_store."""
+    """Unknown top-level fields fail under API Config extra=forbid even with a valid arc_store."""
     with pytest.raises(ValidationError, match="Extra inputs are not permitted"):
         Config.from_data({
             "couchdb": _minimal_couchdb(),
@@ -93,6 +94,19 @@ def test_unknown_top_level_rejected_when_arc_store_present() -> None:
             "arc_store": _git_repo_arc_store(),
             "consolidated_git": {"repo_url": "file:///tmp/catalog.git"},
         })
+
+
+def test_worker_config_ignores_api_only_keys() -> None:
+    """Shared flat YAML may include API-only fields; WorkerConfig ignores them."""
+    config = WorkerConfig.from_data({
+        "couchdb": _minimal_couchdb(),
+        "celery": _minimal_celery(),
+        "arc_store": _git_repo_arc_store(),
+        "client_auth_oid": "1.3.6.1.4.1.64609.1.1",
+        "require_client_cert": True,
+        "health_checks": {"global_health_check_git_backend": False},
+    })
+    assert config.arc_store.git_repo is not None
 
 
 def test_arc_store_required() -> None:
