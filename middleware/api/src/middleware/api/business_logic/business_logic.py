@@ -243,11 +243,27 @@ class BusinessLogic:
         """Mark a harvest completed (via :meth:`transition_harvest`, including finalize enqueue)."""
         return await self.transition_harvest(harvest, HarvestStatus.COMPLETED, client_id)
 
-    async def finalize_catalog(self, rdi: str, *, harvest_id: str | None = None) -> bool:
+    async def finalize_catalog(
+        self,
+        rdi: str,
+        *,
+        harvest_id: str | None = None,
+        record_transient_as_failed: bool = False,
+    ) -> bool:
         """Publish consolidated catalog for an RDI (worker mode)."""
-        return await self._arc_manager.finalize_catalog(rdi, harvest_id=harvest_id)
+        return await self._arc_manager.finalize_catalog(
+            rdi,
+            harvest_id=harvest_id,
+            record_transient_as_failed=record_transient_as_failed,
+        )
 
-    async def sync_to_gitlab(self, rdi: str, arc: RoCratePayload | RoCrateContent) -> None:
+    async def sync_to_gitlab(
+        self,
+        rdi: str,
+        arc: RoCratePayload | RoCrateContent,
+        *,
+        record_transient_as_failed: bool = False,
+    ) -> None:
         """Synchronize ARC to GitLab storage.
 
         This method performs the slow GitLab sync operation. It must only be
@@ -256,9 +272,14 @@ class BusinessLogic:
         Args:
             rdi: Research Data Infrastructure identifier.
             arc: ARC definition.
+            record_transient_as_failed: Persist GIT_PUSH_FAILED when Celery retries are exhausted.
 
         Raises:
             InvalidJsonSemanticError: If the JSON is semantically incorrect.
             BusinessLogicError: If an error occurs during the operation or if in API mode.
         """
-        await self._arc_manager.sync_to_gitlab(rdi, arc)
+        await self._arc_manager.sync_to_gitlab(
+            rdi,
+            arc,
+            record_transient_as_failed=record_transient_as_failed,
+        )

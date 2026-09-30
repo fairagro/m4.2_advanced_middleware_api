@@ -198,8 +198,20 @@ class ArcManager:
                     raise DuplicateArcInHarvestError(str(e)) from e
                 raise BusinessLogicError(f"unexpected error encountered: {str(e)}") from e
 
-    async def finalize_catalog(self, rdi: str, *, harvest_id: str | None = None) -> bool:
-        """Rebuild and publish the RDI catalog file (worker mode only)."""
+    async def finalize_catalog(
+        self,
+        rdi: str,
+        *,
+        harvest_id: str | None = None,
+        record_transient_as_failed: bool = False,
+    ) -> bool:
+        """Rebuild and publish the RDI catalog file (worker mode only).
+
+        When ``record_transient_as_failed`` is True (Celery retries exhausted), a
+        still-transient error appends ``CATALOG_PUSH_FAILED`` once before re-raise.
+        Mid-retry attempts keep the event log quiet so a later success is not
+        preceded by false failures.
+        """
         if self._dispatcher:
             raise BusinessLogicError("finalize_catalog must not be called in API mode")
         if self._consolidated_store is None:
@@ -222,9 +234,6 @@ class ArcManager:
                     )
                 return outcome.pushed
             except ArcStoreTransientError as exc:
-                # Do not append CATALOG_PUSH_FAILED: Celery will retry, and
-                # recording here would bloat catalog_events / leave false
-                # failures after a later success (same as GIT_PUSH_*).
                 logger.info(
                     "Transient error during catalog finalize for RDI %s (harvest %s): %s",
                     rdi,
@@ -232,26 +241,32 @@ class ArcManager:
                     exc,
                 )
                 span.record_exception(exc)
+                if record_transient_as_failed:
+                    await self._try_record_catalog_failure(harvest_id, str(exc))
                 raise TransientError(str(exc)) from exc
             except Exception as exc:
-                if harvest_id is not None:
-                    try:
-                        # Redact before CouchDB persist (log redaction does not apply).
-                        await self._append_harvest_catalog_event(
-                            harvest_id,
-                            CatalogPushEventType.CATALOG_PUSH_FAILED,
-                            redact_url_userinfo(str(exc)),
-                        )
-                    except Exception as log_error:  # noqa: BLE001
-                        logger.warning(
-                            "Could not record catalog failure on harvest %s: %s",
-                            harvest_id,
-                            log_error,
-                        )
+                await self._try_record_catalog_failure(harvest_id, str(exc))
                 span.record_exception(exc)
                 if isinstance(exc, BusinessLogicError):
                     raise
                 raise BusinessLogicError(f"catalog finalize failed: {exc}") from exc
+
+    async def _try_record_catalog_failure(self, harvest_id: str | None, message: str) -> None:
+        """Best-effort CATALOG_PUSH_FAILED append; never raises."""
+        if harvest_id is None:
+            return
+        try:
+            await self._append_harvest_catalog_event(
+                harvest_id,
+                CatalogPushEventType.CATALOG_PUSH_FAILED,
+                redact_url_userinfo(message),
+            )
+        except Exception as log_error:  # noqa: BLE001
+            logger.warning(
+                "Could not record catalog failure on harvest %s: %s",
+                harvest_id,
+                log_error,
+            )
 
     async def _append_harvest_catalog_event(
         self,
@@ -271,15 +286,41 @@ class ArcManager:
             {"append_catalog_event": event.model_dump(mode="json")},
         )
 
-    async def sync_to_gitlab(self, rdi: str, arc: RoCratePayload | RoCrateContent) -> None:
+    async def _try_record_git_push_failure(self, arc_id: str | None, error: BaseException) -> None:
+        """Best-effort GIT_PUSH_FAILED append; never raises."""
+        if arc_id is None:
+            return
+        try:
+            await self._doc_store.add_event(
+                arc_id,
+                ArcEvent(
+                    timestamp=datetime.now(UTC),
+                    type=ArcEventType.GIT_PUSH_FAILED,
+                    message=redact_url_userinfo(f"GitLab sync failed: {error!s}"),
+                ),
+            )
+        except Exception as log_error:  # noqa: BLE001
+            logger.warning("Could not log sync failure to CouchDB: %s", log_error)
+
+    async def sync_to_gitlab(
+        self,
+        rdi: str,
+        arc: RoCratePayload | RoCrateContent,
+        *,
+        record_transient_as_failed: bool = False,
+    ) -> None:
         """Synchronize ARC to GitLab storage.
 
         This method performs the slow GitLab sync operation. It must only be
         called by background workers (requires NO task_dispatcher).
 
+        When ``record_transient_as_failed`` is True (Celery retries exhausted), a
+        still-transient error appends ``GIT_PUSH_FAILED`` once before re-raise.
+
         Args:
             rdi: Research Data Infrastructure identifier.
             arc: Validated or raw RO-Crate payload.
+            record_transient_as_failed: Persist GIT_PUSH_FAILED on exhausted transient retries.
 
         Raises:
             InvalidJsonSemanticError: If the JSON is semantically incorrect.
@@ -328,24 +369,14 @@ class ArcManager:
             except ArcStoreTransientError as e:
                 logger.info("Transient error during GitLab sync for ARC %s: %s", arc_id or "unknown", e)
                 span.record_exception(e)
+                if record_transient_as_failed:
+                    await self._try_record_git_push_failure(arc_id, e)
                 raise TransientError(str(e)) from e
 
             except Exception as e:
                 logger.error("Unexpected error while syncing ARC to GitLab: %s", e, exc_info=True)
                 span.record_exception(e)
-
-                if arc_id is not None:
-                    try:
-                        await self._doc_store.add_event(
-                            arc_id,
-                            ArcEvent(
-                                timestamp=datetime.now(UTC),
-                                type=ArcEventType.GIT_PUSH_FAILED,
-                                message=redact_url_userinfo(f"GitLab sync failed: {e!s}"),
-                            ),
-                        )
-                    except Exception as log_error:  # noqa: BLE001
-                        logger.warning("Could not log sync failure to CouchDB: %s", log_error)
+                await self._try_record_git_push_failure(arc_id, e)
 
                 if isinstance(e, InvalidJsonSemanticError):
                     raise

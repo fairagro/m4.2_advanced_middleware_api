@@ -129,3 +129,31 @@ reject standalone ingestion based on a standalone-support flag on the store.
 - **GIVEN** `consolidated_store` is absent
 - **WHEN** harvest completion would previously have recorded catalog push events
 - **THEN** no `CATALOG_PUSH_*` events are appended for catalog finalize
+
+### Requirement: Record push failures after Celery transient retry exhaustion
+
+Worker-mode `sync_to_gitlab` and `finalize_catalog` MUST NOT append `GIT_PUSH_FAILED` / `CATALOG_PUSH_FAILED` on
+intermediate `ArcStoreTransientError` attempts (Celery will autoretry). On the final Celery attempt
+(`request.retries >= max_retries`), a still-transient failure MUST append the corresponding `*_FAILED` event once
+(redacted message) before re-raising `TransientError`, so operators see durable outcome when the task ends in `FAILURE`.
+Permanent (non-transient) failures continue to record `*_FAILED` immediately. Append-only logs MUST retain a prior
+exhaustion failure if a later success is recorded.
+
+#### Scenario: Mid-retry transient sync stays quiet
+
+- **GIVEN** `sync_to_gitlab` raises `ArcStoreTransientError` and Celery will still retry
+- **WHEN** the worker re-raises `TransientError`
+- **THEN** no `GIT_PUSH_FAILED` event is appended
+
+#### Scenario: Exhausted transient sync records GIT_PUSH_FAILED
+
+- **GIVEN** `sync_to_gitlab` raises `ArcStoreTransientError` on the final Celery attempt
+- **WHEN** the worker re-raises `TransientError`
+- **THEN** exactly one `GIT_PUSH_FAILED` event is appended (redacted message)
+
+#### Scenario: Exhausted transient catalog finalize records CATALOG_PUSH_FAILED
+
+- **GIVEN** `finalize_catalog` raises `ArcStoreTransientError` on the final Celery attempt with a harvest id and
+  consolidated store
+- **WHEN** the worker re-raises `TransientError`
+- **THEN** exactly one `CATALOG_PUSH_FAILED` event is appended on the harvest
