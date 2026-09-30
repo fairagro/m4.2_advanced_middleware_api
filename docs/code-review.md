@@ -34,5 +34,5 @@ imports, relative imports, `sys.path` mutation, lazy imports used only to break 
 
 ## Auth
 
-Same personal-token helpers — see root README **Personal tokens** and `scripts/bin/gh`. Prefer
-`uv run --project scripts/ai m42-ai …`.
+Same personal-token helpers — see root README **Personal tokens** and `scripts/bin/gh`. Prefer `m42-ai …` when
+`scripts/bin` is on `PATH` (or `env -u VIRTUAL_ENV uv run --project scripts/ai m42-ai …`).

@@ -19,6 +19,7 @@ works. Do not triage Copilot/Bugbot threads (use `/review-fixer`). Do not commit
 
 1. Read and follow `.agents/skills/code-review/SKILL.md`.
 2. Use `docs/ai_review_policy.md` for severity language; do not duplicate Ruff/mypy/Bandit/etc. findings.
-3. Prefer `uv run --project scripts/ai m42-ai code-review-context|code-review-report-write|code-review-publish`.
+3. Prefer `m42-ai code-review-context|code-review-report-write|code-review-publish` (or
+   `env -u VIRTUAL_ENV uv run --project scripts/ai m42-ai …`).
 4. If publishing to a PR and `GH_TOKEN` is missing with no TTY, ask the user to `source ./scripts/set-dev-tokens.sh` and
    wait — keep the `/tmp` report if auth fails.

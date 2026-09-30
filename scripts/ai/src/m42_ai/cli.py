@@ -139,6 +139,9 @@ def cmd_branch_ahead(args: argparse.Namespace) -> int:
 
 
 def cmd_issue_start(args: argparse.Namespace) -> int:
+    override: str | None = None
+    if getattr(args, "body_file", None) or getattr(args, "body", None):
+        override = _read_body(args)
     data = issue_start(
         issue=args.issue,
         slug=args.slug,
@@ -146,6 +149,7 @@ def cmd_issue_start(args: argparse.Namespace) -> int:
         channel=args.channel,
         cwd=Path(args.cwd) if args.cwd else None,
         draft_title=args.title,
+        body=override,
     )
     _print_json(data)
     return 0
@@ -369,6 +373,14 @@ def build_parser() -> argparse.ArgumentParser:
     )
     ist.add_argument("--base", default="main")
     ist.add_argument("--title", help="Override draft PR title (default: issue title)")
+    ist.add_argument(
+        "--body",
+        help="Override draft PR body (Markdown); Fixes #<issue> appended if missing",
+    )
+    ist.add_argument(
+        "--body-file",
+        help="Override draft PR body from file (or '-' for stdin); default = title + commit subjects",
+    )
     ist.add_argument("--cwd", help="Git repo root (default: cwd)")
     ist.set_defaults(func=cmd_issue_start)
 

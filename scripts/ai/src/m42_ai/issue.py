@@ -29,6 +29,49 @@ ORG_TYPES = frozenset({"Bug", "Security", "Feature", "Task", "Discussion", "Refa
 ISSUE_BRANCH_CHANNELS = frozenset({"build", "ci", "docs"})
 DEFAULT_ISSUE_BRANCH_CHANNEL = "build"
 ISSUE_URL_RE = re.compile(r"https://github\.com/[^/\s]+/[^/\s]+/issues/\d+")
+_PR_BODY_COMMIT_CAP = 15
+
+
+def ensure_fixes_line(body: str, issue: int) -> str:
+    """Return body with ``Fixes #<issue>`` present (append if missing)."""
+    text = body.rstrip() + "\n"
+    if re.search(rf"(?im)^\s*Fixes\s+#{issue}\b", text):
+        return text if text.endswith("\n") else text + "\n"
+    if text.strip():
+        return f"{text.rstrip()}\n\nFixes #{issue}\n"
+    return f"Fixes #{issue}\n"
+
+
+def default_issue_start_body(
+    *,
+    issue: int,
+    issue_title: str,
+    commit_subjects: list[str],
+) -> str:
+    """Build a non-stub draft PR body from issue title + commit subjects."""
+    bullets: list[str] = []
+    title = issue_title.strip()
+    if title:
+        bullets.append(title)
+    for subject in commit_subjects:
+        sub = subject.strip()
+        if not sub:
+            continue
+        if title and sub.casefold() == title.casefold():
+            continue
+        bullets.append(sub)
+        if len(bullets) >= _PR_BODY_COMMIT_CAP:
+            break
+    if not bullets:
+        bullets.append(f"Work for issue #{issue}")
+    lines = ["## Summary", *[f"- {b}" for b in bullets], "", f"Fixes #{issue}", ""]
+    return "\n".join(lines)
+
+
+def _commit_subjects_ahead(*, base: str, cwd: Path) -> list[str]:
+    """Newest-first commit subjects for ``origin/<base>..HEAD`` (empty if none)."""
+    proc = run_git(["log", "--format=%s", f"origin/{base}..HEAD"], cwd=cwd)
+    return [ln.strip() for ln in proc.stdout.splitlines() if ln.strip()]
 
 
 def slugify(text: str, *, max_len: int = 48) -> str:
@@ -340,6 +383,7 @@ def issue_start(
     channel: str | None = None,
     cwd: Path | None = None,
     draft_title: str | None = None,
+    body: str | None = None,
 ) -> dict[str, Any]:
     """Push issue branch and open a draft PR — requires commits ahead of base (no empty bootstrap)."""
     root = cwd or Path.cwd()
@@ -351,9 +395,13 @@ def issue_start(
 
     title = str(ensured["issue"]["title"])
     pr_title = draft_title or title
-    body = f"## Summary\n- MVP scope: (fill in)\n\nFixes #{issue}\n"
+    if body is not None:
+        pr_body = ensure_fixes_line(body, issue)
+    else:
+        subjects = _commit_subjects_ahead(base=base, cwd=root)
+        pr_body = default_issue_start_body(issue=issue, issue_title=title, commit_subjects=subjects)
     with tempfile.NamedTemporaryFile("w", suffix=".md", delete=False, encoding="utf-8") as tmp:
-        tmp.write(body)
+        tmp.write(pr_body)
         body_path = tmp.name
     try:
         proc = run_gh(

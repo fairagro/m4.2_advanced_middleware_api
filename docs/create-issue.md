@@ -40,8 +40,9 @@ skill):
 
 Do **not** invent other triage label names in the skill. Free-text labels are forbidden.
 
-Prefer `uv run --project scripts/ai m42-ai issue-create …` (see [`scripts/ai/README.md`](../scripts/ai/README.md));
-`--practicality` is optional. Bare `uv run m42-ai` is only OK when `scripts/ai` is a root workspace member (Devinfra).
+Prefer `m42-ai issue-create …` when `scripts/bin` is on `PATH` (see [`scripts/ai/README.md`](../scripts/ai/README.md));
+portable: `env -u VIRTUAL_ENV uv run --project scripts/ai m42-ai issue-create …`. `--practicality` is optional. Bare
+`uv run m42-ai` is only OK when `scripts/ai` is a root workspace member (Devinfra).
 
 ## Relation: sub-of vs linked
 
