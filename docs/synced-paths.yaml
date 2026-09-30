@@ -45,6 +45,7 @@ allow:
   - scripts/bin/git
   - scripts/bin/k
   - scripts/bin/d
+  - scripts/bin/m42-ai
   - scripts/quality-check.sh
   - scripts/quality-fix.sh
   - scripts/run-container-structure-test.sh
