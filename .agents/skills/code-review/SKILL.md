@@ -27,15 +27,17 @@ Same checklist for local and PR.
 
 ## Auth (`gh`)
 
-Prefer `uv run --project scripts/ai m42-ai …` (works in Devinfra and product checkouts). Bare `uv run m42-ai` is only OK
-when `scripts/ai` is a root workspace member (Devinfra).
+Prefer `m42-ai …` when `scripts/bin` is on `PATH` (synced wrapper unsets conflicting `VIRTUAL_ENV`, then
+`uv run --project scripts/ai m42-ai`). Portable without the wrapper:
+`env -u VIRTUAL_ENV uv run --project scripts/ai m42-ai …`. Bare `uv run m42-ai` is only OK when `scripts/ai` is a root
+workspace member (Devinfra). Do **not** use `uv run --active` to silence the warning.
 
 `gh` is wrapped (`scripts/bin/gh`, on `PATH` in the Dev Container). Never invent or paste PATs into chat.
 
 **Agent / no TTY (PR publish only):** If auth is missing:
 
 1. Ask the user to run `source ./scripts/set-dev-tokens.sh` in a real terminal and wait.
-2. Retry `uv run --project scripts/ai m42-ai auth-status`.
+2. Retry `m42-ai auth-status`.
 3. If they decline or auth still fails: keep the `/tmp` report and **skip** GitHub writes.
 
 Local-only reviews never require GitHub auth.
@@ -45,9 +47,9 @@ Local-only reviews never require GitHub auth.
 1. **Context**
 
    ```bash
-   uv run --project scripts/ai m42-ai code-review-context --base main
+   m42-ai code-review-context --base main
    # or
-   uv run --project scripts/ai m42-ai code-review-context --pr <n>
+   m42-ai code-review-context --pr <n>
    ```
 
    Use `paths` / `stats` from JSON. Full patch is omitted — open files as needed.
@@ -58,7 +60,7 @@ Local-only reviews never require GitHub auth.
 3. **Write report**
 
    ```bash
-   uv run --project scripts/ai m42-ai code-review-report-write --slug <branch-or-pr> --body-file - <<'EOF'
+   m42-ai code-review-report-write --slug <branch-or-pr> --body-file - <<'EOF'
    …report…
    EOF
    ```
@@ -69,7 +71,7 @@ Local-only reviews never require GitHub auth.
    - With PR + auth:
 
      ```bash
-     uv run --project scripts/ai m42-ai code-review-publish --pr <n> --body-file <path-from-step-3>
+     m42-ai code-review-publish --pr <n> --body-file <path-from-step-3>
      ```
 
      Prefer channel `pull_request_review` (COMMENT via `gh pr review --comment`). Fallback `conversation_comment` only

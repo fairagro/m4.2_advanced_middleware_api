@@ -1,0 +1,11 @@
+#!/usr/bin/env bash
+# PATH wrapper: unset conflicting VIRTUAL_ENV, then run product-layout m42-ai.
+# DC remoteEnv sets VIRTUAL_ENV to the root .venv; scripts/ai uses its own .venv via
+# --project. Unsetting avoids uv's mismatch warning without --active or clearing DC env.
+# On PATH via remoteEnv (scripts/bin). Synced to products.
+set -euo pipefail
+_bin_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+_root="$(cd "${_bin_dir}/../.." && pwd)"
+unset VIRTUAL_ENV
+unset _bin_dir
+exec uv run --project "${_root}/scripts/ai" m42-ai "$@"

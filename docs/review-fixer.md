@@ -10,10 +10,10 @@ Issue: [#5](https://github.com/fairagro/m4.2_middleware_devinfra/issues/5).
 
 ## Workflow (summary)
 
-- Process **open** review work — **first hard gate:** `uv run --project scripts/ai m42-ai review-open --pr <n>` (not raw
-  GraphQL). Stop on checkout failure (no stash/improvise); dirty on the PR head is OK. Then triage unresolved threads
-  (**any** author) **and** `summary_only_findings` from finder reviews (Copilot suppressed packing **and**
-  `/code-review` marked COMMENT bodies — not only the latest submission).
+- Process **open** review work — **first hard gate:** `m42-ai review-open --pr <n>` (not raw GraphQL). Stop on checkout
+  failure (no stash/improvise); dirty on the PR head is OK. Then triage unresolved threads (**any** author) **and**
+  `summary_only_findings` from finder reviews (Copilot suppressed packing **and** `/code-review` marked COMMENT bodies —
+  not only the latest submission).
 - Two phases when anything is `fix`: local fixes + dismiss/follow-up replies first (**no commit**); `Fixed in <sha>`
   only after the user commits.
 - In **product** repos: do not `fix` paths on [`synced-paths.yaml`](synced-paths.yaml); `follow-up` to Devinfra or

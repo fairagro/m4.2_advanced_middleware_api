@@ -25,9 +25,9 @@ invoked explicitly.
    explore **in-skill** (no `/opsx-explore`). Wait for lock-in / `go` / `skip explore`.
 3. Create `{channel}/issue-<n>-<slug>` **before** propose or implement (`build` / `ci` / `docs` per skill).
 4. **OpenSpec types (Feature / Refactoring):** follow openspec-propose → **pause** → on `go` apply → **pause** → on `go`
-   draft PR (`uv run --project scripts/ai m42-ai issue-start` when the tip is ahead of `main`) → on `go` (last) follow
-   openspec-archive → **pause** to commit. Never empty bootstrap commits. Same path if a skill file is in scope (even
-   for Task) or the user said `use opsx`.
+   draft PR (`m42-ai issue-start`, prefer `--body-file` with a real Summary; tip ahead of `main`) → on `go` (last)
+   follow openspec-archive → **pause** to commit. Never empty bootstrap commits. Same path if a skill file is in scope
+   (even for Task) or the user said `use opsx`.
 5. **Task / Bug / cheap Security**, and **docs-only** Feature/Refactoring with no skill file: implement in the working
    tree → **pause** → on continue: draft PR when ahead of `main`. Docs-only does **not** include Markdown under
    `openspec/specs/` or `openspec/changes/`. If a Task clearly changes `openspec/specs/`, pause once (retype Feature or
