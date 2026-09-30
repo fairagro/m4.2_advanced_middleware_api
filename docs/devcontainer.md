@@ -68,6 +68,11 @@ from apt without a separate pin.
 npm’s self-update notice until Renovate bumps `NPM_VERSION` to current; once the pin matches the latest advertised
 release, that notice should stop.
 
+**Global OpenSpec / Prettier / markdownlint-cli2 / Renovate install** uses `npm install -g --loglevel=error` so
+transitive `npm warn deprecated` / `install-scripts` lines do not dominate Dev Container rebuild logs. Those warnings
+come from upstream transitive deps of the pinned CLIs — not a signal to add npm `overrides` or hand-pin extras unless a
+real functional break appears. Version checks in the same `RUN` still fail the build on install errors.
+
 [`.python-version`](../.python-version) is kept aligned with `PYTHON_VERSION` (via `scripts/load-versions-env.sh`, also
 run from postCreate).
 
