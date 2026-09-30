@@ -155,7 +155,7 @@ def test_consolidated_store_shared_git_settings_merge() -> None:
 
 def test_consolidated_store_needs_no_type() -> None:
     """consolidated_store has no type field; slot name selects catalog."""
-    assert "type" not in ConsolidatedStoreConfig.model_fields
+    assert ConsolidatedStoreConfig.model_fields.get("type") is None
     slot = ConsolidatedStoreConfig.model_validate({
         "consolidated_git": {"repo_url": "file:///tmp/catalog.git"},
     })

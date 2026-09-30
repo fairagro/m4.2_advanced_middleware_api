@@ -286,3 +286,10 @@ The JSON-LD `@context` entry for `fairagro` SHALL use
 Bumps that break term compatibility use a new version segment; documentation lives under `ns/harvest-report/v2/` and is
 published via GitHub Pages from tags without publishing unrelated `docs/` trees. The v1 vocabulary under
 `ns/harvest-report/v1/` remains frozen (`failedRecords`) and MUST NOT be altered by this rename.
+
+#### Scenario: Context uses v2 vocabulary IRI
+
+- **GIVEN** a harvest report serialized as JSON-LD
+- **WHEN** the `@context` maps the `fairagro` prefix
+- **THEN** the IRI is `https://fairagro.github.io/m4.2_advanced_middleware_api/ns/harvest-report/v2/#`
+- **AND** the frozen v1 vocabulary under `ns/harvest-report/v1/` is unchanged
