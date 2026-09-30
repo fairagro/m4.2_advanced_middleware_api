@@ -29,7 +29,13 @@ async def create_or_update_arc(
     _: Annotated[None, Depends(get_content_type)],
     __: Annotated[None, Depends(get_accept_type)],
 ) -> models.ArcResponse:
-    """Process an ARC and return the result directly."""
+    """Process an ARC and return the result directly.
+
+    HTTP ``409 Conflict`` may be returned when an existing ``arc_{arc_id}`` document's
+    strip-normalized identifier/``rdi`` do not match the incoming pair (identity
+    mismatch — distinct from harvest content-duplicate ``409``). Unicode NFC
+    canonicalize-before-hash is out of scope (issue #537).
+    """
     rdi = request_body.rdi
     await deps.validate_rdi_authorized(rdi, request)
 

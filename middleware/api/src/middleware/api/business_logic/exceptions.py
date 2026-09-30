@@ -27,6 +27,15 @@ class DuplicateArcInHarvestError(ConflictError):
     """Arises when the same ARC is submitted more than once within a harvest run."""
 
 
+class ArcIdentityMismatchError(ConflictError):
+    """Arises when a stored ``arc_{arc_id}`` identity does not match the incoming pair.
+
+    Distinct from :class:`DuplicateArcInHarvestError` (harvest-local content duplicate).
+    Both map to HTTP 409; this type refuses overwrite when strip-normalized identifier/``rdi``
+    differ. Unicode NFC canonicalize-before-hash remains issue #537.
+    """
+
+
 class InvalidRequestError(BusinessLogicError):
     """Arises when request parameters or headers are invalid for this operation.
 

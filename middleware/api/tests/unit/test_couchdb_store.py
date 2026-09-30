@@ -8,12 +8,13 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 from pydantic import SecretStr
 
-from middleware.api.document_store import DuplicateArcError
+from middleware.api.document_store import ArcIdentityConflictError, DuplicateArcError
 from middleware.api.document_store.arc_document import ArcDocument, ArcEvent, ArcMetadata
 from middleware.api.document_store.config import CouchDBConfig
 from middleware.api.document_store.content_hash import RoCrateContent, calculate_arc_content_hash
 from middleware.api.document_store.couchdb import CouchDB
 from middleware.api.document_store.couchdb_client import DocumentConflictError
+from middleware.api.utils import calculate_arc_id
 from middleware.shared.api_models.common.models import ArcEventType, ArcLifecycleStatus, HarvestStatus
 
 
@@ -153,18 +154,22 @@ async def test_store_arc_update_changed(store: CouchDB, mock_client_instance: Ma
     """Test updating an existing ARC with changes."""
     # Setup
     rdi = "test_rdi"
+    existing_content: RoCrateContent = {
+        "@context": "https://w3id.org/ro/crate/1.1/context",
+        "@graph": [{"@id": "./", "identifier": "arc_123"}, {"@id": "dataset", "name": "Original Name"}],
+    }
     arc_content: RoCrateContent = {
         "@context": "https://w3id.org/ro/crate/1.1/context",
         "@graph": [{"@id": "./", "identifier": "arc_123"}, {"@id": "dataset", "name": "Changed Name"}],
     }
 
-    # Existing document
+    # Existing document (matching identity, different content)
     existing_hash = "old_hash"
     existing_doc = {
         "_id": "arc_...",
         "_rev": "1-rev",
         "rdi": rdi,
-        "arc_content": {"original": "content"},
+        "arc_content": existing_content,
         "metadata": {
             "arc_hash": existing_hash,
             "status": "ACTIVE",
@@ -389,6 +394,7 @@ async def test_store_arc_concurrent_conflicting_duplicate_detected_via_validator
     assert validator is not None, "store_arc must pass pre_save_validator when harvest_id is set"
 
     fresh_doc_with_concurrent_write = {
+        "rdi": rdi,
         "arc_content": conflicting_content,
         "metadata": {"last_harvest_id": harvest_id},
     }
@@ -419,6 +425,7 @@ async def test_store_arc_concurrent_identical_resubmit_allowed_via_validator(
     assert validator is not None
 
     fresh_doc_identical = {
+        "rdi": rdi,
         "arc_content": arc_content,
         "metadata": {"last_harvest_id": harvest_id},
     }
@@ -461,6 +468,131 @@ async def test_store_arc_no_harvest_context_allows_resubmit(store: CouchDB, mock
 
     assert result.is_new is False
     mock_client_instance.save_document.assert_called_once()
+
+
+@pytest.mark.asyncio
+async def test_store_arc_identity_mismatch_refuses_overwrite(store: CouchDB, mock_client_instance: MagicMock) -> None:
+    """store_arc raises ArcIdentityConflictError when strip-normalized identity differs."""
+    rdi = "test_rdi"
+    stored_content: RoCrateContent = {
+        "@context": "https://w3id.org/ro/crate/1.1/context",
+        "@graph": [{"@id": "./", "identifier": "stored-other"}],
+    }
+    incoming_content: RoCrateContent = {
+        "@context": "https://w3id.org/ro/crate/1.1/context",
+        "@graph": [{"@id": "./", "identifier": "incoming-colliding"}],
+    }
+    mock_client_instance.get_document.return_value = _make_existing_arc_doc(rdi, stored_content)
+
+    with pytest.raises(ArcIdentityConflictError, match="Identity conflict"):
+        await store.store_arc(rdi, incoming_content, "incoming-colliding")
+
+    mock_client_instance.save_document.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_store_arc_identity_mismatch_on_rdi_refuses_overwrite(
+    store: CouchDB, mock_client_instance: MagicMock
+) -> None:
+    """store_arc refuses overwrite when top-level rdi differs under strip rules."""
+    identifier = "arc_same"
+    stored_content: RoCrateContent = {
+        "@context": "https://w3id.org/ro/crate/1.1/context",
+        "@graph": [{"@id": "./", "identifier": identifier}],
+    }
+    mock_client_instance.get_document.return_value = _make_existing_arc_doc("stored-rdi", stored_content)
+
+    with pytest.raises(ArcIdentityConflictError, match="Identity conflict"):
+        await store.store_arc("incoming-rdi", stored_content, identifier)
+
+    mock_client_instance.save_document.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_store_arc_matching_identity_with_whitespace_continues(
+    store: CouchDB, mock_client_instance: MagicMock
+) -> None:
+    """Matching strip-normalized identity continues content-hash / merge paths."""
+    rdi = "test_rdi"
+    stored_content: RoCrateContent = {
+        "@context": "https://w3id.org/ro/crate/1.1/context",
+        "@graph": [{"@id": "./", "identifier": "  arc_ws  "}],
+    }
+    incoming_content: RoCrateContent = {
+        "@context": "https://w3id.org/ro/crate/1.1/context",
+        "@graph": [{"@id": "./", "identifier": "arc_ws"}],
+    }
+    mock_client_instance.get_document.return_value = _make_existing_arc_doc(f"  {rdi}  ", stored_content)
+    mock_client_instance.save_document.return_value = {"ok": True}
+
+    result = await store.store_arc(rdi, incoming_content, "arc_ws")
+
+    assert result.is_new is False
+    mock_client_instance.save_document.assert_called_once()
+    assert calculate_arc_id("arc_ws", rdi) == calculate_arc_id("  arc_ws  ", f"  {rdi}  ")
+
+
+@pytest.mark.asyncio
+async def test_store_arc_unparseable_stored_identifier_fail_closed(
+    store: CouchDB, mock_client_instance: MagicMock
+) -> None:
+    """Malformed legacy docs without extractable identifier refuse overwrite."""
+    rdi = "test_rdi"
+    mock_client_instance.get_document.return_value = {
+        "_id": "arc_...",
+        "_rev": "1-rev",
+        "rdi": rdi,
+        "arc_content": {"@context": "https://w3id.org/ro/crate/1.1/context", "@graph": [{"@id": "not-root"}]},
+        "metadata": {
+            "arc_hash": "hash",
+            "status": "ACTIVE",
+            "first_seen": "2023-01-01T00:00:00Z",
+            "last_seen": "2023-01-01T00:00:00Z",
+            "events": [],
+        },
+    }
+
+    with pytest.raises(ArcIdentityConflictError, match="no extractable"):
+        await store.store_arc(
+            rdi,
+            {
+                "@context": "https://w3id.org/ro/crate/1.1/context",
+                "@graph": [{"@id": "./", "identifier": "arc_x"}],
+            },
+            "arc_x",
+        )
+
+    mock_client_instance.save_document.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_store_arc_concurrent_identity_mismatch_detected_via_validator(
+    store: CouchDB, mock_client_instance: MagicMock
+) -> None:
+    """pre_save_validator re-checks identity against the fresh document on retry."""
+    rdi = "test_rdi"
+    arc_content: RoCrateContent = {
+        "@context": "https://w3id.org/ro/crate/1.1/context",
+        "@graph": [{"@id": "./", "identifier": "arc_ours"}],
+    }
+    mock_client_instance.get_document.return_value = None
+    mock_client_instance.save_document.return_value = {"ok": True}
+
+    await store.store_arc(rdi, arc_content, "arc_ours")
+
+    _, kwargs = mock_client_instance.save_document.call_args
+    validator = kwargs.get("pre_save_validator")
+    assert validator is not None, "store_arc must always pass an identity pre_save_validator"
+
+    fresh_doc_mismatched = {
+        "rdi": rdi,
+        "arc_content": {
+            "@context": "https://w3id.org/ro/crate/1.1/context",
+            "@graph": [{"@id": "./", "identifier": "arc_theirs"}],
+        },
+    }
+    with pytest.raises(ArcIdentityConflictError, match="Identity conflict"):
+        validator(fresh_doc_mismatched)
 
 
 @pytest.mark.asyncio

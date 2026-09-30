@@ -17,6 +17,16 @@ class DuplicateArcError(DocumentStoreError):
     """Raised when the same ARC is submitted more than once within the same harvest run."""
 
 
+class ArcIdentityConflictError(DocumentStoreError):
+    """Raised when an existing ``arc_{arc_id}`` document's strip-normalized identity mismatches.
+
+    Distinct from :class:`DuplicateArcError` (harvest-local content conflict). Both may map
+    to HTTP 409 for API callers; this type means the stored identifier/``rdi`` pair does not
+    match the incoming pair under ``calculate_arc_id`` strip rules, so the body must not be
+    overwritten. Unicode NFC canonicalize-before-hash is out of scope (issue #537).
+    """
+
+
 class IdempotencyBodyConflictError(DocumentStoreError):
     """Raised when an Idempotency-Key is reused with an incompatible create body."""
 

@@ -6,6 +6,9 @@ import hashlib
 def calculate_arc_id(identifier: str, rdi: str) -> str:
     """Calculate the unique ARC ID from its identifier and RDI.
 
+    Normalization is whitespace ``.strip()`` only on both inputs (no Unicode NFC;
+    canonicalize-before-hash is tracked in issue #537).
+
     Args:
         identifier: The ARC's internal identifier (e.g., from ISA or RO-Crate).
         rdi: The Research Data Infrastructure identifier.

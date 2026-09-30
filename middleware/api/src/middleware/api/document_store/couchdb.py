@@ -13,9 +13,11 @@ from middleware.api.document_store.content_hash import RoCrateContent, calculate
 from middleware.api.document_store.couchdb_client import CouchDBClient, DocumentConflictError
 from middleware.api.utils import calculate_arc_id
 from middleware.shared.api_models.common.models import ArcEventType, ArcLifecycleStatus, HarvestStatus
-from middleware.shared.json_types import CouchDbDocument, JsonObject
+from middleware.shared.api_models.common.rocrate import extract_identifier, validate_root_dataset
+from middleware.shared.json_types import CouchDbDocument, JsonObject, RoCrateGraphNode
 
 from . import (
+    ArcIdentityConflictError,
     ArcStoreResult,
     DocumentStore,
     DuplicateArcError,
@@ -85,6 +87,86 @@ class CouchDB(DocumentStore):
             raise DuplicateArcError(
                 f"ARC '{identifier}' was already submitted in harvest '{harvest_id}' with different content."
             )
+
+    @staticmethod
+    def _extract_stored_identifier(arc_content: RoCrateContent) -> str:
+        """Extract strip-normalized identifier from stored RO-Crate content.
+
+        Fail closed when the stored document has no extractable root identifier so an
+        overwrite cannot proceed (malformed legacy docs). Does not apply Unicode NFC
+        (#537); matches ``calculate_arc_id`` strip-only rules via ``extract_identifier``.
+        """
+        graph_raw = arc_content.get("@graph")
+        if not isinstance(graph_raw, list) or not graph_raw:
+            raise ArcIdentityConflictError(
+                "Identity conflict: existing ARC document has no extractable RO-Crate "
+                "identifier; refusing overwrite (NFC canonicalize-before-hash is #537)."
+            )
+        nodes: list[RoCrateGraphNode] = [node for node in graph_raw if isinstance(node, dict)]
+        try:
+            root = validate_root_dataset(nodes)
+            return extract_identifier(root)
+        except ValueError as exc:
+            raise ArcIdentityConflictError(
+                "Identity conflict: existing ARC document has no extractable RO-Crate "
+                f"identifier ({exc}); refusing overwrite (NFC canonicalize-before-hash is #537)."
+            ) from exc
+
+    @classmethod
+    def _assert_identity_matches(
+        cls,
+        *,
+        stored_rdi: object,
+        stored_arc_content: object,
+        identifier: str,
+        rdi: str,
+        arc_id: str,
+    ) -> None:
+        """Refuse update when strip-normalized stored identity differs from incoming.
+
+        Distinct from harvest-local :class:`DuplicateArcError` (content conflict). Both may
+        surface as HTTP 409 to clients; this gate protects ``arc_{arc_id}`` key integrity.
+        """
+        if not isinstance(stored_rdi, str) or not isinstance(stored_arc_content, dict):
+            raise ArcIdentityConflictError(
+                f"Identity conflict for arc_id '{arc_id}': existing document is missing "
+                "stored rdi or arc_content; refusing overwrite "
+                "(distinct from harvest content duplicate 409; NFC is #537)."
+            )
+        stored_identifier = cls._extract_stored_identifier(cast(RoCrateContent, stored_arc_content))
+        if stored_identifier.strip() != identifier.strip() or stored_rdi.strip() != rdi.strip():
+            raise ArcIdentityConflictError(
+                f"Identity conflict for arc_id '{arc_id}': stored identifier/rdi do not match "
+                "the incoming pair under strip() rules; document was not overwritten "
+                "(distinct from harvest content duplicate 409; NFC is #537)."
+            )
+
+    @classmethod
+    def _assert_document_identity(
+        cls,
+        doc: CouchDbDocument | ArcDocument,
+        *,
+        identifier: str,
+        rdi: str,
+        arc_id: str,
+    ) -> None:
+        """Identity check for an ArcDocument or raw CouchDB document dict."""
+        if isinstance(doc, ArcDocument):
+            cls._assert_identity_matches(
+                stored_rdi=doc.rdi,
+                stored_arc_content=doc.arc_content,
+                identifier=identifier,
+                rdi=rdi,
+                arc_id=arc_id,
+            )
+            return
+        cls._assert_identity_matches(
+            stored_rdi=doc.get("rdi"),
+            stored_arc_content=doc.get("arc_content"),
+            identifier=identifier,
+            rdi=rdi,
+            arc_id=arc_id,
+        )
 
     def _merge_existing_arc_metadata(
         self,
@@ -169,6 +251,39 @@ class CouchDB(DocumentStore):
 
         return _check_duplicate_on_retry
 
+    def _pre_save_validator(
+        self,
+        *,
+        identifier: str,
+        rdi: str,
+        arc_id: str,
+        content_hash: str,
+        harvest_id: str | None,
+    ) -> Callable[[CouchDbDocument], None]:
+        """Compose identity + optional harvest-duplicate checks for save retries."""
+        harvest_validator = (
+            self._harvest_identity_validator(
+                harvest_id=harvest_id,
+                identifier=identifier,
+                content_hash=content_hash,
+            )
+            if harvest_id
+            else None
+        )
+
+        def _validate(fresh_doc: CouchDbDocument) -> None:
+            # Always re-check strip-normalized identity against the fresh document (TOCTOU).
+            self._assert_document_identity(
+                fresh_doc,
+                identifier=identifier,
+                rdi=rdi,
+                arc_id=arc_id,
+            )
+            if harvest_validator is not None:
+                harvest_validator(fresh_doc)
+
+        return _validate
+
     async def store_arc(
         self,
         rdi: str,
@@ -176,7 +291,13 @@ class CouchDB(DocumentStore):
         identifier: str,
         harvest_id: str | None = None,
     ) -> ArcStoreResult:
-        """Store ARC with change detection."""
+        """Store ARC with change detection.
+
+        When an ``arc_{arc_id}`` document already exists, strip-normalized identifier and
+        ``rdi`` must match the incoming pair (same rules as ``calculate_arc_id``). Mismatch
+        raises :class:`ArcIdentityConflictError` without writing the body — distinct from
+        harvest content :class:`DuplicateArcError`. Unicode NFC is deferred (#537).
+        """
         if not identifier:
             raise ValueError("ARC content must contain a valid identifier")
 
@@ -194,6 +315,12 @@ class CouchDB(DocumentStore):
             logger.info("ARC %s is new (hash: %s)", arc_id, content_hash[:8])
             metadata = self._new_arc_metadata(content_hash, now, harvest_id)
         else:
+            self._assert_document_identity(
+                existing_doc,
+                identifier=identifier,
+                rdi=rdi,
+                arc_id=arc_id,
+            )
             is_new = False
             metadata, has_changes = self._merge_existing_arc_metadata(
                 existing_doc,
@@ -215,14 +342,12 @@ class CouchDB(DocumentStore):
         )
         doc_data = doc.model_dump(mode="json", by_alias=True, exclude_none=True)
 
-        pre_save_validator = (
-            self._harvest_identity_validator(
-                harvest_id=harvest_id,
-                identifier=identifier,
-                content_hash=content_hash,
-            )
-            if harvest_id
-            else None
+        pre_save_validator = self._pre_save_validator(
+            identifier=identifier,
+            rdi=rdi,
+            arc_id=arc_id,
+            content_hash=content_hash,
+            harvest_id=harvest_id,
         )
         await self._client.save_document(doc_id, doc_data, pre_save_validator=pre_save_validator)
 
