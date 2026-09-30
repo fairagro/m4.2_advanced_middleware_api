@@ -123,7 +123,8 @@ RUN curl -fsSL "https://nodejs.org/dist/${NODE_VERSION}/node-${NODE_VERSION}-lin
 RUN npm install -g "npm@${NPM_VERSION}" && npm --version
 
 # ── OpenSpec + Markdown + Renovate (global; bind-mount would hide local node_modules)
-RUN npm install -g \
+# --loglevel=error: hide transitive npm warn deprecated / install-scripts noise (upstream pins).
+RUN npm install -g --loglevel=error \
         "@fission-ai/openspec@${OPENSPEC_VERSION}" \
         "prettier@${PRETTIER_VERSION}" \
         "markdownlint-cli2@${MARKDOWNLINT_CLI2_VERSION}" \
