@@ -1,0 +1,38 @@
+# Post-merge Trivy SARIF on the default branch (Code Scanning alert close).
+# Pattern: Devinfra docs/ci.md § Post-merge main — build + check only (no code-quality / Release).
+name: Main Docker Check
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
+on:
+  push:
+    branches: [main]
+
+concurrency:
+  group: main-docker-check-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  security-events: write
+
+jobs:
+  build:
+    name: Build
+    uses: fairagro/m4.2_middleware_devinfra/.github/workflows/reusable-build.yml@main
+    with:
+      components: '["api"]'
+      image_base_name: fairagro-advanced-middleware
+    secrets: inherit
+
+  check:
+    name: Check
+    needs: [build]
+    # Local until Devinfra #74: omit Trivy licence-check (Alpine GPL noise).
+    uses: ./.github/workflows/reusable-check-local.yml
+    with:
+      version: ${{ needs.build.outputs.version }}
+      components: '["api"]'
+      image_base_name: fairagro-advanced-middleware
+    secrets: inherit
