@@ -81,3 +81,16 @@ shutdown. An unknown harvest lookup SHALL return nothing so callers can raise `R
 - **WHEN** `get_harvest_statistics` runs for that harvest
 - **THEN** `arcs_submitted` equals the total number of matching ARC documents
 - **AND** `arcs_new`, `arcs_updated`, and `arcs_unchanged` sum to that total using the existing classification rules
+
+### Requirement: Detect content change via arc-content-hash
+
+When deciding whether stored ARC content changed, the document store SHALL compare `content_hash` values computed under
+the `arc-content-hash` capability. It MUST NOT treat raw JSON serialization differences that the `arc-content-hash`
+capability canonicalizes away as a content change.
+
+#### Scenario: Re-submit after order-only RO-Crate noise
+
+- **GIVEN** an ARC document already stored with a content hash
+- **WHEN** the same logical ARC is stored again with only order or serialization differences covered by
+  `arc-content-hash`
+- **THEN** the content-changed flag is false and no body write occurs
