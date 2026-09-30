@@ -128,10 +128,18 @@ finalize runs.
 
 #### Scenario: Transient catalog push does not record failure before retry
 
-- **GIVEN** finalize raises a retryable store error after harvest `COMPLETED`
+- **GIVEN** finalize raises a retryable store error after harvest `COMPLETED` and Celery will still retry
 - **WHEN** the worker re-raises for Celery retry
 - **THEN** no `CATALOG_PUSH_FAILED` event is appended (matching per-ARC `GIT_PUSH_*` handling); a later successful
   attempt MAY record only `CATALOG_PUSH_SUCCESS`
+
+#### Scenario: Exhausted transient catalog push records failure once
+
+- **GIVEN** finalize raises a retryable store error after harvest `COMPLETED` on the final Celery attempt (`retries`
+  exhausted)
+- **WHEN** the worker re-raises `TransientError` (task ends in `FAILURE`)
+- **THEN** exactly one `CATALOG_PUSH_FAILED` event is appended (redacted message)
+- **AND** the harvest remains `COMPLETED`
 
 #### Scenario: Re-complete after dispatch failure re-enqueues finalize
 

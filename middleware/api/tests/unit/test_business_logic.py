@@ -371,6 +371,55 @@ async def test_finalize_catalog_transient_error_skips_failure_event(
 
 
 @pytest.mark.asyncio
+async def test_finalize_catalog_exhausted_transient_records_failure_event(
+    worker_logic_with_catalog: BusinessLogic,
+    mock_consolidated_store: MagicMock,
+    mock_doc_store: MagicMock,
+) -> None:
+    """Final Celery attempt records CATALOG_PUSH_FAILED before re-raising TransientError."""
+    mock_consolidated_store.finalize = AsyncMock(side_effect=ArcStoreTransientError("git unreachable"))
+    mock_doc_store.update_harvest = AsyncMock()
+
+    with pytest.raises(TransientError, match="git unreachable"):
+        await worker_logic_with_catalog.finalize_catalog(
+            "test-rdi",
+            harvest_id="harvest-1",
+            record_transient_as_failed=True,
+        )
+
+    mock_doc_store.update_harvest.assert_called_once()
+    patch = mock_doc_store.update_harvest.call_args.args[1]
+    assert patch["append_catalog_event"]["type"] == "CATALOG_PUSH_FAILED"
+    assert "git unreachable" in patch["append_catalog_event"]["message"]
+
+
+@pytest.mark.asyncio
+async def test_finalize_catalog_exhausted_transient_redacts_oauth_token(
+    worker_logic_with_catalog: BusinessLogic,
+    mock_consolidated_store: MagicMock,
+    mock_doc_store: MagicMock,
+) -> None:
+    """Exhausted-transient CATALOG_PUSH_FAILED messages redact oauth2 credentials."""
+    mock_consolidated_store.finalize = AsyncMock(
+        side_effect=ArcStoreTransientError(
+            "push failed: https://oauth2:secret-token@gitlab.example.com/group/catalog.git"
+        )
+    )
+    mock_doc_store.update_harvest = AsyncMock()
+
+    with pytest.raises(TransientError):
+        await worker_logic_with_catalog.finalize_catalog(
+            "test-rdi",
+            harvest_id="harvest-1",
+            record_transient_as_failed=True,
+        )
+
+    message = mock_doc_store.update_harvest.call_args.args[1]["append_catalog_event"]["message"]
+    assert "secret-token" not in message
+    assert "https://***@gitlab.example.com" in message
+
+
+@pytest.mark.asyncio
 async def test_finalize_catalog_permanent_error_records_failure_event(
     worker_logic_with_catalog: BusinessLogic,
     mock_consolidated_store: MagicMock,
@@ -572,6 +621,57 @@ async def test_worker_mode_sync_to_gitlab_success(worker_logic: BusinessLogic, m
     args, kwargs = mock_store.create_or_update.call_args
     assert args[0] == "arc_id"
     assert kwargs["rdi"] == rdi
+
+
+@pytest.mark.asyncio
+async def test_sync_to_gitlab_transient_error_skips_failure_event(
+    worker_logic: BusinessLogic,
+    mock_store: MagicMock,
+    mock_doc_store: MagicMock,
+) -> None:
+    """Mid-retry transient sync must not append GIT_PUSH_FAILED."""
+    mock_store.create_or_update = AsyncMock(side_effect=ArcStoreTransientError("git unreachable"))
+    mock_doc_store.add_event = AsyncMock()
+    arc_data = minimal_rocrate_dict("ABC")
+
+    with (
+        patch("middleware.api.business_logic.arc_manager.ARC") as mock_arc_class,
+        patch("middleware.api.business_logic.arc_manager.calculate_arc_id", return_value="arc_id"),
+    ):
+        mock_arc_class.from_rocrate_json_string.return_value = MagicMock(Identifier="ABC")
+        with pytest.raises(TransientError, match="git unreachable"):
+            await worker_logic.sync_to_gitlab("test-rdi", arc_data)
+
+    mock_doc_store.add_event.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_sync_to_gitlab_exhausted_transient_records_failure_event(
+    worker_logic: BusinessLogic,
+    mock_store: MagicMock,
+    mock_doc_store: MagicMock,
+) -> None:
+    """Final Celery attempt records GIT_PUSH_FAILED before re-raising TransientError."""
+    mock_store.create_or_update = AsyncMock(side_effect=ArcStoreTransientError("git unreachable"))
+    mock_doc_store.add_event = AsyncMock()
+    arc_data = minimal_rocrate_dict("ABC")
+
+    with (
+        patch("middleware.api.business_logic.arc_manager.ARC") as mock_arc_class,
+        patch("middleware.api.business_logic.arc_manager.calculate_arc_id", return_value="arc_id"),
+    ):
+        mock_arc_class.from_rocrate_json_string.return_value = MagicMock(Identifier="ABC")
+        with pytest.raises(TransientError, match="git unreachable"):
+            await worker_logic.sync_to_gitlab(
+                "test-rdi",
+                arc_data,
+                record_transient_as_failed=True,
+            )
+
+    mock_doc_store.add_event.assert_called_once()
+    event = mock_doc_store.add_event.call_args.args[1]
+    assert event.type.value == "GIT_PUSH_FAILED"
+    assert "git unreachable" in event.message
 
 
 @pytest.mark.asyncio
