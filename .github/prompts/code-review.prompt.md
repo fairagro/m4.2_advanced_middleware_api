@@ -8,7 +8,8 @@ Produce a first-party critical review of a local branch diff or GitHub pull requ
 
 Follow `.agents/skills/code-review/SKILL.md` to:
 
-- gather context via `uv run --project scripts/ai m42-ai code-review-context`
+- gather context via `m42-ai code-review-context` (or
+  `env -u VIRTUAL_ENV uv run --project scripts/ai m42-ai code-review-context`)
 - apply the judgment checklist (security, correctness, architecture, …) without duplicating quality-toolchain findings
 - write `/tmp` via `code-review-report-write` (auto-prefixes `<!-- m42-ai:code-review -->`); publish a COMMENT PR Review
   via `code-review-publish` when a PR is known

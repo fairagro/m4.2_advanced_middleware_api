@@ -36,17 +36,26 @@ Equivalent: `uv run --project scripts/ai m42-ai …`.
 
 ### Product consumers — invoke
 
-From the **repo root**:
+**Primary (silent):** when synced `scripts/bin` is on `PATH` (Dev Container `remoteEnv`), use the wrapper — it unsets a
+conflicting root `VIRTUAL_ENV` then runs `--project scripts/ai`:
 
 ```bash
-uv run --project scripts/ai --locked m42-ai --help
-uv run --project scripts/ai --locked m42-ai review-open --pr 22
+m42-ai --help
+m42-ai review-open --pr 22
 ```
 
-`--locked` fails closed if the synced lock is missing or out of date — that is intentional. Works on a **host** or in
-the Dev Container. Auth is whatever `gh` on your `PATH` uses (`GH_TOKEN` / `gh auth`) — the Dev Container token store
-and `scripts/bin/gh` wrapper are optional and DC-only. GitHub commands need a repo context (`gh` cwd / remotes), unless
-you pass `--owner` / `--repo` where the command supports them.
+**Portable (no wrapper on `PATH`):**
+
+```bash
+env -u VIRTUAL_ENV uv run --project scripts/ai --locked m42-ai --help
+env -u VIRTUAL_ENV uv run --project scripts/ai --locked m42-ai review-open --pr 22
+```
+
+Do **not** use `uv run --active` (would target the product root `.venv`) and do **not** remove Dev Container
+`VIRTUAL_ENV` (root-venv activation is intentional). `--locked` fails closed if the synced lock is missing or out of
+date — that is intentional. Works on a **host** or in the Dev Container. Auth is whatever `gh` on your `PATH` uses
+(`GH_TOKEN` / `gh auth`) — the Dev Container token store and `scripts/bin/gh` wrapper are optional and DC-only. GitHub
+commands need a repo context (`gh` cwd / remotes), unless you pass `--owner` / `--repo` where the command supports them.
 
 ## Commands
 
@@ -89,7 +98,7 @@ uv run pytest
 ### Product consumers — tests
 
 ```bash
-uv run --project scripts/ai pytest
+env -u VIRTUAL_ENV uv run --project scripts/ai pytest
 ```
 
 Fixtures only — no live GitHub in CI.

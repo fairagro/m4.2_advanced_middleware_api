@@ -39,8 +39,10 @@ Do **not** commit or push unless the user asks.
 
 ## Auth (`gh`)
 
-Prefer `uv run --project scripts/ai m42-ai …` (works in Devinfra and product checkouts). Bare `uv run m42-ai` is only OK
-when `scripts/ai` is a root workspace member (Devinfra).
+Prefer `m42-ai …` when `scripts/bin` is on `PATH` (synced wrapper unsets conflicting `VIRTUAL_ENV`, then
+`uv run --project scripts/ai m42-ai`). Portable without the wrapper:
+`env -u VIRTUAL_ENV uv run --project scripts/ai m42-ai …`. Bare `uv run m42-ai` is only OK when `scripts/ai` is a root
+workspace member (Devinfra). Do **not** use `uv run --active` to silence the warning.
 
 `gh` is wrapped (`scripts/bin/gh`, on `PATH` in the Dev Container via `remoteEnv`). Missing `GH_TOKEN` prompts on
 `/dev/tty` and is saved to `/commandhistory/tokens.env` (Linux Dev Container only — see `docs/conventions.md`). The
@@ -58,7 +60,7 @@ do not invent them. Never ask the user to paste a PAT into chat.
 
    Then reply here when done (or decline).
 
-3. After they confirm, retry `uv run --project scripts/ai m42-ai auth-status` (or `gh auth status`). If auth works,
+3. After they confirm, retry `m42-ai auth-status` (or `gh auth status`). If auth works,
    continue with label ensure + issue create.
 4. Only if they decline or auth still fails: skip GitHub writes, print the draft title/body/type/labels, and stop.
 
@@ -149,7 +151,7 @@ Prefer the plumbing CLI (still uses `gh` on `PATH` / `GH_TOKEN`):
 
 ```bash
 # Improvement / Task with no defect path — omit --practicality
-uv run --project scripts/ai m42-ai issue-create \
+m42-ai issue-create \
   --title "..." \
   --type Task \
   --severity severity:low \
@@ -158,7 +160,7 @@ uv run --project scripts/ai m42-ai issue-create \
   [--parent 42]
 
 # Bug / Security (or Task that closes a real failure mode) — include --practicality
-uv run --project scripts/ai m42-ai issue-create \
+m42-ai issue-create \
   --title "..." \
   --type Bug \
   --severity severity:high \

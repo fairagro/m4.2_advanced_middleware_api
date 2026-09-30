@@ -363,7 +363,7 @@
       "groupName": "Python build tools"
     },
     {
-      "description": "npm toolchain pins (package.json + versions.env)",
+      "description": "npm datasource default group (non-mirrored); prettier/markdownlint-cli2 overridden below",
       "matchDatasources": ["npm"],
       "groupName": "npm toolchain"
     },
@@ -402,6 +402,12 @@
     {
       "description": "Bundle all versions.env (+ .python-version mirror) pin bumps into one PR (overrides earlier datasource groupNames for these files only)",
       "matchFileNames": ["versions.env", ".python-version"],
+      "groupName": "versions.env toolchain pins",
+      "separateMinorPatch": false
+    },
+    {
+      "description": "Mirrored npm pins: keep package.json/lock with versions.env (same group as file rule above)",
+      "matchPackageNames": ["prettier", "markdownlint-cli2"],
       "groupName": "versions.env toolchain pins",
       "separateMinorPatch": false
     }
