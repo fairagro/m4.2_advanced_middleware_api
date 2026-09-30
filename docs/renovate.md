@@ -79,14 +79,17 @@ on `PATH`). That pin is for local dry-runs only. CI runs
 [`renovatebot/github-action`](../.github/workflows/renovate.yml) at its own Action version (currently `v46.2.6`) — keep
 the Action major aware of the CLI major when bumping either pin; they are not the same artifact.
 
-The **npm CLI** itself is pinned as `NPM_VERSION` in `versions.env` (regex custom manager, `datasourceTemplate: npm`,
-grouped under **npm toolchain** with Prettier / markdownlint-cli2 / OpenSpec / Renovate CLI). It is independent of
-`NODE_VERSION` (Node tarball). Bump npm in Devinfra via Renovate; do not hand-edit the pin in product checkouts.
+The **npm CLI** itself is pinned as `NPM_VERSION` in `versions.env` (regex custom manager, `datasourceTemplate: npm`).
+It is independent of `NODE_VERSION` (Node tarball). Bump npm in Devinfra via Renovate; do not hand-edit the pin in
+product checkouts.
 
 **Grouping:** all Renovate updates that touch `versions.env` or `.python-version` share one PR group
 (`versions.env toolchain pins`), including former per-datasource splits (GitHub release CLIs, npm/pypi pins,
-`node-version`, …). Other managers (Actions, Dockerfiles outside those files) keep their own groups. Product Renovate
-still has those files **disabled** (bump in Devinfra, then sync).
+`node-version`, …). **Mirrored** `package.json` / `package-lock.json` pins for `prettier` and `markdownlint-cli2` use
+that **same** group so a Prettier bump cannot land as a SoT-only PR while `npm ci` still sees the old lockfile.
+`NPM_VERSION` / `RENOVATE_VERSION` / `OPENSPEC_VERSION` live only in `versions.env` (not in `package.json`) and stay in
+that file group. Other managers (Actions, Dockerfiles outside those files) keep their own groups. Product Renovate still
+has those synced files **disabled** (bump in Devinfra, then sync).
 
 From the repo root (no PR creation):
 
