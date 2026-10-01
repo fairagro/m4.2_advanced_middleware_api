@@ -12,7 +12,11 @@ if TYPE_CHECKING:
 
 
 class HarvestConfig(BaseModel):
-    """Configuration for a harvest run."""
+    """Configuration for a harvest run.
+
+    ``grace_period_days`` / ``auto_mark_deleted`` are unused stubs until ARC lifecycle
+    delete policy (#340) wires them; keep the knobs so deploys can pre-configure.
+    """
 
     grace_period_days: Annotated[int, Field(description="Days before marking ARC as deleted")] = 14
     auto_mark_deleted: Annotated[bool, Field(description="Automatically mark ARCs as deleted")] = False

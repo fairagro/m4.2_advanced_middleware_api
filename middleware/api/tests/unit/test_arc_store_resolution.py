@@ -3,7 +3,7 @@
 import pytest
 from pydantic import TypeAdapter, ValidationError
 
-from middleware.api.arc_store.arc_store_config import ArcStoreBackendType, ArcStoreConfig, ConsolidatedStoreConfig
+from middleware.api.arc_store.arc_store_config import ArcStoreConfig, ConsolidatedStoreConfig
 from middleware.api.arc_store.consolidated_git import ConsolidatedGitConfig
 from middleware.api.arc_store.git_repo import GitRepoConfig
 from middleware.api.arc_store.resolution import (
@@ -41,8 +41,7 @@ def test_accept_git_repo_plus_optional_catalog() -> None:
             "consolidated_git": {"repo_url": "file:///tmp/catalog.git"},
         },
     })
-    backend_type, settings = resolve_arc_store_backend(config)
-    assert backend_type == ArcStoreBackendType.GIT_REPO
+    settings = resolve_arc_store_backend(config)
     assert isinstance(settings, GitRepoConfig)
     assert has_consolidated_store(config)
     consol = resolve_consolidated_store_settings(config)
@@ -71,6 +70,27 @@ def test_reject_consolidated_alongside_git_repo_under_arc_store() -> None:
             "arc_store": {
                 **_git_repo_arc_store(),
                 "consolidated_git": {"repo_url": "file:///tmp/catalog.git"},
+            },
+        })
+
+
+def test_reject_nested_gitlab_api_under_arc_store() -> None:
+    """Nested gitlab_api under arc_store is rejected (hard cut)."""
+    with pytest.raises(ValidationError, match="Extra inputs are not permitted"):
+        Config.from_data({
+            "couchdb": _minimal_couchdb(),
+            "celery": _minimal_celery(),
+            "arc_store": {
+                "gitlab_api": {"url": "https://gitlab.example", "token": "x", "group": "g"},
+            },
+        })
+    with pytest.raises(ValidationError, match="Extra inputs are not permitted"):
+        Config.from_data({
+            "couchdb": _minimal_couchdb(),
+            "celery": _minimal_celery(),
+            "arc_store": {
+                **_git_repo_arc_store(),
+                "gitlab_api": {"url": "https://gitlab.example", "token": "x", "group": "g"},
             },
         })
 
@@ -118,11 +138,11 @@ def test_arc_store_required() -> None:
         })
 
 
-def test_arc_store_config_requires_exactly_one_backend_key() -> None:
-    """ArcStoreConfig rejects empty / dual / catalog-only nested keys."""
-    with pytest.raises(ValidationError, match="exactly one"):
+def test_arc_store_config_requires_git_repo_only() -> None:
+    """ArcStoreConfig requires git_repo and rejects nested gitlab_api / catalog keys."""
+    with pytest.raises(ValidationError, match="git_repo"):
         _ARC_STORE_CONFIG.validate_python({})
-    with pytest.raises(ValidationError, match="exactly one"):
+    with pytest.raises(ValidationError, match="Extra inputs are not permitted"):
         _ARC_STORE_CONFIG.validate_python({
             "git_repo": {"url": "https://gitlab.example/repo.git", "group": "fairagro"},
             "gitlab_api": {"url": "https://gitlab.example", "token": "x", "group": "g"},
@@ -176,7 +196,7 @@ def test_arc_store_shared_git_settings_merge() -> None:
             },
         },
     })
-    _, settings = resolve_arc_store_backend(config)
+    settings = resolve_arc_store_backend(config)
     assert isinstance(settings, GitRepoConfig)
     assert settings.branch == "main"
     assert settings.user_name == "Shared Git"

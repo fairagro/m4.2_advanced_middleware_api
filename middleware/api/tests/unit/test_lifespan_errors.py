@@ -20,7 +20,6 @@ async def test_lifespan_setup_error_reraised() -> None:
     mock_config.otel.log_console_spans = False
     mock_config.otel.log_level = "DEBUG"
     mock_config.celery.broker_url = SecretStr("memory://")
-    mock_config.celery.result_backend = SecretStr("cache+memory://")
     mock_config.known_rdis = []
     mock_config.max_concurrent_requests = None
     mock_config.retry_after_seconds = 5
@@ -67,7 +66,6 @@ async def test_lifespan_generic_exception_reraised() -> None:
     mock_config.otel.log_console_spans = False
     mock_config.otel.log_level = "DEBUG"
     mock_config.celery.broker_url = SecretStr("memory://")
-    mock_config.celery.result_backend = SecretStr("cache+memory://")
     mock_config.max_concurrent_requests = None
     mock_config.retry_after_seconds = 5
     mock_config.model_dump.return_value = {}

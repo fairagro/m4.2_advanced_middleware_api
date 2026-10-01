@@ -101,24 +101,6 @@ class ArcStore(ABC):
         """Check connection to the storage backend."""
         raise NotImplementedError("`ArcStore._check_health` is not implemented")
 
-    @property
-    def publishes_per_arc_git(self) -> bool:
-        """Whether this backend's ``create_or_update`` pushes one Git project per ARC.
-
-        Dual-slot orchestration always syncs via the per-ARC store; catalog backends
-        return False as a capability marker (not a call-site gate).
-        """
-        return True
-
-    @property
-    def supports_standalone_upload(self) -> bool:
-        """Whether this backend is suitable as a standalone per-ARC destination.
-
-        Dual-slot orchestration no longer gates ``/v1|/v2|/v3/arcs`` on this flag;
-        catalog backends return False as a capability marker.
-        """
-        return True
-
     async def _finalize(self, *, rdi: str) -> CatalogFinalizeResult:  # noqa: PLR6301, ARG002
         """Publish pending catalog state for an RDI.
 

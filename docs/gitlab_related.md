@@ -1,6 +1,9 @@
 # Gitlab considerations
 
-The FAIRagro advanced middleware API will access the gitlab API (in case you use the `GitlabApi` `ArcStore`) via https.
+The FAIRagro advanced middleware API uses the GitLab HTTP API (via `python-gitlab`) for project metadata when the
+`GitRepo` ArcStore talks to a GitLab / DataHUB remote — creating projects and updating title, description, and topics.
+Git content itself is written through clone/commit/push, not the deprecated REST commit-action backend.
+
 Therefore it needs a group access token.
 
 To prepare your Gitlab/Datahub instance to interoperate with the FAIRagro advanced middle, please perform the following
@@ -16,6 +19,7 @@ steps:
    owner role, because the tests will delete all repos to be in a deterministic state. In a prodoctive scenario, the
    maintainer role will be sufficient.
 
-3. Add the add group (as well as the URL of your DataHub instance) to your FAIRagro advanced middleware config file
+3. Add the group (as well as the URL of your DataHub instance) under `arc_store.git_repo` in your FAIRagro advanced
+   middleware config file
 4. Define the environment variable `GITLAB_API_TOKEN` and assign the created group access token. Note: for testing
    purpose you may create a corresponding `.env` file in the project main directory.

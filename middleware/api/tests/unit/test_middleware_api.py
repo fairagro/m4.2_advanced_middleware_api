@@ -12,8 +12,6 @@ from middleware.api.api.common.dependencies import get_client_id
 from middleware.api.api.fastapi_app import Api
 from middleware.shared.config.logging import RedactingFormatter
 
-pytestmark = pytest.mark.filterwarnings("ignore:gitlab_api configuration is deprecated.*:DeprecationWarning")
-
 
 def test_uvicorn_access_logger_uses_api_format() -> None:
     """Ensure uvicorn access logs use the same timestamped format as middleware logs."""
@@ -100,7 +98,6 @@ def test_health_check_success(client: TestClient, middleware_api: Api, cert: str
         assert r.status_code == http.HTTPStatus.OK
         assert r.json() == {
             "status": "ok",
-            "redis_reachable": True,
             "rabbitmq_reachable": True,
         }
 
@@ -123,7 +120,6 @@ def test_health_check_failure(client: TestClient, middleware_api: Api, cert: str
         assert r.status_code == http.HTTPStatus.SERVICE_UNAVAILABLE
         assert r.json() == {
             "status": "error",
-            "redis_reachable": True,
             "rabbitmq_reachable": False,
         }
 

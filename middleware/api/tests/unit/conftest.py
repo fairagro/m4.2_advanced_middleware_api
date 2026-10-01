@@ -10,11 +10,12 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 from cryptography import x509
 from fastapi.testclient import TestClient
-from pydantic import HttpUrl, SecretStr
+from pydantic import SecretStr
 
 from middleware.api.api.fastapi_app import Api
 from middleware.api.api.legacy.task_types import SyncTaskResult, SyncTaskStatus
-from middleware.api.arc_store.gitlab_api import GitlabApi, GitlabApiConfig
+from middleware.api.arc_store.arc_store_config import ArcStoreConfig
+from middleware.api.arc_store.git_repo.config import GitRepoConfig
 from middleware.api.business_logic import BusinessLogic
 from middleware.api.business_logic.ports import BusinessLogicPorts
 from middleware.api.config import Config
@@ -63,14 +64,14 @@ def config(oid: x509.ObjectIdentifier, known_rdis: list[str]) -> Config:
         log_level="DEBUG",
         client_auth_oid=oid,
         known_rdis=known_rdis,
-        arc_store={
-            "git_repo": {
-                "url": "http://localhost:8080",
-                "group": "test-group",
-                "branch": "main",
-                "rdi_gitlab_topics": {"rdi-1": "rdi-1", "rdi-2": "rdi-2"},
-            },
-        },
+        arc_store=ArcStoreConfig(
+            git_repo=GitRepoConfig(
+                url="http://localhost:8080",
+                group="test-group",
+                branch="main",
+                rdi_gitlab_topics={"rdi-1": "rdi-1", "rdi-2": "rdi-2"},
+            ),
+        ),
         celery=CeleryConfig(
             broker_url=SecretStr("amqp://guest:guest@localhost:5672//"),
         ),
@@ -118,8 +119,6 @@ def service(config: Config) -> BusinessLogic:
     store.delete = AsyncMock()
     store.create_or_update = AsyncMock()
     store.shutdown = AsyncMock()
-    store.publishes_per_arc_git = True
-    store.supports_standalone_upload = True
 
     doc_store = MagicMock()
 
@@ -153,12 +152,3 @@ def service(config: Config) -> BusinessLogic:
             broker_health_checker=broker_health_checker,
         ),
     )
-
-
-@pytest.fixture
-def gitlab_api() -> GitlabApi:
-    """Provide a GitlabApi instance with a mocked Gitlab client."""
-    api_config = GitlabApiConfig(url=HttpUrl("http://gitlab"), token=SecretStr("token"), group="1", branch="main")  # nosec
-    api = GitlabApi(api_config)
-    api._gitlab = MagicMock()  # noqa: SLF001
-    return api

@@ -81,14 +81,14 @@ receives them, as specified in `arc-upload/` and `harvest-arc-upload/`.
 
 ### Requirement: Support optional finalize on ArcStore
 
-The `ArcStore` port SHALL expose a `finalize` operation scoped to an RDI (`finalize(rdi=…)`). Existing per-ARC backends
-(`GitRepo`, `GitlabApi`) MUST implement `finalize` as a successful no-op. Callers MUST be able to invoke `finalize`
-after a harvest without branching on backend type. Finalize MUST NOT take `harvest_id` as a store argument (CouchDB
-holds latest ARC bodies only; harvest cannot filter catalog membership).
+The `ArcStore` port SHALL expose a `finalize` operation scoped to an RDI (`finalize(rdi=…)`). The per-ARC `GitRepo`
+backend MUST implement `finalize` as a successful no-op. Callers MUST be able to invoke `finalize` after a harvest
+without branching on backend type. Finalize MUST NOT take `harvest_id` as a store argument (CouchDB holds latest ARC
+bodies only; harvest cannot filter catalog membership).
 
 #### Scenario: Finalize on per-ARC Git backend
 
-- **GIVEN** `git_repo` or `gitlab_api` is the configured store
+- **GIVEN** `git_repo` is the configured per-ARC store
 - **WHEN** `finalize` is invoked for an RDI
 - **THEN** the call succeeds without writing a consolidated catalog file
 
@@ -165,15 +165,16 @@ extraction/normalize, see the empty-wipe refusal under the publish requirement.
 ### Requirement: Dual ArcStore configuration slots
 
 Configuration MUST provide a **required** `arc_store` slot for per-ARC Git persistence and MAY provide an **optional**
-`consolidated_store` slot for the shared RDI catalog. The `arc_store` backend MUST be selected by which nested settings
-key is set: `git_repo` or deprecated `gitlab_api` (exactly one). There MUST NOT be a separate `type` discriminator field
-on either slot. The `consolidated_store` slot MUST configure consolidated catalog settings under `consolidated_git`
-(slot name selects the catalog role). Putting catalog settings under `arc_store` MUST fail validation. Top-level
-`git_repo`, `gitlab_api`, and `consolidated_git` MUST NOT be model fields (they are not accepted as configuration).
-Config that relies only on those keys MUST fail on the API config model (required `arc_store` missing and/or unknown
-top-level fields forbidden). The API `Config` model MUST reject unknown top-level fields (`extra="forbid"`). The worker
-`WorkerConfig` projection MUST ignore API-only keys from the same shared flat file (it is not a second full schema).
-Each slot MAY carry its own `git` CLI settings object using the shared Git CLI settings type.
+`consolidated_store` slot for the shared RDI catalog. The `arc_store` backend MUST be configured via nested `git_repo`
+settings (exactly that key). There MUST NOT be a separate `type` discriminator field on either slot. The
+`consolidated_store` slot MUST configure consolidated catalog settings under `consolidated_git` (slot name selects the
+catalog role). Putting catalog settings under `arc_store` MUST fail validation. Nested `gitlab_api` under `arc_store`
+MUST fail validation. Top-level `git_repo`, `gitlab_api`, and `consolidated_git` MUST NOT be model fields (they are not
+accepted as configuration). Config that relies only on those keys MUST fail on the API config model (required
+`arc_store` missing and/or unknown top-level fields forbidden). The API `Config` model MUST reject unknown top-level
+fields (`extra="forbid"`). The worker `WorkerConfig` projection MUST ignore API-only keys from the same shared flat file
+(it is not a second full schema). Each slot MAY carry its own `git` CLI settings object using the shared Git CLI
+settings type.
 
 #### Scenario: Accept GitRepo plus optional catalog
 
@@ -183,7 +184,13 @@ Each slot MAY carry its own `git` CLI settings object using the shared Git CLI s
 
 #### Scenario: Reject catalog settings under arc_store
 
-- **GIVEN** `arc_store` contains only `consolidated_git` (no `git_repo` / `gitlab_api`)
+- **GIVEN** `arc_store` contains only `consolidated_git` (no `git_repo`)
+- **WHEN** configuration is validated
+- **THEN** validation fails before the API or worker starts
+
+#### Scenario: Reject nested gitlab_api under arc_store
+
+- **GIVEN** `arc_store` contains nested `gitlab_api` (with or without `git_repo`)
 - **WHEN** configuration is validated
 - **THEN** validation fails before the API or worker starts
 
