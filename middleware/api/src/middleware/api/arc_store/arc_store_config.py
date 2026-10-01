@@ -1,28 +1,19 @@
 """Preferred ``arc_store`` / ``consolidated_store`` configuration blocks."""
 
-from enum import StrEnum
-from typing import Annotated, ClassVar, Self
+from typing import Annotated, ClassVar
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field
 
 from middleware.api.arc_store.consolidated_git.config import ConsolidatedGitConfig
 from middleware.api.arc_store.git_cli_settings import GitCliSettings
 from middleware.api.arc_store.git_repo.config import GitRepoConfig
-from middleware.api.arc_store.gitlab_api.store import GitlabApiConfig
-
-
-class ArcStoreBackendType(StrEnum):
-    """Configured per-ARC ArcStore implementation."""
-
-    GIT_REPO = "git_repo"
-    GITLAB_API = "gitlab_api"
 
 
 class ArcStoreConfig(BaseModel):
     """Required per-ARC ArcStore slot.
 
-    Backend is selected by which nested settings key is set (``git_repo`` or
-    deprecated ``gitlab_api``) — no separate ``type`` field.
+    Backend is ``git_repo`` only — no separate ``type`` field. Nested
+    ``gitlab_api`` is rejected via ``extra="forbid"``.
     """
 
     model_config: ClassVar[ConfigDict] = ConfigDict(extra="forbid")
@@ -37,22 +28,9 @@ class ArcStoreConfig(BaseModel):
         ),
     ] = None
     git_repo: Annotated[
-        GitRepoConfig | None,
-        Field(description="Per-ARC GitRepo backend settings (selects git_repo backend)"),
-    ] = None
-    gitlab_api: Annotated[
-        GitlabApiConfig | None,
-        Field(description="Deprecated GitLab API backend settings (selects gitlab_api backend)"),
-    ] = None
-
-    @model_validator(mode="after")
-    def exactly_one_backend(self) -> Self:
-        """Require exactly one of ``git_repo`` or ``gitlab_api``."""
-        has_git_repo = self.git_repo is not None
-        has_gitlab_api = self.gitlab_api is not None
-        if has_git_repo == has_gitlab_api:
-            raise ValueError("arc_store must set exactly one of 'git_repo' or 'gitlab_api'")
-        return self
+        GitRepoConfig,
+        Field(description="Per-ARC GitRepo backend settings"),
+    ]
 
 
 class ConsolidatedStoreConfig(BaseModel):

@@ -321,8 +321,8 @@ Before generating or modifying code, read the relevant specs:
 - **[`openspec/specs/arc-manager/`](openspec/specs/arc-manager/)** — `ArcManager.create_or_update_arc` business logic:
   CouchDB storage, content-hash + harvest-scoped idempotency, Celery dispatch. Shared by both upload endpoints and
   accessible from the worker context.
-- **[`openspec/specs/arc-store/`](openspec/specs/arc-store/)** — `ArcStore` Git-backend interface: `GitRepo` (primary)
-  and `GitlabApi` (deprecated), error classification, and credential injection.
+- **[`openspec/specs/arc-store/`](openspec/specs/arc-store/)** — `ArcStore` Git-backend interface: `GitRepo` (primary),
+  error classification, and credential injection.
 - **[`openspec/specs/document-store/`](openspec/specs/document-store/)** — CouchDB persistence layer,
   race-condition-safe initialization, and content-hash idempotency.
 - **[`openspec/specs/arc-content-hash/`](openspec/specs/arc-content-hash/)** — RO-Crate canonicalization contract for
@@ -359,22 +359,22 @@ plumbing via `uv run --project scripts/ai m42-ai …`).
 This table maps each OpenSpec domain to the primary source file(s) it describes. Agents (`/opsx-apply` and default Agent
 mode) use it to locate affected code.
 
-| Spec domain                          | Primary source file(s)                                                                                                                                                                                                          |
-| ------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `openspec/specs/arc-manager/`        | `middleware/api/src/middleware/api/business_logic/arc_manager.py`                                                                                                                                                               |
-| `openspec/specs/arc-store/`          | `middleware/api/src/middleware/api/arc_store/git_repo/`, `gitlab_api/` (deprecated), `consolidated_git/`, `factory.py`, `resolution.py`, `arc_store_config.py`, `git_cli_settings.py`, `git_context.py`, `git_cache_cleanup.py` |
-| `openspec/specs/url-str/`            | `middleware/shared/src/middleware/shared/security/url_str.py`, `url_redact.py`                                                                                                                                                  |
-| `openspec/specs/document-store/`     | `middleware/api/src/middleware/api/document_store/couchdb_client.py`, `couchdb.py`                                                                                                                                              |
-| `openspec/specs/arc-content-hash/`   | `middleware/api/src/middleware/api/document_store/content_hash.py`                                                                                                                                                              |
-| `openspec/specs/harvest-manager/`    | `middleware/api/src/middleware/api/business_logic/harvest_manager.py`                                                                                                                                                           |
-| `openspec/specs/arc-upload/`         | `middleware/api/src/middleware/api/api/v3/arcs.py`                                                                                                                                                                              |
-| `openspec/specs/harvest-arc-upload/` | `middleware/api/src/middleware/api/api/v3/harvests.py`                                                                                                                                                                          |
-| `openspec/specs/admission-control/`  | `middleware/api/src/middleware/api/api/admission_control.py`, `fastapi_app.py`                                                                                                                                                  |
-| `openspec/specs/rate-limiting/`      | `middleware/api/src/middleware/api/api/rate_limiting.py`, `fastapi_app.py`, `middleware/api/src/middleware/api/config.py` (`RateLimitingConfig`)                                                                                |
-| `openspec/specs/harvest-client/`     | `middleware/api_client/src/middleware/api_client/api_client.py`, `models.py`                                                                                                                                                    |
-| `openspec/specs/harvest-report/`     | `middleware/shared/src/middleware/shared/report/`, `ns/harvest-report/`                                                                                                                                                         |
-| `openspec/specs/ci-cd/`              | `.github/workflows/` (see domain design for workflow files)                                                                                                                                                                     |
-| `openspec/specs/helm-httproute/`     | `helmchart/fairagro-advanced-middleware-api-chart/templates/httproute.yaml`, `values.yaml` (`api.httpRoute`), `templates/NOTES.txt`; template overlay `helmchart/test_deploy/values-httproute.yaml`                             |
+| Spec domain                          | Primary source file(s)                                                                                                                                                                              |
+| ------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `openspec/specs/arc-manager/`        | `middleware/api/src/middleware/api/business_logic/arc_manager.py`                                                                                                                                   |
+| `openspec/specs/arc-store/`          | `middleware/api/src/middleware/api/arc_store/git_repo/`, `consolidated_git/`, `factory.py`, `resolution.py`, `arc_store_config.py`, `git_cli_settings.py`, `git_context.py`, `git_cache_cleanup.py` |
+| `openspec/specs/url-str/`            | `middleware/shared/src/middleware/shared/security/url_str.py`, `url_redact.py`                                                                                                                      |
+| `openspec/specs/document-store/`     | `middleware/api/src/middleware/api/document_store/couchdb_client.py`, `couchdb.py`                                                                                                                  |
+| `openspec/specs/arc-content-hash/`   | `middleware/api/src/middleware/api/document_store/content_hash.py`                                                                                                                                  |
+| `openspec/specs/harvest-manager/`    | `middleware/api/src/middleware/api/business_logic/harvest_manager.py`                                                                                                                               |
+| `openspec/specs/arc-upload/`         | `middleware/api/src/middleware/api/api/v3/arcs.py`                                                                                                                                                  |
+| `openspec/specs/harvest-arc-upload/` | `middleware/api/src/middleware/api/api/v3/harvests.py`                                                                                                                                              |
+| `openspec/specs/admission-control/`  | `middleware/api/src/middleware/api/api/admission_control.py`, `fastapi_app.py`                                                                                                                      |
+| `openspec/specs/rate-limiting/`      | `middleware/api/src/middleware/api/api/rate_limiting.py`, `fastapi_app.py`, `middleware/api/src/middleware/api/config.py` (`RateLimitingConfig`)                                                    |
+| `openspec/specs/harvest-client/`     | `middleware/api_client/src/middleware/api_client/api_client.py`, `models.py`                                                                                                                        |
+| `openspec/specs/harvest-report/`     | `middleware/shared/src/middleware/shared/report/`, `ns/harvest-report/`                                                                                                                             |
+| `openspec/specs/ci-cd/`              | `.github/workflows/` (see domain design for workflow files)                                                                                                                                         |
+| `openspec/specs/helm-httproute/`     | `helmchart/fairagro-advanced-middleware-api-chart/templates/httproute.yaml`, `values.yaml` (`api.httpRoute`), `templates/NOTES.txt`; template overlay `helmchart/test_deploy/values-httproute.yaml` |
 
 ---
 

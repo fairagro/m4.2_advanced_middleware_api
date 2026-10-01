@@ -33,12 +33,17 @@ def api_config(known_rdis: list[str], oid: Any) -> dict[str, Any]:
         "log_level": "DEBUG",
         "known_rdis": known_rdis,
         "client_auth_oid": oid.dotted_string,
-        "gitlab_api": {
-            "url": "https://fake-gitlab.example.com",
-            "group": "test-group",
-            "token": "fake-token",
-            "branch": "main",
+        "arc_store": {
+            "git_repo": {
+                "url": "https://fake-gitlab.example.com",
+                "group": "test-group",
+                "token": "fake-token",
+                "branch": "main",
+                "rdi_gitlab_topics": {rdi: rdi for rdi in known_rdis},
+            },
         },
+        "couchdb": {"url": "http://localhost:5984"},
+        "celery": {"broker_url": "memory://"},
     }
 
 

@@ -70,23 +70,6 @@ python_files = ["test_*.py"]
 python_classes = ["Test*"]
 python_functions = ["test_*"]
 
-# Suppress DeprecationWarnings from intentionally deprecated modules so tests
-# stay clean. Use pytest.warns(DeprecationWarning) to assert the warnings
-# explicitly where needed.
-filterwarnings = [
-    "ignore:GitlabApi.*is deprecated:DeprecationWarning",
-    "ignore:GitlabApiConfig.*is deprecated:DeprecationWarning",
-    # Pydantic Field(deprecated=...) on legacy top-level ArcStore keys.
-    # Assert with pytest.warns where needed.
-    "ignore:Top-level git_repo is obsolete:DeprecationWarning",
-    "ignore:Top-level gitlab_api is obsolete:DeprecationWarning",
-    "ignore:Top-level consolidated_git is obsolete:DeprecationWarning",
-    # Pydantic emits a bare 'deprecated' warning whenever a deprecated field
-    # is *accessed* on a model instance.  In tests we intentionally exercise
-    # paths that touch the deprecated gitlab_api field; suppress the noise.
-    "ignore:deprecated:DeprecationWarning:middleware\\.api\\.config",
-]
-
 # Output and behavior
 addopts = [
     "-v",                        # Verbose output

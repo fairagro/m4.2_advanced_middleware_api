@@ -18,10 +18,6 @@ class CeleryConfig(BaseModel):
         SecretStr,
         Field(description="RabbitMQ broker URL"),
     ]
-    result_backend: Annotated[
-        SecretStr | None,
-        Field(description="[DEPRECATED] Backend URL for results", deprecated=True),
-    ] = None
     task_rate_limit: Annotated[str | None, Field(description="Rate limit for tasks (e.g. '10/m')")] = None
     retry_backoff: Annotated[bool, Field(description="Whether to use exponential backoff for retries")] = True
     retry_backoff_max: Annotated[int, Field(description="Max backoff time in seconds")] = 3600
@@ -41,7 +37,7 @@ class WorkerConfig(ConfigBase):
     ] = []
     arc_store: Annotated[
         ArcStoreConfig,
-        Field(description="Required per-ARC ArcStore backend (git_repo | deprecated gitlab_api)"),
+        Field(description="Required per-ARC ArcStore backend (nested git_repo)"),
     ]
     consolidated_store: Annotated[
         ConsolidatedStoreConfig | None,

@@ -50,7 +50,7 @@ def test_config_validate_rdi_gitlab_topics_requires_full_mapping(tmp_path: Path)
             },
         },
         "couchdb": {"url": "http://localhost:5984"},
-        "celery": {"broker_url": "memory://", "result_backend": "cache+memory://"},
+        "celery": {"broker_url": "memory://"},
     }
     with pytest.raises(ValidationError, match="missing from rdi_gitlab_topics"):
         Config.model_validate(config_data)
@@ -67,7 +67,7 @@ def test_config_validate_rdi_gitlab_topics_rejects_unknown_keys(tmp_path: Path) 
             },
         },
         "couchdb": {"url": "http://localhost:5984"},
-        "celery": {"broker_url": "memory://", "result_backend": "cache+memory://"},
+        "celery": {"broker_url": "memory://"},
     }
     with pytest.raises(ValidationError, match="not in known_rdis"):
         Config.model_validate(config_data)
@@ -79,7 +79,7 @@ def test_config_validate_known_rdis_valid(tmp_path: Path) -> None:
         "known_rdis": ["valid-rdi", "rdi.123", "under_score"],
         "arc_store": _arc_store(tmp_path),
         "couchdb": {"url": "http://localhost:5984"},
-        "celery": {"broker_url": "memory://", "result_backend": "cache+memory://"},
+        "celery": {"broker_url": "memory://"},
     }
     config = Config.model_validate(config_data)
     assert len(config.known_rdis) == 3  # noqa: PLR2004
@@ -91,7 +91,7 @@ def test_config_validate_known_rdis_invalid(tmp_path: Path) -> None:
         "known_rdis": ["invalid rdi"],  # space not allowed
         "arc_store": _arc_store(tmp_path),
         "couchdb": {"url": "http://localhost:5984"},
-        "celery": {"broker_url": "memory://", "result_backend": "cache+memory://"},
+        "celery": {"broker_url": "memory://"},
     }
     with pytest.raises(ValidationError) as exc:
         Config.model_validate(config_data)
@@ -105,7 +105,7 @@ def test_config_parse_client_auth_oid_str(tmp_path: Path) -> None:
         "client_auth_oid": oid_str,
         "arc_store": _arc_store(tmp_path),
         "couchdb": {"url": "http://localhost:5984"},
-        "celery": {"broker_url": "memory://", "result_backend": "cache+memory://"},
+        "celery": {"broker_url": "memory://"},
     }
     config = Config.model_validate(config_data)
     assert isinstance(config.client_auth_oid, x509.ObjectIdentifier)
@@ -119,7 +119,7 @@ def test_config_parse_client_auth_oid_obj(tmp_path: Path) -> None:
         "client_auth_oid": oid,
         "arc_store": _arc_store(tmp_path),
         "couchdb": {"url": "http://localhost:5984"},
-        "celery": {"broker_url": "memory://", "result_backend": "cache+memory://"},
+        "celery": {"broker_url": "memory://"},
     }
     config = Config.model_validate(config_data)
     assert config.client_auth_oid == oid
@@ -131,7 +131,7 @@ def test_config_parse_client_auth_oid_invalid_type(tmp_path: Path) -> None:
         "client_auth_oid": 1234,
         "arc_store": _arc_store(tmp_path),
         "couchdb": {"url": "http://localhost:5984"},
-        "celery": {"broker_url": "memory://", "result_backend": "cache+memory://"},
+        "celery": {"broker_url": "memory://"},
     }
     with pytest.raises(TypeError) as exc:
         Config.model_validate(config_data)
@@ -142,7 +142,7 @@ def test_config_requires_arc_store() -> None:
     """Test failure when arc_store is missing."""
     config_data: dict[str, Any] = {
         "couchdb": {"url": "http://localhost:5984"},
-        "celery": {"broker_url": "memory://", "result_backend": "cache+memory://"},
+        "celery": {"broker_url": "memory://"},
     }
     with pytest.raises(ValidationError) as exc:
         Config.model_validate(config_data)
@@ -155,7 +155,7 @@ def test_config_rejects_legacy_only_top_level_backends(tmp_path: Path) -> None:
         "git_repo": _git_repo(tmp_path),
         "gitlab_api": {"url": "https://gitlab.com", "token": "t", "group": "g", "branch": "b"},
         "couchdb": {"url": "http://localhost:5984"},
-        "celery": {"broker_url": "memory://", "result_backend": "cache+memory://"},
+        "celery": {"broker_url": "memory://"},
     }
     with pytest.raises(ValidationError, match="Extra inputs are not permitted|arc_store"):
         Config.model_validate(config_data)
@@ -182,7 +182,6 @@ def test_config_from_yaml_file_success(tmp_path: Path) -> None:
           url: http://localhost:5984
         celery:
           broker_url: memory://
-          result_backend: cache+memory://
         """
     )
     config_file.write_text(config_yaml)

@@ -7,7 +7,7 @@ config:
   # Dual-slot ArcStore: required arc_store + optional consolidated_store.
   # Chart does not ship a live default (Helm deep-merges maps).
   #
-  # Required per-ARC store (backend selected by nested key):
+  # Required per-ARC store (nested git_repo only):
   # arc_store:
   #   git_repo:
   #     url: https://datahub-dev.ipk-gatersleben.de
@@ -27,8 +27,8 @@ config:
   #     repo_url: https://datahub-dev.ipk-gatersleben.de/group/catalog.git
   #     # token / branch / cache_dir via env or nested fields as needed
   #
-  # Top-level git_repo / gitlab_api / consolidated_git are no longer accepted
-  # (hard cut — see NOTES.txt).
+  # Top-level git_repo / gitlab_api / consolidated_git and nested
+  # arc_store.gitlab_api are no longer accepted (hard cut — see NOTES.txt).
   known_rdis:
     - bonares
     - edal

@@ -107,15 +107,15 @@ def config(
         },
         "require_client_cert": False,
         "arc_store": {
-            "gitlab_api": {
+            "git_repo": {
                 "url": "https://datahub.ipk-gatersleben.de",
                 "group": "FAIRagro-advanced-middleware-dev-test",
                 "token": gitlab_token,
+                "rdi_gitlab_topics": {rdi: rdi for rdi in known_rdis},
             },
         },
         "celery": {
             "broker_url": external_services["rabbitmq_broker_url"],
-            "result_backend": os.getenv("CELERY_RESULT_BACKEND", "rpc://"),
         },
         "couchdb": {
             "url": external_services["couchdb_url"],
@@ -133,17 +133,17 @@ def gitlab_api(
     token = os.getenv("GITLAB_API_TOKEN")
     if not token:
         pytest.skip("system_external tests require GITLAB_API_TOKEN")
-    return Gitlab(config["arc_store"]["gitlab_api"]["url"], private_token=token)
+    return Gitlab(config["arc_store"]["git_repo"]["url"], private_token=token)
 
 
 @pytest.fixture(scope="session")
 def gitlab_group(config: dict[str, Any], gitlab_api: Gitlab) -> Any:  # pylint: disable=redefined-outer-name
     """Provide the Gitlab group for tests."""
     try:
-        group = gitlab_api.groups.get(config["arc_store"]["gitlab_api"]["group"])
+        group = gitlab_api.groups.get(config["arc_store"]["git_repo"]["group"])
         return group
     except GitlabError as e:
-        pytest.skip(f"GitLab group {config['arc_store']['gitlab_api']['group']} not found or accessible: {e}")
+        pytest.skip(f"GitLab group {config['arc_store']['git_repo']['group']} not found or accessible: {e}")
         return None
 
 
@@ -217,10 +217,11 @@ def worker_process(
             "max_retries": 3,
         },
         "arc_store": {
-            "gitlab_api": {
-                "url": str(config["arc_store"]["gitlab_api"]["url"]),
-                "group": config["arc_store"]["gitlab_api"]["group"],
+            "git_repo": {
+                "url": str(config["arc_store"]["git_repo"]["url"]),
+                "group": config["arc_store"]["git_repo"]["group"],
                 "token": gitlab_token,
+                "rdi_gitlab_topics": dict(config["arc_store"]["git_repo"]["rdi_gitlab_topics"]),
             },
         },
     }

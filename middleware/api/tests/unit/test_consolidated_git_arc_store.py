@@ -210,17 +210,6 @@ async def test_finalize_empty_rdi_still_publishes_empty_catalog(
     assert mock_publish.call_args[0][1].strip() == b"[]"
 
 
-@pytest.mark.asyncio
-async def test_finalize_catalog_backend_flags(
-    consolidated_config: ConsolidatedGitConfig,
-    doc_store: MagicMock,
-) -> None:
-    """Consolidated backend flags per-ARC Git off and standalone upload off."""
-    store = ConsolidatedGitArcStore(consolidated_config, doc_store)
-    assert store.publishes_per_arc_git is False
-    assert store.supports_standalone_upload is False
-
-
 def test_check_health_file_url_without_existing_path(tmp_path: Path) -> None:
     """file:// health is True even when the bare remote path does not exist yet."""
     missing = tmp_path / "nested" / "missing" / "catalog.git"

@@ -1,12 +1,6 @@
 log_level: DEBUG
 
-# gitlab_api under arc_store is deprecated; prefer git_repo.
-# arc_store:
-#   gitlab_api:
-#     group: FAIRagro-advanced-middleware-dev
-#     url: https://datahub-dev.ipk-gatersleben.de
-#     max_workers: 10
-#     commit_chunk_size: 200
+# Dual-slot ArcStore: required arc_store.git_repo + optional consolidated_store.
 arc_store:
   git_repo:
     url: https://datahub-dev.ipk-gatersleben.de

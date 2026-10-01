@@ -10,8 +10,6 @@ from middleware.api.api.fastapi_app import Api
 from middleware.api.api.legacy.task_types import SyncTaskResult, SyncTaskStatus
 from middleware.shared.api_models import ArcOperationResult, ArcResponse, ArcStatus, TaskStatus
 
-pytestmark = pytest.mark.filterwarnings("ignore:gitlab_api configuration is deprecated.*:DeprecationWarning")
-
 
 @pytest.mark.unit
 @pytest.mark.parametrize(
