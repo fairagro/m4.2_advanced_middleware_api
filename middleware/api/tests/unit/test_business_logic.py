@@ -9,6 +9,7 @@ from rocrate_fixtures import minimal_rocrate_dict
 
 from middleware.api.arc_store import ArcStoreError, ArcStoreTransientError, CatalogFinalizeResult
 from middleware.api.business_logic import (
+    ArcIdentityMismatchError,
     BusinessLogic,
     BusinessLogicError,
     BusinessLogicFactory,
@@ -18,7 +19,7 @@ from middleware.api.business_logic import (
 )
 from middleware.api.business_logic.ports import BusinessLogicPorts
 from middleware.api.business_logic.task_payloads import ArcSyncTask
-from middleware.api.document_store import ArcStoreResult
+from middleware.api.document_store import ArcIdentityConflictError, ArcStoreResult
 from middleware.api.document_store.harvest_document import HarvestDocument, HarvestStatistics
 from middleware.shared.api_models.common.models import ArcOperationResult, ArcStatus, HarvestStatus
 from middleware.shared.json_types import RoCrateContent
@@ -786,6 +787,22 @@ async def test_create_or_update_generic_exception(api_logic: BusinessLogic, mock
 
     with pytest.raises(BusinessLogicError, match="unexpected error encountered"):
         await api_logic.create_or_update_arc("test_rdi", cast(RoCrateContent, arc_data), "client_1")
+
+
+@pytest.mark.asyncio
+async def test_create_or_update_identity_mismatch_raises_and_skips_sync(
+    api_logic: BusinessLogic, mock_doc_store: MagicMock, mock_task_dispatcher: MagicMock
+) -> None:
+    """Identity conflict from document store maps to ArcIdentityMismatchError without Git sync."""
+    mock_doc_store.store_arc.side_effect = ArcIdentityConflictError(
+        "Identity conflict for arc_id 'abc': stored identifier/rdi do not match"
+    )
+    arc_data = minimal_rocrate_dict("colliding")
+
+    with pytest.raises(ArcIdentityMismatchError, match="Identity conflict"):
+        await api_logic.create_or_update_arc("test_rdi", cast(RoCrateContent, arc_data), "client_1")
+
+    mock_task_dispatcher.dispatch_sync_arc.assert_not_called()
 
 
 @pytest.mark.asyncio

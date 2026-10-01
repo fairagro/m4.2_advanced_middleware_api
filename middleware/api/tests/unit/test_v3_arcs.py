@@ -9,6 +9,7 @@ from fastapi.testclient import TestClient
 
 from middleware.api.api.common.dependencies import get_client_id
 from middleware.api.api.fastapi_app import Api
+from middleware.api.business_logic import ArcIdentityMismatchError
 from middleware.api.document_store.arc_document import ArcEvent, ArcMetadata
 from middleware.shared.api_models import ArcOperationResult, ArcResponse, ArcStatus
 from middleware.shared.api_models.common.models import ArcEventType, ArcLifecycleStatus
@@ -108,3 +109,42 @@ def test_create_or_update_arc_v3_rdi_not_authorized(client: TestClient, cert: st
         assert r.status_code == http.HTTPStatus.FORBIDDEN
 
     middleware_api.app.dependency_overrides.clear()
+
+
+@pytest.mark.unit
+def test_create_or_update_arc_v3_identity_mismatch_returns_409(
+    client: TestClient, cert: str, middleware_api: Api
+) -> None:
+    """Standalone POST /v3/arcs maps ArcIdentityMismatchError to HTTP 409 (not harvest content 409)."""
+    rocrate = {
+        "@context": "https://w3id.org/ro/crate/1.1/context",
+        "@graph": [{"@id": "./", "identifier": "ARC-collide"}],
+    }
+
+    with (
+        patch.object(middleware_api.business_logic, "create_or_update_arc", new_callable=AsyncMock) as mock_create,
+        patch.object(middleware_api.app.state.common_deps, "get_authorized_rdis", new_callable=AsyncMock) as mock_auth,
+    ):
+        mock_auth.return_value = ["rdi-1"]
+        mock_create.side_effect = ArcIdentityMismatchError(
+            "Identity conflict for arc_id 'deadbeef': stored identifier/rdi do not match "
+            "the incoming pair under strip() rules; document was not overwritten "
+            "(distinct from harvest content duplicate 409; NFC is #537)."
+        )
+
+        r = client.post(
+            "/v3/arcs",
+            headers={
+                "ssl-client-cert": cert,
+                "ssl-client-verify": "SUCCESS",
+                "content-type": "application/json",
+                "accept": "application/json",
+            },
+            json={"rdi": "rdi-1", "arc": rocrate},
+        )
+
+        assert r.status_code == http.HTTPStatus.CONFLICT
+        detail = r.json()["detail"]
+        assert "Identity conflict" in detail
+        assert "different content" not in detail
+        mock_create.assert_awaited_once()

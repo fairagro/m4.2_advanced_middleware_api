@@ -8,7 +8,12 @@ import pytest
 from fastapi.testclient import TestClient
 
 from middleware.api.api.fastapi_app import Api
-from middleware.api.business_logic import BusinessLogicError, DuplicateArcInHarvestError, InvalidJsonSemanticError
+from middleware.api.business_logic import (
+    ArcIdentityMismatchError,
+    BusinessLogicError,
+    DuplicateArcInHarvestError,
+    InvalidJsonSemanticError,
+)
 from middleware.api.business_logic.exceptions import ConflictError, InvalidRequestError
 from middleware.api.business_logic.harvest_manager import CreateHarvestResult
 from middleware.api.document_store.harvest_document import HarvestDocument, HarvestStatistics
@@ -270,6 +275,57 @@ def test_submit_arc_in_harvest_conflicting_content_returns_conflict(
 
         assert r.status_code == http.HTTPStatus.CONFLICT
         assert "ARC-dup" in r.json()["detail"]
+
+
+@pytest.mark.unit
+def test_submit_arc_in_harvest_identity_mismatch_returns_409(
+    client: TestClient, cert: str, middleware_api: Api
+) -> None:
+    """Harvest ARC submit maps identity mismatch to 409 with distinct detail from content duplicate."""
+    harvest_id = "harvest-123"
+    mock_harvest = HarvestDocument(
+        doc_id=harvest_id,
+        rdi="rdi-1",
+        client_id="test-client-cn",
+        status=HarvestStatus.RUNNING,
+        started_at=datetime.now(UTC),
+        statistics=HarvestStatistics(),
+    )
+    rocrate = {
+        "@context": "https://w3id.org/ro/crate/1.1/context",
+        "@graph": [{"@id": "./", "identifier": "ARC-collide"}],
+    }
+
+    with (
+        patch.object(
+            middleware_api.business_logic.harvest_manager, "get_harvest", new_callable=AsyncMock
+        ) as mock_get_harvest,
+        patch.object(middleware_api.app.state.common_deps, "get_authorized_rdis", new_callable=AsyncMock) as mock_auth,
+        patch.object(middleware_api.business_logic, "create_or_update_arc", new_callable=AsyncMock) as mock_create_arc,
+    ):
+        mock_get_harvest.return_value = mock_harvest
+        mock_auth.return_value = ["rdi-1"]
+        mock_create_arc.side_effect = ArcIdentityMismatchError(
+            "Identity conflict for arc_id 'deadbeef': stored identifier/rdi do not match "
+            "the incoming pair under strip() rules; document was not overwritten "
+            "(distinct from harvest content duplicate 409; NFC is #537)."
+        )
+
+        r = client.post(
+            f"/v3/harvests/{harvest_id}/arcs",
+            headers={
+                "ssl-client-cert": cert,
+                "ssl-client-verify": "SUCCESS",
+                "content-type": "application/json",
+                "accept": "application/json",
+            },
+            json={"arc": rocrate},
+        )
+
+        assert r.status_code == http.HTTPStatus.CONFLICT
+        detail = r.json()["detail"]
+        assert "Identity conflict" in detail
+        assert "different content" not in detail
 
 
 # ---------------------------------------------------------------------------

@@ -5,6 +5,7 @@ from middleware.api.business_logic.business_logic import BusinessLogic
 from middleware.api.business_logic.business_logic_factory import BusinessLogicFactory
 from middleware.api.business_logic.exceptions import (
     AccessDeniedError,
+    ArcIdentityMismatchError,
     BusinessLogicError,
     ConflictError,
     DuplicateArcInHarvestError,
@@ -28,6 +29,7 @@ __all__ = [
     "BusinessLogicPorts",
     "ConflictError",
     "CreateHarvestResult",
+    "ArcIdentityMismatchError",
     "DuplicateArcInHarvestError",
     "HarvestManager",
     "InvalidJsonSemanticError",
