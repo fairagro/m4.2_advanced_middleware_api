@@ -21,6 +21,7 @@ from m42_ai.issue import (
     issue_start,
     view_issue,
 )
+from m42_ai.openspec_instructions import OpenspecInstructionsError, fetch_openspec_instructions
 from m42_ai.pr import pr_strip_footer
 from m42_ai.review import PrHeadGateError, fetch_review_open, review_reply, review_resolve
 from m42_ai.sync_followup import (
@@ -36,6 +37,23 @@ def _print_json(data: Any) -> None:
     sys.stdout.write("\n")
 
 
+def _attach_json_argparse_error(parser: argparse.ArgumentParser) -> None:
+    """Make argparse ``error()`` emit fail-closed JSON then exit 2."""
+
+    def error(message: str) -> None:
+        _print_json(
+            {
+                "ok": False,
+                "error_code": "invalid_args",
+                "error": message,
+                "agent_action": "stop",
+            }
+        )
+        parser.exit(2)
+
+    parser.error = error  # type: ignore[method-assign]
+
+
 def _read_body(args: argparse.Namespace) -> str:
     body_file = getattr(args, "body_file", None)
     if body_file:
@@ -45,6 +63,26 @@ def _read_body(args: argparse.Namespace) -> str:
     if getattr(args, "body", None) is not None:
         return str(args.body)
     raise SystemExit("provide --body or --body-file")
+
+
+def cmd_openspec_instructions(args: argparse.Namespace) -> int:
+    try:
+        data = fetch_openspec_instructions(
+            args.artifact,
+            args.change,
+            cwd=Path(args.cwd) if getattr(args, "cwd", None) else None,
+        )
+    except OpenspecInstructionsError as exc:
+        _print_json(exc.as_json())
+        return 1
+    except (GhError, ValueError, RuntimeError, OSError, json.JSONDecodeError) as exc:
+        # Always emit structured JSON on failure (stderr-only breaks agent parsers).
+        _print_json(
+            OpenspecInstructionsError(str(exc), error_code="unexpected_error").as_json()
+        )
+        return 1
+    _print_json(data)
+    return 0
 
 
 def cmd_auth_status(args: argparse.Namespace) -> int:
@@ -465,6 +503,16 @@ def build_parser() -> argparse.ArgumentParser:
     sfe.add_argument("--dry-run", action="store_true")
     sfe.add_argument("--cwd", help="Git repo root (default: cwd)")
     sfe.set_defaults(func=cmd_sync_followup_ensure)
+
+    osi = sub.add_parser(
+        "openspec-instructions",
+        help="Fail-closed wrapper for openspec instructions … --json (stop; do not invent templates)",
+    )
+    osi.add_argument("--artifact", required=True, help="Artifact id (proposal, specs, design, tasks, apply, …)")
+    osi.add_argument("--change", required=True, help="OpenSpec change name")
+    osi.add_argument("--cwd", help="OpenSpec / git repo root (default: cwd)")
+    osi.set_defaults(func=cmd_openspec_instructions)
+    _attach_json_argparse_error(osi)
 
     return p
 
