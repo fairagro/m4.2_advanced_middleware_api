@@ -331,11 +331,10 @@ Before generating or modifying code, read the relevant specs:
   validation, and progress tracking.
 - **[`openspec/specs/admission-control/`](openspec/specs/admission-control/)** — Process-local concurrent request
   admission: at capacity → `503` + `Retry-After` (probes exempt).
-- **[`openspec/specs/rate-limiting/`](openspec/specs/rate-limiting/)** (via change `rate-limiting-arc-endpoints` until
-  archive) — Process-local per-client rate limits on harvest/ARC write POSTs → `429` + `Retry-After`.
-- **[`openspec/changes/helm-gateway-httproute/`](openspec/changes/helm-gateway-httproute/)** (`helm-httproute`
-  capability) — Optional Gateway API `HTTPRoute` in the product Helm chart (dual-path with Ingress; cluster-agnostic
-  `parentRefs`; no chart-owned public hostname cert). Archives to `openspec/specs/helm-httproute/`.
+- **[`openspec/specs/rate-limiting/`](openspec/specs/rate-limiting/)** — Process-local per-client rate limits on
+  harvest/ARC write POSTs → `429` + `Retry-After`.
+- **[`openspec/specs/helm-httproute/`](openspec/specs/helm-httproute/)** — Optional Gateway API `HTTPRoute` in the
+  product Helm chart (dual-path with Ingress; cluster-agnostic `parentRefs`; no chart-owned public hostname cert).
 
 **API Client capabilities:**
 
