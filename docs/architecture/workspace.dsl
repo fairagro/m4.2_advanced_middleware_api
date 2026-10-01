@@ -37,7 +37,7 @@ workspace "FAIRagro Advanced Middleware API" "Architecture of the FAIRagro Advan
 
                 # ── API Layer ─────────────────────────────────────────────────
 
-                v1Router = component "API v1 Router" "Deprecated system endpoints only: GET /v1/whoami and GET /v1/health. POST /v1/arcs and GET /v1/tasks have been removed." "FastAPI APIRouter"
+                v1Router = component "API v1 Router" "Deprecated system endpoints only: GET /v1/whoami, GET /v1/liveness, and GET /v1/health. POST /v1/arcs and GET /v1/tasks have been removed." "FastAPI APIRouter"
 
                 v2Router = component "API v2 Router" "Task-based async ARC submission. POST /v2/arcs returns task_id immediately; clients poll GET /v2/tasks/{id} for the SUCCESS/FAILURE status." "FastAPI APIRouter"
 

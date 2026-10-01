@@ -24,7 +24,7 @@ pytestmark = [
 
 
 # ---------------------------------------------------------------------------
-# Shared helpers for v3 harvest-based tests
+# GitLab project verification helpers
 # ---------------------------------------------------------------------------
 
 
