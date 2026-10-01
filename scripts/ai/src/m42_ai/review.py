@@ -423,12 +423,61 @@ def extract_summary_findings(body: str) -> list[dict[str, str | None]]:
     return extract_suppressed_comments(body)
 
 
+_ZWSP_RE = re.compile(r"[\u200b\u200c\u200d\ufeff]")
+_PREVIOUSLY_MISSED_RE = re.compile(r"previously\s+missed", re.IGNORECASE)
+# Nested CCR v2 detail: summary, then a lone ``path`` / ``path:line`` backtick line, then prose.
+_PREVIOUSLY_MISSED_DETAIL_RE = re.compile(
+    r"<details>\s*<summary>(?P<summary>.*?)</summary>\s*"
+    r"`(?P<path>[^`]+?)(?::(?P<line>\d+))?`\s*"
+    r"(?P<text>.*?)\s*</details>",
+    re.IGNORECASE | re.DOTALL,
+)
+
+
+def _clean_summary_path(raw: str) -> str:
+    """Strip Copilot word-break ZWSP and whitespace from a path token."""
+    return _ZWSP_RE.sub("", raw).strip()
+
+
+def extract_previously_missed_details(body: str) -> list[dict[str, str | None]]:
+    """Parse ``ccr-overview-v2`` **Previously missed** nested ``<details>`` findings.
+
+    These appear when the overview says **Findings: None** and there is no ``Suppressed comments``
+    heading — actionable Low items live only under nested details with a backtick ``path:line``.
+    ``Resolved since last review`` is ignored (no backtick path packing).
+    """
+    if not body or not _PREVIOUSLY_MISSED_RE.search(body):
+        return []
+    start = _PREVIOUSLY_MISSED_RE.search(body)
+    assert start is not None
+    # Prefer content after the Previously missed marker so Resolved-before-Missed bodies stay clean.
+    region = body[start.start() :]
+    # Drop the outer wrapper's own summary line residue; scan nested details only.
+    items: list[dict[str, str | None]] = []
+    for m in _PREVIOUSLY_MISSED_DETAIL_RE.finditer(region):
+        summary = m.group("summary") or ""
+        # Skip the section header detail itself if it somehow matches (no path-only summary).
+        if _PREVIOUSLY_MISSED_RE.search(summary):
+            continue
+        path = _clean_summary_path(m.group("path") or "")
+        if not path:
+            continue
+        line = m.group("line")
+        text = (m.group("text") or "").strip()
+        # Prefer summary title (severity badge + short name) when prose is empty.
+        if not text:
+            text = re.sub(r"<[^>]+>", "", summary).strip() or None
+        items.append({"path": path, "line": line, "text": text or None})
+    return items
+
+
 def extract_suppressed_comments(body: str) -> list[dict[str, str | None]]:
     """Extract summary-only / suppressed findings from a review body.
 
     Copilot often uses ``**path:line**`` then a ``*`` bullet (no thread). Older fixtures use plain ``-`` lists
-    under a ``Suppressed comments`` heading. Do **not** treat the whole-review title
-    ``Needs a closer look`` as the suppressed section — that would swallow the intro.
+    under a ``Suppressed comments`` heading. Newer ``ccr-overview-v2`` bodies pack the same work under
+    **Previously missed** nested ``<details>`` (no ``Suppressed comments`` heading). Do **not** treat the
+    whole-review title ``Needs a closer look`` as the suppressed section — that would swallow the intro.
     """
     if not body:
         return []
@@ -470,7 +519,9 @@ def extract_suppressed_comments(body: str) -> list[dict[str, str | None]]:
             continue
         if items and not line.startswith((" ", "\t", "*")):
             break
-    return items
+    if items:
+        return items
+    return extract_previously_missed_details(body)
 
 
 TRIAGE_REPLY_RE = re.compile(r"(?is)^\s*(Fixed in |Dismissed\.|Follow-up:)")

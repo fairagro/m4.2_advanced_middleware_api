@@ -11,6 +11,7 @@ from m42_ai.review import (
     CODE_REVIEW_MARKER,
     correlate_code_quality_finding,
     extract_code_review_findings,
+    extract_previously_missed_details,
     extract_suppressed_comments,
     is_ai_author,
     is_code_review_report,
@@ -19,6 +20,9 @@ from m42_ai.review import (
 )
 
 FIXTURE = Path(__file__).parent / "fixtures" / "review_pr.json"
+COPILOT_CCR_PREVIOUSLY_MISSED = (
+    Path(__file__).parent / "fixtures" / "copilot_ccr_previously_missed.md"
+).read_text(encoding="utf-8")
 
 COPILOT_SUPPRESSED_BODY = """### 🔵 Needs a closer look
 
@@ -186,6 +190,36 @@ def test_extract_copilot_path_bullet_suppressed() -> None:
     assert items[0]["line"] == "161"
     assert "slug" in (items[0]["text"] or "")
     assert items[1]["path"] == "scripts/ai/src/m42_ai/review.py"
+
+
+def test_extract_previously_missed_ccr_v2() -> None:
+    """ccr-overview-v2: Findings None + Previously missed nested details (no Suppressed heading)."""
+    items = extract_previously_missed_details(COPILOT_CCR_PREVIOUSLY_MISSED)
+    assert len(items) == 2
+    assert items[0]["path"] == "dev_environment/config_example.yaml"
+    assert items[0]["line"] == "48"
+    assert "parser" in (items[0]["text"] or "")
+    assert items[1]["path"] == "openspec/specs/sitemap-mycore-solr/spec.md"
+    assert items[1]["line"] == "15"
+    # Same path via extract_suppressed_comments fallback when no Suppressed comments heading.
+    via_suppressed = extract_suppressed_comments(COPILOT_CCR_PREVIOUSLY_MISSED)
+    assert via_suppressed == items
+
+
+def test_shape_review_open_previously_missed_is_open_work() -> None:
+    payload = _payload()
+    nodes = payload["data"]["repository"]["pullRequest"]["reviews"]["nodes"]
+    for n in nodes:
+        if n["databaseId"] == 2:
+            n["body"] = COPILOT_CCR_PREVIOUSLY_MISSED
+            n["submittedAt"] = "2026-09-02T10:00:00Z"
+            n["state"] = "COMMENTED"
+    shaped = shape_review_open(payload)
+    assert shaped["open_work_empty"] is False
+    assert shaped["open_summary_review_id"] == 2
+    assert len(shaped["summary_only_findings"]) == 2
+    assert shaped["summary_only_findings"][0]["path"] == "dev_environment/config_example.yaml"
+    assert shaped["summary_only_findings"][0]["resolvable"] is False
 
 
 def test_is_code_review_report() -> None:

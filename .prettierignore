@@ -20,3 +20,5 @@ LICENSE
 .github/prompts/opsx-*
 .github/skills/openspec-*/
 package-lock.json
+# Raw Copilot CCR review-body fixtures (keep verbatim for parser tests)
+scripts/ai/tests/fixtures/copilot_ccr_*.md

@@ -15,6 +15,9 @@ openspec/**
 # Not Markdown documentation
 LICENSE
 
+# Raw Copilot CCR review-body fixtures (HTML + ZWSP paths — not prose docs)
+scripts/ai/tests/fixtures/copilot_ccr_*.md
+
 # Third-party / local environments / build artifacts
 .venv/**
 node_modules/**
