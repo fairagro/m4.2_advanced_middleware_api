@@ -4,7 +4,7 @@ from typing import Annotated
 
 from pydantic import BaseModel, Field
 
-from ..common.models import ApiResponse, ArcResponse
+from ..common.models import ApiResponse
 
 
 class LivenessResponse(BaseModel):
@@ -33,57 +33,3 @@ class WhoamiResponse(ApiResponse):
     accessible_rdis: Annotated[
         list[str], Field(description="List of Research Data Infrastructures the client is authorized for")
     ]
-
-
-class ArcTaskTicket(ApiResponse):
-    """Response model for a newly created async task ticket."""
-
-    rdi: Annotated[str, Field(description="Research Data Infrastructure identifier the ARC belongs to")]
-    task_id: Annotated[str, Field(description="Async task ID")]
-
-
-class CreateOrUpdateArcsRequest(BaseModel):
-    """Request model for creating or updating ARCs.
-
-    Standalone uploads update the per-ARC store only and do not update the
-    consolidated RDI catalog.
-    """
-
-    rdi: Annotated[
-        str,
-        Field(description="Research Data Infrastructure identifier"),
-    ]
-    arcs: Annotated[
-        list[dict],
-        Field(
-            description=(
-                "List of ARC definitions in RO-Crate JSON format. Standalone create "
-                "updates the per-ARC store only and does not update the consolidated catalog."
-            )
-        ),
-    ]
-
-
-class CreateOrUpdateArcsResponse(ApiResponse):
-    """Response model for create or update ARC operations (Task Ticket or Result)."""
-
-    rdi: Annotated[str | None, Field(description="Research Data Infrastructure identifier the ARCs belong to")] = None
-    arcs: Annotated[list[ArcResponse], Field(description="List of ARC responses for the operation")] = Field(
-        default_factory=list
-    )
-
-    # Async task fields
-    task_id: Annotated[str | None, Field(description="The ID of the background task processing the ARC")] = None
-    status: Annotated[str | None, Field(description="The status of the task submission")] = None
-
-
-class GetTaskStatusResponse(BaseModel):
-    """Response model for task status."""
-
-    task_id: Annotated[str, Field(description="The ID of the background task")]
-    status: Annotated[str, Field(description="The status of the task")]
-    result: Annotated[
-        CreateOrUpdateArcsResponse | None,
-        Field(description="The result of the task if completed"),
-    ] = None
-    error: Annotated[str | None, Field(description="Error message if task failed")] = None

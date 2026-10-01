@@ -66,10 +66,10 @@ identity.
 
 ### Requirement: Standalone upload uses per-ARC store only
 
-Standalone ARC create endpoints (`POST /v1/arcs`, `POST /v2/arcs`, and `POST /v3/arcs`) MUST always be accepted when the
-API is otherwise healthy. They MUST stage content and schedule per-ARC Git sync via the required `arc_store` slot. They
-MUST NOT publish or finalize the consolidated RDI catalog. API models exposed in OpenAPI/Swagger MUST describe that
-standalone uploads update the per-ARC store only and do not update the consolidated catalog.
+Standalone ARC create endpoints (`POST /v2/arcs` and `POST /v3/arcs`) MUST always be accepted when the API is otherwise
+healthy. They MUST stage content and schedule per-ARC Git sync via the required `arc_store` slot. They MUST NOT publish
+or finalize the consolidated RDI catalog. API models exposed in OpenAPI/Swagger MUST describe that standalone uploads
+update the per-ARC store only and do not update the consolidated catalog.
 
 #### Scenario: Standalone accepted with consolidated_store configured
 

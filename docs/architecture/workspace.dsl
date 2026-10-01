@@ -37,7 +37,7 @@ workspace "FAIRagro Advanced Middleware API" "Architecture of the FAIRagro Advan
 
                 # ── API Layer ─────────────────────────────────────────────────
 
-                v1Router = component "API v1 Router" "Legacy synchronous task-poll ARC endpoint. POST /v1/arcs stores the ARC, writes a task record, and returns a task_id. Clients poll GET /v1/tasks/{id}." "FastAPI APIRouter"
+                v1Router = component "API v1 Router" "Deprecated system endpoints only: GET /v1/whoami and GET /v1/health. POST /v1/arcs and GET /v1/tasks have been removed." "FastAPI APIRouter"
 
                 v2Router = component "API v2 Router" "Task-based async ARC submission. POST /v2/arcs returns task_id immediately; clients poll GET /v2/tasks/{id} for the SUCCESS/FAILURE status." "FastAPI APIRouter"
 
@@ -57,7 +57,7 @@ workspace "FAIRagro Advanced Middleware API" "Architecture of the FAIRagro Advan
 
                 # ── Infrastructure Adapters ───────────────────────────────────
 
-                legacyTaskStore = component "LegacyTaskStatusStore" "Persists and retrieves task status documents in CouchDB for the v1/v2 task-poll endpoints. A write failure propagates as HTTP 500 to prevent silent task loss." "Python class"
+                legacyTaskStore = component "LegacyTaskStatusStore" "Persists and retrieves task status documents in CouchDB for the v2 task-poll endpoints. A write failure propagates as HTTP 500 to prevent silent task loss." "Python class"
 
                 taskDispatcher = component "CeleryTaskDispatcher" "Sends ARC sync tasks to RabbitMQ via Celery send_task(). Implements the TaskDispatcher port." "Python class"
 
@@ -112,9 +112,6 @@ workspace "FAIRagro Advanced Middleware API" "Architecture of the FAIRagro Advan
         ops -> middlewareApi.apiServer "GET /v3/liveness  ·  /v3/readiness  ·  /v3/health" "HTTP"
 
         # ── Component-level relationships: API Server ─────────────────────────
-
-        middlewareApi.apiServer.v1Router -> middlewareApi.apiServer.businessLogic "create_or_update_arc()"
-        middlewareApi.apiServer.v1Router -> middlewareApi.apiServer.legacyTaskStore "store_task_result()"
 
         middlewareApi.apiServer.v2Router -> middlewareApi.apiServer.businessLogic "create_or_update_arc()"
         middlewareApi.apiServer.v2Router -> middlewareApi.apiServer.legacyTaskStore "store_task_result() / get_task_status()"

@@ -43,7 +43,7 @@ from .admission_control import AdmissionControlMiddleware
 from .common.dependencies import CommonApiDependencies
 from .legacy.task_status_store import LegacyTaskStatusStore
 from .tracing import setup_api_tracing
-from .v1 import arcs as arcs_v1, system as system_v1, tasks as tasks_v1
+from .v1 import system as system_v1
 from .v2 import arcs as arcs_v2, system as system_v2, tasks as tasks_v2
 from .v3 import arcs as arcs_v3, harvests as harvests_v3, system as system_v3
 
@@ -120,20 +120,6 @@ _configure_uvicorn_loggers(loaded_config.log_level)
 logger = logging.getLogger("middleware_api")
 
 
-class PollingLogFilter(logging.Filter):
-    """Filter to suppress polling task status logs from uvicorn access logger."""
-
-    def filter(self, record: logging.LogRecord) -> bool:  # noqa: PLR6301
-        """Suppress access logs for task status polling at INFO level.
-
-        These logs are shown if the 'middleware_api' logger is set to DEBUG.
-        """
-        msg = record.getMessage()
-        if "GET /v1/tasks/" in msg:
-            return logging.getLogger("middleware_api").isEnabledFor(logging.DEBUG)
-        return True
-
-
 class Api:
     """FastAPI middleware for managing ARC (Advanced Research Context) objects.
 
@@ -184,7 +170,6 @@ class Api:
             # uvicorn.main() installs its own handlers on uvicorn.access/uvicorn.error
             # *after* this module is imported, so we must reconfigure here.
             _configure_uvicorn_loggers(self._config.log_level)
-            logging.getLogger("uvicorn.access").addFilter(PollingLogFilter())
 
             # Initialize business logic and its stores
             try:
@@ -310,10 +295,8 @@ class Api:
 
     def _setup_routes(self) -> None:
         """Register all API routes via versioned routers."""
-        # Register V1
+        # Register V1 (system endpoints only; arcs/tasks removed)
         self._app.include_router(system_v1.router)
-        self._app.include_router(arcs_v1.router)
-        self._app.include_router(tasks_v1.router)
 
         # Register V2
         self._app.include_router(system_v2.router)
