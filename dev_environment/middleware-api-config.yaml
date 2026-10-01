@@ -44,6 +44,8 @@ health_checks:
   global_health_check_git_backend: false
 
 # Per-client rate limits on harvest/ARC write POSTs (process-local; default off).
+# Keep a live stub so RATE_LIMITING_* env overrides are discovered (ConfigWrapper).
+rate_limiting: {}
 # rate_limiting:
 #   enabled: true
 #   harvest_create_per_minute: 10   # POST /v3/harvests

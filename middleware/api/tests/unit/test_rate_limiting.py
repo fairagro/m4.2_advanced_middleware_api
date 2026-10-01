@@ -188,6 +188,27 @@ async def test_over_limit_returns_429_with_retry_after(monkeypatch: pytest.Monke
 
 
 @pytest.mark.asyncio
+async def test_window_resets_after_one_minute(monkeypatch: pytest.MonkeyPatch) -> None:
+    """After the fixed window elapses, a new request is allowed again."""
+    clock = {"now": 1000.0}
+    monkeypatch.setattr(
+        "middleware.api.api.rate_limiting.time.monotonic",
+        lambda: clock["now"],
+    )
+    app = _app_with_rate_limit(harvest_create_per_minute=1)
+    transport = ASGITransport(app=app)
+    async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
+        first = await client.post("/v3/harvests")
+        blocked = await client.post("/v3/harvests")
+        clock["now"] += 60.0
+        after_reset = await client.post("/v3/harvests")
+
+    assert first.status_code == HTTPStatus.OK
+    assert blocked.status_code == HTTPStatus.TOO_MANY_REQUESTS
+    assert after_reset.status_code == HTTPStatus.OK
+
+
+@pytest.mark.asyncio
 async def test_unlimited_class_when_non_positive() -> None:
     """Non-positive class limit disables limiting for that class only."""
     app = _app_with_rate_limit(harvest_create_per_minute=0, arc_submit_per_minute=1)
