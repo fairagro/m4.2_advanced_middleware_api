@@ -2,19 +2,19 @@
 
 ## Module Overview
 
-`ArcStore` (`arc_store/__init__.py`) defines Git persistence. `GitRepo` (`arc_store/git_repo/`) is the primary,
-Git-server-agnostic implementation: it clones through SSH or HTTPS, writes arctrl ISA files, and pushes. `GitlabApi`
-(`arc_store/gitlab_api/`) is deprecated and retained only for compatibility.
+`ArcStore` (`arc_store/__init__.py`) defines Git persistence. `GitRepo` (`arc_store/git_repo/`) is the only per-ARC
+implementation: it clones through SSH or HTTPS, writes arctrl ISA files, and pushes. Optional `ConsolidatedGitArcStore`
+(`arc_store/consolidated_git/`) publishes the shared RDI catalog on finalize.
 
-`ArcManager.sync_to_gitlab` parses queued JSON, selects the backend, and records CouchDB events. The store only handles
-Git.
+`ArcManager.sync_to_gitlab` parses queued JSON, selects the per-ARC store, and records CouchDB events. The store only
+handles Git.
 
 ```text
 ArcManager.sync_to_gitlab(rdi, arc)
 ├─→ parse_rocrate(arc)
 ├─→ ARC.from_rocrate_json_string(...)
 └─→ ArcStore.create_or_update(arc_id, arc_obj, rdi=...)
-    └─→ GitRepo (or deprecated GitlabApi)
+    └─→ GitRepo
         ├─→ RemoteGitProvider.ensure_repo_exists(arc_id, metadata)
         ├─→ clone / pull
         ├─→ write ISA files via arctrl WriteAsync
@@ -43,8 +43,8 @@ values. Non-GitLab providers accept metadata for a uniform interface and ignore 
 
 1. **Separate transient from permanent failures** — `ArcStoreTransientError` lets `ArcManager` decide to retry network
    and availability failures; other exceptions are permanent.
-2. **Prefer `GitRepo` to `GitlabApi`** — Clone-and-push avoids REST commit action limits, is simpler, and works across
-   Git servers. The REST implementation remains temporarily compatible.
+2. **GitRepo only for per-ARC persistence** — Clone-and-push avoids REST commit action limits, is simpler, and works
+   across Git servers. The deprecated `GitlabApi` ArcStore backend has been removed.
 3. **Use unique ephemeral local clones** — Each create-or-update or get that needs a working tree allocates a dedicated
    temporary directory under `cache_dir` (not a stable `cache_dir / arc_id` path). This avoids filesystem races across
    Celery worker processes and thread-pool workers. Directories are removed after each operation; stale orphans are

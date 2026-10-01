@@ -12,8 +12,6 @@ from middleware.api.api.common.dependencies import get_client_id
 from middleware.api.api.fastapi_app import Api
 from middleware.shared.config.logging import RedactingFormatter
 
-pytestmark = pytest.mark.filterwarnings("ignore:gitlab_api configuration is deprecated.*:DeprecationWarning")
-
 
 def test_uvicorn_access_logger_uses_api_format() -> None:
     """Ensure uvicorn access logs use the same timestamped format as middleware logs."""

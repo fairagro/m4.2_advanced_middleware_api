@@ -41,7 +41,7 @@ class WorkerConfig(ConfigBase):
     ] = []
     arc_store: Annotated[
         ArcStoreConfig,
-        Field(description="Required per-ARC ArcStore backend (git_repo | deprecated gitlab_api)"),
+        Field(description="Required per-ARC ArcStore backend (nested git_repo)"),
     ]
     consolidated_store: Annotated[
         ConsolidatedStoreConfig | None,

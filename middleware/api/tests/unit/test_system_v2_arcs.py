@@ -13,9 +13,6 @@ from middleware.api.api.fastapi_app import Api
 
 pytestmark = [
     pytest.mark.filterwarnings(
-        "ignore:gitlab_api configuration is deprecated; prefer git_repo instead\\.:DeprecationWarning:pydantic\\.main"
-    ),
-    pytest.mark.filterwarnings(
         "ignore:deprecated:DeprecationWarning:middleware\\.api\\.business_logic\\.business_logic_factory"
     ),
 ]

@@ -5,14 +5,12 @@ from __future__ import annotations
 from typing import Protocol
 
 from middleware.api.arc_store.arc_store_config import (
-    ArcStoreBackendType,
     ArcStoreConfig,
     ConsolidatedStoreConfig,
 )
 from middleware.api.arc_store.consolidated_git import ConsolidatedGitConfig
 from middleware.api.arc_store.git_cli_settings import merge_git_cli_settings
 from middleware.api.arc_store.git_repo import GitRepoConfig
-from middleware.api.arc_store.gitlab_api import GitlabApiConfig
 
 
 class ArcStoreConfigSource(Protocol):
@@ -24,7 +22,7 @@ class ArcStoreConfigSource(Protocol):
 
 def normalize_git_repo_rdi_gitlab_topics(arc_store: ArcStoreConfig, known_rdis: list[str]) -> ArcStoreConfig:
     """Return ``arc_store`` with ``rdi_gitlab_topics`` validated for ``known_rdis`` when applicable."""
-    if arc_store.git_repo is None or not known_rdis:
+    if not known_rdis:
         return arc_store
     git_repo = arc_store.git_repo
     validated_topics = GitRepoConfig.validate_rdi_gitlab_topics_for_known_rdis(
@@ -47,17 +45,10 @@ def validate_arc_store_config(config: ArcStoreConfigSource, *, known_rdis: list[
     return normalize_git_repo_rdi_gitlab_topics(config.arc_store, known_rdis)
 
 
-def resolve_arc_store_backend(
-    config: ArcStoreConfigSource,
-) -> tuple[ArcStoreBackendType, GitRepoConfig | GitlabApiConfig]:
-    """Return per-ARC backend type and its settings model."""
+def resolve_arc_store_backend(config: ArcStoreConfigSource) -> GitRepoConfig:
+    """Return per-ARC GitRepo settings (merged with optional shared ``git``)."""
     arc = config.arc_store
-    if arc.git_repo is not None:
-        return ArcStoreBackendType.GIT_REPO, merge_git_cli_settings(arc.git_repo, arc.git)
-    if arc.gitlab_api is not None:
-        return ArcStoreBackendType.GITLAB_API, arc.gitlab_api
-    msg = "arc_store must set exactly one of 'git_repo' or 'gitlab_api'"
-    raise ValueError(msg)
+    return merge_git_cli_settings(arc.git_repo, arc.git)
 
 
 def resolve_consolidated_store_settings(config: ArcStoreConfigSource) -> ConsolidatedGitConfig | None:

@@ -8,8 +8,6 @@ from middleware.api.business_logic import BusinessLogic
 from middleware.api.business_logic.business_logic_factory import BusinessLogicFactory
 from middleware.api.config import Config
 
-pytestmark = pytest.mark.filterwarnings("ignore:gitlab_api configuration is deprecated.*:DeprecationWarning")
-
 
 def _config_data() -> dict[str, object]:
     return {
