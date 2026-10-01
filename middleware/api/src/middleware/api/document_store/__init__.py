@@ -2,6 +2,7 @@
 
 from abc import ABC, abstractmethod
 from collections.abc import AsyncIterator
+from typing import cast
 
 from middleware.api.document_store.arc_document import ArcEvent, ArcMetadata
 from middleware.api.document_store.harvest_document import HarvestDocument, HarvestStatistics, HarvestUpdatePayload
@@ -252,18 +253,20 @@ class DocumentStore(ABC):
         raise NotImplementedError
 
     @abstractmethod
-    def iter_arc_contents_by_rdi(self, rdi: str) -> AsyncIterator[tuple[str, RoCrateContent]]:
+    async def iter_arc_contents_by_rdi(self, rdi: str) -> AsyncIterator[tuple[str, RoCrateContent]]:
         """Yield ``(arc_id, arc_content)`` for ARC documents of an RDI.
 
         Implementations MUST stream (paginate) so callers need not hold all
         RO-Crate bodies in memory at once. Prefer stable cursors (e.g. CouchDB
         bookmarks) over offset ``skip`` paging for multi-page scans.
 
-        Concrete stores implement this as an ``async def`` generator. The ABC is
-        intentionally not ``async`` so the annotated return type is ``AsyncIterator``
-        (not a coroutine wrapping one) — see mypy async-generator / ABC guidance.
+        The empty loop keeps a ``yield`` so type checkers treat this ABC method as
+        an async generator (not a coroutine returning ``AsyncIterator``), without
+        placing code after ``raise`` (vulture unreachable).
 
         Raises:
             ValueError: If a stored ARC document has an unexpected shape.
         """
+        for _ in ():
+            yield "", cast(RoCrateContent, {})
         raise NotImplementedError
