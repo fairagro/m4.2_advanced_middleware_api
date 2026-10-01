@@ -196,6 +196,30 @@ async def test_over_limit_returns_429_with_retry_after(monkeypatch: pytest.Monke
 
 
 @pytest.mark.asyncio
+async def test_expired_windows_are_pruned(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Idle (client, class) windows are removed after the fixed interval."""
+    clock = {"now": 1000.0}
+    monkeypatch.setattr(
+        "middleware.api.api.rate_limiting.time.monotonic",
+        lambda: clock["now"],
+    )
+    middleware = RateLimitingMiddleware(
+        FastAPI(),
+        harvest_create_per_minute=10,
+        arc_submit_per_minute=60,
+        retry_after_seconds=7,
+    )
+    # pylint: disable=protected-access
+    assert await middleware._try_acquire("client-a", "harvest_create", 10)
+    assert await middleware._try_acquire("client-b", "harvest_create", 10)
+    assert len(middleware._windows) == 2
+
+    clock["now"] += 60.0
+    assert await middleware._try_acquire("client-c", "harvest_create", 10)
+    assert set(middleware._windows) == {("client-c", "harvest_create")}
+
+
+@pytest.mark.asyncio
 async def test_window_resets_after_one_minute(monkeypatch: pytest.MonkeyPatch) -> None:
     """After the fixed window elapses, a new request is allowed again."""
     clock = {"now": 1000.0}

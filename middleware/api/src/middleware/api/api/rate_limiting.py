@@ -132,8 +132,17 @@ class RateLimitingMiddleware:
         key = (client_key, limit_class)
         now = time.monotonic()
         async with self._lock:
+            # Drop expired windows so idle (client, class) keys cannot grow without bound.
+            expired = [
+                window_key
+                for window_key, window in self._windows.items()
+                if (now - window.start_monotonic) >= _WINDOW_SECONDS
+            ]
+            for window_key in expired:
+                del self._windows[window_key]
+
             window = self._windows.get(key)
-            if window is None or (now - window.start_monotonic) >= _WINDOW_SECONDS:
+            if window is None:
                 self._windows[key] = _WindowCounter(start_monotonic=now, count=1)
                 return True
             if window.count >= limit:
