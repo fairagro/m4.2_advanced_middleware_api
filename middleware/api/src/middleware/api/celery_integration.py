@@ -53,7 +53,6 @@ class CeleryBrokerHealthChecker(BrokerHealthChecker):
 
     def __init__(self, celery_app: Celery) -> None:
         """Initialize checker with Celery app instance."""
-        self._celery_app = celery_app
         self._connection: Connection = celery_app.connection()
         self._lock = threading.Lock()
 
