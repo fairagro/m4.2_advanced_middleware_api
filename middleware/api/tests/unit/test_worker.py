@@ -1,6 +1,7 @@
 """Unit tests for Celery worker tasks."""
 
 import asyncio
+import json
 from collections.abc import Iterator
 from contextlib import contextmanager
 from typing import Any
@@ -62,6 +63,7 @@ def test_celery_retries_exhausted_unlimited() -> None:
 
 def test_sync_arc_to_gitlab_success() -> None:
     """Test successful task execution."""
+    arc_json = json.dumps({"dummy": "data"})
     with patch("middleware.api.worker.worker.BusinessLogicManager.get") as mock_get:
         mock_bl = MagicMock()
         mock_bl.sync_to_gitlab = AsyncMock()
@@ -70,7 +72,7 @@ def test_sync_arc_to_gitlab_success() -> None:
 
         try:
             result = sync_arc_to_gitlab.apply(
-                args=({"rdi": "test-rdi", "arc": {"dummy": "data"}, "client_id": "test-client"},)
+                args=({"rdi": "test-rdi", "arc": arc_json, "client_id": "test-client"},)
             ).get()
         finally:
             loop.close()
@@ -78,13 +80,14 @@ def test_sync_arc_to_gitlab_success() -> None:
         assert result is None
         mock_bl.sync_to_gitlab.assert_called_once_with(
             "test-rdi",
-            {"dummy": "data"},
+            arc_json,
             record_transient_as_failed=False,
         )
 
 
 def test_sync_arc_to_gitlab_passes_exhausted_flag() -> None:
     """On the final Celery attempt, record_transient_as_failed is True."""
+    arc_json = json.dumps({"dummy": "data"})
     with (
         patch("middleware.api.worker.worker.BusinessLogicManager.get") as mock_get,
         patch(
@@ -98,15 +101,13 @@ def test_sync_arc_to_gitlab_passes_exhausted_flag() -> None:
         mock_get.return_value = (mock_bl, loop)
 
         try:
-            sync_arc_to_gitlab.apply(
-                args=({"rdi": "test-rdi", "arc": {"dummy": "data"}, "client_id": "test-client"},)
-            ).get()
+            sync_arc_to_gitlab.apply(args=({"rdi": "test-rdi", "arc": arc_json, "client_id": "test-client"},)).get()
         finally:
             loop.close()
 
         mock_bl.sync_to_gitlab.assert_called_once_with(
             "test-rdi",
-            {"dummy": "data"},
+            arc_json,
             record_transient_as_failed=True,
         )
 
@@ -175,7 +176,7 @@ def test_sync_arc_to_gitlab_exhausted_retries_records_git_push_failed() -> None:
                     args=(
                         {
                             "rdi": "test-rdi",
-                            "arc": minimal_rocrate_dict("ABC"),
+                            "arc": json.dumps(minimal_rocrate_dict("ABC")),
                             "client_id": "test-client",
                         },
                     )
@@ -238,6 +239,7 @@ def test_finalize_catalog_exhausted_retries_records_catalog_push_failed() -> Non
 
 def test_sync_arc_to_gitlab_failure() -> None:
     """Test task failure handling — exception must be re-raised."""
+    arc_json = json.dumps({"dummy": "data"})
     with patch("middleware.api.worker.worker.BusinessLogicManager.get") as mock_get:
         mock_bl = MagicMock()
         mock_bl.sync_to_gitlab = AsyncMock(side_effect=ValueError("Processing failed"))
@@ -246,9 +248,7 @@ def test_sync_arc_to_gitlab_failure() -> None:
 
         try:
             with pytest.raises(ValueError, match="Processing failed"):
-                sync_arc_to_gitlab.apply(
-                    args=({"rdi": "test-rdi", "arc": {"dummy": "data"}, "client_id": "test-client"},)
-                ).get()
+                sync_arc_to_gitlab.apply(args=({"rdi": "test-rdi", "arc": arc_json, "client_id": "test-client"},)).get()
         finally:
             loop.close()
 
@@ -263,5 +263,5 @@ def test_sync_arc_to_gitlab_initialization_error() -> None:
         pytest.raises(RuntimeError, match="CouchDB unreachable"),
     ):
         sync_arc_to_gitlab.apply(
-            args=({"rdi": "test-rdi", "arc": {"dummy": "data"}, "client_id": "test-client"},)
+            args=({"rdi": "test-rdi", "arc": json.dumps({"dummy": "data"}), "client_id": "test-client"},)
         ).get()

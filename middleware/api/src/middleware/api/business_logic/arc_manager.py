@@ -163,7 +163,7 @@ class ArcManager:
                     self._dispatcher.dispatch_sync_arc(
                         ArcSyncTask(
                             rdi=rdi,
-                            arc=arc_content,
+                            arc=json.dumps(arc_content),
                             client_id=client_id,
                         )
                     )
@@ -312,7 +312,7 @@ class ArcManager:
     async def sync_to_gitlab(
         self,
         rdi: str,
-        arc: RoCratePayload | RoCrateContent,
+        arc: str,
         *,
         record_transient_as_failed: bool = False,
     ) -> None:
@@ -326,7 +326,7 @@ class ArcManager:
 
         Args:
             rdi: Research Data Infrastructure identifier.
-            arc: Validated or raw RO-Crate payload.
+            arc: RO-Crate JSON string (Celery hard-cut payload; no dict round-trip).
             record_transient_as_failed: Persist GIT_PUSH_FAILED on exhausted transient retries.
 
         Raises:
@@ -344,15 +344,16 @@ class ArcManager:
             arc_id: str | None = None
             try:
                 try:
-                    rocrate = parse_rocrate(arc)
+                    arc_content = json.loads(arc)
+                    rocrate = parse_rocrate(arc_content)
+                except json.JSONDecodeError as exc:
+                    raise InvalidJsonSemanticError(f"Invalid RO-Crate JSON: {exc}") from exc
                 except RocrateParseError as exc:
                     raise InvalidJsonSemanticError(str(exc)) from exc
                 arc_id = calculate_arc_id(rocrate.identifier, rdi)
-                arc_content = rocrate.model_dump(by_alias=True)
                 span.set_attribute("arc_id", arc_id)
 
-                arc_json = json.dumps(arc_content)
-                arc_obj = ARC.from_rocrate_json_string(arc_json)
+                arc_obj = ARC.from_rocrate_json_string(arc)
 
                 logger.info("Triggering Git storage for ARC %s", arc_id)
                 await self._store.create_or_update(

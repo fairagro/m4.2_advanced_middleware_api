@@ -45,8 +45,9 @@ ArcManager.sync_to_gitlab(rdi, arc)  (see openspec/specs/arc-store/)
    `last_changed_harvest_id`; `HarvestManager` uses `DocumentStore.get_harvest_statistics` at the terminal transition.
    No per-ARC harvest counter writes occur during ingest.
 
-7. **Cross process boundaries as JSON dictionaries** — arctrl objects carry .NET interop state and cannot safely be
-   pickled. The worker reparses raw JSON into an ARC.
+7. **Cross process boundaries as JSON strings** — arctrl objects carry .NET interop state and cannot safely be pickled.
+   Celery ARC payloads are RO-Crate JSON text (hard cut; coordinated deploy / queue drain). The worker reparses that
+   string into an ARC via `ARC.from_rocrate_json_string` (after `parse_rocrate` on the loaded object graph).
 
 8. **Do not parse arctrl during API ingestion** — `parse_rocrate` performs only inexpensive wire validation.
    `ARC.from_rocrate_json_string` runs in the Celery worker so the API can store and return promptly.
