@@ -1,7 +1,7 @@
 """Celery application configuration and initialization.
 
 This module sets up the Celery app for the middleware API, including:
-- Broker and backend configuration from YAML config file
+- Broker configuration from YAML config file
 - Optional OpenTelemetry instrumentation for distributed tracing
 - Task serialization and timezone settings
 """
@@ -46,7 +46,6 @@ if "pytest" in sys.modules or not config_path.is_file():
     celery_app = Celery(
         "middleware_api",
         broker="memory://",
-        backend="cache+memory://",
         include=[],  # Avoid circular imports in test mode
     )
     # Use a dummy config in test mode to satisfy the non-optional type
@@ -66,18 +65,12 @@ else:
         raise ValueError("Celery configuration missing in config file")
 
     broker_url = loaded_config.celery.broker_url.get_secret_value()
-    backend_url = (
-        loaded_config.celery.result_backend.get_secret_value()
-        if loaded_config.celery.result_backend is not None
-        else None
-    )
 
     logger.info("Celery configured with broker: %s", broker_url)
 
     celery_app = Celery(
         "middleware_api",
         broker=broker_url,
-        backend=backend_url,
         include=["middleware.api.worker.worker"],
     )
 

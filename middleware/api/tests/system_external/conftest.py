@@ -116,7 +116,6 @@ def config(
         },
         "celery": {
             "broker_url": external_services["rabbitmq_broker_url"],
-            "result_backend": os.getenv("CELERY_RESULT_BACKEND", "rpc://"),
         },
         "couchdb": {
             "url": external_services["couchdb_url"],

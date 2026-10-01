@@ -58,7 +58,6 @@ def git_repo_config(git_server_root: Path, git_repo_cache_dir: Path, oid: x509.O
         },
         "celery": {
             "broker_url": "memory://",
-            "result_backend": "cache+memory://",
         },
         "couchdb": {
             "url": "http://localhost:5984",

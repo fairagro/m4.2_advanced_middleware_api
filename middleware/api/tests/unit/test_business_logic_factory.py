@@ -23,7 +23,6 @@ def _config_data() -> dict[str, object]:
         },
         "celery": {
             "broker_url": "memory://",
-            "result_backend": "cache+memory://",
         },
     }
 

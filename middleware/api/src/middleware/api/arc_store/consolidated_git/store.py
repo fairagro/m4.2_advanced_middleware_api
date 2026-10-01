@@ -61,18 +61,6 @@ class ConsolidatedGitArcStore(ArcStore):
         self._doc_store = doc_store
         self._executor = concurrent.futures.ThreadPoolExecutor(max_workers=self._config.max_workers)
 
-    @property
-    @override
-    def publishes_per_arc_git(self) -> bool:
-        """Catalog backend does not push one Git project per ARC."""
-        return False
-
-    @property
-    @override
-    def supports_standalone_upload(self) -> bool:
-        """Standalone upload has no harvest finalize signal."""
-        return False
-
     @override
     async def shutdown(self) -> None:
         """Shut down the thread-pool executor."""

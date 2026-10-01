@@ -13,13 +13,6 @@ import pytest
 from fastapi.testclient import TestClient
 from gitlab import Gitlab, GitlabError
 
-pytestmark = [
-    pytest.mark.filterwarnings(
-        "ignore:deprecated:DeprecationWarning:middleware\\.api\\.business_logic\\.business_logic_factory"
-    ),
-]
-
-
 # ---------------------------------------------------------------------------
 # GitLab project verification helpers
 # ---------------------------------------------------------------------------

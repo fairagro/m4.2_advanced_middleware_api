@@ -5,12 +5,6 @@ import http
 import pytest
 from fastapi.testclient import TestClient
 
-pytestmark = [
-    pytest.mark.filterwarnings(
-        "ignore:deprecated:DeprecationWarning:middleware\\.api\\.business_logic\\.business_logic_factory"
-    ),
-]
-
 
 @pytest.mark.asyncio
 @pytest.mark.unit

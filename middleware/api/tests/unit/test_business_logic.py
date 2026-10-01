@@ -33,8 +33,6 @@ def mock_store() -> MagicMock:
     store.arc_id.side_effect = lambda i, r: f"arc_{i}_{r}"
     store.create_or_update = AsyncMock()
     store.shutdown = AsyncMock()
-    store.publishes_per_arc_git = True
-    store.supports_standalone_upload = True
     store.finalize = AsyncMock(return_value=CatalogFinalizeResult(pushed=False))
     return store
 
@@ -81,9 +79,7 @@ def mock_consolidated_store() -> MagicMock:
 @pytest.fixture
 def mock_config() -> MagicMock:
     """Mock Config."""
-    config = MagicMock()
-    config.celery.result_backend.get_secret_value.return_value = "redis://localhost:6379/0"
-    return config
+    return MagicMock()
 
 
 @pytest.fixture

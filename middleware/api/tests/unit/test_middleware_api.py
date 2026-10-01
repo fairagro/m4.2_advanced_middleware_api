@@ -98,7 +98,6 @@ def test_health_check_success(client: TestClient, middleware_api: Api, cert: str
         assert r.status_code == http.HTTPStatus.OK
         assert r.json() == {
             "status": "ok",
-            "redis_reachable": True,
             "rabbitmq_reachable": True,
         }
 
@@ -121,7 +120,6 @@ def test_health_check_failure(client: TestClient, middleware_api: Api, cert: str
         assert r.status_code == http.HTTPStatus.SERVICE_UNAVAILABLE
         assert r.json() == {
             "status": "error",
-            "redis_reachable": True,
             "rabbitmq_reachable": False,
         }
 
