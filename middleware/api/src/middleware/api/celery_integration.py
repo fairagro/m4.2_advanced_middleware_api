@@ -1,8 +1,10 @@
 """Celery integration adapters for API-side port wiring."""
 
 import logging
+import threading
 
 from celery import Celery
+from kombu import Connection
 
 from .business_logic.ports import BrokerHealthChecker
 from .business_logic.task_payloads import ArcSyncTask, CatalogFinalizeTask
@@ -40,21 +42,39 @@ class CeleryTaskDispatcher:
 
 
 class CeleryBrokerHealthChecker(BrokerHealthChecker):
-    """Broker health checker adapter backed by Celery connection handling."""
+    """Broker health checker using one long-lived AMQP connection per API process.
+
+    Short-lived open/drop probes make RabbitMQ log
+    ``client unexpectedly closed TCP connection``. Holding a durable kombu
+    connection and verifying it with ``ensure_connection`` / ``heartbeat_check``
+    keeps reachability accurate without those warnings. Call :meth:`close` on
+    API shutdown for a clean AMQP teardown.
+    """
 
     def __init__(self, celery_app: Celery) -> None:
         """Initialize checker with Celery app instance."""
         self._celery_app = celery_app
+        self._connection: Connection = celery_app.connection()
+        self._lock = threading.Lock()
 
     def is_healthy(self) -> bool:
-        """Check broker reachability via Celery connection."""
+        """Check broker reachability on the durable AMQP connection."""
         try:
-            with self._celery_app.connection_or_acquire() as conn:
-                conn.ensure_connection(max_retries=1)
+            with self._lock:
+                self._connection.ensure_connection(max_retries=1)
+                self._connection.heartbeat_check()
                 return True
         except Exception as e:  # noqa: BLE001
             logger.error("RabbitMQ health check failed: %s", e)
             return False
+
+    def close(self) -> None:
+        """Close the durable AMQP connection with a clean broker-side teardown."""
+        with self._lock:
+            try:
+                self._connection.close()
+            except Exception as e:  # noqa: BLE001
+                logger.warning("Failed to close RabbitMQ health-check connection: %s", e)
 
 
 class CeleryWorkerHealthChecker:

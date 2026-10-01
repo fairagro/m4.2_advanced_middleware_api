@@ -197,6 +197,7 @@ class Api:
                     logger.exception("An unexpected error occurred during business logic initialization")
                     raise
             finally:
+                broker_health_checker.close()
                 # Cleanup OTEL
                 tracer_provider, logger_provider = self._otel
                 if tracer_provider is not None:
