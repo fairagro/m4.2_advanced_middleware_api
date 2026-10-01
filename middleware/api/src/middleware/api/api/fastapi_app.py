@@ -42,6 +42,7 @@ from ..health_service import ApiHealthService
 from .admission_control import AdmissionControlMiddleware
 from .common.dependencies import CommonApiDependencies
 from .legacy.task_status_store import LegacyTaskStatusStore
+from .rate_limiting import RateLimitingMiddleware
 from .tracing import setup_api_tracing
 from .v1 import system as system_v1
 from .v2 import arcs as arcs_v2, system as system_v2, tasks as tasks_v2
@@ -216,6 +217,9 @@ class Api:
                 self._config.retry_after_seconds,
             )
 
+        # After admission so rate limiting runs first on the request path (Starlette LIFO).
+        self._maybe_add_rate_limiting_middleware()
+
         # Initialize OpenTelemetry tracing and logging
         _tracing = setup_api_tracing(self._app, self._config)
         self._otel = (_tracing.tracer_provider, _tracing.logger_provider)
@@ -228,6 +232,24 @@ class Api:
 
         self._setup_routes()
         self._setup_exception_handlers()
+
+    def _maybe_add_rate_limiting_middleware(self) -> None:
+        """Register rate-limiting middleware when enabled (runs before admission)."""
+        rate_limiting = self._config.rate_limiting
+        if not rate_limiting.enabled:
+            return
+        self._app.add_middleware(
+            RateLimitingMiddleware,
+            harvest_create_per_minute=rate_limiting.harvest_create_per_minute,
+            arc_submit_per_minute=rate_limiting.arc_submit_per_minute,
+            retry_after_seconds=rate_limiting.retry_after_seconds,
+        )
+        logger.info(
+            "Rate limiting enabled: harvest_create=%d/min arc_submit=%d/min retry_after_seconds=1..%d",
+            rate_limiting.harvest_create_per_minute,
+            rate_limiting.arc_submit_per_minute,
+            rate_limiting.retry_after_seconds,
+        )
 
     @property
     def app(self) -> FastAPI:

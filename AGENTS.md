@@ -331,6 +331,8 @@ Before generating or modifying code, read the relevant specs:
   validation, and progress tracking.
 - **[`openspec/specs/admission-control/`](openspec/specs/admission-control/)** — Process-local concurrent request
   admission: at capacity → `503` + `Retry-After` (probes exempt).
+- **[`openspec/specs/rate-limiting/`](openspec/specs/rate-limiting/)** (via change `rate-limiting-arc-endpoints` until
+  archive) — Process-local per-client rate limits on harvest/ARC write POSTs → `429` + `Retry-After`.
 - **[`openspec/changes/helm-gateway-httproute/`](openspec/changes/helm-gateway-httproute/)** (`helm-httproute`
   capability) — Optional Gateway API `HTTPRoute` in the product Helm chart (dual-path with Ingress; cluster-agnostic
   `parentRefs`; no chart-owned public hostname cert). Archives to `openspec/specs/helm-httproute/`.
@@ -369,6 +371,7 @@ mode) use it to locate affected code.
 | `openspec/specs/arc-upload/`         | `middleware/api/src/middleware/api/api/v3/arcs.py`                                                                                                                                                                              |
 | `openspec/specs/harvest-arc-upload/` | `middleware/api/src/middleware/api/api/v3/harvests.py`                                                                                                                                                                          |
 | `openspec/specs/admission-control/`  | `middleware/api/src/middleware/api/api/admission_control.py`, `fastapi_app.py`                                                                                                                                                  |
+| `openspec/specs/rate-limiting/`      | `middleware/api/src/middleware/api/api/rate_limiting.py`, `fastapi_app.py`, `middleware/api/src/middleware/api/config.py` (`RateLimitingConfig`)                                                                                |
 | `openspec/specs/harvest-client/`     | `middleware/api_client/src/middleware/api_client/api_client.py`, `models.py`                                                                                                                                                    |
 | `openspec/specs/harvest-report/`     | `middleware/shared/src/middleware/shared/report/`, `ns/harvest-report/`                                                                                                                                                         |
 | `openspec/specs/ci-cd/`              | `.github/workflows/` (see domain design for workflow files)                                                                                                                                                                     |

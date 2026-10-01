@@ -43,6 +43,13 @@ health_checks:
   global_health_check_workers: true
   global_health_check_git_backend: false
 
+# Per-client rate limits on harvest/ARC write POSTs (process-local; default off).
+# rate_limiting:
+#   enabled: true
+#   harvest_create_per_minute: 10   # POST /v3/harvests
+#   arc_submit_per_minute: 60       # POST /v2|/v3/arcs and /v3/harvests/{id}/arcs
+#   retry_after_seconds: 60         # jittered Retry-After upper bound on 429
+
 otel:
   # endpoint: http://signoz:4318  # Uncomment to enable Signoz tracing
   # log_console_spans: true       # Enable SPAN logging to console

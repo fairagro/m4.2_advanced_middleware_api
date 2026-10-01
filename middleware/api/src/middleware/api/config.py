@@ -5,7 +5,7 @@ import re
 from typing import Annotated, ClassVar, Self
 
 from cryptography import x509
-from pydantic import ConfigDict, Field, field_validator, model_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from middleware.api.arc_store.arc_store_config import ArcStoreConfig, ConsolidatedStoreConfig
 from middleware.api.arc_store.resolution import validate_arc_store_config
@@ -36,6 +36,42 @@ class HealthCheckConfig(ConfigBase):
     ] = False
 
 
+class RateLimitingConfig(BaseModel):
+    """Process-local per-client rate limits for harvest/ARC write POSTs."""
+
+    enabled: Annotated[
+        bool,
+        Field(description="Enable per-client rate limiting on harvest/ARC write POSTs."),
+    ] = False
+    harvest_create_per_minute: Annotated[
+        int,
+        Field(
+            description=(
+                "Max POST /v3/harvests per client per minute. Non-positive disables the harvest-create class only."
+            ),
+        ),
+    ] = 10
+    arc_submit_per_minute: Annotated[
+        int,
+        Field(
+            description=(
+                "Max ARC submit POSTs (v2/v3 arcs and harvest-scoped arcs) per client per minute. "
+                "Non-positive disables the arc-submit class only."
+            ),
+        ),
+    ] = 60
+    retry_after_seconds: Annotated[
+        int,
+        Field(
+            description=(
+                "Upper bound (seconds, inclusive) for the Retry-After header on rate-limit 429 responses. "
+                "The actual delay is chosen uniformly at random from 1..retry_after_seconds."
+            ),
+            ge=1,
+        ),
+    ] = 60
+
+
 class Config(ConfigBase):
     """Configuration model for the Middleware API."""
 
@@ -60,6 +96,10 @@ class Config(ConfigBase):
         HealthCheckConfig,
         Field(description="Health check feature-toggle configuration"),
     ] = HealthCheckConfig()
+    rate_limiting: Annotated[
+        RateLimitingConfig,
+        Field(description="Per-client rate limiting for harvest/ARC write POSTs"),
+    ] = RateLimitingConfig()
 
     max_concurrent_requests: Annotated[
         int | None,
