@@ -39,6 +39,8 @@ class HealthCheckConfig(ConfigBase):
 class RateLimitingConfig(BaseModel):
     """Process-local per-client rate limits for harvest/ARC write POSTs."""
 
+    model_config: ClassVar[ConfigDict] = ConfigDict(extra="forbid")
+
     enabled: Annotated[
         bool,
         Field(description="Enable per-client rate limiting on harvest/ARC write POSTs."),

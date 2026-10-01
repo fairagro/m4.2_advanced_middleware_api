@@ -142,6 +142,14 @@ def test_config_accepts_nested_rate_limiting() -> None:
     assert config.rate_limiting.retry_after_seconds == 9  # noqa: PLR2004
 
 
+def test_config_rejects_unknown_rate_limiting_keys() -> None:
+    """Unknown keys under rate_limiting are rejected (extra=forbid)."""
+    from pydantic import ValidationError
+
+    with pytest.raises(ValidationError):
+        _minimal_config(rate_limiting={"enabled_typo": True})
+
+
 @pytest.mark.asyncio
 async def test_under_limit_succeeds() -> None:
     """Requests under the class limit are handled normally."""
@@ -277,7 +285,7 @@ async def test_distinct_client_cns_have_separate_buckets() -> None:
 def test_resolve_rate_limit_client_key_from_cert() -> None:
     """CN from a verified client cert becomes the bucket key."""
     cert = _pem_cert_with_cn("rate-limit-client")
-    scope = {
+    scope: dict[str, object] = {
         "type": "http",
         "headers": [
             (b"ssl-client-cert", cert.encode("latin-1")),
@@ -285,12 +293,16 @@ def test_resolve_rate_limit_client_key_from_cert() -> None:
         ],
     }
     assert resolve_rate_limit_client_key(scope) == "rate-limit-client"
+    state = scope.get("state")
+    assert isinstance(state, dict)
+    assert isinstance(state.get("cert"), x509.Certificate)
 
 
 def test_resolve_rate_limit_client_key_anonymous_without_cert() -> None:
-    """Missing cert falls back to the anonymous key."""
-    scope = {"type": "http", "headers": []}
+    """Missing cert falls back to the anonymous key without caching cert=None."""
+    scope: dict[str, object] = {"type": "http", "headers": []}
     assert resolve_rate_limit_client_key(scope) == ANONYMOUS_CLIENT_KEY
+    assert "state" not in scope
 
 
 def test_middleware_rejects_non_positive_retry_after() -> None:

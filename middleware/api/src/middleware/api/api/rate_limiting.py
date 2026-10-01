@@ -59,7 +59,11 @@ def _header_value(scope: Scope, *names: str) -> str | None:
 
 
 def resolve_rate_limit_client_key(scope: Scope) -> str:
-    """Resolve the rate-limit bucket key from mTLS headers (CN or ``anonymous``)."""
+    """Resolve the rate-limit bucket key from mTLS headers (CN or ``anonymous``).
+
+    On a successfully parsed client certificate, caches it on ``scope["state"]["cert"]``
+    so FastAPI dependencies can reuse ``request.state.cert`` without re-parsing.
+    """
     client_cert = _header_value(scope, "ssl-client-cert", "x-ssl-client-cert")
     client_verify = _header_value(scope, "ssl-client-verify", "x-ssl-client-verify") or "NONE"
     if not client_cert or client_verify != "SUCCESS":
@@ -71,6 +75,9 @@ def resolve_rate_limit_client_key(scope: Scope) -> str:
         cn_attributes = cert.subject.get_attributes_for_oid(NameOID.COMMON_NAME)
         if not cn_attributes:
             return ANONYMOUS_CLIENT_KEY
+        state = scope.setdefault("state", {})
+        if isinstance(state, dict):
+            state["cert"] = cert
         value = cn_attributes[0].value
         if isinstance(value, bytes):
             return value.decode("utf-8")
