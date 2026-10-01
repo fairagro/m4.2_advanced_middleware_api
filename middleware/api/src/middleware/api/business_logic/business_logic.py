@@ -260,7 +260,7 @@ class BusinessLogic:
     async def sync_to_gitlab(
         self,
         rdi: str,
-        arc: RoCratePayload | RoCrateContent,
+        arc: str,
         *,
         record_transient_as_failed: bool = False,
     ) -> None:
@@ -271,7 +271,7 @@ class BusinessLogic:
 
         Args:
             rdi: Research Data Infrastructure identifier.
-            arc: ARC definition.
+            arc: RO-Crate JSON string from the Celery task payload.
             record_transient_as_failed: Persist GIT_PUSH_FAILED when Celery retries are exhausted.
 
         Raises:

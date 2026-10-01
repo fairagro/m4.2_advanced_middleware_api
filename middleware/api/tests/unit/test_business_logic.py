@@ -1,5 +1,6 @@
 """Unit tests for the unified BusinessLogic class."""
 
+import json
 from datetime import UTC, datetime
 from typing import cast
 from unittest.mock import AsyncMock, MagicMock, patch
@@ -505,7 +506,7 @@ async def test_api_mode_create_or_update_success(
     # Verify calls
     mock_doc_store.store_arc.assert_called_once()
     mock_task_dispatcher.dispatch_sync_arc.assert_called_once_with(
-        ArcSyncTask(rdi=rdi, arc=arc_data, client_id=client_id)
+        ArcSyncTask(rdi=rdi, arc=json.dumps(arc_data), client_id=client_id)
     )
 
 
@@ -547,7 +548,7 @@ async def test_api_mode_harvest_scoped_with_consolidated_still_syncs(
 async def test_api_mode_sync_to_gitlab_forbidden(api_logic: BusinessLogic) -> None:
     """Test calling sync_to_gitlab in API mode raises error."""
     with pytest.raises(BusinessLogicError, match="sync_to_gitlab must not be called in API mode"):
-        await api_logic.sync_to_gitlab("rdi", {})
+        await api_logic.sync_to_gitlab("rdi", "{}")
 
 
 @pytest.mark.asyncio
@@ -603,7 +604,7 @@ async def test_setup_failure(api_logic: BusinessLogic, mock_doc_store: MagicMock
 async def test_worker_mode_sync_to_gitlab_success(worker_logic: BusinessLogic, mock_store: MagicMock) -> None:
     """Test sync_to_gitlab in Worker mode."""
     rdi = "test-rdi"
-    arc_data = minimal_rocrate_dict("ABC")
+    arc_json = json.dumps(minimal_rocrate_dict("ABC"))
 
     with patch("middleware.api.business_logic.arc_manager.ARC") as mock_arc_class:
         mock_arc_instance = MagicMock()
@@ -611,7 +612,9 @@ async def test_worker_mode_sync_to_gitlab_success(worker_logic: BusinessLogic, m
         mock_arc_class.from_rocrate_json_string.return_value = mock_arc_instance
 
         with patch("middleware.api.business_logic.arc_manager.calculate_arc_id", return_value="arc_id"):
-            await worker_logic.sync_to_gitlab(rdi, arc_data)
+            await worker_logic.sync_to_gitlab(rdi, arc_json)
+
+        mock_arc_class.from_rocrate_json_string.assert_called_once_with(arc_json)
 
     # Verify store called
     mock_store.create_or_update.assert_called_once()
@@ -629,7 +632,7 @@ async def test_sync_to_gitlab_transient_error_skips_failure_event(
     """Mid-retry transient sync must not append GIT_PUSH_FAILED."""
     mock_store.create_or_update = AsyncMock(side_effect=ArcStoreTransientError("git unreachable"))
     mock_doc_store.add_event = AsyncMock()
-    arc_data = minimal_rocrate_dict("ABC")
+    arc_json = json.dumps(minimal_rocrate_dict("ABC"))
 
     with (
         patch("middleware.api.business_logic.arc_manager.ARC") as mock_arc_class,
@@ -637,7 +640,7 @@ async def test_sync_to_gitlab_transient_error_skips_failure_event(
     ):
         mock_arc_class.from_rocrate_json_string.return_value = MagicMock(Identifier="ABC")
         with pytest.raises(TransientError, match="git unreachable"):
-            await worker_logic.sync_to_gitlab("test-rdi", arc_data)
+            await worker_logic.sync_to_gitlab("test-rdi", arc_json)
 
     mock_doc_store.add_event.assert_not_called()
 
@@ -651,7 +654,7 @@ async def test_sync_to_gitlab_exhausted_transient_records_failure_event(
     """Final Celery attempt records GIT_PUSH_FAILED before re-raising TransientError."""
     mock_store.create_or_update = AsyncMock(side_effect=ArcStoreTransientError("git unreachable"))
     mock_doc_store.add_event = AsyncMock()
-    arc_data = minimal_rocrate_dict("ABC")
+    arc_json = json.dumps(minimal_rocrate_dict("ABC"))
 
     with (
         patch("middleware.api.business_logic.arc_manager.ARC") as mock_arc_class,
@@ -661,7 +664,7 @@ async def test_sync_to_gitlab_exhausted_transient_records_failure_event(
         with pytest.raises(TransientError, match="git unreachable"):
             await worker_logic.sync_to_gitlab(
                 "test-rdi",
-                arc_data,
+                arc_json,
                 record_transient_as_failed=True,
             )
 
@@ -804,17 +807,17 @@ async def test_create_or_update_identity_mismatch_raises_and_skips_sync(
 @pytest.mark.asyncio
 async def test_sync_to_gitlab_missing_identifier(worker_logic: BusinessLogic) -> None:
     """Test sync_to_gitlab with missing Identifier."""
-    arc_data = {"@context": "https://w3id.org/ro/crate/1.1/context", "@graph": [{"@id": "arc"}]}
+    arc_json = json.dumps({"@context": "https://w3id.org/ro/crate/1.1/context", "@graph": [{"@id": "arc"}]})
 
     with pytest.raises(InvalidJsonSemanticError):
-        await worker_logic.sync_to_gitlab("test_rdi", cast(RoCrateContent, arc_data))
+        await worker_logic.sync_to_gitlab("test_rdi", arc_json)
 
 
 @pytest.mark.asyncio
 async def test_sync_to_gitlab_generic_exception(worker_logic: BusinessLogic, mock_store: MagicMock) -> None:
     """Test sync_to_gitlab with unexpected exception."""
     mock_store.create_or_update.side_effect = Exception("Git failure")
-    arc_data = minimal_rocrate_dict("test")
+    arc_json = json.dumps(minimal_rocrate_dict("test"))
 
     with patch("middleware.api.business_logic.arc_manager.ARC") as mock_arc_class:
         mock_arc_obj = MagicMock()
@@ -822,7 +825,7 @@ async def test_sync_to_gitlab_generic_exception(worker_logic: BusinessLogic, moc
         mock_arc_class.from_rocrate_json_string.return_value = mock_arc_obj
 
         with pytest.raises(BusinessLogicError, match="unexpected error encountered"):
-            await worker_logic.sync_to_gitlab("test_rdi", arc_data)
+            await worker_logic.sync_to_gitlab("test_rdi", arc_json)
 
 
 @pytest.mark.asyncio
@@ -835,7 +838,7 @@ async def test_sync_to_gitlab_redacts_oauth_token_in_failure_event(
     mock_store.create_or_update.side_effect = ArcStoreError(
         "failed to push to 'https://oauth2:secret-token@gitlab.example.com/group/arc.git'"
     )
-    arc_data = minimal_rocrate_dict("test")
+    arc_json = json.dumps(minimal_rocrate_dict("test"))
 
     with patch("middleware.api.business_logic.arc_manager.ARC") as mock_arc_class:
         mock_arc_obj = MagicMock()
@@ -843,7 +846,7 @@ async def test_sync_to_gitlab_redacts_oauth_token_in_failure_event(
         mock_arc_class.from_rocrate_json_string.return_value = mock_arc_obj
 
         with pytest.raises(BusinessLogicError, match="https://\\*\\*\\*@gitlab.example.com"):
-            await worker_logic.sync_to_gitlab("test_rdi", arc_data)
+            await worker_logic.sync_to_gitlab("test_rdi", arc_json)
 
     mock_doc_store.add_event.assert_awaited()
     event = mock_doc_store.add_event.await_args.args[1]
@@ -855,4 +858,4 @@ async def test_sync_to_gitlab_redacts_oauth_token_in_failure_event(
 async def test_sync_to_gitlab_business_logic_error(api_logic: BusinessLogic) -> None:
     """Test sync_to_gitlab in API mode (should fail)."""
     with pytest.raises(BusinessLogicError, match="must not be called in API mode"):
-        await api_logic.sync_to_gitlab("test_rdi", {})
+        await api_logic.sync_to_gitlab("test_rdi", "{}")
