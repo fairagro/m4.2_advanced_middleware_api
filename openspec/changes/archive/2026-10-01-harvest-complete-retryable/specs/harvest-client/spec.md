@@ -37,7 +37,7 @@ connection failures and those same transient status codes for harvest completion
 - **WHEN** `POST /v3/harvests` fails with a connection error
 - **THEN** the client does not retry the create POST
 
-#### Scenario: Do not retry harvest completion
+#### Scenario: Retry harvest completion after ConnectError
 
 - **GIVEN** a harvest completion request fails with a connection error before an HTTP response
 - **WHEN** retries remain
