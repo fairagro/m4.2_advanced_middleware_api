@@ -16,6 +16,8 @@
     ".cursor/skills/openspec-*/**",
     ".cursor/rules/openspec-*.mdc",
     ".github/prompts/opsx-*",
-    ".github/skills/openspec-*/**"
+    ".github/skills/openspec-*/**",
+    // Raw Copilot CCR review-body fixtures (HTML + ZWSP paths — not prose docs)
+    "scripts/ai/tests/fixtures/copilot_ccr_*.md"
   ]
 }
