@@ -96,16 +96,29 @@ class ApiClient:
         )
 
     @classmethod
+    def _is_harvest_complete_post_path(cls, path: str) -> bool:
+        """Return whether *path* is ``POST /v3/harvests/{id}/complete``."""
+        parts = path.lstrip("/").split("/")
+        harvest_complete_parts = 4  # v3 / harvests / {id} / complete
+        return (
+            len(parts) == harvest_complete_parts
+            and parts[0] == "v3"
+            and parts[1] == "harvests"
+            and parts[3] == "complete"
+        )
+
+    @classmethod
     def _is_idempotent_post_path(cls, path: str, headers: Mapping[str, str] | None = None) -> bool:
         """Return whether a POST path is safe to retry with an identical request.
 
-        Covers idempotent ARC POSTs and ``POST /v3/harvests`` only when a
-        non-empty ``Idempotency-Key`` header is present. Harvest completion
-        remains non-retryable.
+        Covers idempotent ARC POSTs, harvest completion, and ``POST /v3/harvests``
+        only when a non-empty ``Idempotency-Key`` header is present.
         """
         normalized = path.lstrip("/")
         if normalized == "v3/harvests":
             return cls._has_idempotency_key(headers)
+        if cls._is_harvest_complete_post_path(path):
+            return True
         return cls._is_idempotent_arc_post_path(path)
 
     @classmethod
@@ -756,7 +769,9 @@ class ApiClient:
     async def complete_harvest(self, harvest_id: str) -> HarvestResult:
         """Mark a harvest run as completed.
 
-        Uses ``POST /v3/harvests/{harvest_id}/complete``.
+        Uses ``POST /v3/harvests/{harvest_id}/complete``. Retries transient
+        transport failures. If completion still fails, fetches the harvest and
+        treats an already-``COMPLETED`` status as success (lost-response defense).
 
         Args:
             harvest_id: Harvest identifier.
@@ -764,8 +779,21 @@ class ApiClient:
         Returns:
             Updated :class:`HarvestResult`.
         """
-        data = await self._post_empty(f"v3/harvests/{harvest_id}/complete")
-        return self._parse_harvest_response(data)
+        try:
+            data = await self._post_empty(f"v3/harvests/{harvest_id}/complete")
+            return self._parse_harvest_response(data)
+        except ApiClientError as complete_error:
+            try:
+                harvest = await self.get_harvest(harvest_id)
+            except ApiClientError:
+                raise complete_error from None
+            if harvest.status == HarvestStatus.COMPLETED:
+                logger.info(
+                    "Harvest %s already COMPLETED after failed complete; treating as success",
+                    harvest_id,
+                )
+                return harvest
+            raise
 
     async def cancel_harvest(self, harvest_id: str) -> HarvestResult:
         """Mark a harvest run as cancelled.

@@ -97,7 +97,10 @@ flushed”. When `consolidated_store` is configured, the system MUST enqueue fin
 statistics show no new or updated ARCs (bootstrap and retry after a failed finalize). Byte-stable comparison still
 governs whether a Git push occurs. Worker task payloads MAY include `harvest_id` for correlation only; catalog
 membership is always “all current ARCs for the RDI”. There is no requirement that all per-ARC syncs complete before
-finalize runs.
+finalize runs. Re-requesting `COMPLETED` on an already-`COMPLETED` harvest MUST re-enqueue finalize when
+`consolidated_store` is configured; when the ARC set is unchanged, catalog finalize MUST NOT create a new catalog Git
+commit (identical catalog bytes → skip commit/push), so a second finalize after a lost HTTP response is safe for catalog
+content.
 
 #### Scenario: Complete harvest enqueues catalog finalize
 
@@ -148,6 +151,13 @@ finalize runs.
 - **WHEN** the client requests `COMPLETED` again for that harvest
 - **THEN** the harvest document is not rewritten
 - **AND** a finalize task for that RDI is enqueued again
+
+#### Scenario: Unchanged ARC set makes second finalize a catalog Git no-op
+
+- **GIVEN** a harvest already `COMPLETED` and catalog finalize previously published catalog bytes for its RDI
+- **AND** no ARC content for that RDI has changed
+- **WHEN** finalize runs again after a re-complete enqueue
+- **THEN** catalog Git commit/push is skipped because the rebuilt catalog bytes match the tip
 
 ### Requirement: Surface partial-push skips on catalog success events
 

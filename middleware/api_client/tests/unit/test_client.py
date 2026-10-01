@@ -617,6 +617,64 @@ async def test_complete_harvest(client_config: Config) -> None:
 
 @pytest.mark.asyncio
 @respx.mock
+async def test_complete_harvest_retries_on_connect_error(client_config: Config) -> None:
+    """Harvest completion is idempotent: ConnectError is retried then succeeds."""
+    client_config.retry_backoff_factor = 0.01
+    client_config.max_retries = 2
+    completed_response = {**HARVEST_RESPONSE, "status": "COMPLETED", "completed_at": "2024-01-01T01:00:00Z"}
+    route = respx.post(f"{client_config.api_url}v3/harvests/harvest-456/complete").mock(
+        side_effect=[
+            httpx.ConnectError("Connection refused"),
+            httpx.Response(http.HTTPStatus.OK, json=completed_response),
+        ]
+    )
+    async with ApiClient(client_config) as client:
+        harvest = await client.complete_harvest("harvest-456")
+    assert harvest.status == "COMPLETED"
+    assert route.call_count == 2  # noqa: PLR2004
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_complete_harvest_recovers_via_get_when_already_completed(client_config: Config) -> None:
+    """After exhausted complete failures, GET COMPLETED is treated as success."""
+    client_config.retry_backoff_factor = 0.01
+    client_config.max_retries = 1
+    completed_response = {**HARVEST_RESPONSE, "status": "COMPLETED", "completed_at": "2024-01-01T01:00:00Z"}
+    complete_route = respx.post(f"{client_config.api_url}v3/harvests/harvest-456/complete").mock(
+        side_effect=httpx.ConnectError("Connection refused")
+    )
+    get_route = respx.get(f"{client_config.api_url}v3/harvests/harvest-456").mock(
+        return_value=httpx.Response(http.HTTPStatus.OK, json=completed_response)
+    )
+    async with ApiClient(client_config) as client:
+        harvest = await client.complete_harvest("harvest-456")
+    assert harvest.status == "COMPLETED"
+    assert complete_route.call_count == client_config.max_retries + 1
+    assert get_route.called
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_complete_harvest_still_fails_when_get_shows_running(client_config: Config) -> None:
+    """GET defense must not fake success when the harvest is still RUNNING."""
+    client_config.retry_backoff_factor = 0.01
+    client_config.max_retries = 0
+    complete_route = respx.post(f"{client_config.api_url}v3/harvests/harvest-456/complete").mock(
+        side_effect=httpx.ConnectError("Connection refused")
+    )
+    get_route = respx.get(f"{client_config.api_url}v3/harvests/harvest-456").mock(
+        return_value=httpx.Response(http.HTTPStatus.OK, json=HARVEST_RESPONSE)
+    )
+    async with ApiClient(client_config) as client:
+        with pytest.raises(ApiClientError, match="Connection refused"):
+            await client.complete_harvest("harvest-456")
+    assert complete_route.call_count == 1
+    assert get_route.called
+
+
+@pytest.mark.asyncio
+@respx.mock
 async def test_cancel_harvest(client_config: Config) -> None:
     """Test cancelling a harvest run via PATCH."""
     cancelled_response = {**HARVEST_RESPONSE, "status": "CANCELLED"}
