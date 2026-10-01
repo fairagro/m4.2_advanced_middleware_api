@@ -2,7 +2,6 @@
 
 from middleware.shared.api_models import (
     ArcStatus,
-    CreateOrUpdateArcsRequest,
     LivenessResponse,
 )
 
@@ -17,21 +16,6 @@ def test_liveness_response_custom_message() -> None:
     """Test creating a LivenessResponse with custom message."""
     response = LivenessResponse(message="service is running")
     assert response.message == "service is running"
-
-
-def test_create_or_update_arcs_request() -> None:
-    """Test creating a CreateOrUpdateArcsRequest."""
-    arcs_data = [
-        {"identifier": "1", "title": "ARC 1"},
-        {"identifier": "2", "title": "ARC 2"},
-    ]
-
-    request = CreateOrUpdateArcsRequest(rdi="edaphobase", arcs=arcs_data)
-
-    assert request.rdi == "edaphobase"
-    assert len(request.arcs) == 2  # noqa: PLR2004
-    assert request.arcs[0]["identifier"] == "1"
-    assert request.arcs[1]["identifier"] == "2"
 
 
 def test_arc_status_enum() -> None:

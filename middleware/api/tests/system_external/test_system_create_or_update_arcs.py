@@ -23,43 +23,9 @@ pytestmark = [
 ]
 
 
-@pytest.mark.asyncio
-@pytest.mark.system_external
-@pytest.mark.parametrize(
-    "json_info",
-    [
-        {"file_name": "minimal.json", "identifier": "Test"},
-        {"file_name": "sample.json", "identifier": "AthalianaColdStressSugar"},
-    ],
-)
-async def test_create_arcs(
-    client: TestClient,
-    cert: str,
-    json_info: dict[str, Any],
-    gitlab_api: Gitlab,
-    config: dict[str, Any],
-    worker_process: Path,
-) -> None:
-    """Test creating ARCs via the /v1/arcs endpoint."""
-    cert_with_linebreaks = cert.replace("\\n", "\n")
-
-    headers = {
-        "ssl-client-cert": cert_with_linebreaks,
-        "ssl-client-verify": "SUCCESS",
-        "content-type": "application/json",
-    }
-    arc_json_path = Path(__file__).parent.parent.parent.parent.parent / "ro_crates" / json_info["file_name"]
-    with arc_json_path.open("r", encoding="utf-8") as f:
-        body = {"rdi": "rdi-1", "arcs": [json.load(f)]}
-
-    response = client.post("/v1/arcs", headers=headers, json=body)
-
-    assert response.status_code == http.HTTPStatus.ACCEPTED  # nosec (202 for async processing)
-    body = response.json()
-    assert "task_id" in body  # nosec
-    assert body["status"] == "processing"  # nosec
-
-    _wait_for_gitlab_project(gitlab_api, config, json_info, worker_log_path=worker_process)
+# ---------------------------------------------------------------------------
+# GitLab project verification helpers
+# ---------------------------------------------------------------------------
 
 
 def _verify_gitlab_project(gitlab_api: Gitlab, config: dict[str, Any], json_info: dict[str, Any]) -> bool:

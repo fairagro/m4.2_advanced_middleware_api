@@ -19,6 +19,7 @@ from middleware.api.api.fastapi_app import Api
 from middleware.api.config import Config
 from middleware.api.document_store import ArcStoreResult, TaskRecord
 from middleware.api.document_store.task_record import TaskRecordStatus
+from middleware.shared.api_models.common.models import TaskStatus
 from middleware.shared.config.config_wrapper import ConfigWrapper
 
 
@@ -116,8 +117,8 @@ async def test_create_arc_via_git_repo(
     with arc_json_path.open("r", encoding="utf-8") as f:
         json_content = json.load(f)
 
-    # Wrap in API expected format
-    body = {"rdi": "rdi-1", "arcs": [json_content]}
+    # Wrap in API expected format (v2: singular ``arc``)
+    body = {"rdi": "rdi-1", "arc": json_content}
 
     # Calculate expected ARC ID for identifier "Test"
     arc_id = hashlib.sha256(b"Test:rdi-1").hexdigest()
@@ -132,17 +133,16 @@ async def test_create_arc_via_git_repo(
     Repo.init(repo_path, bare=True)
 
     # 3. Call API
-    response = api_client.post("/v1/arcs", headers=headers, json=body)
+    response = api_client.post("/v2/arcs", headers=headers, json=body)
 
     # Assert
-    # API now returns 202 (Accepted) for async processing
+    # API returns 202 (Accepted) for async processing
     assert response.status_code == http.HTTPStatus.ACCEPTED, f"Response: {response.text}"
     response_data = response.json()
     assert "task_id" in response_data
-    assert response_data["status"] == "processing"
+    assert response_data["status"] == TaskStatus.SUCCESS
 
-    # Note: In system tests, we would need to poll /v1/tasks/{task_id} and wait for completion
-    # For now, we skip verification as it requires Celery worker to be running
+    # Note: Full Git push verification requires a Celery worker; skipped here.
     # _verify_repo_content(repo_path)
 
 
@@ -152,17 +152,15 @@ async def test_create_arc_requires_client_cert_when_enabled(api_client: TestClie
     """Ensure requests without client cert are rejected when cert auth is enabled."""
     body = {
         "rdi": "rdi-1",
-        "arcs": [
-            {
-                "@id": "./",
-                "@type": "Dataset",
-                "identifier": "Test",
-                "name": "Test ARC",
-            }
-        ],
+        "arc": {
+            "@id": "./",
+            "@type": "Dataset",
+            "identifier": "Test",
+            "name": "Test ARC",
+        },
     }
 
-    response = api_client.post("/v1/arcs", json=body)
+    response = api_client.post("/v2/arcs", json=body)
 
     assert response.status_code == http.HTTPStatus.UNAUTHORIZED
     assert response.json()["detail"] == "Client certificate required"

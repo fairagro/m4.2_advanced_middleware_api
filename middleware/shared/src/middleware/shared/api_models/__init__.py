@@ -13,14 +13,10 @@ TaskStatus = common.TaskStatus
 ApiResponse = common.ApiResponse
 ArcResponse = common.ArcResponse  # V1/V2 common
 
-# V1 Models
+# V1 Models (system endpoints only; ARC/task models removed with /v1/arcs and /v1/tasks)
 LivenessResponse = v1.LivenessResponse
 HealthResponse = v1.HealthResponse
-CreateOrUpdateArcsRequest = v1.CreateOrUpdateArcsRequest
-CreateOrUpdateArcsResponse = v1.CreateOrUpdateArcsResponse
-GetTaskStatusResponse = v1.GetTaskStatusResponse
 WhoamiResponse = v1.WhoamiResponse
-ArcTaskTicket = v1.ArcTaskTicket
 
 # V2 Models
 HealthResponseV2 = v2.HealthResponse
