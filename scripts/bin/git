@@ -55,6 +55,7 @@ if [[ "${count}" =~ ^[0-9]+$ ]] && ((count > 0)); then
   done
 fi
 
+# Load store/host tokens for hooks (e.g. GitGuardian). Never prompt — Cursor SCM polls share /dev/tty.
 # shellcheck source=scripts/dev-tokens.sh
 source "${_git_dir}/../dev-tokens.sh"
 unset _git_dir _git_self
