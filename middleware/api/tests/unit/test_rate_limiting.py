@@ -13,6 +13,7 @@ from cryptography.hazmat.primitives.asymmetric import rsa
 from cryptography.x509.oid import NameOID
 from fastapi import FastAPI
 from httpx import ASGITransport
+from pydantic import ValidationError
 
 from middleware.api.api.fastapi_app import Api
 from middleware.api.api.rate_limiting import (
@@ -144,8 +145,6 @@ def test_config_accepts_nested_rate_limiting() -> None:
 
 def test_config_rejects_unknown_rate_limiting_keys() -> None:
     """Unknown keys under rate_limiting are rejected (extra=forbid)."""
-    from pydantic import ValidationError
-
     with pytest.raises(ValidationError):
         _minimal_config(rate_limiting={"enabled_typo": True})
 

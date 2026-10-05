@@ -10,11 +10,8 @@ from typing import NoReturn
 from arctrl import ARC
 from opentelemetry import trace
 
-from middleware.api.arc_store.arctrl_compat import patch_fable_int32_for_openpyxl
 from middleware.api.utils import calculate_arc_id
 from middleware.shared.security.url_redact import redact_url_userinfo
-
-patch_fable_int32_for_openpyxl()
 
 logger = logging.getLogger(__name__)
 
