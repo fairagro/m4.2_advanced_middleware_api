@@ -301,6 +301,16 @@ class GitlabGitProvider(RemoteGitProvider):
                 project_path = f"{group.full_path}/{arc_id}"
                 try:
                     project = self._gl.projects.get(project_path)
+                    # Delayed deletion renames ``path`` to ``{path}-deletion_scheduled-{id}``.
+                    # Treat that as missing so we restore (or recreate) a usable repo URL.
+                    if getattr(project, "marked_for_deletion_on", None) or project.path != arc_id:
+                        logger.info(
+                            "GitLab project %s is pending deletion (path=%s); restoring before sync",
+                            project_path,
+                            project.path,
+                        )
+                        project.restore()
+                        project = self._gl.projects.get(project_path)
                     logger.debug("GitLab project %s already exists", project_path)
                     apply_gitlab_project_metadata(project, arc_id, metadata)
                 except GitlabGetError:

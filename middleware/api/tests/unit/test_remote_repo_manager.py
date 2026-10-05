@@ -161,8 +161,10 @@ class TestGitlabGitProvider:
 
         mock_project = MagicMock()
         mock_project.name = "old-hash-name"
+        mock_project.path = "abc123hash"
         mock_project.description = "old description"
         mock_project.topics = ["existing"]
+        mock_project.marked_for_deletion_on = None
         mock_gl.projects.get.return_value = mock_project
 
         provider = GitlabGitProvider(url="https://gitlab.com", group_name="my-group", token="secret")  # nosec
@@ -177,10 +179,54 @@ class TestGitlabGitProvider:
         provider.ensure_repo_exists("abc123hash", metadata=metadata)
 
         mock_gl.projects.create.assert_not_called()
+        mock_project.restore.assert_not_called()
         assert mock_project.name == "dataset-42"
         assert mock_project.description == "Readable title"
         assert mock_project.topics == ["rdi-2"]
         mock_project.save.assert_called_once()
+
+    @staticmethod
+    @patch("middleware.api.arc_store.git_repo.remote_git_provider.gitlab.Gitlab")
+    def test_ensure_repo_exists_restores_soft_deleted_project(mock_gitlab_class: MagicMock) -> None:
+        """Pending-deletion projects must be restored before metadata/sync reuse."""
+        mock_gl = MagicMock()
+        mock_gitlab_class.return_value = mock_gl
+
+        mock_group = MagicMock()
+        mock_group.full_path = "my-group-path"
+        mock_gl.groups.get.return_value = mock_group
+
+        pending = MagicMock()
+        pending.path = "abc123hash-deletion_scheduled-9"
+        pending.marked_for_deletion_on = "2026-10-05"
+        pending.name = "old"
+        pending.description = None
+        pending.topics = []
+
+        restored = MagicMock()
+        restored.path = "abc123hash"
+        restored.marked_for_deletion_on = None
+        restored.name = "old"
+        restored.description = None
+        restored.topics = []
+
+        mock_gl.projects.get.side_effect = [pending, restored]
+
+        provider = GitlabGitProvider(url="https://gitlab.com", group_name="my-group", token="secret")  # nosec
+        metadata = GitProjectMetadata(
+            rdi="rdi-2",
+            arc_id="abc123hash",
+            display_name="Readable title",
+            identifier="dataset-42",
+            gitlab_topic="rdi-2",
+        )
+
+        provider.ensure_repo_exists("abc123hash", metadata=metadata)
+
+        pending.restore.assert_called_once()
+        mock_gl.projects.create.assert_not_called()
+        assert restored.name == "dataset-42"
+        restored.save.assert_called_once()
 
     @staticmethod
     def test_apply_gitlab_project_metadata_skips_save_when_gitlab_values_match() -> None:
