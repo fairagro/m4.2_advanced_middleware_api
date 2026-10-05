@@ -19,6 +19,7 @@ from middleware.api.business_logic import (
     TransientError,
 )
 from middleware.api.business_logic.ports import BusinessLogicPorts
+from middleware.api.business_logic.rdi_comments import enrich_investigation_rdi_comments
 from middleware.api.business_logic.task_payloads import ArcSyncTask
 from middleware.api.document_store import ArcIdentityConflictError, ArcStoreResult
 from middleware.api.document_store.harvest_document import HarvestDocument, HarvestStatistics
@@ -503,11 +504,33 @@ async def test_api_mode_create_or_update_success(
     assert result.arc.id == "arc_id"
     assert result.arc.status == ArcStatus.CREATED
 
-    # Verify calls
+    # Verify calls — stored/queued body includes Investigation RDI Comments
     mock_doc_store.store_arc.assert_called_once()
+    stored_rdi, stored_arc, stored_identifier = mock_doc_store.store_arc.call_args.args[:3]
+    assert stored_rdi == rdi
+    assert stored_identifier == "ABC"
+    comment_names = {
+        node.get("name") for node in stored_arc["@graph"] if isinstance(node, dict) and node.get("@type") == "Comment"
+    }
+    assert {"RDI", "RDI Description", "RDI URL"} <= comment_names
     mock_task_dispatcher.dispatch_sync_arc.assert_called_once_with(
-        ArcSyncTask(rdi=rdi, arc=json.dumps(arc_data), client_id=client_id)
+        ArcSyncTask(rdi=rdi, arc=json.dumps(stored_arc), client_id=client_id)
     )
+
+
+@pytest.mark.asyncio
+async def test_api_mode_rejects_conflicting_rdi_comment(
+    api_logic: BusinessLogic, mock_doc_store: MagicMock, mock_task_dispatcher: MagicMock
+) -> None:
+    """Comment[RDI] mismatch fails before store/sync with InvalidJsonSemanticError."""
+    arc_data = minimal_rocrate_dict("ABC")
+    enrich_investigation_rdi_comments(arc_data, rdi="edaphobase", description="", url="")
+
+    with pytest.raises(InvalidJsonSemanticError, match="conflicts with authorized RDI"):
+        await api_logic.create_or_update_arc("edal", arc_data, "client")
+
+    mock_doc_store.store_arc.assert_not_called()
+    mock_task_dispatcher.dispatch_sync_arc.assert_not_called()
 
 
 @pytest.mark.asyncio

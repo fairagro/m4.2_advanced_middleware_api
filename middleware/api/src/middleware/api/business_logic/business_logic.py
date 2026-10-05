@@ -30,6 +30,7 @@ from middleware.api.business_logic.task_payloads import CatalogFinalizeTask
 from middleware.api.document_store import DocumentStore
 from middleware.api.document_store.arc_document import ArcMetadata
 from middleware.api.document_store.harvest_document import HarvestDocument
+from middleware.api.rdi_registry import RdiRegistryEntry
 from middleware.shared.api_models.common.models import ArcOperationResult, HarvestStatus
 from middleware.shared.api_models.common.rocrate import RoCratePayload
 from middleware.shared.json_types import RoCrateContent
@@ -79,11 +80,18 @@ class BusinessLogic:
         self._ports = resolved_ports
         self._broker_health_checker = resolved_ports.broker_health_checker
         self._harvest_manager = HarvestManager.from_config(config.harvest, doc_store)
+        raw_registry = getattr(config, "known_rdis", None)
+        rdi_registry = (
+            [entry for entry in raw_registry if isinstance(entry, RdiRegistryEntry)]
+            if isinstance(raw_registry, list)
+            else []
+        )
         self._arc_manager = ArcManager(
             store=store,
             doc_store=doc_store,
             task_dispatcher=resolved_ports.task_dispatcher,
             consolidated_store=consolidated_store,
+            rdi_registry=rdi_registry,
         )
 
     @property

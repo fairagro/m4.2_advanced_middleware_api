@@ -29,6 +29,7 @@ config:
   #
   # Top-level git_repo / gitlab_api / consolidated_git and nested
   # arc_store.gitlab_api are no longer accepted (hard cut — see NOTES.txt).
+  # Prefer {id, description?, url?}. Bare strings still work but are deprecated.
   known_rdis:
     - bonares
     - edal

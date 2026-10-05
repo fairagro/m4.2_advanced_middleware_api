@@ -2,12 +2,18 @@
 
 from typing import Annotated, Self
 
-from pydantic import BaseModel, Field, SecretStr, model_validator
+from pydantic import BaseModel, Field, SecretStr, field_validator, model_validator
 
 from middleware.api.arc_store.arc_store_config import ArcStoreConfig, ConsolidatedStoreConfig
 from middleware.api.arc_store.resolution import validate_arc_store_config
 from middleware.api.business_logic.config import HarvestConfig
 from middleware.api.document_store.config import CouchDBConfig
+from middleware.api.rdi_registry import (
+    RdiRegistryEntry,
+    known_rdi_ids,
+    validate_unique_rdi_ids,
+    warn_deprecated_string_known_rdis,
+)
 from middleware.shared.config.config_base import ConfigBase
 
 
@@ -32,8 +38,13 @@ class WorkerConfig(ConfigBase):
     """
 
     known_rdis: Annotated[
-        list[str],
-        Field(description="Known RDI identifiers (used to validate GitLab topic mapping)"),
+        list[RdiRegistryEntry],
+        Field(
+            description=(
+                "Known RDIs as objects with id and optional description/url. "
+                "Bare identifier strings remain accepted but are deprecated."
+            ),
+        ),
     ] = []
     arc_store: Annotated[
         ArcStoreConfig,
@@ -47,8 +58,20 @@ class WorkerConfig(ConfigBase):
     celery: Annotated[CeleryConfig, Field(description="Celery configuration")]
     harvest: Annotated[HarvestConfig, Field(description="Default harvest configuration")] = HarvestConfig()
 
+    @field_validator("known_rdis", mode="before")
+    @classmethod
+    def deprecate_string_known_rdis(cls, rdis: object) -> object:
+        """Keep bare-string known_rdis working while warning operators to migrate."""
+        return warn_deprecated_string_known_rdis(rdis)
+
+    @field_validator("known_rdis")
+    @classmethod
+    def validate_known_rdis(cls, rdis: list[RdiRegistryEntry]) -> list[RdiRegistryEntry]:
+        """Reject duplicate RDI identifiers (charset checked on each entry)."""
+        return validate_unique_rdi_ids(rdis)
+
     @model_validator(mode="after")
     def validate_git_repo_rdi_gitlab_topics(self) -> Self:
         """Validate dual-slot ArcStore config and GitLab topic mapping."""
-        self.arc_store = validate_arc_store_config(self, known_rdis=self.known_rdis)
+        self.arc_store = validate_arc_store_config(self, known_rdis=known_rdi_ids(self.known_rdis))
         return self

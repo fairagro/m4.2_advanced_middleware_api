@@ -15,6 +15,7 @@ from middleware.api.api.legacy.task_status_store import LegacyTaskStatusStore
 from middleware.api.business_logic import BusinessLogic
 from middleware.api.config import Config
 from middleware.api.health_service import ApiHealthService
+from middleware.api.rdi_registry import known_rdi_ids
 
 logger = logging.getLogger(__name__)
 
@@ -108,13 +109,14 @@ class CommonApiDependencies:
             raise HTTPException(status_code=HTTPStatus.NOT_ACCEPTABLE, detail="Accept must be application/json")
 
     def get_known_rdis(self) -> list[str]:
-        """Return the list of known RDIs."""
-        return self.config.known_rdis if self.config.known_rdis else []
+        """Return the list of known RDI identifiers."""
+        return known_rdi_ids(self.config.known_rdis) if self.config.known_rdis else []
 
     async def get_authorized_rdis(self, request: Request) -> list[str]:
         """Return list of RDIs the client is authorized for."""
         if not self.config.require_client_cert:
-            return self.config.known_rdis if self.config.known_rdis else ["*"]
+            known = self.get_known_rdis()
+            return known if known else ["*"]
 
         cert = self._validate_client_cert(request)
         if cert is None:
