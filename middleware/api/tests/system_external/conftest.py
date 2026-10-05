@@ -173,17 +173,34 @@ def client(
         yield c
 
 
+def _delete_gitlab_project(gitlab_api: Gitlab, project_id: int, project_label: str) -> None:
+    """Schedule deletion, then permanently remove when the instance allows it.
+
+    DataHUB uses delayed deletion: a plain ``delete()`` only renames the path to
+    ``{path}-deletion_scheduled-{id}``, which blocks recreating the same ``arc_id``
+    path and poisons fuzzy project search in e2e helpers.
+    """
+    full_project = gitlab_api.projects.get(project_id)
+    full_path = full_project.path_with_namespace
+    if not getattr(full_project, "marked_for_deletion_on", None):
+        full_project.delete()
+        full_project = gitlab_api.projects.get(project_id)
+        full_path = full_project.path_with_namespace
+    try:
+        full_project.delete(permanently_remove=True, full_path=full_path)
+        print(f"Permanently deleted test project: {project_label}")
+    except GitlabError as permanent_error:
+        print(f"Scheduled deletion for {project_label} (permanent remove unavailable: {permanent_error})")
+
+
 @pytest.fixture(scope="session", autouse=True)
 def cleanup_gitlab_group(gitlab_group: Any, gitlab_api: Gitlab) -> None:  # pylint: disable=redefined-outer-name
     """Cleanup the Gitlab group before tests."""
     if gitlab_group is None:
         return
-    # delete all projects in the group
     for project in gitlab_group.projects.list(all=True):
         try:
-            full_project = gitlab_api.projects.get(project.id)
-            full_project.delete()
-            print(f"Deleted test project: {project.name}")
+            _delete_gitlab_project(gitlab_api, project.id, project.name)
         except GitlabError as e:
             print(f"Failed to delete project {project.name}: {e}")
 

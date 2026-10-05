@@ -6,28 +6,47 @@ import http
 import json
 import os
 import time
+import uuid
 from pathlib import Path
 from typing import Any
 
 import pytest
 from fastapi.testclient import TestClient
 from gitlab import Gitlab, GitlabError
+from gitlab.v4.objects import Project
 
 # ---------------------------------------------------------------------------
 # GitLab project verification helpers
 # ---------------------------------------------------------------------------
 
 
+def _live_gitlab_project(gitlab_api: Gitlab, config: dict[str, Any], arc_id: str) -> Project | None:
+    """Return the live (not soft-deleted) GitLab project for *arc_id*, if any.
+
+    DataHUB/GitLab delayed deletion renames paths to ``{path}-deletion_scheduled-{id}``.
+    Fuzzy ``search=arc_id`` matches those ghosts and made e2e tests observe stale SHAs.
+    """
+    group_name = config["arc_store"]["git_repo"]["group"].lower()
+    try:
+        group = gitlab_api.groups.get(group_name)
+        project = gitlab_api.projects.get(f"{group.full_path}/{arc_id}")
+    except GitlabError:
+        return None
+    if project.path != arc_id:
+        return None
+    if getattr(project, "marked_for_deletion_on", None):
+        return None
+    return project
+
+
 def _verify_gitlab_project(gitlab_api: Gitlab, config: dict[str, Any], json_info: dict[str, Any]) -> bool:
     """Verify that the project was created in GitLab and contains the expected file."""
-    group_name = config["arc_store"]["git_repo"]["group"].lower()
-    group = gitlab_api.groups.get(group_name)
-    arc_id = hashlib.sha256(f"{json_info['identifier']}:rdi-1".encode()).hexdigest()
+    rdi = str(json_info.get("_rdi") or "rdi-1")
+    arc_id = hashlib.sha256(f"{json_info['identifier']}:{rdi}".encode()).hexdigest()
     try:
-        projects = group.projects.list(search=arc_id)
-        if not projects:
+        project = _live_gitlab_project(gitlab_api, config, arc_id)
+        if project is None:
             return False
-        project = gitlab_api.projects.get(projects[0].id)
         project.files.get(file_path="isa.investigation.xlsx", ref="main")
         return True
     except GitlabError:
@@ -158,19 +177,21 @@ def _get_latest_commit_sha(
 
     Returns ``None`` when the project does not yet exist or has no commits.
     """
-    group_name = config["arc_store"]["git_repo"]["group"].lower()
     try:
-        group = gitlab_api.groups.get(group_name)
-        projects = group.projects.list(search=arc_id)
-        if not projects:
+        project = _live_gitlab_project(gitlab_api, config, arc_id)
+        if project is None:
             return None
-        project = gitlab_api.projects.get(projects[0].id)
         commits = project.commits.list(ref_name="main", per_page=1, get_all=False)
         if not commits:
             return None
         return str(commits[0].id)
     except GitlabError:
         return None
+
+
+def _unique_identifier(prefix: str) -> str:
+    """Build a per-run identifier so GitLab paths do not collide with soft-deleted ghosts."""
+    return f"{prefix}-{uuid.uuid4().hex[:12]}"
 
 
 def _wait_for_commit_change(
@@ -232,7 +253,7 @@ def test_new_arc_created_in_gitlab_via_harvest(
     config: dict[str, Any],
 ) -> None:
     """A brand-new ARC submitted via the harvest flow must appear as a GitLab project."""
-    identifier = "test-e2e-new-arc"
+    identifier = _unique_identifier("test-e2e-new-arc")
     rdi = "rdi-1"
     arc_data = _arc_for_identifier(identifier)
     headers = _harvest_headers(cert)
@@ -260,7 +281,7 @@ def test_changed_arc_creates_new_commit_in_gitlab(
     config: dict[str, Any],
 ) -> None:
     """Re-submitting an ARC with changed content must produce a new Git commit."""
-    identifier = "test-e2e-update-arc"
+    identifier = _unique_identifier("test-e2e-update-arc")
     rdi = "rdi-1"
     arc_id = _arc_id_for(identifier, rdi)
     headers = _harvest_headers(cert)
@@ -274,11 +295,12 @@ def test_changed_arc_creates_new_commit_in_gitlab(
     sha_a = _get_latest_commit_sha(gitlab_api, config, arc_id)
     assert sha_a is not None  # nosec
 
-    # --- second harvest: update (add a title field) ---
+    # --- second harvest: update (RO-Crate name → Investigation Title in isa.investigation.xlsx) ---
+    # Note: schema.org "title" is ignored by ARCtrl Write; only "name"/"description" change XLSX bytes.
     arc_v2 = copy.deepcopy(arc_v1)
     for node in arc_v2.get("@graph", []):
         if node.get("@id") == "./" and node.get("@type") == "Dataset":
-            node["title"] = "Updated title for e2e test"
+            node["name"] = "Updated name for e2e test"
             break
 
     result_v2 = _submit_arc_via_harvest(client, headers, rdi, arc_v2)
@@ -299,7 +321,7 @@ def test_unchanged_arc_does_not_trigger_git_push(
     config: dict[str, Any],
 ) -> None:
     """Re-submitting an identical ARC must NOT create a new Git commit."""
-    identifier = "test-e2e-unchanged-arc"
+    identifier = _unique_identifier("test-e2e-unchanged-arc")
     rdi = "rdi-1"
     arc_id = _arc_id_for(identifier, rdi)
     headers = _harvest_headers(cert)
@@ -327,7 +349,7 @@ def test_same_arc_different_rdis_creates_separate_gitlab_projects(
     config: dict[str, Any],
 ) -> None:
     """The same ARC submitted under two RDIs must produce two independent GitLab projects."""
-    identifier = "test-e2e-two-rdis"
+    identifier = _unique_identifier("test-e2e-two-rdis")
     rdi_1 = "rdi-1"
     rdi_2 = "rdi-2"
     arc_data = _arc_for_identifier(identifier)

@@ -7,7 +7,7 @@ requires-python = ">=3.12"
 dependencies = [
   "fairagro-middleware-shared",
   "aiocouch>=4.0.1",
-  "arctrl>=3.1.1",
+  "arctrl>=3.2.2",
   "asn1crypto>=1.5.1",
   "celery>=5.3.6",
   "cryptography>=45.0.6",
