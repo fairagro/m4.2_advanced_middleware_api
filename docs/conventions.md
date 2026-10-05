@@ -36,10 +36,12 @@ supported host `~/.config/…` token store — personal-token helpers (`dev-toke
 [`docs/devcontainer.md`](devcontainer.md#bashrc-free-shell-init-no-load-envsh); do **not** patch `~/.bashrc` for tokens
 or load-env.
 
-**Store is the sole source:** sourcing `dev-tokens.sh` (including via `scripts/bin/gh`) always applies
-`/commandhistory/tokens.env` for `GH_TOKEN` / `GITGUARDIAN_API_KEY`. A non-empty process env value does **not** override
-the store (stale agent `GH_TOKEN` cannot shadow a freshly written store). Missing or empty store entries unset the
-variable. Set or refresh tokens with `source ./scripts/set-dev-tokens.sh`.
+**Store vs host:** sourcing `dev-tokens.sh` (including via `scripts/bin/gh` / `scripts/bin/git`) applies
+`/commandhistory/tokens.env` for `GH_TOKEN` / `GITGUARDIAN_API_KEY`. A non-empty store value wins over process/host env
+(stale agent `GH_TOKEN` cannot shadow a freshly written store). Missing or empty store keys **keep** a non-empty
+process/host value (e.g. `remoteEnv` `${localEnv:…}`). Default sourcing is **load-only** (no TTY prompt) so Cursor SCM
+`git` polls stay quiet. Prompting happens only from `scripts/bin/gh` (when still empty on a TTY) or
+`source ./scripts/set-dev-tokens.sh` (force / override).
 
 ## Docker volumes
 
