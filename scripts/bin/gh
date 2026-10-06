@@ -1,11 +1,22 @@
 #!/usr/bin/env bash
-# PATH wrapper: prompt/load GH_TOKEN, then exec real gh.
+# PATH wrapper: load GH_TOKEN (prompt on TTY when missing), then exec real gh.
 # Environment: Linux Dev Container only (scripts/bin on PATH via remoteEnv; token store).
+# Prompting is opt-in via DEV_TOKENS_PROMPT so scripts/bin/git can load tokens silently.
 set -euo pipefail
 _gh_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 _gh_self="${_gh_dir}/$(basename "${BASH_SOURCE[0]}")"
+_gh_prompt_prev="${DEV_TOKENS_PROMPT-}"
+_gh_prompt_had=0
+[ "${DEV_TOKENS_PROMPT+x}" = x ] && _gh_prompt_had=1
+export DEV_TOKENS_PROMPT=1
 # shellcheck source=scripts/dev-tokens.sh
 source "${_gh_dir}/../dev-tokens.sh"
+if [ "${_gh_prompt_had}" -eq 1 ]; then
+  export DEV_TOKENS_PROMPT="${_gh_prompt_prev}"
+else
+  unset DEV_TOKENS_PROMPT
+fi
+unset _gh_prompt_prev _gh_prompt_had
 if [ -z "${GH_TOKEN:-}" ]; then
   echo "gh: no GH_TOKEN — run: source ./scripts/set-dev-tokens.sh (or open a terminal if never asked)" >&2
   exit 1

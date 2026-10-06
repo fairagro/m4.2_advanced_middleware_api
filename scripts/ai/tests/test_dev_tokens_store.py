@@ -93,6 +93,40 @@ test "${{GH_TOKEN}}" = "store-override"
     subprocess.run(["bash", "-c", script], check=True, cwd=REPO_ROOT)
 
 
+def test_default_source_does_not_prompt_on_tty(tmp_path: Path) -> None:
+    """Load-only: empty store + TTY must not hang waiting for input (#286)."""
+    store = tmp_path / "tokens.env"
+    store.write_text("", encoding="utf-8")
+    script = f"""
+set -euo pipefail
+export DEV_TOKENS_FILE={store!s}
+unset DEV_TOKENS_FORCE DEV_TOKENS_PROMPT GH_TOKEN GITGUARDIAN_API_KEY || true
+# shellcheck disable=SC1091
+source {DEV_TOKENS!s}
+test -z "${{GH_TOKEN-}}"
+test -z "${{GITGUARDIAN_API_KEY-}}"
+"""
+    master, slave = pty.openpty()
+    try:
+        proc = subprocess.Popen(
+            ["bash", "-c", script],
+            stdin=slave,
+            stdout=slave,
+            stderr=subprocess.PIPE,
+            cwd=REPO_ROOT,
+            text=True,
+        )
+        os.close(slave)
+        slave = -1
+        status = proc.wait(timeout=5)
+        err = proc.stderr.read() if proc.stderr else ""
+        assert status == 0, f"script failed ({status}): {err}"
+    finally:
+        if slave >= 0:
+            os.close(slave)
+        os.close(master)
+
+
 def test_empty_tty_answer_does_not_write_skip_marker(tmp_path: Path) -> None:
     store = tmp_path / "tokens.env"
     store.write_text("", encoding="utf-8")
