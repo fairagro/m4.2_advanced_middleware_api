@@ -218,15 +218,23 @@ def _upsert_comments(graph: list[JsonValue], values: dict[str, str]) -> None:
         shared_ids=shared_ids,
     )
 
+    keep_ids: set[str] = set()
+    for item in keep:
+        if isinstance(item, dict):
+            item_id = item.get("@id")
+            if isinstance(item_id, str):
+                keep_ids.add(item_id)
     new_comment_ids: list[str] = []
     for name, text in values.items():
         comment_id = _STABLE_COMMENT_IDS[name]
-        keep.append({
-            "@id": comment_id,
-            "@type": "Comment",
-            "name": name,
-            "text": text,
-        })
+        if comment_id not in keep_ids:
+            keep.append({
+                "@id": comment_id,
+                "@type": "Comment",
+                "name": name,
+                "text": text,
+            })
+            keep_ids.add(comment_id)
         new_comment_ids.append(comment_id)
 
     retained_refs = _retained_comment_refs(root.get("comment"), root_rdi_ids)

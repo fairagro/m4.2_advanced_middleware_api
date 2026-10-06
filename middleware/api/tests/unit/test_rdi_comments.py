@@ -141,6 +141,43 @@ def test_enrich_ignores_study_rdi_comment_conflict() -> None:
     assert study_comments[COMMENT_NAME_URL] == "https://study.example"
 
 
+def test_enrich_does_not_duplicate_shared_stable_comment_ids() -> None:
+    """Root + Study sharing a stable Comment @id must not produce two graph nodes."""
+    crate: RoCrateContent = {
+        "@context": "https://w3id.org/ro/crate/1.1/context",
+        "@graph": [
+            {
+                "@id": "./",
+                "@type": "Dataset",
+                "comment": {"@id": "#Comment_RDI"},
+            },
+            {
+                "@id": "#study-s1",
+                "@type": "Study",
+                "comment": {"@id": "#Comment_RDI"},
+            },
+            {
+                "@id": "#Comment_RDI",
+                "@type": "Comment",
+                "name": COMMENT_NAME_RDI,
+                "text": "edal",
+            },
+        ],
+    }
+    enrich_investigation_rdi_comments(crate, rdi="edal", description="desc", url="https://edal.example")
+    graph_ids = [node.get("@id") for node in _graph_nodes(crate)]
+    assert graph_ids.count("#Comment_RDI") == 1
+    comments = [node for node in _graph_nodes(crate) if node.get("@id") == "#Comment_RDI"]
+    assert comments == [
+        {
+            "@id": "#Comment_RDI",
+            "@type": "Comment",
+            "name": COMMENT_NAME_RDI,
+            "text": "edal",
+        }
+    ]
+
+
 def test_enrich_keeps_shared_study_rdi_comment_nodes() -> None:
     """Shared investigation/study Comment nodes stay in the graph for the study."""
     crate = _rocrate_with_study_rdi_comments(
