@@ -7,7 +7,7 @@ PR → main
   feature-pull-request.yml
     ├─ reusable-code-quality.yml
     ├─ reusable-build.yml (push=false)
-    ├─ reusable-check.yml
+    ├─ reusable-check-local.yml
     └─ reusable-helm-lint.yml
 
 workflow_dispatch pre-release (any branch)
@@ -36,7 +36,8 @@ Reusable workflows separate responsibilities:
 - `reusable-code-quality.yml`: Ruff, Pylint, MyPy, Bandit, and pytest.
 - `reusable-build.yml`: version calculation, Docker and Python package builds, and SBOM generation.
 
-- `reusable-check.yml`: licence, vulnerability, and container structure checks.
+- `reusable-check.yml`: licence, vulnerability, and container structure checks (Feature PRs use product-local
+  `reusable-check-local.yml` until Devinfra #74).
 - `reusable-helm-lint.yml`: Feature-PR `helm lint` plus optional default-values `helm template` smoke.
 - `reusable-release.yml`: independent external upload jobs, Git tags, and GitHub Release creation.
 
@@ -76,9 +77,10 @@ Docker build/scan and Helm lint. Helm-only changes skip Docker build/scan and ru
 MUST NOT live only in the Docker `code` filter.
 
 Required checks cannot be job-skipped because that leaves branch protection without a status.
-`reusable-code-quality.yml`, `reusable-check.yml`, and `reusable-helm-lint.yml` accept a boolean `skip` input; they
-still run a successful no-op step when it is true, while every substantive step is guarded. Non-required build, licence,
-and security jobs retain normal job-level guards.
+`reusable-code-quality.yml`, `reusable-check-local.yml` (Feature PR; same `skip` contract as Devinfra
+`reusable-check.yml`), and `reusable-helm-lint.yml` accept a boolean `skip` input; they still run a successful no-op
+step when it is true, while every substantive step is guarded. Non-required build, licence, and security jobs retain
+normal job-level guards.
 
 ### Independent publishing and release reporting
 
