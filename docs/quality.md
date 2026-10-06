@@ -14,6 +14,7 @@ Not every file under `scripts/` is Dev Container-only. Personal-token helpers ar
 | `run-quality-cli.sh`                  | Host or Dev Container  | `uv run --with-requirements scripts/quality-tools-pins.txt` for fleet quality CLIs                                                                       |
 | `run-import-linter.sh`                | Host or Dev Container  | Product `.importlinter`; soft-skips without `middleware/`; uses `run-quality-cli.sh`                                                                     |
 | `run-uv-audit.sh`                     | Host or Dev Container  | Needs `uv` + network to OSV; optional `.uv-audit-ignore`                                                                                                 |
+| `run-helm-lint.sh`                    | Host or Dev Container  | Needs `helm` on `PATH` only when `helmchart/<chart>/` or `helm/<chart>/` exists; pin is Dev Container `HELM_VERSION`                                     |
 | `setup-git-hooks.sh` / `git-hooks/`   | Host or Dev Container  | Dispatcher + `pre-push.d/50-quality`; no `git-lfs` required                                                                                              |
 | `load-versions-env.sh`                | Host or Dev Container  | Reads `versions.env`, writes `.python-version`                                                                                                           |
 | `scripts/ai/` (`m42-ai`)              | Host or Dev Container  | uv workspace member; `uv sync` then `uv run m42-ai` (needs `gh` + auth)                                                                                  |
@@ -57,6 +58,7 @@ products may drop a duplicate `--extension-pkg-allow-list=lxml` CLI flag — tha
 | Vulture                 | **hooks + CI only**                                 | — (CLI policy)       | yes | Named IDE exception; `--min-confidence 100`, no synced whitelist — see below               |
 | import-linter           | **hooks + CI only**                                 | `.importlinter`      | yes | Named IDE exception; **product-owned** config — see below                                  |
 | uv audit                | **hooks + CI only**                                 | — (CLI + overlay)    | yes | Named IDE exception; frozen lockfile CVE gate; needs OSV network — see below               |
+| Helm lint               | **hooks + Feature-PR CI only**                      | yes                  | yes | Named IDE exception; local `run-helm-lint.sh`; CI is `reusable-helm-lint.yml` — see below  |
 | pytest                  | IDE via `pyproject.toml` `testpaths`                | pre-push             | yes | Synced `pytestArgs` stay `[]` — do not hardcode roots in settings                          |
 
 **Bandit severity (named exception):** `.bandit` has no fail-on-severity key. Hooks use Bandit’s `-ll` (report MEDIUM+
@@ -189,7 +191,12 @@ exception is a documented product-local surface that sync does **not** overwrite
 Examples already in the shared skeleton:
 
 - `check-yaml` excludes Go-templated Helm under `helm/**/templates/` and `helmchart/**/templates/` (and vendor skill
-  trees) — safe when those paths are absent.
+  trees) — safe when those paths are absent. Helm validation is the commit-stage `helm-lint` hook
+  ([`scripts/run-helm-lint.sh`](../scripts/run-helm-lint.sh)): `helm lint` plus default-values `helm template` smoke on
+  each `helmchart/<chart>/` or `helm/<chart>/` with `Chart.yaml`. No such chart → no-op (Helm not required). Charts
+  without `helm` on `PATH` fail closed (use the Dev Container pin from `versions.env` `HELM_VERSION`). Feature-PR CI
+  still uses [`reusable-helm-lint.yml`](ci.md#reusable-helm-lintyml) with a **separate** chart detect-changes filter —
+  do not put chart paths only in the Docker `code` bag. IDE Helm extensions are optional and are **not** the gate.
 - Commit-stage `prettier-md` (`npm run format:md` write) and `markdownlint` (`npm run lint:md`) share the same `files` /
   `exclude` class for `*.md` / `*.mdc`. Escape hatch only: `SKIP=prettier-md` or `SKIP=markdownlint` (same class as
   other Node markdown hooks — not the normal workflow). Like `ruff-format`, Prettier rewrites on commit; re-stage
