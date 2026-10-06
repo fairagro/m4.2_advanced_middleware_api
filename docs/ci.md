@@ -510,7 +510,9 @@ Feature-PR chart gate (lint + optional template smoke). Does **not** package or 
 | `run_template` | `true`     | Also run `helm template` smoke (chart default values) |
 
 Helm CLI version comes from the caller’s `versions.env` (`HELM_VERSION`). Wire with a **separate** detect-changes output
-for chart roots (`helmchart/**` or `helm/**`); see the Feature PR example above.
+for chart roots (`helmchart/**` or `helm/**`); see the Feature PR example above. Local commit-stage lint is the synced
+`helm-lint` hook (`scripts/run-helm-lint.sh`) — see [`docs/quality.md`](quality.md); it does **not** replace this
+Feature-PR reusable.
 
 ### `reusable-helm-release.yml` / `reusable-helm-pre-release.yml`
 
