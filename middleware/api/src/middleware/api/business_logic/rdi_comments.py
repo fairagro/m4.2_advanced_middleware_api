@@ -37,7 +37,7 @@ def enrich_investigation_rdi_comments(
         msg = "RO-Crate @graph must be a list"
         raise InvalidJsonSemanticError(msg)
 
-    existing_rdi = _find_comment_text(graph, COMMENT_NAME_RDI)
+    existing_rdi = _find_investigation_comment_text(graph, COMMENT_NAME_RDI)
     if existing_rdi is not None:
         trimmed = existing_rdi.strip()
         if trimmed and trimmed != rdi:
@@ -80,14 +80,59 @@ def _comment_text(node: RoCrateGraphNode) -> str | None:
     return value if isinstance(value, str) else None
 
 
-def _find_comment_text(graph: list[JsonValue], name: str) -> str | None:
+def _comment_ref_ids(existing_refs: JsonValue | None) -> set[str]:
+    ids: set[str] = set()
+    for ref in _iter_comment_refs(existing_refs):
+        ref_id = _ref_id(ref)
+        if ref_id is not None:
+            ids.add(ref_id)
+    return ids
+
+
+def _nodes_by_id(graph: list[JsonValue]) -> dict[str, RoCrateGraphNode]:
+    by_id: dict[str, RoCrateGraphNode] = {}
     for item in graph:
         if not isinstance(item, dict):
             continue
-        node: RoCrateGraphNode = item
+        node_id = item.get("@id")
+        if isinstance(node_id, str):
+            by_id[node_id] = item
+    return by_id
+
+
+def _find_investigation_comment_text(graph: list[JsonValue], name: str) -> str | None:
+    """Read a Comment linked from the root dataset only (not Study/Assay comments)."""
+    root = _root_dataset(graph)
+    by_id = _nodes_by_id(graph)
+    for ref_id in _comment_ref_ids(root.get("comment")):
+        node = by_id.get(ref_id)
+        if node is None:
+            continue
         if _is_comment_node(node) and _comment_name(node) == name:
             return _comment_text(node)
     return None
+
+
+def _non_root_comment_ref_ids(graph: list[JsonValue]) -> set[str]:
+    referenced: set[str] = set()
+    for item in graph:
+        if not isinstance(item, dict) or item.get("@id") == "./":
+            continue
+        referenced.update(_comment_ref_ids(item.get("comment")))
+    return referenced
+
+
+def _investigation_rdi_comment_ids(graph: list[JsonValue], root: RoCrateGraphNode) -> set[str]:
+    """Root-linked Comment ``@id``s whose name is one of the RDI Investigation Comments."""
+    by_id = _nodes_by_id(graph)
+    matched: set[str] = set()
+    for ref_id in _comment_ref_ids(root.get("comment")):
+        node = by_id.get(ref_id)
+        if node is None:
+            continue
+        if _is_comment_node(node) and _comment_name(node) in _RDI_COMMENT_NAMES:
+            matched.add(ref_id)
+    return matched
 
 
 def _root_dataset(graph: list[JsonValue]) -> RoCrateGraphNode:
@@ -105,25 +150,7 @@ def _ref_id(ref: JsonValue) -> str | None:
     return None
 
 
-def _strip_rdi_comment_nodes(graph: list[JsonValue]) -> tuple[list[JsonValue], set[str]]:
-    """Remove RDI Comment nodes; return remaining graph nodes and removed ``@id``s."""
-    removed_ids: set[str] = set()
-    keep: list[JsonValue] = []
-    for item in graph:
-        if not isinstance(item, dict):
-            keep.append(item)
-            continue
-        node: RoCrateGraphNode = item
-        if _is_comment_node(node) and _comment_name(node) in _RDI_COMMENT_NAMES:
-            node_id = node.get("@id")
-            if isinstance(node_id, str):
-                removed_ids.add(node_id)
-            continue
-        keep.append(item)
-    return keep, removed_ids
-
-
-def _iter_comment_refs(existing_refs: JsonValue) -> list[JsonValue]:
+def _iter_comment_refs(existing_refs: JsonValue | None) -> list[JsonValue]:
     if isinstance(existing_refs, list):
         return list(existing_refs)
     if isinstance(existing_refs, dict):
@@ -131,7 +158,7 @@ def _iter_comment_refs(existing_refs: JsonValue) -> list[JsonValue]:
     return []
 
 
-def _retained_comment_refs(existing_refs: JsonValue, removed_ids: set[str]) -> list[JsonObject]:
+def _retained_comment_refs(existing_refs: JsonValue | None, drop_ids: set[str]) -> list[JsonObject]:
     """Keep non-RDI comment links from the root dataset."""
     retained: list[JsonObject] = []
     stable_ids = set(_STABLE_COMMENT_IDS.values())
@@ -141,15 +168,40 @@ def _retained_comment_refs(existing_refs: JsonValue, removed_ids: set[str]) -> l
             if isinstance(ref, dict):
                 retained.append(ref)
             continue
-        if ref_id in removed_ids or ref_id in stable_ids:
+        if ref_id in drop_ids or ref_id in stable_ids:
             continue
         retained.append({"@id": ref_id})
     return retained
 
 
+def _strip_unshared_investigation_rdi_nodes(
+    graph: list[JsonValue],
+    *,
+    root_rdi_ids: set[str],
+    shared_ids: set[str],
+) -> list[JsonValue]:
+    """Drop Investigation RDI Comment nodes that no other entity still references."""
+    keep: list[JsonValue] = []
+    for item in graph:
+        if not isinstance(item, dict):
+            keep.append(item)
+            continue
+        node_id = item.get("@id")
+        if isinstance(node_id, str) and node_id in root_rdi_ids and node_id not in shared_ids:
+            continue
+        keep.append(item)
+    return keep
+
+
 def _upsert_comments(graph: list[JsonValue], values: dict[str, str]) -> None:
     root = _root_dataset(graph)
-    keep, removed_ids = _strip_rdi_comment_nodes(graph)
+    root_rdi_ids = _investigation_rdi_comment_ids(graph, root)
+    shared_ids = root_rdi_ids & _non_root_comment_ref_ids(graph)
+    keep = _strip_unshared_investigation_rdi_nodes(
+        graph,
+        root_rdi_ids=root_rdi_ids,
+        shared_ids=shared_ids,
+    )
 
     new_comment_ids: list[str] = []
     for name, text in values.items():
@@ -162,7 +214,7 @@ def _upsert_comments(graph: list[JsonValue], values: dict[str, str]) -> None:
         })
         new_comment_ids.append(comment_id)
 
-    retained_refs = _retained_comment_refs(root.get("comment"), removed_ids)
+    retained_refs = _retained_comment_refs(root.get("comment"), root_rdi_ids)
     new_refs: list[JsonObject] = [{"@id": cid} for cid in new_comment_ids]
     root["comment"] = [*retained_refs, *new_refs]
     graph[:] = keep

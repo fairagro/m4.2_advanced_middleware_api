@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 
 import pytest
-from arctrl import ARC
+from arctrl import ARC, ArcInvestigation, ArcStudy, Comment
 from rocrate_fixtures import minimal_rocrate_dict
 
 from middleware.api.business_logic.exceptions import InvalidJsonSemanticError
@@ -107,3 +107,50 @@ def test_enrich_round_trip_through_arctrl() -> None:
     assert by_name[COMMENT_NAME_RDI] == "edal"
     assert by_name[COMMENT_NAME_DESCRIPTION] == "desc"
     assert by_name[COMMENT_NAME_URL] == "https://edal.example"
+
+
+def _rocrate_with_study_rdi_comments(*, investigation_rdi: str, study_rdi: str, study_url: str) -> RoCrateContent:
+    """Build a crate whose Study Comments reuse RDI names (arctrl graph flattening)."""
+    inv = ArcInvestigation.create(identifier="inv-rdi-test", title="T", description="d")
+    inv.Comments.append(Comment.create(COMMENT_NAME_RDI, investigation_rdi))
+    arc_obj = ARC.from_arc_investigation(inv)
+    study = ArcStudy.create(identifier="S1", title="Study 1")
+    study.Comments.append(Comment.create(COMMENT_NAME_RDI, study_rdi))
+    study.Comments.append(Comment.create(COMMENT_NAME_URL, study_url))
+    arc_obj.AddRegisteredStudy(study)
+    payload = json.loads(arc_obj.ToROCrateJsonString())
+    assert isinstance(payload, dict)
+    return payload
+
+
+def test_enrich_ignores_study_rdi_comment_conflict() -> None:
+    """Study Comment[RDI] must not 422 when Investigation Comment[RDI] matches."""
+    crate = _rocrate_with_study_rdi_comments(
+        investigation_rdi="edal",
+        study_rdi="other",
+        study_url="https://study.example",
+    )
+    enrich_investigation_rdi_comments(crate, rdi="edal", description="desc", url="https://edal.example")
+    parsed = ARC.from_rocrate_json_string(json.dumps(crate))
+    inv_comments = {c.Name: c.Value for c in parsed.Comments}
+    assert inv_comments[COMMENT_NAME_RDI] == "edal"
+    study = next(s for s in parsed.Studies if s.Identifier == "S1")
+    study_comments = {c.Name: c.Value for c in study.Comments}
+    assert study_comments[COMMENT_NAME_RDI] == "other"
+    assert study_comments[COMMENT_NAME_URL] == "https://study.example"
+
+
+def test_enrich_keeps_shared_study_rdi_comment_nodes() -> None:
+    """Shared investigation/study Comment nodes stay in the graph for the study."""
+    crate = _rocrate_with_study_rdi_comments(
+        investigation_rdi="edal",
+        study_rdi="edal",
+        study_url="https://study.example",
+    )
+    enrich_investigation_rdi_comments(crate, rdi="edal", description="desc", url="https://edal.example")
+    parsed = ARC.from_rocrate_json_string(json.dumps(crate))
+    assert {c.Name: c.Value for c in parsed.Comments}[COMMENT_NAME_RDI] == "edal"
+    study = next(s for s in parsed.Studies if s.Identifier == "S1")
+    study_comments = {c.Name: c.Value for c in study.Comments}
+    assert study_comments[COMMENT_NAME_RDI] == "edal"
+    assert study_comments[COMMENT_NAME_URL] == "https://study.example"

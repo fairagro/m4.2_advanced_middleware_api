@@ -127,6 +127,23 @@ def test_config_validate_known_rdis_invalid(tmp_path: Path) -> None:
     assert "Invalid RDI identifier" in str(exc.value)
 
 
+def test_config_validate_known_rdis_rejects_duplicate_ids(tmp_path: Path) -> None:
+    """Duplicate RDI identifiers in known_rdis fail validation."""
+    config_data = {
+        "known_rdis": [{"id": "edal"}, {"id": "edal", "description": "dup"}],
+        "arc_store": {
+            "git_repo": {
+                **_git_repo(tmp_path),
+                "rdi_gitlab_topics": {"edal": "e!DAL"},
+            },
+        },
+        "couchdb": {"url": "http://localhost:5984"},
+        "celery": {"broker_url": "memory://"},
+    }
+    with pytest.raises(ValidationError, match="Duplicate RDI identifier"):
+        Config.model_validate(config_data)
+
+
 def test_config_parse_client_auth_oid_str(tmp_path: Path) -> None:
     """Test parsing OID from string."""
     oid_str = "1.2.3.4"

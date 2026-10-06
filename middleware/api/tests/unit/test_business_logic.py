@@ -81,7 +81,9 @@ def mock_consolidated_store() -> MagicMock:
 @pytest.fixture
 def mock_config() -> MagicMock:
     """Mock Config."""
-    return MagicMock()
+    config = MagicMock()
+    config.known_rdis = []
+    return config
 
 
 @pytest.fixture
@@ -766,6 +768,7 @@ def test_factory_create_api_mode() -> None:
     """Test factory creates API mode BusinessLogic."""
     config = MagicMock()
     config.couchdb = MagicMock()
+    config.known_rdis = []
 
     with (
         patch("middleware.api.business_logic.business_logic_factory.CouchDB"),
