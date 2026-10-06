@@ -123,6 +123,14 @@ repos:
         pass_filenames: false
         exclude: ^\.agents/skills/(gh|docker|hadolint|uv|scan-secrets)/
 
+      - id: helm-lint
+        name: helm lint
+        # Discovers helmchart/<chart>/ and helm/<chart>/; no-op without charts (scripts/run-helm-lint.sh).
+        entry: bash scripts/run-helm-lint.sh
+        language: system
+        files: ^(helm|helmchart)/
+        pass_filenames: false
+
       - id: pytest
         name: pytest
         entry: >-
