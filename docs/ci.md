@@ -8,6 +8,7 @@ Canonical GitHub Actions for the three m4.2 product repos live in this repositor
 | Image / SBOM checks           | [`.github/workflows/reusable-check.yml`](https://github.com/fairagro/m4.2_middleware_devinfra/blob/main/.github/workflows/reusable-check.yml)                                                |
 | Docker build                  | [`.github/workflows/reusable-build.yml`](https://github.com/fairagro/m4.2_middleware_devinfra/blob/main/.github/workflows/reusable-build.yml)                                                |
 | Docker release                | [`.github/workflows/reusable-release.yml`](https://github.com/fairagro/m4.2_middleware_devinfra/blob/main/.github/workflows/reusable-release.yml)                                            |
+| Helm lint (Feature PR)        | [`.github/workflows/reusable-helm-lint.yml`](https://github.com/fairagro/m4.2_middleware_devinfra/blob/main/.github/workflows/reusable-helm-lint.yml)                                        |
 | Helm final release            | [`.github/workflows/reusable-helm-release.yml`](https://github.com/fairagro/m4.2_middleware_devinfra/blob/main/.github/workflows/reusable-helm-release.yml)                                  |
 | Helm pre-release              | [`.github/workflows/reusable-helm-pre-release.yml`](https://github.com/fairagro/m4.2_middleware_devinfra/blob/main/.github/workflows/reusable-helm-pre-release.yml)                          |
 | Registry retry                | [`.github/workflows/reusable-registry-retry.yml`](https://github.com/fairagro/m4.2_middleware_devinfra/blob/main/.github/workflows/reusable-registry-retry.yml) — existing release only      |
@@ -150,11 +151,12 @@ a substitute for Trivy on images. See
 
 Bump the product `uses:` ref after this policy lands so callers pick up report-only Licence Check.
 
-### Feature PR (Docker build + check)
+### Feature PR (Docker build + check + Helm lint)
 
 Recommended product caller: cancel in-progress runs on the same PR, keep `detect-changes` **product-local**, and pass
-`skip` into the shared reusables. Outer Devinfra reusables also declare complementary `concurrency` (see below); that
-does **not** replace this caller-level cancel for the full pipeline.
+`skip` into the shared reusables (including a **separate** chart filter for `reusable-helm-lint`). Outer Devinfra
+reusables also declare complementary `concurrency` (see below); that does **not** replace this caller-level cancel for
+the full pipeline.
 
 ```yaml
 name: Feature Pull Request
@@ -174,6 +176,7 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       code: ${{ steps.changes.outputs.code }}
+      helm: ${{ steps.changes.outputs.helm }}
     steps:
       - uses: actions/checkout@v7
       - uses: dorny/paths-filter@v4
@@ -192,6 +195,10 @@ jobs:
               - '.bandit'
               - 'versions.env'
               # Products may extend, e.g. stubs/, dev_environment/**
+              # Do NOT put chart paths only here — that forces Docker build/check without linting charts.
+            helm:
+              - 'helmchart/**'
+              # Other products: 'helm/**' (or the product chart root)
 
   code-quality:
     needs: [detect-changes]
@@ -221,10 +228,19 @@ jobs:
       image_base_name: fairagro-advanced-middleware
       skip: ${{ needs.detect-changes.outputs.code != 'true' || needs.build.result != 'success' }}
     secrets: inherit
+
+  helm-lint:
+    needs: [detect-changes]
+    uses: fairagro/m4.2_middleware_devinfra/.github/workflows/reusable-helm-lint.yml@main
+    with:
+      chart_dir: helmchart/fairagro-advanced-middleware-api-chart
+      skip: ${{ needs.detect-changes.outputs.helm != 'true' }}
 ```
 
 `detect-changes` / `skip` stay a **caller** responsibility. Suggested `code` paths above are a fleet default — extend
-for product-only trees (e.g. `stubs/`, `dev_environment/**`).
+for product-only trees (e.g. `stubs/`, `dev_environment/**`). Chart-only PRs should skip Docker build/check via `code`
+while still running `helm-lint` when the `helm` filter matches. **Do not** treat “add `helmchart/**` to the Docker
+`code` filter alone” as chart validation.
 
 ### Post-merge main (Docker build + check → Code Scanning)
 
@@ -482,6 +498,19 @@ GHCR image tag shape: `ghcr.io/<ghcr_namespace>/<image_base_name>-<component>:<v
 naming).
 
 When `create_github_release` is false, no git tag or GitHub Release is created (image pushes still run).
+
+### `reusable-helm-lint.yml`
+
+Feature-PR chart gate (lint + optional template smoke). Does **not** package or publish.
+
+| Input          | Default    | Purpose                                               |
+| -------------- | ---------- | ----------------------------------------------------- |
+| `chart_dir`    | (required) | Chart path in caller checkout                         |
+| `skip`         | `false`    | No-op success path when no chart paths changed        |
+| `run_template` | `true`     | Also run `helm template` smoke (chart default values) |
+
+Helm CLI version comes from the caller’s `versions.env` (`HELM_VERSION`). Wire with a **separate** detect-changes output
+for chart roots (`helmchart/**` or `helm/**`); see the Feature PR example above.
 
 ### `reusable-helm-release.yml` / `reusable-helm-pre-release.yml`
 
