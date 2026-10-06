@@ -361,7 +361,7 @@ mode) use it to locate affected code.
 
 | Spec domain                          | Primary source file(s)                                                                                                                                                                              |
 | ------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `openspec/specs/arc-manager/`        | `middleware/api/src/middleware/api/business_logic/arc_manager.py`, `rdi_comments.py`; `middleware/api/src/middleware/api/rdi_registry.py`                                                           |
+| `openspec/specs/arc-manager/`        | `middleware/api/src/middleware/api/business_logic/arc_manager.py`, `middleware/api/src/middleware/api/business_logic/rdi_comments.py`; `middleware/api/src/middleware/api/rdi_registry.py`          |
 | `openspec/specs/arc-store/`          | `middleware/api/src/middleware/api/arc_store/git_repo/`, `consolidated_git/`, `factory.py`, `resolution.py`, `arc_store_config.py`, `git_cli_settings.py`, `git_context.py`, `git_cache_cleanup.py` |
 | `openspec/specs/url-str/`            | `middleware/shared/src/middleware/shared/security/url_str.py`, `url_redact.py`                                                                                                                      |
 | `openspec/specs/document-store/`     | `middleware/api/src/middleware/api/document_store/couchdb_client.py`, `couchdb.py`                                                                                                                  |
