@@ -1,6 +1,7 @@
 # Personal GH_TOKEN / GITGUARDIAN_API_KEY. Source this file.
 # Environment: Linux Dev Container only (requires /commandhistory).
-# Precedence: non-empty store wins; else keep non-empty process/host env; else prompt on TTY.
+# Default: load only (store → keep non-empty process/host env). No TTY prompt.
+# Prompt only when DEV_TOKENS_FORCE=1 (set-dev-tokens.sh) or DEV_TOKENS_PROMPT=1 (scripts/bin/gh).
 # Empty prompt is not persisted. Override host: source ./scripts/set-dev-tokens.sh
 # Store: /commandhistory/tokens.env
 
@@ -135,8 +136,12 @@ _dev_tokens_ask() {
   return 0
 }
 
-_dev_tokens_ask GH_TOKEN "GitHub PAT (issues + PRs)"
-_dev_tokens_ask GITGUARDIAN_API_KEY "GitGuardian API key"
+# Load-only by default so Cursor SCM `git` polls / quality scripts never steal the TTY.
+# Interactive ask: set-dev-tokens (FORCE) or the gh wrapper (PROMPT).
+if [ -n "${DEV_TOKENS_FORCE:-}" ] || [ -n "${DEV_TOKENS_PROMPT:-}" ]; then
+  _dev_tokens_ask GH_TOKEN "GitHub PAT (issues + PRs)"
+  _dev_tokens_ask GITGUARDIAN_API_KEY "GitGuardian API key"
+fi
 unset -f _dev_tokens_file _dev_tokens_write _dev_tokens_ask
 unset -f _dev_tokens_decode_raw _dev_tokens_get_stored
 unset _DEV_TOKENS_FILE
