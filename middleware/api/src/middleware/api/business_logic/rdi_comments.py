@@ -1,4 +1,19 @@
-"""Embed authorized source RDI as ISA Investigation Comments in RO-Crate JSON."""
+"""Embed authorized source RDI as ISA Investigation Comments in RO-Crate JSON.
+
+ARCtrl 3.2.x ``ARC.Write`` fails when **one** Comment holder (Investigation, Study,
+Assay, or Person) has two Comments with the same ``name`` — Python surfaces this as
+``TypeError: Object is not iterable`` (https://github.com/nfdi4plants/ARCtrl/issues/641).
+Same names on **different** holders (Investigation ``Comment[RDI]`` plus Study
+``Comment[RDI]``) are valid. This module therefore upserts only Investigation
+Comments linked from the root dataset ``./`` and must not leave two Investigation
+Comments with names ``RDI`` / ``RDI Description`` / ``RDI URL``.
+
+A separate ARCtrl bug duplicates Investigation ``dateModified`` Comments on
+RO-Crate read (https://github.com/nfdi4plants/ARCtrl/issues/642); the harvester
+documents workarounds in
+https://github.com/fairagro/m4.2_middleware_harvester/pull/446. That is out of
+scope here.
+"""
 
 from __future__ import annotations
 

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from pathlib import Path
 
 import pytest
 from arctrl import ARC, ArcInvestigation, ArcStudy, Comment
@@ -154,3 +155,19 @@ def test_enrich_keeps_shared_study_rdi_comment_nodes() -> None:
     study_comments = {c.Name: c.Value for c in study.Comments}
     assert study_comments[COMMENT_NAME_RDI] == "edal"
     assert study_comments[COMMENT_NAME_URL] == "https://study.example"
+
+
+def test_enrich_with_study_rdi_comments_survives_arc_write(tmp_path: Path) -> None:
+    """ARCtrl#641 is per holder: Investigation+Study Comment[RDI] must still Write."""
+    crate = _rocrate_with_study_rdi_comments(
+        investigation_rdi="edal",
+        study_rdi="other",
+        study_url="https://study.example",
+    )
+    enrich_investigation_rdi_comments(crate, rdi="edal", description="desc", url="https://edal.example")
+    parsed = ARC.from_rocrate_json_string(json.dumps(crate))
+    out = tmp_path / "arc"
+    out.mkdir()
+    parsed.Write(str(out))
+    assert (out / "isa.investigation.xlsx").is_file()
+    assert (out / "studies" / "S1" / "isa.study.xlsx").is_file()
