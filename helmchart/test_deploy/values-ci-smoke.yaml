@@ -1,0 +1,16 @@
+# Optional auth overlay (chart values.yaml already ships changeme placeholders for
+# default-values helm lint / template smoke). Keep for explicit CI overlays when
+# Devinfra reusable-helm-lint gains values_file (devinfra#294).
+#
+#   helm template ci-smoke ./helmchart/fairagro-advanced-middleware-api-chart \
+#     -f helmchart/test_deploy/values-ci-smoke.yaml
+
+rabbitmq:
+  auth:
+    username: ci-smoke
+    password: ci-smoke
+
+couchdb:
+  auth:
+    username: ci-smoke
+    password: ci-smoke
