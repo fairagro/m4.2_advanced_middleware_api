@@ -23,6 +23,7 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       code: ${{ steps.filter.outputs.code }}
+      helm: ${{ steps.filter.outputs.helm }}
     steps:
       - uses: actions/checkout@v7
       - uses: dorny/paths-filter@v4
@@ -35,6 +36,8 @@ jobs:
               - 'docker/**'
               - 'scripts/**'
               - '.github/workflows/**'
+            helm:
+              - 'helmchart/**'
 
   code-quality:
     name: Code Quality
@@ -70,4 +73,13 @@ jobs:
       components: '["api"]'
       image_base_name: fairagro-advanced-middleware
       skip: ${{ needs.detect-changes.outputs.code != 'true' }}
+    secrets: inherit
+
+  helm-lint:
+    name: Helm Lint
+    needs: detect-changes
+    uses: fairagro/m4.2_middleware_devinfra/.github/workflows/reusable-helm-lint.yml@main
+    with:
+      chart_dir: helmchart/fairagro-advanced-middleware-api-chart
+      skip: ${{ needs.detect-changes.outputs.helm != 'true' }}
     secrets: inherit
