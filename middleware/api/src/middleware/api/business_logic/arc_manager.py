@@ -390,10 +390,10 @@ class ArcManager:
                         ArcEvent(
                             timestamp=datetime.now(UTC),
                             type=ArcEventType.GIT_PUSH_SKIPPED,
-                            message="Git sync completed with no commit/push (working tree clean)",
+                            message="Git sync completed with no commit/push",
                         ),
                     )
-                    logger.info("Git sync for ARC %s skipped commit/push (no changes)", arc_id)
+                    logger.info("Git sync for ARC %s completed with no commit/push", arc_id)
 
                 span.set_attribute("git.pushed", pushed)
                 span.set_attribute("success", True)
