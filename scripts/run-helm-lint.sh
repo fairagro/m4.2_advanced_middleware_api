@@ -1,7 +1,9 @@
 #!/usr/bin/env bash
-# Commit-stage Helm lint + default-values template smoke.
+# Commit-stage Helm lint + template smoke.
 # Discovers helmchart/<chart>/Chart.yaml and helm/<chart>/Chart.yaml.
 # No charts → success (Helm optional). Charts present → helm on PATH required.
+# Optional overlay: HELM_VALUES_FILE (path relative to repo root) — same -f semantics
+# as Feature-PR reusable input values_file (empty = bare chart).
 # Environment: host or Dev Container. Supported pin: versions.env HELM_VERSION (Dev Container image).
 
 set -euo pipefail
@@ -34,11 +36,20 @@ if ! command -v helm >/dev/null 2>&1; then
   exit 1
 fi
 
+values_args=()
+if [[ -n "${HELM_VALUES_FILE:-}" ]]; then
+  if [[ ! -f "${HELM_VALUES_FILE}" ]]; then
+    echo "helm lint: HELM_VALUES_FILE '${HELM_VALUES_FILE}' does not exist" >&2
+    exit 1
+  fi
+  values_args=(-f "${HELM_VALUES_FILE}")
+fi
+
 echo "helm lint: using $(command -v helm) ($(helm version --short 2>/dev/null || echo unknown)) pin=${helm_pin:-unset}" >&2
 
 for chart in "${charts[@]}"; do
   echo "helm lint: lint ${chart}" >&2
-  helm lint "./${chart}"
+  helm lint "./${chart}" "${values_args[@]}"
   echo "helm lint: template smoke ${chart}" >&2
-  helm template ci-smoke "./${chart}" >/dev/null
+  helm template ci-smoke "./${chart}" "${values_args[@]}" >/dev/null
 done
