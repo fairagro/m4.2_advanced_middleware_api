@@ -316,8 +316,8 @@ Before generating or modifying code, read the relevant specs:
 - **[`openspec/specs/arc-upload/`](openspec/specs/arc-upload/)** — HTTP contract for `POST /v3/arcs`: standalone ARC
   submission (rdi from request body); content-hash idempotent, retry-safe.
 - **[`openspec/specs/harvest-arc-upload/`](openspec/specs/harvest-arc-upload/)** — HTTP contract for
-  `POST /v3/harvests/{harvest_id}/arcs`: harvest-scoped submission; identical re-submit → `200`, conflicting content →
-  `409`.
+  `POST /v3/harvests/{harvest_id}/arcs`: harvest-scoped submission; identical re-submit → `200` (retry-safe),
+  conflicting content / identity mismatch → `409` with persisted per-item harvest errors.
 - **[`openspec/specs/arc-manager/`](openspec/specs/arc-manager/)** — `ArcManager.create_or_update_arc` business logic:
   CouchDB storage, content-hash + harvest-scoped idempotency, Celery dispatch. Shared by both upload endpoints and
   accessible from the worker context.
@@ -328,7 +328,7 @@ Before generating or modifying code, read the relevant specs:
 - **[`openspec/specs/arc-content-hash/`](openspec/specs/arc-content-hash/)** — RO-Crate canonicalization contract for
   `content_hash` (volatile timestamps, `@graph` / reference-list order, Keywords multisets).
 - **[`openspec/specs/harvest-manager/`](openspec/specs/harvest-manager/)** — Harvest run lifecycle, ownership
-  validation, and progress tracking.
+  validation, progress tracking, and typed per-item `errors` on the harvest document / wire response.
 - **[`openspec/specs/admission-control/`](openspec/specs/admission-control/)** — Process-local concurrent request
   admission: at capacity → `503` + `Retry-After` (probes exempt).
 - **[`openspec/specs/rate-limiting/`](openspec/specs/rate-limiting/)** — Process-local per-client rate limits on
@@ -339,8 +339,8 @@ Before generating or modifying code, read the relevant specs:
 **API Client capabilities:**
 
 - **[`openspec/specs/harvest-client/`](openspec/specs/harvest-client/)** — Harvest lifecycle: parallel ARC submission,
-  per-item error collection (`HarvestError`, `HarvestErrorType`), typed statistics (`HarvestStatistics`), and
-  compatibility shim for issue #240.
+  per-item error collection (`HarvestError`, `HarvestErrorType`), merge with server-persisted errors, typed statistics
+  (`HarvestStatistics`), and temporary client shim until #566.
 
 **Shared capabilities:**
 
