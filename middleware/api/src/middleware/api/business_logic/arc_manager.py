@@ -368,23 +368,35 @@ class ArcManager:
                 arc_obj = ARC.from_rocrate_json_string(arc)
 
                 logger.info("Triggering Git storage for ARC %s", arc_id)
-                await self._store.create_or_update(
+                pushed = await self._store.create_or_update(
                     arc_id,
                     arc_obj,
                     rdi=rdi,
                 )
 
-                await self._doc_store.add_event(
-                    arc_id,
-                    ArcEvent(
-                        timestamp=datetime.now(UTC),
-                        type=ArcEventType.GIT_PUSH_SUCCESS,
-                        message="Successfully synchronized to GitLab",
-                    ),
-                )
+                if pushed:
+                    await self._doc_store.add_event(
+                        arc_id,
+                        ArcEvent(
+                            timestamp=datetime.now(UTC),
+                            type=ArcEventType.GIT_PUSH_SUCCESS,
+                            message="Successfully synchronized to GitLab",
+                        ),
+                    )
+                    logger.info("Successfully synced ARC %s to GitLab", arc_id)
+                else:
+                    await self._doc_store.add_event(
+                        arc_id,
+                        ArcEvent(
+                            timestamp=datetime.now(UTC),
+                            type=ArcEventType.GIT_PUSH_SKIPPED,
+                            message="Git sync completed with no commit/push (working tree clean)",
+                        ),
+                    )
+                    logger.info("Git sync for ARC %s skipped commit/push (no changes)", arc_id)
 
+                span.set_attribute("git.pushed", pushed)
                 span.set_attribute("success", True)
-                logger.info("Successfully synced ARC %s to GitLab", arc_id)
 
             except ArcStoreTransientError as e:
                 logger.info("Transient error during GitLab sync for ARC %s: %s", arc_id or "unknown", e)

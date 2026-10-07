@@ -14,8 +14,8 @@ def create_mock_arc_store() -> ArcStore:
     class ConcreteArcStore(ArcStore):
         arc_id = MagicMock()
 
-        async def _create_or_update(self, *_args: object, **_kwargs: object) -> None:
-            pass
+        async def _create_or_update(self, *_args: object, **_kwargs: object) -> bool:  # noqa: PLR6301
+            return False
 
         async def _delete(self, *_args: object, **_kwargs: object) -> None:
             pass

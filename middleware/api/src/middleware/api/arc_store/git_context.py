@@ -235,8 +235,13 @@ class GitContext:
         """Path to the repository directory."""
         return str(self.config.local_path)
 
-    def commit_and_push(self, message: str) -> None:
-        """Add all changes, commit and push."""
+    def commit_and_push(self, message: str) -> bool:
+        """Add all changes, commit and push.
+
+        Returns:
+            ``True`` if a commit and push were performed; ``False`` if the working
+            tree was clean (nothing to commit).
+        """
         if not self.repo:
             msg = "Repository not initialized"
             raise RuntimeError(msg)
@@ -246,7 +251,8 @@ class GitContext:
             if not self.repo.is_dirty(untracked_files=True):
                 logger.info("No changes to commit.")
                 span.set_attribute("git.dirty", False)
-                return
+                span.set_attribute("git.pushed", False)
+                return False
 
             span.set_attribute("git.dirty", True)
 
@@ -258,3 +264,5 @@ class GitContext:
 
             logger.info("Pushing changes to remote branch %s", self.config.branch)
             self._run_git_command("push", self.repo.remotes.origin.push, self.config.branch)
+            span.set_attribute("git.pushed", True)
+            return True

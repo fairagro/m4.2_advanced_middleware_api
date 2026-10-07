@@ -104,11 +104,11 @@ class GitRepo(ArcStore):
         arc: ARC,
         *,
         rdi: str,
-    ) -> None:
-        """Create or update ARC using Git CLI."""
+    ) -> bool:
+        """Create or update ARC using Git CLI. Returns whether a commit/push ran."""
         logger.debug("Creating/updating ARC %s via Git CLI", arc_id)
 
-        def _task() -> None:
+        def _task() -> bool:
             with self._tracer.start_as_current_span(
                 "api.GitRepo._create_or_update",
                 attributes={"arc_id": arc_id, "rdi": rdi},
@@ -148,8 +148,9 @@ class GitRepo(ArcStore):
                         with self._tracer.start_as_current_span("api.GitRepo._create_or_update:arc_write"):
                             arc.Write(str(repo_path))
 
-                        # Commit and push
-                        ctx.commit_and_push(f"Update ARC {arc_id}")
+                        pushed = ctx.commit_and_push(f"Update ARC {arc_id}")
+                        span.set_attribute("git.pushed", pushed)
+                        return pushed
                 except GitCommandError as e:
                     detail = format_git_error_detail(e)
                     # Soft "not found" during create/update is not expected (clone soft is
@@ -161,7 +162,7 @@ class GitRepo(ArcStore):
                 finally:
                     _cleanup_workdir(local_path)
 
-        await self._run_in_executor(_task)
+        return await self._run_in_executor(_task)
 
     async def _get(self, arc_id: str) -> ARC | None:
         """Get ARC from Git."""

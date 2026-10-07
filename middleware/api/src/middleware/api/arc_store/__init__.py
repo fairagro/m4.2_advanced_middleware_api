@@ -74,8 +74,13 @@ class ArcStore(ABC):
         arc: ARC,
         *,
         rdi: str,
-    ) -> None:
-        """Create or updates an ARC."""
+    ) -> bool:
+        """Create or update an ARC.
+
+        Returns:
+            ``True`` if a Git commit/push was performed; ``False`` if the sync
+            completed with nothing to push (or the backend does not push here).
+        """
         raise NotImplementedError("`ArcStore._create_or_update` is not implemented")
 
     @abstractmethod
@@ -120,8 +125,8 @@ class ArcStore(ABC):
         arc: ARC,
         *,
         rdi: str,
-    ) -> None:
-        """_Create or update an ARC.
+    ) -> bool:
+        """Create or update an ARC.
 
         Args:
             arc_id (str): ID of the ARC to create or update.
@@ -132,15 +137,16 @@ class ArcStore(ABC):
             ArcStoreError: If an error occurs during the operation.
 
         Returns:
-            _type_: None
-
+            ``True`` if a Git commit/push was performed; ``False`` otherwise.
         """
         with self._tracer.start_as_current_span(
             "api.ArcStore.create_or_update",
             attributes={"arc_id": arc_id, "rdi": rdi},
         ) as span:
             try:
-                return await self._create_or_update(arc_id, arc, rdi=rdi)
+                pushed = await self._create_or_update(arc_id, arc, rdi=rdi)
+                span.set_attribute("git.pushed", pushed)
+                return pushed
             except ArcStoreError as e:
                 span.record_exception(e)
                 raise

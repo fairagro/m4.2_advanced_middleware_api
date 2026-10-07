@@ -110,13 +110,14 @@ class ConsolidatedGitArcStore(ArcStore):
         return await loop.run_in_executor(self._executor, _wrapper)
 
     @override
-    async def _create_or_update(self, arc_id: str, arc: ARC, *, rdi: str) -> None:
+    async def _create_or_update(self, arc_id: str, arc: ARC, *, rdi: str) -> bool:
         """Per-ARC Git sync is unused; catalog publish happens in ``finalize``."""
         logger.debug(
             "Ignoring create_or_update for consolidated catalog store (arc_id=%s, rdi=%s)",
             arc_id,
             rdi,
         )
+        return False
 
     @override
     async def _get(self, arc_id: str) -> ARC | None:
@@ -165,7 +166,7 @@ class ConsolidatedGitArcStore(ArcStore):
                     return False
                 target.write_bytes(catalog_bytes)
                 try:
-                    git_ctx.commit_and_push(f"Update {filename}")
+                    return git_ctx.commit_and_push(f"Update {filename}")
                 except GitCommandError as exc:
                     detail = redact_url_userinfo(format_git_error_detail(exc))
                     if is_transient_git_error(exc):
@@ -173,7 +174,6 @@ class ConsolidatedGitArcStore(ArcStore):
                     if is_soft_git_error(exc):
                         raise ArcStoreError(detail) from exc
                     raise ArcStoreError(f"Git failure publishing {filename}: {detail}") from exc
-                return True
         finally:
             shutil.rmtree(temp_dir, ignore_errors=True)
 

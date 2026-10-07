@@ -22,6 +22,7 @@ from middleware.api.business_logic.ports import BusinessLogicPorts
 from middleware.api.business_logic.rdi_comments import enrich_investigation_rdi_comments
 from middleware.api.business_logic.task_payloads import ArcSyncTask
 from middleware.api.document_store import ArcIdentityConflictError, ArcStoreResult
+from middleware.api.document_store.arc_document import ArcEventType
 from middleware.api.document_store.harvest_document import HarvestDocument, HarvestStatistics
 from middleware.shared.api_models.common.models import ArcOperationResult, ArcStatus, HarvestStatus
 from middleware.shared.json_types import RoCrateContent
@@ -33,7 +34,7 @@ def mock_store() -> MagicMock:
     store = MagicMock()
     # Mock arc_id to use hashing or simpler return
     store.arc_id.side_effect = lambda i, r: f"arc_{i}_{r}"
-    store.create_or_update = AsyncMock()
+    store.create_or_update = AsyncMock(return_value=True)
     store.shutdown = AsyncMock()
     store.finalize = AsyncMock(return_value=CatalogFinalizeResult(pushed=False))
     return store
@@ -626,8 +627,10 @@ async def test_setup_failure(api_logic: BusinessLogic, mock_doc_store: MagicMock
 
 
 @pytest.mark.asyncio
-async def test_worker_mode_sync_to_gitlab_success(worker_logic: BusinessLogic, mock_store: MagicMock) -> None:
-    """Test sync_to_gitlab in Worker mode."""
+async def test_worker_mode_sync_to_gitlab_success(
+    worker_logic: BusinessLogic, mock_store: MagicMock, mock_doc_store: MagicMock
+) -> None:
+    """Test sync_to_gitlab logs GIT_PUSH_SUCCESS when the store pushes."""
     rdi = "test-rdi"
     arc_json = json.dumps(minimal_rocrate_dict("ABC"))
 
@@ -646,6 +649,30 @@ async def test_worker_mode_sync_to_gitlab_success(worker_logic: BusinessLogic, m
     args, kwargs = mock_store.create_or_update.call_args
     assert args[0] == "arc_id"
     assert kwargs["rdi"] == rdi
+    mock_doc_store.add_event.assert_called_once()
+    event = mock_doc_store.add_event.call_args.args[1]
+    assert event.type is ArcEventType.GIT_PUSH_SUCCESS
+
+
+@pytest.mark.asyncio
+async def test_sync_to_gitlab_logs_skipped_when_no_push(
+    worker_logic: BusinessLogic, mock_store: MagicMock, mock_doc_store: MagicMock
+) -> None:
+    """Test sync_to_gitlab logs GIT_PUSH_SKIPPED when create_or_update did not push."""
+    mock_store.create_or_update = AsyncMock(return_value=False)
+    arc_json = json.dumps(minimal_rocrate_dict("ABC"))
+
+    with (
+        patch("middleware.api.business_logic.arc_manager.ARC") as mock_arc_class,
+        patch("middleware.api.business_logic.arc_manager.calculate_arc_id", return_value="arc_id"),
+    ):
+        mock_arc_class.from_rocrate_json_string.return_value = MagicMock(Identifier="ABC")
+        await worker_logic.sync_to_gitlab("test-rdi", arc_json)
+
+    mock_doc_store.add_event.assert_called_once()
+    event = mock_doc_store.add_event.call_args.args[1]
+    assert event.type is ArcEventType.GIT_PUSH_SKIPPED
+    assert "no commit/push" in event.message
 
 
 @pytest.mark.asyncio
