@@ -29,6 +29,7 @@ config:
   #
   # Top-level git_repo / gitlab_api / consolidated_git and nested
   # arc_store.gitlab_api are no longer accepted (hard cut — see NOTES.txt).
+  # Prefer {id, description?, url?}. Bare strings still work but are deprecated.
   known_rdis:
     - bonares
     - edal
@@ -49,10 +50,12 @@ rabbitmq:
   enabled: true
   image: rabbitmq:3.12-management
   auth:
-    username: ~
-    password: ~
+    # Placeholders so `helm template` / commit-stage helm-lint smoke succeed with chart defaults.
+    # Production: override or set existingSecret (must contain username, password, erlang_cookie).
+    username: changeme
+    password: changeme
     erlang_cookie: ~
-    existingSecret: ~  # if set, the secret must contain keys: username, password, erlang_cookie
+    existingSecret: ~
   service:
     port: 5672
     managementPort: 15672
@@ -61,9 +64,10 @@ couchdb:
   enabled: true
   image: couchdb:3.3
   auth:
-    username: ~
-    password: ~
-    existingSecret: ~  # if set, the secret must contain keys: username, password
+    # Same as rabbitmq.auth — placeholders for lint/template smoke; override or existingSecret in prod.
+    username: changeme
+    password: changeme
+    existingSecret: ~
     usernameKey: ~
     passwordKey: ~
   service:

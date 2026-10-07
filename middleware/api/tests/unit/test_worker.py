@@ -157,7 +157,9 @@ def test_sync_arc_to_gitlab_exhausted_retries_records_git_push_failed() -> None:
     mock_store.shutdown = AsyncMock()
     mock_doc_store = MagicMock()
     mock_doc_store.add_event = AsyncMock()
-    worker_logic = BusinessLogic(config=MagicMock(), store=mock_store, doc_store=mock_doc_store)
+    cfg = MagicMock()
+    cfg.known_rdis = []
+    worker_logic = BusinessLogic(config=cfg, store=mock_store, doc_store=mock_doc_store)
     loop = asyncio.new_event_loop()
 
     with (
@@ -201,8 +203,10 @@ def test_finalize_catalog_exhausted_retries_records_catalog_push_failed() -> Non
     mock_consolidated.shutdown = AsyncMock()
     mock_doc_store = MagicMock()
     mock_doc_store.update_harvest = AsyncMock()
+    cfg = MagicMock()
+    cfg.known_rdis = []
     worker_logic = BusinessLogic(
-        config=MagicMock(),
+        config=cfg,
         store=mock_store,
         doc_store=mock_doc_store,
         consolidated_store=mock_consolidated,

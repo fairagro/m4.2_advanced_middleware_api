@@ -84,6 +84,7 @@ class BusinessLogic:
             doc_store=doc_store,
             task_dispatcher=resolved_ports.task_dispatcher,
             consolidated_store=consolidated_store,
+            rdi_registry=config.known_rdis,
         )
 
     @property

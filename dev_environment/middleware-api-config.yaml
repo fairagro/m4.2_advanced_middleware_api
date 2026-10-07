@@ -17,6 +17,10 @@ arc_store:
 # consolidated_store:
 #   consolidated_git:
 #     repo_url: https://datahub-dev.ipk-gatersleben.de/group/catalog.git
+# Prefer object form (id + optional description/url). Bare strings still work but are deprecated.
+# - id: edaphobase
+#   description: Edaphobase soil biodiversity database
+#   url: https://www.edaphobase.org
 known_rdis:
 - bonares
 - edal

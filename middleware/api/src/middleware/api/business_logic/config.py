@@ -6,6 +6,8 @@ from typing import TYPE_CHECKING, Annotated, Protocol
 
 from pydantic import BaseModel, Field
 
+from middleware.api.rdi_registry import RdiRegistryEntry
+
 if TYPE_CHECKING:
     from middleware.api.arc_store.arc_store_config import ArcStoreConfig, ConsolidatedStoreConfig
     from middleware.api.document_store.config import CouchDBConfig
@@ -26,6 +28,8 @@ class BusinessLogicConfig(Protocol):
     """Minimal config interface required by BusinessLogic."""
 
     harvest: HarvestConfig
+    # list (not Sequence): Protocol attributes are invariant; Config/WorkerConfig use list[…].
+    known_rdis: list[RdiRegistryEntry]
 
 
 class BusinessLogicFactoryConfig(BusinessLogicConfig, Protocol):

@@ -16,10 +16,12 @@ from middleware.api.business_logic.exceptions import (
     TransientError,
 )
 from middleware.api.business_logic.ports import TaskDispatcher
+from middleware.api.business_logic.rdi_comments import enrich_investigation_rdi_comments
 from middleware.api.business_logic.task_payloads import ArcSyncTask
 from middleware.api.document_store import ArcIdentityConflictError, DocumentStore, DuplicateArcError
 from middleware.api.document_store.arc_document import ArcEvent, ArcEventType
 from middleware.api.document_store.harvest_document import CatalogPushEventType, HarvestCatalogEvent
+from middleware.api.rdi_registry import RdiRegistryEntry, lookup_rdi_entry
 from middleware.api.rocrate import RocrateParseError, parse_rocrate
 from middleware.api.utils import calculate_arc_id
 from middleware.shared.api_models.common.models import ArcOperationResult, ArcResponse, ArcStatus
@@ -65,6 +67,7 @@ class ArcManager:
         doc_store: DocumentStore,
         task_dispatcher: TaskDispatcher | None = None,
         consolidated_store: ArcStore | None = None,
+        rdi_registry: list[RdiRegistryEntry] | None = None,
     ) -> None:
         """Initialize the ArcManager.
 
@@ -73,11 +76,13 @@ class ArcManager:
             doc_store: DocumentStore for CouchDB persistence.
             task_dispatcher: Optional dispatcher for enqueueing GitLab sync jobs (API mode only).
             consolidated_store: Optional consolidated catalog ArcStore for finalize.
+            rdi_registry: Deployment RDI registry for Investigation Comment enrichment.
         """
         self._store = store
         self._consolidated_store = consolidated_store
         self._doc_store = doc_store
         self._dispatcher = task_dispatcher
+        self._rdi_registry = list(rdi_registry) if rdi_registry is not None else []
         self._tracer = trace.get_tracer(__name__)
 
     @property
@@ -139,6 +144,13 @@ class ArcManager:
                 except RocrateParseError as exc:
                     raise InvalidJsonSemanticError(str(exc)) from exc
                 arc_content = rocrate.model_dump(by_alias=True)
+                entry = lookup_rdi_entry(self._rdi_registry, rdi)
+                enrich_investigation_rdi_comments(
+                    arc_content,
+                    rdi=rdi,
+                    description=entry.description,
+                    url=entry.url,
+                )
                 doc_result = await self._doc_store.store_arc(
                     rdi,
                     arc_content,

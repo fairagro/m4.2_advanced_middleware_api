@@ -1,7 +1,5 @@
 """FAIRagro Middleware API configuration module."""
 
-import logging
-import re
 from typing import Annotated, ClassVar, Self
 
 from cryptography import x509
@@ -11,6 +9,12 @@ from middleware.api.arc_store.arc_store_config import ArcStoreConfig, Consolidat
 from middleware.api.arc_store.resolution import validate_arc_store_config
 from middleware.api.business_logic.config import HarvestConfig
 from middleware.api.document_store.config import CouchDBConfig
+from middleware.api.rdi_registry import (
+    RdiRegistryEntry,
+    known_rdi_ids,
+    validate_unique_rdi_ids,
+    warn_deprecated_string_known_rdis,
+)
 from middleware.api.worker.config import CeleryConfig
 from middleware.shared.config.config_base import ConfigBase
 
@@ -77,7 +81,15 @@ class RateLimitingConfig(BaseModel):
 class Config(ConfigBase):
     """Configuration model for the Middleware API."""
 
-    known_rdis: Annotated[list[str], Field(description="List of known RDI identifiers")] = []
+    known_rdis: Annotated[
+        list[RdiRegistryEntry],
+        Field(
+            description=(
+                "Known RDIs as objects with id and optional description/url (used for Investigation "
+                "Comment[RDI*] enrichment). Bare identifier strings remain accepted but are deprecated."
+            ),
+        ),
+    ] = []
     client_auth_oid: Annotated[x509.ObjectIdentifier, Field(description="OID for client authentication")] = (
         x509.ObjectIdentifier("1.3.6.1.4.1.64609.1.1")
     )
@@ -129,21 +141,17 @@ class Config(ConfigBase):
 
     model_config: ClassVar[ConfigDict] = ConfigDict(arbitrary_types_allowed=True, extra="forbid")
 
+    @field_validator("known_rdis", mode="before")
+    @classmethod
+    def deprecate_string_known_rdis(cls, rdis: object) -> object:
+        """Keep bare-string known_rdis working while warning operators to migrate."""
+        return warn_deprecated_string_known_rdis(rdis)
+
     @field_validator("known_rdis")
     @classmethod
-    def validate_known_rdis(cls, rdis: list[str]) -> list[str]:
-        """Validate that RDI identifiers contain only allowed characters."""
-        # This regex allows alphanumeric characters, underscore, hyphen, and dot.
-        allowed_chars_pattern = re.compile(r"^[a-zA-Z0-9_.-]+$")
-        for rdi in rdis:
-            if not allowed_chars_pattern.match(rdi):
-                msg = (
-                    f"Invalid RDI identifier '{rdi}'. Only alphanumeric characters, hyphens, "
-                    "underscores, and dots are allowed."
-                )
-                logging.error(msg)
-                raise ValueError(msg)
-        return rdis
+    def validate_known_rdis(cls, rdis: list[RdiRegistryEntry]) -> list[RdiRegistryEntry]:
+        """Reject duplicate RDI identifiers (charset checked on each entry)."""
+        return validate_unique_rdi_ids(rdis)
 
     @field_validator("client_auth_oid", mode="before")
     @classmethod
@@ -158,5 +166,5 @@ class Config(ConfigBase):
     @model_validator(mode="after")
     def validate_storage_backends(self) -> Self:
         """Validate dual-slot ArcStore config and GitLab topic mapping."""
-        self.arc_store = validate_arc_store_config(self, known_rdis=self.known_rdis)
+        self.arc_store = validate_arc_store_config(self, known_rdis=known_rdi_ids(self.known_rdis))
         return self
