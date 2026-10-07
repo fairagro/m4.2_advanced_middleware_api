@@ -118,6 +118,25 @@ class PatchHarvestRequest(BaseModel):
     ]
 
 
+class HarvestErrorType(StrEnum):
+    """Category of a per-item error recorded on a harvest run."""
+
+    DUPLICATE = "duplicate"
+    SUBMISSION_FAILED = "submission_failed"
+
+
+class HarvestError(BaseModel):
+    """A single per-item error persisted on a harvest document and returned on the wire."""
+
+    arc_id: Annotated[
+        str | None,
+        Field(description="ARC identifier (RO-Crate identifier), None if not applicable or not extractable"),
+    ] = None
+    error_type: Annotated[HarvestErrorType, Field(description="Category of the error")]
+    message: Annotated[str, Field(description="Human-readable error description")]
+    timestamp: Annotated[str, Field(description="ISO 8601 timestamp when the error occurred")]
+
+
 class HarvestResponse(ApiResponse):
     """Response model for harvest details."""
 
@@ -127,3 +146,7 @@ class HarvestResponse(ApiResponse):
     started_at: Annotated[str, Field(description="Start timestamp")]
     completed_at: Annotated[str | None, Field(description="Completion timestamp")] = None
     statistics: Annotated[dict, Field(description="Harvest statistics")]
+    errors: Annotated[
+        list[HarvestError],
+        Field(description="Per-item errors recorded for this harvest run"),
+    ] = Field(default_factory=list)

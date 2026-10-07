@@ -50,11 +50,10 @@ class HarvestErrorType(StrEnum):
 class HarvestError(BaseModel):
     """A single per-item error recorded during a harvest run.
 
-    Once the server persists errors natively (issue #240), this list is
-    populated directly from the server response returned by any harvest
-    query method.  Until then, :meth:`~middleware.api_client.ApiClient.harvest_arcs`
-    collects errors client-side and injects them into the returned
-    :class:`HarvestResult` as a compatibility shim.
+    Harvest query/complete responses may include server-persisted errors
+    (issue #240). :meth:`~middleware.api_client.ApiClient.harvest_arcs` also
+    merges client-collected errors as a compatibility shim until follow-up
+    #566 removes client-side duplicate skip.
     """
 
     arc_id: Annotated[
@@ -140,9 +139,8 @@ class HarvestResult(BaseModel):
     errors: Annotated[
         list[HarvestError],
         Field(
-            description="Per-item errors encountered during the harvest run. "
-            "Populated client-side by harvest_arcs() until the server supports "
-            "error persistence natively (issue #240)."
+            description="Per-item errors for the harvest run (server-persisted and/or "
+            "client-collected by harvest_arcs() until shim removal in #566)."
         ),
     ] = Field(default_factory=list)
     message: Annotated[str, Field(description="Human-readable result message")] = ""

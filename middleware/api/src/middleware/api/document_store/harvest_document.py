@@ -9,6 +9,7 @@ from typing import Annotated, TypedDict
 from pydantic import BaseModel, ConfigDict, Field
 
 from middleware.shared.api_models.common.models import HarvestStatus
+from middleware.shared.api_models.v3.models import HarvestError
 from middleware.shared.json_types import JsonObject
 
 
@@ -66,13 +67,16 @@ class HarvestDocument(BaseModel):
     started_at: Annotated[datetime, Field(description="Harvest start timestamp")]
     completed_at: Annotated[datetime | None, Field(description="Harvest completion timestamp")] = None
     status: Annotated[HarvestStatus, Field(description="Harvest status")]
-    statistics: Annotated[
-        HarvestStatistics,
-        Field(description="Harvest statistics"),
-    ] = Field(default_factory=HarvestStatistics)
+    # Model default (not Field(default_factory=)): pylint otherwise types this as FieldInfo.
+    # Pydantic deep-copies BaseModel defaults per instance.
+    statistics: Annotated[HarvestStatistics, Field(description="Harvest statistics")] = HarvestStatistics()
     catalog_events: Annotated[
         list[HarvestCatalogEvent],
         Field(description="Consolidated catalog flush events"),
+    ] = Field(default_factory=list)
+    errors: Annotated[
+        list[HarvestError],
+        Field(description="Per-item errors recorded during the harvest run"),
     ] = Field(default_factory=list)
 
     model_config = ConfigDict(populate_by_name=True, extra="ignore")
@@ -85,3 +89,4 @@ class HarvestUpdatePayload(TypedDict, total=False):
     statistics: JsonObject
     completed_at: datetime | None
     append_catalog_event: JsonObject
+    append_error: JsonObject

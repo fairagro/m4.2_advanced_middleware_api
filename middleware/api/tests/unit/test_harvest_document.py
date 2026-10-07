@@ -18,6 +18,7 @@ from middleware.api.document_store.harvest_document import (
     HarvestStatistics,
 )
 from middleware.shared.api_models.common.models import HarvestStatus
+from middleware.shared.api_models.v3.models import HarvestError, HarvestErrorType
 
 ARCS_SUBMITTED = 10
 GRACE_PERIOD_DAYS = 7
@@ -123,6 +124,44 @@ def test_harvest_document_backward_compat_config_field_ignored() -> None:
     # Neither 'config' nor 'source' must appear on the new model
     assert not hasattr(doc, "config")
     assert not hasattr(doc, "source")
+
+
+def test_harvest_document_backward_compat_no_errors() -> None:
+    """Legacy harvest documents without an errors field default to an empty list."""
+    now = datetime.now()
+    old_doc: dict[str, Any] = {
+        "_id": "harvest-old-003",
+        "type": "harvest",
+        "rdi": "test-rdi",
+        "started_at": now.isoformat(),
+        "status": HarvestStatus.RUNNING,
+        "statistics": {},
+    }
+
+    doc = HarvestDocument.model_validate(old_doc)
+
+    assert doc.errors == []
+
+
+def test_harvest_document_stores_errors() -> None:
+    """HarvestDocument retains typed per-item errors."""
+    now = datetime.now()
+    doc = HarvestDocument(
+        doc_id="harvest-err",
+        rdi="test-rdi",
+        started_at=now,
+        status=HarvestStatus.RUNNING,
+        errors=[
+            HarvestError(
+                arc_id="ARC-1",
+                error_type=HarvestErrorType.DUPLICATE,
+                message="conflict",
+                timestamp="2024-01-01T00:00:00Z",
+            )
+        ],
+    )
+    assert len(doc.errors) == 1
+    assert doc.errors[0].error_type is HarvestErrorType.DUPLICATE
 
 
 def test_harvest_catalog_event_accepts_known_types() -> None:

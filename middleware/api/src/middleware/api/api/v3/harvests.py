@@ -200,7 +200,21 @@ async def submit_arc_in_harvest(  # noqa: PLR0913, PLR0917
 
     try:
         result = await bl.create_or_update_arc(rdi, request_body.arc, client_id, harvest_id=harvest_id)
-    except (DuplicateArcInHarvestError, ArcIdentityMismatchError) as exc:
+    except DuplicateArcInHarvestError as exc:
+        await bl.harvest_manager.try_append_error(
+            harvest_id,
+            arc_id=request_body.arc.identifier,
+            error_type=v3_models.HarvestErrorType.DUPLICATE,
+            message=str(exc),
+        )
+        raise HTTPException(status_code=HTTPStatus.CONFLICT, detail=str(exc)) from exc
+    except ArcIdentityMismatchError as exc:
+        await bl.harvest_manager.try_append_error(
+            harvest_id,
+            arc_id=request_body.arc.identifier,
+            error_type=v3_models.HarvestErrorType.SUBMISSION_FAILED,
+            message=str(exc),
+        )
         raise HTTPException(status_code=HTTPStatus.CONFLICT, detail=str(exc)) from exc
 
     arc_id = result.arc.id
@@ -244,4 +258,5 @@ def _map_harvest(harvest: HarvestDocument) -> v3_models.HarvestResponse:
         started_at=harvest.started_at.isoformat().replace("+00:00", "Z"),
         completed_at=completed_at,
         statistics=harvest.statistics.model_dump() if harvest.statistics else {},
+        errors=list(harvest.errors),
     )
