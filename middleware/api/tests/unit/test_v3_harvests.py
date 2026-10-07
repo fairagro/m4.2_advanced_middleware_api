@@ -19,6 +19,7 @@ from middleware.api.business_logic.harvest_manager import CreateHarvestResult
 from middleware.api.document_store.harvest_document import HarvestDocument, HarvestStatistics
 from middleware.shared.api_models import ArcOperationResult, ArcResponse, ArcStatus
 from middleware.shared.api_models.common.models import HarvestStatus
+from middleware.shared.api_models.v3.models import HarvestError, HarvestErrorType
 
 
 @pytest.mark.unit
@@ -253,12 +254,16 @@ def test_submit_arc_in_harvest_conflicting_content_returns_conflict(
         ) as mock_get_harvest,
         patch.object(middleware_api.app.state.common_deps, "get_authorized_rdis", new_callable=AsyncMock) as mock_auth,
         patch.object(middleware_api.business_logic, "create_or_update_arc", new_callable=AsyncMock) as mock_create_arc,
+        patch.object(
+            middleware_api.business_logic.harvest_manager, "append_error", new_callable=AsyncMock
+        ) as mock_append,
     ):
         mock_get_harvest.return_value = mock_harvest
         mock_auth.return_value = ["rdi-1"]
         mock_create_arc.side_effect = DuplicateArcInHarvestError(
             f"ARC 'ARC-dup' was already submitted in harvest '{harvest_id}' with different content."
         )
+        mock_append.return_value = mock_harvest
 
         r = client.post(
             f"/v3/harvests/{harvest_id}/arcs",
@@ -273,6 +278,11 @@ def test_submit_arc_in_harvest_conflicting_content_returns_conflict(
 
         assert r.status_code == http.HTTPStatus.CONFLICT
         assert "ARC-dup" in r.json()["detail"]
+        mock_append.assert_awaited_once()
+        assert mock_append.await_args is not None
+        append_kwargs = mock_append.await_args.kwargs
+        assert append_kwargs["arc_id"] == "ARC-dup"
+        assert append_kwargs["error_type"] is HarvestErrorType.DUPLICATE
 
 
 @pytest.mark.unit
@@ -300,6 +310,9 @@ def test_submit_arc_in_harvest_identity_mismatch_returns_409(
         ) as mock_get_harvest,
         patch.object(middleware_api.app.state.common_deps, "get_authorized_rdis", new_callable=AsyncMock) as mock_auth,
         patch.object(middleware_api.business_logic, "create_or_update_arc", new_callable=AsyncMock) as mock_create_arc,
+        patch.object(
+            middleware_api.business_logic.harvest_manager, "append_error", new_callable=AsyncMock
+        ) as mock_append,
     ):
         mock_get_harvest.return_value = mock_harvest
         mock_auth.return_value = ["rdi-1"]
@@ -308,6 +321,7 @@ def test_submit_arc_in_harvest_identity_mismatch_returns_409(
             "the incoming pair under strip() rules; document was not overwritten "
             "(distinct from harvest content duplicate 409; NFC is #537)."
         )
+        mock_append.return_value = mock_harvest
 
         r = client.post(
             f"/v3/harvests/{harvest_id}/arcs",
@@ -324,6 +338,11 @@ def test_submit_arc_in_harvest_identity_mismatch_returns_409(
         detail = r.json()["detail"]
         assert "Identity conflict" in detail
         assert "different content" not in detail
+        mock_append.assert_awaited_once()
+        assert mock_append.await_args is not None
+        append_kwargs = mock_append.await_args.kwargs
+        assert append_kwargs["arc_id"] == "ARC-collide"
+        assert append_kwargs["error_type"] is HarvestErrorType.SUBMISSION_FAILED
 
 
 # ---------------------------------------------------------------------------
@@ -451,6 +470,45 @@ def test_get_harvest_success(client: TestClient, cert: str, middleware_api: Api)
 
         assert r.status_code == http.HTTPStatus.OK
         assert r.json()["harvest_id"] == "h-1"
+        assert r.json()["errors"] == []
+
+
+@pytest.mark.unit
+def test_get_harvest_includes_persisted_errors(client: TestClient, cert: str, middleware_api: Api) -> None:
+    """GET harvest exposes server-persisted per-item errors."""
+    harvest = _make_harvest_doc()
+    harvest.errors = [
+        HarvestError(
+            arc_id="ARC-dup",
+            error_type=HarvestErrorType.DUPLICATE,
+            message="content conflict",
+            timestamp="2024-01-01T00:01:00Z",
+        )
+    ]
+    harvest.statistics.errors = 1
+
+    with (
+        patch.object(middleware_api.business_logic.harvest_manager, "get_harvest", new_callable=AsyncMock) as mock_get,
+        patch.object(middleware_api.app.state.common_deps, "get_authorized_rdis", new_callable=AsyncMock) as mock_auth,
+    ):
+        mock_get.return_value = harvest
+        mock_auth.return_value = ["rdi-1"]
+
+        r = client.get(
+            "/v3/harvests/h-1",
+            headers={
+                "ssl-client-cert": cert,
+                "ssl-client-verify": "SUCCESS",
+                "accept": "application/json",
+            },
+        )
+
+        assert r.status_code == http.HTTPStatus.OK
+        body = r.json()
+        assert len(body["errors"]) == 1
+        assert body["errors"][0]["arc_id"] == "ARC-dup"
+        assert body["errors"][0]["error_type"] == "duplicate"
+        assert body["statistics"]["errors"] == 1
 
 
 @pytest.mark.unit

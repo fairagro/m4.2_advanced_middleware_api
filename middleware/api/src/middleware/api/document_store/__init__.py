@@ -7,6 +7,7 @@ from typing import cast
 from middleware.api.document_store.arc_document import ArcEvent, ArcMetadata
 from middleware.api.document_store.harvest_document import HarvestDocument, HarvestStatistics, HarvestUpdatePayload
 from middleware.api.document_store.task_record import TaskRecord
+from middleware.shared.api_models.v3.models import HarvestError
 from middleware.shared.json_types import RoCrateContent
 
 
@@ -197,6 +198,22 @@ class DocumentStore(ABC):
         Args:
             harvest_id: Harvest identifier
             updates: Dictionary of fields to update
+        """
+        raise NotImplementedError
+
+    @abstractmethod
+    async def append_harvest_error(self, harvest_id: str, error: HarvestError) -> HarvestDocument:
+        """Append a typed per-item error to the harvest document (revision-safe).
+
+        Implementations MUST also keep ``statistics.errors`` coherent with the
+        resulting ``errors`` list length.
+
+        Args:
+            harvest_id: Harvest identifier
+            error: Typed per-item error to append
+
+        Returns:
+            The updated harvest document
         """
         raise NotImplementedError
 

@@ -412,3 +412,43 @@ async def test_harvest_arcs_502_is_submission_failed(client_config: Config) -> N
     assert len(result.errors) == 1
     assert result.errors[0].error_type == HarvestErrorType.SUBMISSION_FAILED
     assert "502" in result.errors[0].message
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_harvest_arcs_merges_server_and_client_errors(client_config: Config) -> None:
+    """harvest_arcs merges server-persisted errors with client-collected item errors."""
+    respx.post(f"{client_config.api_url}v3/harvests").mock(
+        return_value=httpx.Response(http.HTTPStatus.OK, json=HARVEST_RESPONSE)
+    )
+    respx.post(f"{client_config.api_url}v3/harvests/harvest-456/arcs").mock(
+        side_effect=[
+            httpx.Response(http.HTTPStatus.BAD_REQUEST, text="invalid arc"),
+            httpx.Response(http.HTTPStatus.OK, json=ARC_RESPONSE),
+        ]
+    )
+    completed_response = {
+        **HARVEST_RESPONSE,
+        "status": "COMPLETED",
+        "completed_at": "2024-01-01T01:00:00Z",
+        "errors": [
+            {
+                "arc_id": "server-arc",
+                "error_type": "duplicate",
+                "message": "content conflict",
+                "timestamp": "2024-01-01T00:30:00Z",
+            }
+        ],
+    }
+    respx.post(f"{client_config.api_url}v3/harvests/harvest-456/complete").mock(
+        return_value=httpx.Response(http.HTTPStatus.OK, json=completed_response)
+    )
+
+    async with ApiClient(client_config) as client:
+        result = await client.harvest_arcs("test-rdi", arc_gen(rocrate_dict("arc-1"), rocrate_dict("arc-2")))
+
+    assert len(result.errors) == 2  # noqa: PLR2004
+    assert result.errors[0].error_type == HarvestErrorType.DUPLICATE
+    assert result.errors[0].arc_id == "server-arc"
+    assert result.errors[1].error_type == HarvestErrorType.SUBMISSION_FAILED
+    assert result.errors[1].arc_id == "arc-1"

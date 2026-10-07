@@ -20,6 +20,7 @@ from middleware.api_client import (
     ApiClientError,
     ArcResult,
     Config,
+    HarvestErrorType,
     HarvestResult,
 )
 from middleware.shared.api_models.v3.models import CreateHarvestRequest
@@ -598,6 +599,32 @@ async def test_get_harvest(client_config: Config) -> None:
         harvest = await client.get_harvest("harvest-456")
     assert isinstance(harvest, HarvestResult)
     assert harvest.harvest_id == "harvest-456"
+    assert harvest.errors == []
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_get_harvest_maps_server_errors(client_config: Config) -> None:
+    """get_harvest maps server-persisted per-item errors onto HarvestResult.errors."""
+    payload = {
+        **HARVEST_RESPONSE,
+        "errors": [
+            {
+                "arc_id": "ARC-1",
+                "error_type": "duplicate",
+                "message": "content conflict",
+                "timestamp": "2024-01-01T00:01:00Z",
+            }
+        ],
+    }
+    respx.get(f"{client_config.api_url}v3/harvests/harvest-456").mock(
+        return_value=httpx.Response(http.HTTPStatus.OK, json=payload)
+    )
+    async with ApiClient(client_config) as client:
+        harvest = await client.get_harvest("harvest-456")
+    assert len(harvest.errors) == 1
+    assert harvest.errors[0].arc_id == "ARC-1"
+    assert harvest.errors[0].error_type == HarvestErrorType.DUPLICATE
 
 
 @pytest.mark.asyncio

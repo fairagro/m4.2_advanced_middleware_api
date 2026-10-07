@@ -14,6 +14,7 @@ from middleware.api.document_store.couchdb_client import CouchDBClient, Document
 from middleware.api.utils import calculate_arc_id
 from middleware.shared.api_models.common.models import ArcEventType, ArcLifecycleStatus, HarvestStatus
 from middleware.shared.api_models.common.rocrate import extract_identifier, validate_root_dataset
+from middleware.shared.api_models.v3.models import HarvestError
 from middleware.shared.json_types import CouchDbDocument, JsonObject, RoCrateGraphNode
 
 from . import (
@@ -569,6 +570,10 @@ class CouchDB(DocumentStore):
         if "append_catalog_event" in updates:
             event = HarvestCatalogEvent.model_validate(updates["append_catalog_event"])
             doc.catalog_events = [*doc.catalog_events, event]
+        if "append_error" in updates:
+            error = HarvestError.model_validate(updates["append_error"])
+            doc.errors = [*doc.errors, error]
+            doc.statistics.errors = len(doc.errors)
         if doc.status == HarvestStatus.COMPLETED and not doc.completed_at:
             doc.completed_at = datetime.now(UTC)
 
@@ -612,6 +617,13 @@ class CouchDB(DocumentStore):
 
         assert last_conflict is not None
         raise last_conflict
+
+    async def append_harvest_error(self, harvest_id: str, error: HarvestError) -> HarvestDocument:
+        """Append a typed per-item error and keep ``statistics.errors`` aligned with list length."""
+        return await self.update_harvest(
+            harvest_id,
+            {"append_error": error.model_dump(mode="json")},
+        )
 
     async def list_harvests(
         self,

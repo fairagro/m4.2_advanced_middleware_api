@@ -913,12 +913,10 @@ class ApiClient:
             )
 
         result = await self.complete_harvest(harvest_id)
-        # Compatibility shim (issue #240): inject client-side errors into the result
-        # until the server persists and returns them natively via the harvest response.
-        # When the server supports it, result.errors will already be populated here
-        # and this merge can be removed.
+        # Compatibility shim (#566): merge client-collected errors with any
+        # server-persisted errors already on the completed harvest response.
         if client_errors:
-            result = result.model_copy(update={"errors": result.errors + client_errors})
+            result = result.model_copy(update={"errors": [*result.errors, *client_errors]})
         logger.info("[%s] Completed harvest %s", rdi, harvest_id)
         return result
 

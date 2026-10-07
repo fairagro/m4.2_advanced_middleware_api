@@ -2,6 +2,7 @@
 
 import logging
 from dataclasses import dataclass
+from datetime import UTC, datetime
 from typing import Self, cast
 
 from middleware.api.business_logic.config import HarvestConfig
@@ -19,6 +20,7 @@ from middleware.api.document_store import (
 )
 from middleware.api.document_store.harvest_document import HarvestDocument, HarvestUpdatePayload
 from middleware.shared.api_models.common.models import HarvestStatus
+from middleware.shared.api_models.v3.models import HarvestError, HarvestErrorType
 from middleware.shared.json_types import JsonObject
 
 logger = logging.getLogger(__name__)
@@ -99,6 +101,23 @@ class HarvestManager:
     async def get_harvest(self, harvest_id: str) -> HarvestDocument | None:
         """Get harvest details."""
         return await self._doc_store.get_harvest(harvest_id)
+
+    async def append_error(
+        self,
+        harvest_id: str,
+        *,
+        error_type: HarvestErrorType,
+        message: str,
+        arc_id: str | None = None,
+    ) -> HarvestDocument:
+        """Append a typed per-item error to the harvest document."""
+        error = HarvestError(
+            arc_id=arc_id,
+            error_type=error_type,
+            message=message,
+            timestamp=datetime.now(UTC).isoformat().replace("+00:00", "Z"),
+        )
+        return await self._doc_store.append_harvest_error(harvest_id, error)
 
     async def validate_client_id(self, harvest_id: str, client_id: str | None) -> None:
         """Validate that the harvest belongs to the client."""
