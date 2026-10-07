@@ -235,12 +235,16 @@ jobs:
     with:
       chart_dir: helmchart/fairagro-advanced-middleware-api-chart
       skip: ${{ needs.detect-changes.outputs.helm != 'true' }}
+      # Optional CI overlay (omit or leave empty for bare chart defaults):
+      # values_file: path/to/ci-values.yaml
 ```
 
 `detect-changes` / `skip` stay a **caller** responsibility. Suggested `code` paths above are a fleet default — extend
 for product-only trees (e.g. `stubs/`, `dev_environment/**`). Chart-only PRs should skip Docker build/check via `code`
 while still running `helm-lint` when the `helm` filter matches. **Do not** treat “add `helmchart/**` to the Docker
-`code` filter alone” as chart validation.
+`code` filter alone” as chart validation. Optional `values_file` passes a checkout-relative overlay into `helm lint` /
+`helm template` (fail closed if missing); empty keeps bare-chart behaviour. Local commit-stage parity uses
+`HELM_VALUES_FILE` on [`scripts/run-helm-lint.sh`](../scripts/run-helm-lint.sh) — see [`docs/quality.md`](quality.md).
 
 ### Post-merge main (Docker build + check → Code Scanning)
 
@@ -503,16 +507,18 @@ When `create_github_release` is false, no git tag or GitHub Release is created (
 
 Feature-PR chart gate (lint + optional template smoke). Does **not** package or publish.
 
-| Input          | Default    | Purpose                                               |
-| -------------- | ---------- | ----------------------------------------------------- |
-| `chart_dir`    | (required) | Chart path in caller checkout                         |
-| `skip`         | `false`    | No-op success path when no chart paths changed        |
-| `run_template` | `true`     | Also run `helm template` smoke (chart default values) |
+| Input          | Default    | Purpose                                                              |
+| -------------- | ---------- | -------------------------------------------------------------------- |
+| `chart_dir`    | (required) | Chart path in caller checkout                                        |
+| `skip`         | `false`    | No-op success path when no chart paths changed                       |
+| `run_template` | `true`     | Also run `helm template` smoke (defaults, or `values_file` when set) |
+| `values_file`  | `""`       | Optional checkout-relative overlay (`-f`); empty = bare chart        |
 
 Helm CLI version comes from the caller’s `versions.env` (`HELM_VERSION`). Wire with a **separate** detect-changes output
-for chart roots (`helmchart/**` or `helm/**`); see the Feature PR example above. Local commit-stage lint is the synced
-`helm-lint` hook (`scripts/run-helm-lint.sh`) — see [`docs/quality.md`](quality.md); it does **not** replace this
-Feature-PR reusable.
+for chart roots (`helmchart/**` or `helm/**`); see the Feature PR example above. When `values_file` is non-empty, the
+job fails if the path is missing and passes `-f` to both `helm lint` and (when enabled) `helm template`. Local
+commit-stage lint is the synced `helm-lint` hook (`scripts/run-helm-lint.sh`) with the matching env `HELM_VALUES_FILE` —
+see [`docs/quality.md`](quality.md); it does **not** replace this Feature-PR reusable.
 
 ### `reusable-helm-release.yml` / `reusable-helm-pre-release.yml`
 

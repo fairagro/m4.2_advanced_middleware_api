@@ -7,20 +7,20 @@ for sync into product consumers (`middleware/` package root — see [path conven
 
 Not every file under `scripts/` is Dev Container-only. Personal-token helpers are; quality runners are not.
 
-| Script / tree                         | Environment            | Notes                                                                                                                                                    |
-| ------------------------------------- | ---------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `quality-check.sh` / `quality-fix.sh` | Host or Dev Container  | Needs `uv`. Commit-stage also runs `npm run lint:md` (Node/`npm`; host: `npm install`). On the host, set `GITGUARDIAN_API_KEY` for ggshield if required. |
-| `run-container-structure-test.sh`     | Host or Dev Container  | Needs Docker + `container-structure-test`                                                                                                                |
-| `run-quality-cli.sh`                  | Host or Dev Container  | `uv run --with-requirements scripts/quality-tools-pins.txt` for fleet quality CLIs                                                                       |
-| `run-import-linter.sh`                | Host or Dev Container  | Product `.importlinter`; soft-skips without `middleware/`; uses `run-quality-cli.sh`                                                                     |
-| `run-uv-audit.sh`                     | Host or Dev Container  | Needs `uv` + network to OSV; optional `.uv-audit-ignore`                                                                                                 |
-| `run-helm-lint.sh`                    | Host or Dev Container  | Needs `helm` on `PATH` only when `helmchart/<chart>/` or `helm/<chart>/` exists; pin is Dev Container `HELM_VERSION`                                     |
-| `setup-git-hooks.sh` / `git-hooks/`   | Host or Dev Container  | Dispatcher + `pre-push.d/50-quality`; no `git-lfs` required                                                                                              |
-| `load-versions-env.sh`                | Host or Dev Container  | Reads `versions.env`, writes `.python-version`                                                                                                           |
-| `scripts/ai/` (`m42-ai`)              | Host or Dev Container  | uv workspace member; `uv sync` then `uv run m42-ai` (needs `gh` + auth)                                                                                  |
-| `dev-tokens.sh` / `set-dev-tokens.sh` | **Dev Container only** | Store: `/commandhistory/tokens.env`                                                                                                                      |
-| `scripts/bin/gh`, `scripts/bin/git`   | **Dev Container only** | On `PATH` via `remoteEnv`; load the token store                                                                                                          |
-| `devcontainer-post-create.sh`         | **Dev Container only** | Invoked from `devcontainer.json`                                                                                                                         |
+| Script / tree                         | Environment            | Notes                                                                                                                                                     |
+| ------------------------------------- | ---------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `quality-check.sh` / `quality-fix.sh` | Host or Dev Container  | Needs `uv`. Commit-stage also runs `npm run lint:md` (Node/`npm`; host: `npm install`). On the host, set `GITGUARDIAN_API_KEY` for ggshield if required.  |
+| `run-container-structure-test.sh`     | Host or Dev Container  | Needs Docker + `container-structure-test`                                                                                                                 |
+| `run-quality-cli.sh`                  | Host or Dev Container  | `uv run --with-requirements scripts/quality-tools-pins.txt` for fleet quality CLIs                                                                        |
+| `run-import-linter.sh`                | Host or Dev Container  | Product `.importlinter`; soft-skips without `middleware/`; uses `run-quality-cli.sh`                                                                      |
+| `run-uv-audit.sh`                     | Host or Dev Container  | Needs `uv` + network to OSV; optional `.uv-audit-ignore`                                                                                                  |
+| `run-helm-lint.sh`                    | Host or Dev Container  | Needs `helm` on `PATH` only when `helmchart/<chart>/` or `helm/<chart>/` exists; pin is Dev Container `HELM_VERSION`; optional `HELM_VALUES_FILE` overlay |
+| `setup-git-hooks.sh` / `git-hooks/`   | Host or Dev Container  | Dispatcher + `pre-push.d/50-quality`; no `git-lfs` required                                                                                               |
+| `load-versions-env.sh`                | Host or Dev Container  | Reads `versions.env`, writes `.python-version`                                                                                                            |
+| `scripts/ai/` (`m42-ai`)              | Host or Dev Container  | uv workspace member; `uv sync` then `uv run m42-ai` (needs `gh` + auth)                                                                                   |
+| `dev-tokens.sh` / `set-dev-tokens.sh` | **Dev Container only** | Store: `/commandhistory/tokens.env`                                                                                                                       |
+| `scripts/bin/gh`, `scripts/bin/git`   | **Dev Container only** | On `PATH` via `remoteEnv`; load the token store                                                                                                           |
+| `devcontainer-post-create.sh`         | **Dev Container only** | Invoked from `devcontainer.json`                                                                                                                          |
 
 Supported day-to-day development remains the Linux Dev Container ([principles](../openspec/principles.global.md)). Host
 checkouts may run the **host-or-DC** scripts above; they do not get the personal-token store or PATH wrappers — use
@@ -192,11 +192,13 @@ Examples already in the shared skeleton:
 
 - `check-yaml` excludes Go-templated Helm under `helm/**/templates/` and `helmchart/**/templates/` (and vendor skill
   trees) — safe when those paths are absent. Helm validation is the commit-stage `helm-lint` hook
-  ([`scripts/run-helm-lint.sh`](../scripts/run-helm-lint.sh)): `helm lint` plus default-values `helm template` smoke on
-  each `helmchart/<chart>/` or `helm/<chart>/` with `Chart.yaml`. No such chart → no-op (Helm not required). Charts
-  without `helm` on `PATH` fail closed (use the Dev Container pin from `versions.env` `HELM_VERSION`). Feature-PR CI
-  still uses [`reusable-helm-lint.yml`](ci.md#reusable-helm-lintyml) with a **separate** chart detect-changes filter —
-  do not put chart paths only in the Docker `code` bag. IDE Helm extensions are optional and are **not** the gate.
+  ([`scripts/run-helm-lint.sh`](../scripts/run-helm-lint.sh)): `helm lint` plus `helm template` smoke on each
+  `helmchart/<chart>/` or `helm/<chart>/` with `Chart.yaml`. No such chart → no-op (Helm not required). Charts without
+  `helm` on `PATH` fail closed (use the Dev Container pin from `versions.env` `HELM_VERSION`). Optional overlay: export
+  `HELM_VALUES_FILE` to a repo-relative values file (same `-f` semantics as Feature-PR
+  [`reusable-helm-lint.yml`](ci.md#reusable-helm-lintyml) input `values_file`; empty/unset = bare chart; missing path
+  fails closed). Feature-PR CI still uses that reusable with a **separate** chart detect-changes filter — do not put
+  chart paths only in the Docker `code` bag. IDE Helm extensions are optional and are **not** the gate.
 - Commit-stage `prettier-md` (`npm run format:md` write) and `markdownlint` (`npm run lint:md`) share the same `files` /
   `exclude` class for `*.md` / `*.mdc`. Escape hatch only: `SKIP=prettier-md` or `SKIP=markdownlint` (same class as
   other Node markdown hooks — not the normal workflow). Like `ruff-format`, Prettier rewrites on commit; re-stage
