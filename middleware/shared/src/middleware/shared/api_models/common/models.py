@@ -55,6 +55,7 @@ class ArcEventType(StrEnum):
     GIT_QUEUED = "GIT_QUEUED"
     GIT_PROCESSING = "GIT_PROCESSING"
     GIT_PUSH_SUCCESS = "GIT_PUSH_SUCCESS"
+    GIT_PUSH_SKIPPED = "GIT_PUSH_SKIPPED"  # Sync ran but repo was clean — no commit/push
     GIT_PUSH_FAILED = "GIT_PUSH_FAILED"
 
     # Validation events

@@ -48,6 +48,7 @@ def test_publish_catalog_bytes_removes_ephemeral_clone(
     ctx_instance = MagicMock()
     ctx_instance.path = str(work_dir)
     ctx_instance.__enter__.return_value = ctx_instance
+    ctx_instance.commit_and_push.return_value = True
 
     with (
         patch("middleware.api.arc_store.consolidated_git.store.tempfile.mkdtemp", return_value=str(work_dir)),
