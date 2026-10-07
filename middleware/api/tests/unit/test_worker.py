@@ -2,7 +2,7 @@
 
 import asyncio
 import json
-from collections.abc import Iterator
+from collections.abc import Generator
 from contextlib import contextmanager
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
@@ -17,7 +17,7 @@ from middleware.api.worker.worker import _celery_retries_exhausted, finalize_cat
 
 
 @contextmanager
-def _low_celery_retries(task: Any, *, max_retries: int = 1) -> Iterator[None]:
+def _low_celery_retries(task: Any, *, max_retries: int = 1) -> Generator[None]:
     """Shrink Celery autoretry budget so exhaustion tests stay fast.
 
     Typed as ``Any`` because celery-stubs' ``Task`` omits ``retry_backoff`` /
