@@ -38,6 +38,14 @@
     "recreateWhen": "auto"
   },
 
+  "osvVulnerabilityAlerts": true,
+
+  "vulnerabilityAlerts": {
+    "enabled": true,
+    "labels": ["dependencies", "security"],
+    "schedule": ["at any time"]
+  },
+
   "devcontainer": {
     "managerFilePatterns": ["/(^|/)\\.devcontainer(/.+)?/devcontainer\\.json$/"]
   },
