@@ -119,6 +119,29 @@ class HarvestManager:
         )
         return await self._doc_store.append_harvest_error(harvest_id, error)
 
+    async def try_append_error(
+        self,
+        harvest_id: str,
+        *,
+        error_type: HarvestErrorType,
+        message: str,
+        arc_id: str | None = None,
+    ) -> None:
+        """Best-effort per-item error append; never raises (keeps HTTP 409 paths intact)."""
+        try:
+            await self.append_error(
+                harvest_id,
+                error_type=error_type,
+                message=message,
+                arc_id=arc_id,
+            )
+        except Exception as log_error:  # noqa: BLE001
+            logger.warning(
+                "Could not record harvest error on harvest %s: %s",
+                harvest_id,
+                log_error,
+            )
+
     async def validate_client_id(self, harvest_id: str, client_id: str | None) -> None:
         """Validate that the harvest belongs to the client."""
         harvest = await self.get_harvest(harvest_id)

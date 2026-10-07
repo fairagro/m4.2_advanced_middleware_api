@@ -255,7 +255,7 @@ def test_submit_arc_in_harvest_conflicting_content_returns_conflict(
         patch.object(middleware_api.app.state.common_deps, "get_authorized_rdis", new_callable=AsyncMock) as mock_auth,
         patch.object(middleware_api.business_logic, "create_or_update_arc", new_callable=AsyncMock) as mock_create_arc,
         patch.object(
-            middleware_api.business_logic.harvest_manager, "append_error", new_callable=AsyncMock
+            middleware_api.business_logic.harvest_manager, "try_append_error", new_callable=AsyncMock
         ) as mock_append,
     ):
         mock_get_harvest.return_value = mock_harvest
@@ -263,7 +263,6 @@ def test_submit_arc_in_harvest_conflicting_content_returns_conflict(
         mock_create_arc.side_effect = DuplicateArcInHarvestError(
             f"ARC 'ARC-dup' was already submitted in harvest '{harvest_id}' with different content."
         )
-        mock_append.return_value = mock_harvest
 
         r = client.post(
             f"/v3/harvests/{harvest_id}/arcs",
@@ -311,7 +310,7 @@ def test_submit_arc_in_harvest_identity_mismatch_returns_409(
         patch.object(middleware_api.app.state.common_deps, "get_authorized_rdis", new_callable=AsyncMock) as mock_auth,
         patch.object(middleware_api.business_logic, "create_or_update_arc", new_callable=AsyncMock) as mock_create_arc,
         patch.object(
-            middleware_api.business_logic.harvest_manager, "append_error", new_callable=AsyncMock
+            middleware_api.business_logic.harvest_manager, "try_append_error", new_callable=AsyncMock
         ) as mock_append,
     ):
         mock_get_harvest.return_value = mock_harvest
@@ -321,7 +320,6 @@ def test_submit_arc_in_harvest_identity_mismatch_returns_409(
             "the incoming pair under strip() rules; document was not overwritten "
             "(distinct from harvest content duplicate 409; NFC is #537)."
         )
-        mock_append.return_value = mock_harvest
 
         r = client.post(
             f"/v3/harvests/{harvest_id}/arcs",
@@ -343,6 +341,58 @@ def test_submit_arc_in_harvest_identity_mismatch_returns_409(
         append_kwargs = mock_append.await_args.kwargs
         assert append_kwargs["arc_id"] == "ARC-collide"
         assert append_kwargs["error_type"] is HarvestErrorType.SUBMISSION_FAILED
+
+
+@pytest.mark.unit
+def test_submit_arc_in_harvest_conflict_returns_409_when_error_append_fails(
+    client: TestClient, cert: str, middleware_api: Api
+) -> None:
+    """Bookkeeping append failure must not replace the documented 409 Conflict."""
+    harvest_id = "harvest-123"
+    mock_harvest = HarvestDocument(
+        doc_id=harvest_id,
+        rdi="rdi-1",
+        client_id="test-client-cn",
+        status=HarvestStatus.RUNNING,
+        started_at=datetime.now(UTC),
+        statistics=HarvestStatistics(),
+    )
+    rocrate = {
+        "@context": "https://w3id.org/ro/crate/1.1/context",
+        "@graph": [{"@id": "./", "identifier": "ARC-dup"}],
+    }
+
+    with (
+        patch.object(
+            middleware_api.business_logic.harvest_manager, "get_harvest", new_callable=AsyncMock
+        ) as mock_get_harvest,
+        patch.object(middleware_api.app.state.common_deps, "get_authorized_rdis", new_callable=AsyncMock) as mock_auth,
+        patch.object(middleware_api.business_logic, "create_or_update_arc", new_callable=AsyncMock) as mock_create_arc,
+        patch.object(
+            middleware_api.business_logic.harvest_manager, "append_error", new_callable=AsyncMock
+        ) as mock_append,
+    ):
+        mock_get_harvest.return_value = mock_harvest
+        mock_auth.return_value = ["rdi-1"]
+        mock_create_arc.side_effect = DuplicateArcInHarvestError(
+            f"ARC 'ARC-dup' was already submitted in harvest '{harvest_id}' with different content."
+        )
+        mock_append.side_effect = ValueError("revision conflict exhausted")
+
+        r = client.post(
+            f"/v3/harvests/{harvest_id}/arcs",
+            headers={
+                "ssl-client-cert": cert,
+                "ssl-client-verify": "SUCCESS",
+                "content-type": "application/json",
+                "accept": "application/json",
+            },
+            json={"arc": rocrate},
+        )
+
+        assert r.status_code == http.HTTPStatus.CONFLICT
+        assert "ARC-dup" in r.json()["detail"]
+        mock_append.assert_awaited_once()
 
 
 # ---------------------------------------------------------------------------
