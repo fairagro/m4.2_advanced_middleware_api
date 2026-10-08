@@ -111,7 +111,7 @@
   // Cursor SCM sparkle uses repo-root `.cursorrules` (not this key). See docs/quality.md.
   "github.copilot.chat.commitMessageGeneration.instructions": [
     {
-      "text": "Use Conventional Commits: type(optional-scope): subject. Types: feat, fix, docs, style, refactor, perf, test, build, ci, chore, revert, deps. Base type and subject on the FULL staged diff (all paths), not only the last hunk or one file. Cover every intentional change; if several independent fixes share the commit, use a theme subject plus a short body with one bullet each. feat/fix only for shipped behaviour. OpenSpec /opsx-archive and opsx housekeeping alone → chore (optional scope openspec), never feat. Docs-only → docs; CI → ci; Renovate → deps. Breaking: feat!: or BREAKING CHANGE:. Subject imperative, no trailing period; accuracy over brevity."
+      "text": "Use Conventional Commits: type(optional-scope): subject. Types: feat, fix, docs, style, refactor, perf, test, build, ci, chore, revert, deps. HARD OVERRIDE: if the staged diff is /opsx-archive (move under openspec/changes/archive/ and/or sync deltas into openspec/specs/), type MUST be chore (optional scope openspec), NEVER feat — even when openspec/specs gains new Requirement text (false minor bump for version_bump=auto). Example: chore(openspec): archive <name> and sync specs. feat/fix only for shipped runtime behaviour (workflows/scripts/product code), not planning trees alone. Prefer optional short scope when clear (e.g. fix(payload): …); no fleet scope-enum. Cover full staged diff. Docs-only → docs; CI → ci; Renovate → deps. Breaking: feat!: or BREAKING CHANGE:. Subject imperative, no trailing period."
     }
   ]
 }

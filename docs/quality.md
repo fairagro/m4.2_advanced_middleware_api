@@ -16,6 +16,7 @@ Not every file under `scripts/` is Dev Container-only. Personal-token helpers ar
 | `run-uv-audit.sh`                     | Host or Dev Container  | Needs `uv` + network to OSV; optional `.uv-audit-ignore`                                                                                                  |
 | `run-helm-lint.sh`                    | Host or Dev Container  | Needs `helm` on `PATH` only when `helmchart/<chart>/` or `helm/<chart>/` exists; pin is Dev Container `HELM_VERSION`; optional `HELM_VALUES_FILE` overlay |
 | `detect-version-bump.sh`              | Host or Dev Container  | Release `version_bump=auto`; needs `git-cliff` + `jq` (pin `GIT_CLIFF_VERSION`)                                                                           |
+| `generate-release-changelog.sh`       | Host or CI             | Final Release `## Changelog` via git-cliff (R1 ranges); soft-fail placeholder                                                                             |
 | `install-git-cliff.sh`                | Host or CI             | Installs pinned `git-cliff` from `versions.env`                                                                                                           |
 | `setup-git-hooks.sh` / `git-hooks/`   | Host or Dev Container  | Dispatcher + `pre-push.d/50-quality`; no `git-lfs` required                                                                                               |
 | `load-versions-env.sh`                | Host or Dev Container  | Reads `versions.env`, writes `.python-version`                                                                                                            |
@@ -46,6 +47,15 @@ Fleet commits MUST follow [Conventional Commits](https://www.conventionalcommits
 Use `feat` / `fix` only when the commit changes shipped behaviour. Sparkle / Copilot subjects MUST cover every
 intentional change in the commit (theme subject, or short body bullets for independent fixes) — do not describe only the
 last or largest file.
+
+**Prefer an optional Conventional Commits scope** when a primary component or area is clear from the staged diff (e.g.
+`fix(payload): …`, `feat(api): …`). Scope is encouraged for readable git-cliff Release changelogs, but **not**
+allowlist-enforced — commitlint has no fleet `scope-enum` (products differ; missing scope remains valid).
+
+**/opsx-archive commits are always `chore` (optional scope `openspec`), never `feat`.** Moving a change under
+`openspec/changes/archive/` and syncing deltas into `openspec/specs/` is opsx cleanup — even if main specs gain new
+requirements. Sparkle/Copilot MUST NOT treat those ADDED requirements as a product `feat` (false minor bump for
+`version_bump: auto`). Example: `chore(openspec): archive <change-name> and sync specs`.
 
 **Enforcement:** commitlint (`commitlint.config.cjs`) on the **commit-msg** hook (`npx commitlint --edit`). Install with
 `uv run pre-commit install --hook-type pre-commit --hook-type commit-msg` (Dev Container postCreate does both). Type
