@@ -82,6 +82,15 @@ class TestFileSystemGitProvider:
         provider = FileSystemGitProvider(base_url="http://invalid", group="g")
         assert provider.check_health() is False
 
+    @staticmethod
+    def test_repo_exists_reports_presence(temp_remote_dir: Path) -> None:
+        """repo_exists is True only after the bare repository is created."""
+        provider = FileSystemGitProvider(base_url=f"file://{temp_remote_dir}", group="my-group")
+        arc_id = "test-arc"
+        assert provider.repo_exists(arc_id) is False
+        provider.ensure_repo_exists(arc_id, _TEST_GIT_METADATA)
+        assert provider.repo_exists(arc_id) is True
+
 
 class TestGitlabGitProvider:
     """Tests for GitlabGitProvider."""
@@ -263,6 +272,63 @@ class TestGitlabGitProvider:
 
         with pytest.raises(ArcStoreError, match="401 Unauthorized"):
             provider.ensure_repo_exists("some-arc", metadata=_TEST_GIT_METADATA)
+
+    @staticmethod
+    @patch("middleware.api.arc_store.git_repo.remote_git_provider.gitlab.Gitlab")
+    def test_repo_exists_present(mock_gitlab_class: MagicMock) -> None:
+        """Usable project path matching arc_id reports present."""
+        mock_gl = MagicMock()
+        mock_gitlab_class.return_value = mock_gl
+        mock_group = MagicMock()
+        mock_group.full_path = "my-group-path"
+        mock_gl.groups.get.return_value = mock_group
+        mock_project = MagicMock()
+        mock_project.path = "abc123"
+        mock_project.marked_for_deletion_on = None
+        mock_gl.projects.get.return_value = mock_project
+
+        provider = GitlabGitProvider(url="https://gitlab.com", group_name="my-group", token="secret")  # nosec
+        assert provider.repo_exists("abc123") is True
+        mock_gl.projects.create.assert_not_called()
+
+    @staticmethod
+    @patch("middleware.api.arc_store.git_repo.remote_git_provider.gitlab.Gitlab")
+    def test_repo_exists_missing(mock_gitlab_class: MagicMock) -> None:
+        """GitlabGetError reports absent."""
+        mock_gl = MagicMock()
+        mock_gitlab_class.return_value = mock_gl
+        mock_group = MagicMock()
+        mock_group.full_path = "my-group-path"
+        mock_gl.groups.get.return_value = mock_group
+        mock_gl.projects.get.side_effect = GitlabGetError("Not Found", response_code=HTTPStatus.NOT_FOUND)
+
+        provider = GitlabGitProvider(url="https://gitlab.com", group_name="my-group", token="secret")  # nosec
+        assert provider.repo_exists("abc123") is False
+        mock_gl.projects.create.assert_not_called()
+
+    @staticmethod
+    @patch("middleware.api.arc_store.git_repo.remote_git_provider.gitlab.Gitlab")
+    def test_repo_exists_pending_deletion(mock_gitlab_class: MagicMock) -> None:
+        """Pending deletion / path rewrite reports absent."""
+        mock_gl = MagicMock()
+        mock_gitlab_class.return_value = mock_gl
+        mock_group = MagicMock()
+        mock_group.full_path = "my-group-path"
+        mock_gl.groups.get.return_value = mock_group
+        mock_project = MagicMock()
+        mock_project.path = "abc123-deletion_scheduled-9"
+        mock_project.marked_for_deletion_on = "2026-01-01"
+        mock_gl.projects.get.return_value = mock_project
+
+        provider = GitlabGitProvider(url="https://gitlab.com", group_name="my-group", token="secret")  # nosec
+        assert provider.repo_exists("abc123") is False
+        mock_gl.projects.create.assert_not_called()
+
+    @staticmethod
+    def test_repo_exists_without_token() -> None:
+        """No token → treat as missing so worker prefers full sync."""
+        provider = GitlabGitProvider(url="https://gitlab.com", group_name="my-group", token=None)
+        assert provider.repo_exists("abc123") is False
 
     @staticmethod
     def test_get_repo_url() -> None:

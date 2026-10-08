@@ -18,7 +18,8 @@ worker; on unchanged content, use a **fast GitLab API project-exists** probe (no
 - Worker when content is unchanged: call GitLab API “does project `arc_id` exist (and not pending deletion)?”; if yes →
   no scaffold write / git push; if no → full `create_or_update` sync.
 - Worker when content is new/changed: full sync as today.
-- Add a narrow `project_exists` (or equivalent) on the Git remote provider — GET only, no create, no git commands.
+- Implement `ArcStore.exists` for the GitLab-backed store via a read-only provider probe (`repo_exists` / project GET),
+  no create, no git CLI — worker skip gate reuses `exists`, not a new ArcStore method.
 - Logging/metrics: reason codes (`changed` / `missing_on_datahub` / `present_unchanged`).
 - OpenSpec deltas for `arc-manager` (and `arc-store` if the exists probe is part of the store/provider contract).
 - Unit tests for enqueue-always + worker branch matrix; update system tests that assumed “unchanged ⇒ no enqueue”.

@@ -56,7 +56,7 @@ has_changes = hash(canonicalize(existing.arc_content)) != incoming_hash
    fallback-to-rehash) — separate issue, not #338.
 
 For Git decisions the worker MUST NOT re-derive CouchDB content comparison as the source of truth. Extend `ArcSyncTask`
-with `is_new` / `has_changes` from `ArcStoreResult` after persist. Worker Git rule: flags + `project_exists` (D3). No
+with `is_new` / `has_changes` from `ArcStoreResult` after persist. Worker Git rule: flags + `ArcStore.exists` (D3). No
 second full hash of the Celery RO-Crate payload for the skip gate.
 
 **Reason (D2):** HTTP/idempotency need the hash on ingest; “change detection in the worker” means **Git skip vs sync**,
@@ -68,7 +68,7 @@ not relocating CouchDB content comparison. Always-enqueue (D1) still recovers Da
 if is_new or has_changes:
     create_or_update(...)  # full path
 else:
-    if project_exists(arc_id):  # GitLab API GET; treat pending-deletion as missing
+    if store.exists(arc_id):  # ArcStore probe; treat pending-deletion as missing
         # no Write, no git push; optional GIT_PUSH_SKIPPED / structured log reason=present_unchanged
     else:
         create_or_update(...)  # recreate / first push
@@ -77,10 +77,11 @@ else:
 **Reason:** Matches explore D; GET is cheap vs scaffold+git; intentional delete vs wipe both look “missing” — acceptable
 per explore (recovery preferred).
 
-### D4: `project_exists` on Git provider
+### D4: Reuse `ArcStore.exists` (provider implements without git CLI)
 
-Add `GitlabGitProvider.project_exists(arc_id) -> bool` (or ArcStore façade): `projects.get`, treat
-`GitlabGetError`/pending-deletion/path rewrite as missing. **Must not** create projects. No git CLI.
+Worker skip gate uses the existing `ArcStore.exists` API — no new ArcStore method. GitLab-backed `GitRepo._exists`
+delegates to `RemoteGitProvider.repo_exists` → GitLab `projects.get` (not `git ls-remote`); treat
+`GitlabGetError`/pending-deletion/path rewrite as missing. **Must not** create. No git CLI for the probe.
 
 **Reason:** `ensure_repo_exists` creates; skip path must not create empty projects without content sync.
 

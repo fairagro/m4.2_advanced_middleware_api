@@ -263,6 +263,8 @@ class BusinessLogic:
         rdi: str,
         arc: str,
         *,
+        is_new: bool = True,
+        has_changes: bool = True,
         record_transient_as_failed: bool = False,
     ) -> None:
         """Synchronize ARC to GitLab storage.
@@ -273,6 +275,8 @@ class BusinessLogic:
         Args:
             rdi: Research Data Infrastructure identifier.
             arc: RO-Crate JSON string from the Celery task payload.
+            is_new: Whether document storage created a new ARC document.
+            has_changes: Whether document storage detected content changes.
             record_transient_as_failed: Persist GIT_PUSH_FAILED when Celery retries are exhausted.
 
         Raises:
@@ -282,5 +286,7 @@ class BusinessLogic:
         await self._arc_manager.sync_to_gitlab(
             rdi,
             arc,
+            is_new=is_new,
+            has_changes=has_changes,
             record_transient_as_failed=record_transient_as_failed,
         )
