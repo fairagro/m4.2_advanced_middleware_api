@@ -1,5 +1,5 @@
 version = 1
-revision = 5
+revision = 3
 requires-python = ">=3.12"
 resolution-markers = [
     "python_full_version >= '3.15'",
@@ -12,6 +12,7 @@ resolution-markers = [
 members = [
     "api",
     "fairagro-middleware-api-client",
+    "fairagro-middleware-arc-validation",
     "fairagro-middleware-shared",
     "m4-2-advanced-middleware",
     "tools",
@@ -1093,6 +1094,16 @@ dev = [
     { name = "respx", specifier = ">=0.20.0" },
     { name = "types-pyyaml", specifier = ">=6.0.12.20240917" },
 ]
+
+[[package]]
+name = "fairagro-middleware-arc-validation"
+source = { editable = "middleware/arc_validation" }
+dependencies = [
+    { name = "arctrl" },
+]
+
+[package.metadata]
+requires-dist = [{ name = "arctrl", specifier = ">=3.2.2" }]
 
 [[package]]
 name = "fairagro-middleware-shared"
