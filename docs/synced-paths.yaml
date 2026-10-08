@@ -56,6 +56,7 @@ allow:
   - scripts/run-uv-audit.sh
   - scripts/run-helm-lint.sh
   - scripts/detect-version-bump.sh
+  - scripts/generate-release-changelog.sh
   - scripts/install-git-cliff.sh
   - scripts/setup-git-hooks.sh
   - scripts/update-dockerfile-pins.sh
