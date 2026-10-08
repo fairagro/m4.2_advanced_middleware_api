@@ -6,9 +6,12 @@
     "format:md": "prettier --write \"**/*.{md,mdc}\"",
     "format:md:check": "prettier --check \"**/*.{md,mdc}\"",
     "format:md:skills": "prettier --write --ignore-path /dev/null \".agents/skills/{review-fixer,create-issue,code-review,issue-fixer,arctrl}/**/*.{md,mdc}\"",
-    "lint:md": "markdownlint-cli2"
+    "lint:md": "markdownlint-cli2",
+    "commitlint": "commitlint --edit"
   },
   "devDependencies": {
+    "@commitlint/cli": "19.8.1",
+    "@commitlint/config-conventional": "19.8.1",
     "markdownlint-cli2": "0.23.3",
     "prettier": "3.9.9"
   },

@@ -316,8 +316,8 @@ on:
     inputs:
       version_bump:
         type: choice
-        options: [major, minor, patch]
-        default: patch
+        options: [auto, major, minor, patch]
+        default: auto
 
 concurrency:
   group: docker-release-${{ github.workflow }}-${{ github.ref }}
@@ -357,11 +357,18 @@ jobs:
     secrets: inherit
 ```
 
+`version_bump: auto` (default) derives the base semver from [Conventional Commits](https://www.conventionalcommits.org/)
+since the latest `*-docker-v*` tag via git-cliff (`scripts/detect-version-bump.sh`). Explicit `major` / `minor` /
+`patch` override. Auto **fails closed** if there are no commits since the last tag or git-cliff is unavailable — see
+[`docs/quality.md`](quality.md#conventional-commits). On `build/*`, the RC / PEP 440 suffix is still applied after the
+base bump.
+
 Keep any **PyPI** publish steps in a product-local job or workflow after build (API only).
 
 ### Helm (thin `workflow_dispatch` caller)
 
-Same serialize guidance as Docker release (`cancel-in-progress: false`). No `detect-changes` required.
+Same serialize guidance as Docker release (`cancel-in-progress: false`). No `detect-changes` required. Helm **auto**
+uses the latest `*-chart-v*` tag range (separate from Docker — R1).
 
 ```yaml
 name: Helm Chart Release
@@ -370,8 +377,8 @@ on:
     inputs:
       version_bump:
         type: choice
-        options: [major, minor, patch]
-        default: patch
+        options: [auto, major, minor, patch]
+        default: auto
 
 concurrency:
   group: helm-release-${{ github.workflow }}-${{ github.ref }}
@@ -463,12 +470,12 @@ CRITICAL/HIGH vulnerabilities. See [Trivy: licenses vs vulnerabilities](#trivy-l
 
 ### `reusable-build.yml`
 
-| Input             | Default                        | Purpose                                            |
-| ----------------- | ------------------------------ | -------------------------------------------------- |
-| `version_bump`    | `patch`                        | major / minor / patch against latest `*-docker-v*` |
-| `components`      | (required)                     | JSON array; matrix build                           |
-| `image_base_name` | `fairagro-advanced-middleware` | Local image tag prefix                             |
-| `skip`            | `false`                        | Successful no-op without artifacts                 |
+| Input             | Default                        | Purpose                                                                                    |
+| ----------------- | ------------------------------ | ------------------------------------------------------------------------------------------ |
+| `version_bump`    | `auto`                         | `auto` (Conventional Commits / git-cliff) or major / minor / patch vs latest `*-docker-v*` |
+| `components`      | (required)                     | JSON array; matrix build                                                                   |
+| `image_base_name` | `fairagro-advanced-middleware` | Local image tag prefix                                                                     |
+| `skip`            | `false`                        | Successful no-op without artifacts                                                         |
 
 Outputs: `version`, `pep440_version`, `components`. Version scheme is shared across all three products
 (`*-docker-vX.Y.Z`; on `build/*` → `X.Y.Z-rc.<branch>.<run>`). Here `<run>` is **`${{ github.run_number }}`** for that
@@ -522,16 +529,16 @@ see [`docs/quality.md`](quality.md); it does **not** replace this Feature-PR reu
 
 ### `reusable-helm-release.yml` / `reusable-helm-pre-release.yml`
 
-| Input                   | Default                   | Purpose                                      |
-| ----------------------- | ------------------------- | -------------------------------------------- |
-| `chart_dir`             | (required)                | Chart path in caller checkout                |
-| `chart_name`            | (required)                | Must match `name:` in Chart.yaml (validated) |
-| `dockerhub_namespace`   | `zalf`                    | Docker Hub OCI namespace                     |
-| `ghcr_namespace`        | `""` → `repository_owner` | GHCR OCI namespace; empty uses owner         |
-| `version_bump`          | `patch`                   | Final release only                           |
-| `require_main`          | `true`                    | Final release only                           |
-| `create_github_release` | `true`                    | Final release only                           |
-| `helm_install_name`     | `fairagro-middleware`     | Example name in release notes (final only)   |
+| Input                   | Default                   | Purpose                                                  |
+| ----------------------- | ------------------------- | -------------------------------------------------------- |
+| `chart_dir`             | (required)                | Chart path in caller checkout                            |
+| `chart_name`            | (required)                | Must match `name:` in Chart.yaml (validated)             |
+| `dockerhub_namespace`   | `zalf`                    | Docker Hub OCI namespace                                 |
+| `ghcr_namespace`        | `""` → `repository_owner` | GHCR OCI namespace; empty uses owner                     |
+| `version_bump`          | `auto`                    | Final + pre-release base: `auto` / major / minor / patch |
+| `require_main`          | `true`                    | Final release only                                       |
+| `create_github_release` | `true`                    | Final release only                                       |
+| `helm_install_name`     | `fairagro-middleware`     | Example name in release notes (final only)               |
 
 Helm CLI version comes from the caller’s `versions.env` (`HELM_VERSION`). Secrets `DOCKERHUB_USER` / `DOCKERHUB_TOKEN`
 are optional; if missing or a push fails, the Helm GitHub Release body (final) or job summary (pre-release) MUST state

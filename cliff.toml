@@ -1,0 +1,24 @@
+# Shared git-cliff config for Conventional Commits parsing (release version_bump=auto).
+# Fleet tags are `N-docker-vX.Y.Z` / `N-chart-vX.Y.Z` — bump arithmetic uses the stripped
+# X.Y.Z plus commit classification from `git cliff … --context` (see scripts/detect-version-bump.sh).
+# Parser patterns require a Conventional Commits type boundary (`type:` / `type(scope):` /
+# `type!:`) so e.g. `feature:` does not match `feat`.
+
+[changelog]
+body = ""
+
+[git]
+conventional_commits = true
+filter_unconventional = false
+split_commits = false
+commit_parsers = [
+  { message = '^feat(\([^)]*\))?(!)?:', group = "Features" },
+  { message = '^fix(\([^)]*\))?(!)?:', group = "Bug Fixes" },
+  { message = '^docs(\([^)]*\))?(!)?:', group = "Documentation" },
+  { message = '^perf(\([^)]*\))?(!)?:', group = "Performance" },
+  { message = '^refactor(\([^)]*\))?(!)?:', group = "Refactor" },
+  { message = '^style(\([^)]*\))?(!)?:', group = "Styling" },
+  { message = '^test(\([^)]*\))?(!)?:', group = "Testing" },
+  { message = '^(chore|ci|build|deps)(\([^)]*\))?(!)?:', group = "Miscellaneous" },
+  { message = ".*", group = "Other" },
+]

@@ -1,0 +1,22 @@
+# Cursor commit-message generation (sparkle)
+
+Fleet guidance for Cursor Source Control "Generate commit message". Newer `.cursor/rules` / `AGENTS.md` are not applied
+to that button today — this legacy file is. Keep in sync with `commitlint.config.cjs` and `docs/quality.md`.
+
+When generating a Git commit message for this repository:
+
+- Use Conventional Commits only: `type(optional-scope): subject`
+- Allowed types: feat, fix, docs, style, refactor, perf, test, build, ci, chore, revert, deps
+- Choose `type` from the **full staged diff**, not from OpenSpec change names, folder titles, or only the last hunk
+- **Cover every intentional change in the commit.** Scan all touched paths; do not write a subject that only
+  describes one file when others also change behaviour (e.g. cliff + commit-msg hook, or archive move + main-spec sync
+  + editor guidance). Prefer one subject that names the shared theme; if two+ independent fixes share the commit, add a
+  short body with one bullet per fix (still no multi-paragraph changelog)
+- `feat` / `fix` only when the commit changes shipped behaviour (workflows, scripts, runtime configs, product code)
+- OpenSpec archive / opsx cleanup alone (e.g. `/opsx-archive`: move under `openspec/changes/archive/`, sync deltas into
+  `openspec/specs/`) → `chore` (optional scope `openspec`), **never** `feat` — that would falsely minor-bump Release
+  `version_bump: auto`
+- Docs-only → `docs`; CI workflow wiring → `ci`; Renovate-style dependency bumps → `deps`
+- Breaking changes: `feat!:` / `fix!:` or a `BREAKING CHANGE:` footer
+- Subject: imperative mood, ~72 chars when possible, no trailing period — accuracy over brevity if the subject would
+  otherwise omit a real change
