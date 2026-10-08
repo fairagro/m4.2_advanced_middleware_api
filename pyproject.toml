@@ -37,11 +37,13 @@ dev = [
 api = { workspace = true }
 fairagro-middleware-api-client = { workspace = true }
 fairagro-middleware-shared = { workspace = true }
+fairagro-middleware-arc-validation = { workspace = true }
 
 [tool.uv.workspace]
 members = [
     "middleware/api",
     "middleware/api_client",
+    "middleware/arc_validation",
     "middleware/shared",
     "middleware/tools",
 ]
@@ -57,9 +59,11 @@ members = [
 extraPaths = [
   "middleware/api/src",
   "middleware/api_client/src",
+  "middleware/arc_validation/src",
   "middleware/shared/src",
   "middleware/api/tests/unit",
   "middleware/api_client/tests",
+  "middleware/arc_validation/tests",
   "middleware/shared/tests",
 ]
 
@@ -93,6 +97,7 @@ markers = [
     "integration: marks tests as integration tests",
     "system_local: marks tests that use locally runnable external services (e.g. testcontainers)",
     "system_external: marks tests that depend on real external systems/secrets",
+    "requires_docker: live Docker (e.g. arc-export); skip in default CI",
 ]
 
 [tool.coverage.run]

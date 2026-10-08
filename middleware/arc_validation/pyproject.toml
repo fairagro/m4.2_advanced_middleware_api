@@ -1,0 +1,23 @@
+[project]
+name = "fairagro-middleware-arc-validation"
+dynamic = ["version"]
+description = "DataHUB-equivalent ARC export validation (ARCtrl write + Docker arc-export)"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "arctrl>=3.2.2",
+]
+
+[project.scripts]
+fairagro-arc-validate = "middleware.arc_validation.cli:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/middleware"]
+
+[tool.hatch.version]
+source = "vcs"
+raw-options = { root = "../..", fallback_version = "0.0.0", tag_regex = "^(?:v|.*-(?:chart|docker)-v)(?P<version>\\d+\\.\\d+\\.\\d+)(?:$|[-+].*)" }
+
+[build-system]
+requires = ["hatchling", "hatch-vcs"]
+build-backend = "hatchling.build"

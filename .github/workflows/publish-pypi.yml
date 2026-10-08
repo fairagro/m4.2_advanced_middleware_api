@@ -1,0 +1,115 @@
+# Product-local PyPI / TestPyPI publish (Devinfra reusable-release does not publish wheels).
+# Packages: fairagro-middleware-shared, fairagro-middleware-api-client,
+# fairagro-middleware-arc-validation.
+name: Publish PyPI
+
+on:
+  workflow_call:
+    inputs:
+      pep440_version:
+        description: "PEP 440 version to stamp on built distributions"
+        required: true
+        type: string
+      release_type:
+        description: "final (PyPI) or feature (TestPyPI)"
+        required: true
+        type: string
+      skip:
+        description: "Exit successfully without publishing"
+        required: false
+        type: boolean
+        default: false
+    secrets:
+      PYPI_TOKEN:
+        required: false
+      TEST_PYPI_TOKEN:
+        required: false
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
+jobs:
+  publish:
+    name: Publish ${{ matrix.package }}
+    if: ${{ !inputs.skip }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        package:
+          - fairagro-middleware-shared
+          - fairagro-middleware-api-client
+          - fairagro-middleware-arc-validation
+    steps:
+      - name: Check publish credentials
+        id: creds
+        env:
+          RELEASE_TYPE: ${{ inputs.release_type }}
+          PYPI_TOKEN: ${{ secrets.PYPI_TOKEN }}
+          TEST_PYPI_TOKEN: ${{ secrets.TEST_PYPI_TOKEN }}
+        run: |
+          set -euo pipefail
+          if [[ "${RELEASE_TYPE}" == "final" ]]; then
+            if [[ -z "${PYPI_TOKEN}" ]]; then
+              echo "skip=true" >> "$GITHUB_OUTPUT"
+              echo "PyPI token absent — skipping ${{ matrix.package }}"
+              exit 0
+            fi
+          else
+            if [[ -z "${TEST_PYPI_TOKEN}" ]]; then
+              echo "skip=true" >> "$GITHUB_OUTPUT"
+              echo "TestPyPI token absent — skipping ${{ matrix.package }}"
+              exit 0
+            fi
+          fi
+          echo "skip=false" >> "$GITHUB_OUTPUT"
+
+      - name: Checkout
+        if: steps.creds.outputs.skip != 'true'
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Read UV_VERSION from versions.env
+        if: steps.creds.outputs.skip != 'true'
+        id: uv-version
+        run: |
+          uv_version="$(awk -F= '/^UV_VERSION=/ {print $2; exit}' versions.env | tr -d '[:space:]')"
+          if [[ -z "$uv_version" ]]; then
+            echo "ERROR: UV_VERSION missing from versions.env" >&2
+            exit 1
+          fi
+          echo "version=$uv_version" >> "$GITHUB_OUTPUT"
+
+      - name: Install uv
+        if: steps.creds.outputs.skip != 'true'
+        uses: astral-sh/setup-uv@v10.2.0
+        with:
+          version: ${{ steps.uv-version.outputs.version }}
+
+      - name: Sync workspace
+        if: steps.creds.outputs.skip != 'true'
+        run: uv sync --dev --all-packages
+
+      - name: Build package
+        if: steps.creds.outputs.skip != 'true'
+        env:
+          HATCH_VCS_PRETEND_VERSION: ${{ inputs.pep440_version }}
+        run: |
+          set -euo pipefail
+          rm -rf dist
+          uv build --package "${{ matrix.package }}" --out-dir dist
+
+      - name: Publish to PyPI
+        if: steps.creds.outputs.skip != 'true' && inputs.release_type == 'final'
+        env:
+          UV_PUBLISH_TOKEN: ${{ secrets.PYPI_TOKEN }}
+          UV_PUBLISH_URL: https://upload.pypi.org/legacy/
+        run: uv publish dist/*
+
+      - name: Publish to TestPyPI
+        if: steps.creds.outputs.skip != 'true' && inputs.release_type != 'final'
+        env:
+          UV_PUBLISH_TOKEN: ${{ secrets.TEST_PYPI_TOKEN }}
+          UV_PUBLISH_URL: https://test.pypi.org/legacy/
+        run: uv publish dist/*
