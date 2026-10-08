@@ -70,9 +70,22 @@ jobs:
         with:
           fetch-depth: 0
 
+      - name: Read UV_VERSION from versions.env
+        if: steps.creds.outputs.skip != 'true'
+        id: uv-version
+        run: |
+          uv_version="$(awk -F= '/^UV_VERSION=/ {print $2; exit}' versions.env | tr -d '[:space:]')"
+          if [[ -z "$uv_version" ]]; then
+            echo "ERROR: UV_VERSION missing from versions.env" >&2
+            exit 1
+          fi
+          echo "version=$uv_version" >> "$GITHUB_OUTPUT"
+
       - name: Install uv
         if: steps.creds.outputs.skip != 'true'
-        uses: astral-sh/setup-uv@v7
+        uses: astral-sh/setup-uv@v10.2.0
+        with:
+          version: ${{ steps.uv-version.outputs.version }}
 
       - name: Sync workspace
         if: steps.creds.outputs.skip != 'true'
