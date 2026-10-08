@@ -47,11 +47,22 @@ def resolve_arc_export_image(image: str | None = None) -> str:
 def write_arc_scaffold(rocrate: str, out_dir: str | Path) -> Path:
     """Load RO-Crate JSON-LD with ARCtrl and write an ARC directory tree.
 
+    ``out_dir`` MUST be missing or an empty directory so scaffold output is not mixed
+    with stale files.
+
     Raises:
+        FileExistsError: If ``out_dir`` exists and is not empty.
+        NotADirectoryError: If ``out_dir`` exists and is not a directory.
         Exception: Propagates ARCtrl / filesystem failures when used directly.
     """
     target = Path(out_dir)
-    target.mkdir(parents=True, exist_ok=True)
+    if target.exists():
+        if not target.is_dir():
+            raise NotADirectoryError(f"out_dir is not a directory: {target}")
+        if any(target.iterdir()):
+            raise FileExistsError(f"out_dir is not empty: {target}")
+    else:
+        target.mkdir(parents=True, exist_ok=True)
     arc = ARC.from_rocrate_json_string(rocrate)
     arc.Write(str(target))
     return target
@@ -87,9 +98,19 @@ def run_arc_export(
     formats: Sequence[str] | None = None,
 ) -> ArcExportResult:
     """Run DataHUB-equivalent ``arc-export`` against a written ARC directory."""
+    arc_path = Path(arc_dir)
+    if not arc_path.is_dir():
+        message = f"arc_dir is not an existing directory: {arc_path}"
+        return ArcExportResult(
+            ok=False,
+            exit_code=_WRITE_FAILURE_EXIT_CODE,
+            stdout="",
+            stderr=message,
+            cause_excerpt=extract_cause_excerpt(fallback=message),
+        )
     resolved_image = resolve_arc_export_image(image)
     resolved_formats = tuple(formats) if formats is not None else DEFAULT_ARC_EXPORT_FORMATS
-    argv = _build_docker_argv(Path(arc_dir), image=resolved_image, formats=resolved_formats)
+    argv = _build_docker_argv(arc_path, image=resolved_image, formats=resolved_formats)
     completed = subprocess.run(  # noqa: S603 — argv is built locally; no shell
         argv,
         check=False,

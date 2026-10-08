@@ -44,6 +44,23 @@ def test_write_arc_scaffold_success(tmp_path: Path) -> None:
     mock_arc.Write.assert_called_once_with(str(tmp_path / "arc"))
 
 
+def test_write_arc_scaffold_rejects_non_empty_out_dir(tmp_path: Path) -> None:
+    out = tmp_path / "arc"
+    out.mkdir()
+    (out / "stale.txt").write_text("x", encoding="utf-8")
+    with pytest.raises(FileExistsError, match="not empty"):
+        write_arc_scaffold('{"@graph":[]}', out)
+
+
+def test_run_arc_export_rejects_missing_arc_dir(tmp_path: Path) -> None:
+    missing = tmp_path / "no-such-arc"
+    with patch("middleware.arc_validation.pipeline.subprocess.run") as run:
+        result = run_arc_export(missing)
+    assert result.ok is False
+    assert "not an existing directory" in result.cause_excerpt
+    run.assert_not_called()
+
+
 def test_run_arc_export_success_builds_argv(tmp_path: Path) -> None:
     arc_dir = tmp_path / "arc"
     arc_dir.mkdir()
