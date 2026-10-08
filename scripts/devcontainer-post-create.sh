@@ -80,13 +80,29 @@ if [ -f "${repo_root}/pyproject.toml" ]; then
   fi
 fi
 
-# ── pre-commit commit-stage hook ─────────────────────────────────────────────
-echo "==> Install pre-commit hook (commit-stage)"
+# ── Node deps (commitlint via npx --no; local prettier/markdownlint scripts) ─
+# Image globals cover Prettier/markdownlint CLIs; commitlint is package.json-only and the
+# commit-msg hook uses `npx --no`, which requires workspace node_modules (bind-mount hides
+# any image-local install under /workspace).
+if [ -f "${repo_root}/package-lock.json" ]; then
+  echo "==> npm ci (lockfile Node deps)"
+  npm ci
+fi
+
+# ── pre-commit commit-stage + commit-msg hooks ───────────────────────────────
+# Install each hook-type on its own guard: .git persists across Dev Container rebuilds,
+# so a pre-existing pre-commit hook must not skip commit-msg (commitlint) install.
+echo "==> Install pre-commit hooks (commit-stage + commit-msg)"
 if command -v pre-commit >/dev/null 2>&1 || uv run pre-commit --version >/dev/null 2>&1; then
   if [ ! -f "${repo_root}/.git/hooks/pre-commit" ]; then
     uv run pre-commit install --hook-type pre-commit
   else
     echo "pre-commit hook already installed"
+  fi
+  if [ ! -f "${repo_root}/.git/hooks/commit-msg" ]; then
+    uv run pre-commit install --hook-type commit-msg
+  else
+    echo "commit-msg hook already installed"
   fi
 else
   echo "WARNING: pre-commit not available after uv sync" >&2

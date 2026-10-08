@@ -30,6 +30,15 @@ repos:
 
   - repo: local
     hooks:
+      - id: commitlint
+        name: commitlint (Conventional Commits)
+        # Requires commit-msg stage: uv run pre-commit install --hook-type commit-msg
+        # pass_filenames must stay true (default): commit-msg stage passes the message file
+        # (COMMIT_EDITMSG / MERGE_MSG / SQUASH_MSG) so --edit lints that path, not a stale default.
+        entry: npx --no -- commitlint --edit
+        language: system
+        stages: [commit-msg]
+
       - id: ggshield
         name: ggshield secret scan
         # Fleet CLI via scripts/run-quality-cli.sh (no product pyproject dep required)

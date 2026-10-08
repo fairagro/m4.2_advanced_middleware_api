@@ -15,6 +15,8 @@ Not every file under `scripts/` is Dev Container-only. Personal-token helpers ar
 | `run-import-linter.sh`                | Host or Dev Container  | Product `.importlinter`; soft-skips without `middleware/`; uses `run-quality-cli.sh`                                                                      |
 | `run-uv-audit.sh`                     | Host or Dev Container  | Needs `uv` + network to OSV; optional `.uv-audit-ignore`                                                                                                  |
 | `run-helm-lint.sh`                    | Host or Dev Container  | Needs `helm` on `PATH` only when `helmchart/<chart>/` or `helm/<chart>/` exists; pin is Dev Container `HELM_VERSION`; optional `HELM_VALUES_FILE` overlay |
+| `detect-version-bump.sh`              | Host or Dev Container  | Release `version_bump=auto`; needs `git-cliff` + `jq` (pin `GIT_CLIFF_VERSION`)                                                                           |
+| `install-git-cliff.sh`                | Host or CI             | Installs pinned `git-cliff` from `versions.env`                                                                                                           |
 | `setup-git-hooks.sh` / `git-hooks/`   | Host or Dev Container  | Dispatcher + `pre-push.d/50-quality`; no `git-lfs` required                                                                                               |
 | `load-versions-env.sh`                | Host or Dev Container  | Reads `versions.env`, writes `.python-version`                                                                                                            |
 | `scripts/ai/` (`m42-ai`)              | Host or Dev Container  | uv workspace member; `uv sync` then `uv run m42-ai` (needs `gh` + auth)                                                                                   |
@@ -25,6 +27,39 @@ Not every file under `scripts/` is Dev Container-only. Personal-token helpers ar
 Supported day-to-day development remains the Linux Dev Container ([principles](../openspec/principles.global.md)). Host
 checkouts may run the **host-or-DC** scripts above; they do not get the personal-token store or PATH wrappers — use
 tokens already in your environment (e.g. exported from `~/.bashrc`) or `gh auth` as you prefer.
+
+## Conventional Commits
+
+Fleet commits MUST follow [Conventional Commits](https://www.conventionalcommits.org/) so Release
+[`version_bump: auto`](ci.md#reusable-buildyml) can derive major/minor/patch via git-cliff
+([`scripts/detect-version-bump.sh`](../scripts/detect-version-bump.sh)).
+
+| Signal                                             | Bump  |
+| -------------------------------------------------- | ----- |
+| Breaking (`feat!:` / `fix!:` / `BREAKING CHANGE:`) | major |
+| `feat:`                                            | minor |
+| `fix:` / other conventional types (incl. `deps:`)  | patch |
+
+**Pick `type` from the full staged diff, not from OpenSpec change titles or a single hunk.** `/opsx-archive` (move under
+`openspec/changes/archive/`, sync deltas into `openspec/specs/`) and other opsx housekeeping alone are **`chore`**
+(optional scope `openspec`), never `feat` — a mistaken `feat:` would falsely minor-bump Release `version_bump: auto`.
+Use `feat` / `fix` only when the commit changes shipped behaviour. Sparkle / Copilot subjects MUST cover every
+intentional change in the commit (theme subject, or short body bullets for independent fixes) — do not describe only the
+last or largest file.
+
+**Enforcement:** commitlint (`commitlint.config.cjs`) on the **commit-msg** hook (`npx commitlint --edit`). Install with
+`uv run pre-commit install --hook-type pre-commit --hook-type commit-msg` (Dev Container postCreate does both). Type
+`deps` is allowed for Renovate’s `deps:` prefix.
+
+**Editor generation (keep the buttons):**
+
+| Surface                                          | How Conventional Commits are steered                                                                                              |
+| ------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------- |
+| **VS Code Copilot**                              | synced `.vscode/settings.json` → `github.copilot.chat.commitMessageGeneration.instructions`                                       |
+| **Cursor sparkle** (SCM generate commit message) | synced root **`.cursorrules`** (Cursor does **not** apply `.cursor/rules` / AGENTS.md / the Copilot setting to that button today) |
+| **Agents**                                       | `.github/copilot-instructions.md` + commitlint                                                                                    |
+
+After pulling `.cursorrules`, retry the sparkle button. commitlint still rejects non-conventional messages on commit.
 
 ## Environment parity (IDE, hooks, CI)
 
@@ -137,27 +172,29 @@ lazy imports solely to break cycles) stay principles / other tools / `/code-revi
 
 ## Files
 
-| Path                                                | Role                                                                                                                         |
-| --------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
-| `.pre-commit-config.yaml`                           | Commit-stage + pre-push hooks — adopt **verbatim** after sync (see below)                                                    |
-| `ruff.toml`                                         | Shared Ruff lint/format — **verbatim** sync (no product `extend` / ignore overlay)                                           |
-| `mypy.ini`                                          | Shared Mypy strictness + fleet arctrl/fable `ignore_missing_imports` (path overlays via **env**)                             |
-| `.pylintrc`                                         | Shared Pylint (`ignored-modules` for arctrl/fable; `extension-pkg-allow-list=lxml`; path overlays via CI / env)              |
-| `pyrightconfig.json`                                | Shared basedpyright/Pylance (`venv`, `scripts/ai`, `typeCheckingMode: off`) — **verbatim**                                   |
-| `scripts/quality-check.sh`                          | Run **commit-stage** hooks only (check)                                                                                      |
-| `scripts/quality-fix.sh`                            | Run commit-stage **autofix** hooks only                                                                                      |
-| `scripts/run-container-structure-test.sh`           | Templated Docker build + `container-structure-test`                                                                          |
-| `scripts/run-import-linter.sh`                      | Thin import-linter runner (product `.importlinter`; see above)                                                               |
-| `scripts/run-quality-cli.sh`                        | `uv run --with-requirements` wrapper for fleet quality CLIs                                                                  |
-| `scripts/quality-tools-pins.txt`                    | Fleet pins for ggshield/ruff/mypy/pylint/bandit/vulture/import-linter (hooks + CI)                                           |
-| `scripts/run-uv-audit.sh`                           | Frozen `uv audit` + optional product `.uv-audit-ignore` (hooks + CI)                                                         |
-| `.importlinter`                                     | Product-owned import-linter config (fleet-required settings in this doc) — **not** synced from Devinfra                      |
-| `scripts/setup-git-hooks.sh`                        | Install dispatcher + `pre-push.d/50-quality` from `scripts/git-hooks/`                                                       |
-| `scripts/git-hooks/`                                | Version-controlled `pre-push` dispatcher + `pre-push.d/`                                                                     |
-| `.bandit`                                           | Bandit config (`bandit -c .bandit`)                                                                                          |
-| `.markdownlint.json` (+ ignore / cli2)              | Markdownlint (also used by the markdownlint hook)                                                                            |
-| `package.json` / `package-lock.json`                | Shared npm scripts + pins for Prettier/markdownlint (`prettier-md` + `markdownlint` hooks + reusable CI) — **verbatim** sync |
-| [`.vscode/settings.json`](../.vscode/settings.json) | Shared IDE baseline (interpreter, Ruff, Mypy, Pylint, empty `pytestArgs`, Prettier) — adopt **verbatim**                     |
+| Path                                                | Role                                                                                                            |
+| --------------------------------------------------- | --------------------------------------------------------------------------------------------------------------- |
+| `.pre-commit-config.yaml`                           | Commit-stage + pre-push hooks — adopt **verbatim** after sync (see below)                                       |
+| `ruff.toml`                                         | Shared Ruff lint/format — **verbatim** sync (no product `extend` / ignore overlay)                              |
+| `mypy.ini`                                          | Shared Mypy strictness + fleet arctrl/fable `ignore_missing_imports` (path overlays via **env**)                |
+| `.pylintrc`                                         | Shared Pylint (`ignored-modules` for arctrl/fable; `extension-pkg-allow-list=lxml`; path overlays via CI / env) |
+| `pyrightconfig.json`                                | Shared basedpyright/Pylance (`venv`, `scripts/ai`, `typeCheckingMode: off`) — **verbatim**                      |
+| `scripts/quality-check.sh`                          | Run **commit-stage** hooks only (check)                                                                         |
+| `scripts/quality-fix.sh`                            | Run commit-stage **autofix** hooks only                                                                         |
+| `scripts/run-container-structure-test.sh`           | Templated Docker build + `container-structure-test`                                                             |
+| `scripts/run-import-linter.sh`                      | Thin import-linter runner (product `.importlinter`; see above)                                                  |
+| `scripts/run-quality-cli.sh`                        | `uv run --with-requirements` wrapper for fleet quality CLIs                                                     |
+| `scripts/quality-tools-pins.txt`                    | Fleet pins for ggshield/ruff/mypy/pylint/bandit/vulture/import-linter (hooks + CI)                              |
+| `scripts/run-uv-audit.sh`                           | Frozen `uv audit` + optional product `.uv-audit-ignore` (hooks + CI)                                            |
+| `.importlinter`                                     | Product-owned import-linter config (fleet-required settings in this doc) — **not** synced from Devinfra         |
+| `scripts/setup-git-hooks.sh`                        | Install dispatcher + `pre-push.d/50-quality` from `scripts/git-hooks/`                                          |
+| `scripts/git-hooks/`                                | Version-controlled `pre-push` dispatcher + `pre-push.d/`                                                        |
+| `.bandit`                                           | Bandit config (`bandit -c .bandit`)                                                                             |
+| `.markdownlint.json` (+ ignore / cli2)              | Markdownlint (also used by the markdownlint hook)                                                               |
+| `package.json` / `package-lock.json`                | Shared npm scripts + pins for Prettier/markdownlint/commitlint — **verbatim** sync                              |
+| `commitlint.config.cjs`                             | Conventional Commits gate (commit-msg hook) — **verbatim**                                                      |
+| `cliff.toml`                                        | git-cliff parsers for Release `version_bump=auto` — **verbatim**                                                |
+| [`.vscode/settings.json`](../.vscode/settings.json) | Shared IDE baseline + Copilot/Cursor Conventional Commit generation instructions — adopt **verbatim**           |
 
 **Local artifact excludes:** repo-root `dist/` (PyInstaller onedir, etc.) is gitignored and already skipped by Ruff /
 Mypy / Pylint / Bandit. Markdown/Node tools must match: synced `.markdownlint-cli2.jsonc`, `.markdownlintignore`, and
