@@ -63,6 +63,7 @@ middleware/
 │   └── src/middleware/api/
 ├── api_client/            # Client library for API
 │   └── config.py          # Optional certificate support (26 tests)
+├── arc_validation/        # Published ARC export validation (ARCtrl + Docker arc-export)
 
 scripts/
 ├── ai/                            # m42-ai (synced): uv run --project scripts/ai m42-ai …
@@ -95,10 +96,10 @@ uv run pytest middleware/api_client/tests/unit/ -v
 # Quality checks (synced fragments — see docs/quality.md)
 uv run ruff check --config ruff.toml middleware/
 uv run ruff format --check --diff --config ruff.toml middleware/
-export MYPYPATH=middleware/api/src:middleware/api_client/src:middleware/shared/src:middleware/api/tests/unit:middleware/api_client/tests/unit:middleware/shared/tests
+export MYPYPATH=middleware/api/src:middleware/api_client/src:middleware/arc_validation/src:middleware/shared/src:middleware/api/tests/unit:middleware/api_client/tests/unit:middleware/arc_validation/tests/unit:middleware/shared/tests
 uv run mypy --config-file mypy.ini middleware/
 uv run pylint --rcfile .pylintrc \
-  --source-roots=middleware/api/src,middleware/api/tests/unit,middleware/api_client/tests/unit,middleware/shared/tests \
+  --source-roots=middleware/api/src,middleware/api/tests/unit,middleware/api_client/tests/unit,middleware/arc_validation/src,middleware/arc_validation/tests/unit,middleware/shared/tests \
   middleware/
 uv run bandit -r middleware/ -c .bandit -ll
 
@@ -347,6 +348,9 @@ Before generating or modifying code, read the relevant specs:
 - **[`openspec/specs/harvest-report/`](openspec/specs/harvest-report/)** — Format-neutral harvest-run accumulator with
   repository scope counting and pluggable serializers (JSON-LD first): `HarvestReport`, `RepositoryScope`,
   `RepositoryReport`, `HarvestIssue`.
+- **[`openspec/specs/arc-export-validation/`](openspec/specs/arc-export-validation/)** — Published
+  `fairagro-middleware-arc-validation`: ARCtrl write → Docker `arc-export` (DataHUB-equivalent) without Middleware
+  runtime.
 
 For the AI agent workflow documentation, see [`docs/ai_workflow.md`](docs/ai_workflow.md). For Copilot/Bugbot review
 triage, see [`docs/ai_review_policy.md`](docs/ai_review_policy.md),
@@ -359,22 +363,23 @@ plumbing via `uv run --project scripts/ai m42-ai …`).
 This table maps each OpenSpec domain to the primary source file(s) it describes. Agents (`/opsx-apply` and default Agent
 mode) use it to locate affected code.
 
-| Spec domain                          | Primary source file(s)                                                                                                                                                                              |
-| ------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `openspec/specs/arc-manager/`        | `middleware/api/src/middleware/api/business_logic/arc_manager.py`, `middleware/api/src/middleware/api/business_logic/rdi_comments.py`; `middleware/api/src/middleware/api/rdi_registry.py`          |
-| `openspec/specs/arc-store/`          | `middleware/api/src/middleware/api/arc_store/git_repo/`, `consolidated_git/`, `factory.py`, `resolution.py`, `arc_store_config.py`, `git_cli_settings.py`, `git_context.py`, `git_cache_cleanup.py` |
-| `openspec/specs/url-str/`            | `middleware/shared/src/middleware/shared/security/url_str.py`, `url_redact.py`                                                                                                                      |
-| `openspec/specs/document-store/`     | `middleware/api/src/middleware/api/document_store/couchdb_client.py`, `couchdb.py`                                                                                                                  |
-| `openspec/specs/arc-content-hash/`   | `middleware/api/src/middleware/api/document_store/content_hash.py`                                                                                                                                  |
-| `openspec/specs/harvest-manager/`    | `middleware/api/src/middleware/api/business_logic/harvest_manager.py`                                                                                                                               |
-| `openspec/specs/arc-upload/`         | `middleware/api/src/middleware/api/api/v3/arcs.py`                                                                                                                                                  |
-| `openspec/specs/harvest-arc-upload/` | `middleware/api/src/middleware/api/api/v3/harvests.py`                                                                                                                                              |
-| `openspec/specs/admission-control/`  | `middleware/api/src/middleware/api/api/admission_control.py`, `fastapi_app.py`                                                                                                                      |
-| `openspec/specs/rate-limiting/`      | `middleware/api/src/middleware/api/api/rate_limiting.py`, `fastapi_app.py`, `middleware/api/src/middleware/api/config.py` (`RateLimitingConfig`)                                                    |
-| `openspec/specs/harvest-client/`     | `middleware/api_client/src/middleware/api_client/api_client.py`, `models.py`                                                                                                                        |
-| `openspec/specs/harvest-report/`     | `middleware/shared/src/middleware/shared/report/`, `ns/harvest-report/`                                                                                                                             |
-| `openspec/specs/ci-cd/`              | `.github/workflows/` (see domain design for workflow files)                                                                                                                                         |
-| `openspec/specs/helm-httproute/`     | `helmchart/fairagro-advanced-middleware-api-chart/templates/httproute.yaml`, `values.yaml` (`api.httpRoute`), `templates/NOTES.txt`; template overlay `helmchart/test_deploy/values-httproute.yaml` |
+| Spec domain                             | Primary source file(s)                                                                                                                                                                              |
+| --------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `openspec/specs/arc-manager/`           | `middleware/api/src/middleware/api/business_logic/arc_manager.py`, `middleware/api/src/middleware/api/business_logic/rdi_comments.py`; `middleware/api/src/middleware/api/rdi_registry.py`          |
+| `openspec/specs/arc-store/`             | `middleware/api/src/middleware/api/arc_store/git_repo/`, `consolidated_git/`, `factory.py`, `resolution.py`, `arc_store_config.py`, `git_cli_settings.py`, `git_context.py`, `git_cache_cleanup.py` |
+| `openspec/specs/url-str/`               | `middleware/shared/src/middleware/shared/security/url_str.py`, `url_redact.py`                                                                                                                      |
+| `openspec/specs/document-store/`        | `middleware/api/src/middleware/api/document_store/couchdb_client.py`, `couchdb.py`                                                                                                                  |
+| `openspec/specs/arc-content-hash/`      | `middleware/api/src/middleware/api/document_store/content_hash.py`                                                                                                                                  |
+| `openspec/specs/harvest-manager/`       | `middleware/api/src/middleware/api/business_logic/harvest_manager.py`                                                                                                                               |
+| `openspec/specs/arc-upload/`            | `middleware/api/src/middleware/api/api/v3/arcs.py`                                                                                                                                                  |
+| `openspec/specs/harvest-arc-upload/`    | `middleware/api/src/middleware/api/api/v3/harvests.py`                                                                                                                                              |
+| `openspec/specs/admission-control/`     | `middleware/api/src/middleware/api/api/admission_control.py`, `fastapi_app.py`                                                                                                                      |
+| `openspec/specs/rate-limiting/`         | `middleware/api/src/middleware/api/api/rate_limiting.py`, `fastapi_app.py`, `middleware/api/src/middleware/api/config.py` (`RateLimitingConfig`)                                                    |
+| `openspec/specs/harvest-client/`        | `middleware/api_client/src/middleware/api_client/api_client.py`, `models.py`                                                                                                                        |
+| `openspec/specs/harvest-report/`        | `middleware/shared/src/middleware/shared/report/`, `ns/harvest-report/`                                                                                                                             |
+| `openspec/specs/arc-export-validation/` | `middleware/arc_validation/src/middleware/arc_validation/`                                                                                                                                          |
+| `openspec/specs/ci-cd/`                 | `.github/workflows/` (see domain design for workflow files); PyPI via `.github/workflows/publish-pypi.yml`                                                                                          |
+| `openspec/specs/helm-httproute/`        | `helmchart/fairagro-advanced-middleware-api-chart/templates/httproute.yaml`, `values.yaml` (`api.httpRoute`), `templates/NOTES.txt`; template overlay `helmchart/test_deploy/values-httproute.yaml` |
 
 ---
 

@@ -42,8 +42,8 @@ jobs:
     with:
       python_package_root: middleware
       components: '["api"]'
-      mypy_path: middleware/api/src:middleware/api_client/src:middleware/shared/src:middleware/api/tests/unit:middleware/api_client/tests/unit:middleware/shared/tests
-      pylint_source_roots: middleware/api/src,middleware/api/tests/unit,middleware/api_client/tests/unit,middleware/shared/tests
+      mypy_path: middleware/api/src:middleware/api_client/src:middleware/arc_validation/src:middleware/shared/src:middleware/api/tests/unit:middleware/api_client/tests/unit:middleware/arc_validation/tests/unit:middleware/shared/tests
+      pylint_source_roots: middleware/api/src,middleware/api/tests/unit,middleware/api_client/tests/unit,middleware/arc_validation/src,middleware/arc_validation/tests/unit,middleware/shared/tests
     secrets: inherit
 
   build:
@@ -78,4 +78,13 @@ jobs:
       image_base_name: fairagro-advanced-middleware
       release_type: 'final'
       tag_prefix: 'docker-v'
+    secrets: inherit
+
+  publish-pypi:
+    name: Publish PyPI
+    needs: [build, check, code-quality]
+    uses: ./.github/workflows/publish-pypi.yml
+    with:
+      pep440_version: ${{ needs.build.outputs.pep440_version }}
+      release_type: final
     secrets: inherit
