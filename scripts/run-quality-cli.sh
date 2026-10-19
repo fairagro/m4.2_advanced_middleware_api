@@ -5,8 +5,10 @@
 # Example:
 #   ./scripts/run-quality-cli.sh ruff check --config ruff.toml middleware/
 #
-# Loads MYPYPATH / PYLINT_SOURCE_ROOTS from .devcontainer/product.env on every
-# invoke (file wins over a stale process/container env_file snapshot).
+# Loads MYPYPATH / PYLINT_SOURCE_ROOTS from .devcontainer/product.env on each
+# invoke (file wins over a stale process/container env_file snapshot), unless
+# QUALITY_PATH_LOADED=1 (set by reusable-code-quality after soft-load + optional
+# mypy_path / pylint_source_roots input overrides).
 
 set -euo pipefail
 
@@ -25,8 +27,10 @@ if [[ "$#" -lt 1 ]]; then
 fi
 
 cd "${REPO_ROOT}"
-# shellcheck source=scripts/load-quality-path-env.sh
-source "${SCRIPT_DIR}/load-quality-path-env.sh" "${REPO_ROOT}/.devcontainer/product.env"
+if [[ -z "${QUALITY_PATH_LOADED:-}" ]]; then
+  # shellcheck source=scripts/load-quality-path-env.sh
+  source "${SCRIPT_DIR}/load-quality-path-env.sh" "${REPO_ROOT}/.devcontainer/product.env"
+fi
 
 tool="$1"
 shift

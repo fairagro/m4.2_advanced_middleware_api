@@ -4,8 +4,11 @@
 #
 # File wins over a pre-existing process value so a stale Dev Container env_file
 # snapshot (Compose applies product.env only at create) cannot shadow an updated
-# .devcontainer/product.env. Prefer product.env as the single source; CI should
-# use quality_env_file / the same keys rather than relying on process-env wins.
+# .devcontainer/product.env. Prefer product.env as the single source.
+#
+# Callers that already soft-loaded and then applied a one-shot override (e.g.
+# reusable-code-quality `mypy_path` input) should set QUALITY_PATH_LOADED=1 so
+# scripts/run-quality-cli.sh skips a second load that would clobber the override.
 #
 # Usage:
 #   source scripts/load-quality-path-env.sh [path-to-env-file]
