@@ -6,6 +6,9 @@
   // Test roots: each repo pyproject.toml testpaths — keep python.testing.pytestArgs empty so discovery
   // is not overridden.
 
+  // Allow JSON language service to fetch SchemaStore schemas (e.g. package.json $schema).
+  "json.schemaDownload.enable": true,
+
   "python.defaultInterpreterPath": "${workspaceFolder}/.venv/bin/python",
   "python-envs.defaultEnvManager": "ms-python.python:venv",
 
@@ -102,5 +105,13 @@
   ],
   "cursorpyright.analysis.extraPaths": [
     "${workspaceFolder}/scripts/ai/src"
+  ],
+
+  // Conventional Commits for release version_bump=auto — VS Code Copilot only.
+  // Cursor SCM sparkle uses repo-root `.cursorrules` (not this key). See docs/quality.md.
+  "github.copilot.chat.commitMessageGeneration.instructions": [
+    {
+      "text": "Use Conventional Commits: type(optional-scope): subject. Types: feat, fix, docs, style, refactor, perf, test, build, ci, chore, revert, deps. Base type and subject on the FULL staged diff (all paths), not only the last hunk or one file. Cover every intentional change; if several independent fixes share the commit, use a theme subject plus a short body with one bullet each. feat/fix only for shipped behaviour. OpenSpec /opsx-archive and opsx housekeeping alone → chore (optional scope openspec), never feat. Docs-only → docs; CI → ci; Renovate → deps. Breaking: feat!: or BREAKING CHANGE:. Subject imperative, no trailing period; accuracy over brevity."
+    }
   ]
 }

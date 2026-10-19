@@ -55,6 +55,8 @@ allow:
   - scripts/quality-tools-pins.txt
   - scripts/run-uv-audit.sh
   - scripts/run-helm-lint.sh
+  - scripts/detect-version-bump.sh
+  - scripts/install-git-cliff.sh
   - scripts/setup-git-hooks.sh
   - scripts/update-dockerfile-pins.sh
   - scripts/prune-merged-branches.sh
@@ -82,8 +84,11 @@ allow:
   - .prettierignore
   - package.json
   - package-lock.json
+  - commitlint.config.cjs
+  - cliff.toml
   - .vscode/settings.json
   - .vscode/extensions.json
+  - .cursorrules
   - .devcontainer/Dockerfile
   - .devcontainer/devcontainer.json
   - .devcontainer/docker-compose.yml

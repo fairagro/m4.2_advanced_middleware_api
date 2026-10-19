@@ -22,6 +22,7 @@ ARG HADOLINT_VERSION
 ARG CST_VERSION
 ARG TRIVY_VERSION
 ARG RENOVATE_VERSION
+ARG GIT_CLIFF_VERSION
 ARG NODE_VERSION
 ARG NPM_VERSION
 ARG OPENSPEC_VERSION
@@ -109,6 +110,11 @@ RUN curl -fsSL "https://github.com/GoogleContainerTools/container-structure-test
 # ── Trivy ─────────────────────────────────────────────────────────────────────
 RUN curl -fsSL "https://github.com/aquasecurity/trivy/releases/download/${TRIVY_VERSION}/trivy_${TRIVY_VERSION#v}_Linux-64bit.tar.gz" \
         | tar -xz -C /usr/local/bin trivy && chmod +x /usr/local/bin/trivy
+
+# ── git-cliff (Conventional Commits version bump for release auto-detect) ─────
+RUN curl -fsSL "https://github.com/orhun/git-cliff/releases/download/${GIT_CLIFF_VERSION}/git-cliff-${GIT_CLIFF_VERSION#v}-x86_64-unknown-linux-gnu.tar.gz" \
+        | tar -xz --strip-components=1 -C /usr/local/bin "git-cliff-${GIT_CLIFF_VERSION#v}/git-cliff" && \
+        chmod +x /usr/local/bin/git-cliff
 
 # ── Node.js (official binary tarball) ─────────────────────────────────────────
 RUN curl -fsSL "https://nodejs.org/dist/${NODE_VERSION}/node-${NODE_VERSION}-linux-x64.tar.xz" \
