@@ -75,6 +75,7 @@ def api_client(git_repo_config: dict[str, Any]) -> Generator[TestClient, None, N
     api = Api(config)
     # Mock BusinessLogic connection methods to avoid requiring a real CouchDB for system tests
     with (
+        patch.object(api.business_logic._doc_store, "ensure_initialized", AsyncMock()),  # noqa: SLF001
         patch.object(api.business_logic._doc_store, "connect", AsyncMock()),  # noqa: SLF001
         patch.object(api.business_logic._doc_store, "setup", AsyncMock()),  # noqa: SLF001
         patch.object(api.business_logic._doc_store, "close", AsyncMock()),  # noqa: SLF001
