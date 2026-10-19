@@ -8,23 +8,24 @@ This image is the **shared product Dev Container toolchain** (issue #10): base p
 [#65](https://github.com/fairagro/m4.2_middleware_devinfra/issues/65)) — do **not** hand-edit those blobs after sync.
 Repo-specific container env (`MYPYPATH`, `PYLINT_SOURCE_ROOTS`, `CST_*`, …) belongs in optional product-owned
 `.devcontainer/product.env` (not synced) and/or CI/hook env inputs. Compose `env_file` applies at **container create**
-only; synced [`scripts/run-quality-cli.sh`](../scripts/run-quality-cli.sh) re-reads `MYPYPATH` / `PYLINT_SOURCE_ROOTS`
-from that file on each invoke when unset (see [quality.md](quality.md) / [ci.md](ci.md)).
+only; synced [`scripts/run-quality-cli.sh`](../scripts/run-quality-cli.sh) re-applies `MYPYPATH` / `PYLINT_SOURCE_ROOTS`
+from that file on each quality invoke unless `QUALITY_PATH_LOADED` is set (file wins over a stale process/container
+snapshot — see [quality.md](quality.md) / [ci.md](ci.md)).
 
 OpenSpec **specs/changes** for product work stay in the product repos
 ([epic #1](https://github.com/fairagro/m4.2_middleware_devinfra/issues/1)); this image provides the OpenSpec CLI.
 
 ## Layout
 
-| Path                                                | Purpose                                                                                                                                                |
-| --------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `.devcontainer/devcontainer.json`                   | **Verbatim** sync: Compose service, DinD, mounts, extensions, postCreate                                                                               |
-| `.devcontainer/docker-compose.yml`                  | **Verbatim** sync: build args from `versions.env`, bind `..:/workspace`                                                                                |
-| `.devcontainer/product.env`                         | **Product-owned** (optional, not synced): `MYPYPATH`, `PYLINT_SOURCE_ROOTS`, `CST_*`, … — re-read by quality CLI / reusable CI when hooks inputs empty |
-| `.devcontainer/Dockerfile`                          | Pinned shared tooling image                                                                                                                            |
-| [`.vscode/settings.json`](../.vscode/settings.json) | Shared workspace IDE settings (also apply on host clones)                                                                                              |
-| `versions.env`                                      | Single source of truth for tool versions                                                                                                               |
-| `.devcontainer/.env`                                | Symlink → `../versions.env` (Compose build-arg substitution)                                                                                           |
+| Path                                                | Purpose                                                                                                                                                                                                       |
+| --------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `.devcontainer/devcontainer.json`                   | **Verbatim** sync: Compose service, DinD, mounts, extensions, postCreate                                                                                                                                      |
+| `.devcontainer/docker-compose.yml`                  | **Verbatim** sync: build args from `versions.env`, bind `..:/workspace`                                                                                                                                       |
+| `.devcontainer/product.env`                         | **Product-owned** (optional, not synced): `MYPYPATH`, `PYLINT_SOURCE_ROOTS`, `CST_*`, … — quality CLI re-applies path keys each invoke unless `QUALITY_PATH_LOADED`; Compose still injects the file at create |
+| `.devcontainer/Dockerfile`                          | Pinned shared tooling image                                                                                                                                                                                   |
+| [`.vscode/settings.json`](../.vscode/settings.json) | Shared workspace IDE settings (also apply on host clones)                                                                                                                                                     |
+| `versions.env`                                      | Single source of truth for tool versions                                                                                                                                                                      |
+| `.devcontainer/.env`                                | Symlink → `../versions.env` (Compose build-arg substitution)                                                                                                                                                  |
 
 ## Shared JSON + Compose contract (`/workspace`)
 
