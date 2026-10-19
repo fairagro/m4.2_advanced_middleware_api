@@ -21,6 +21,7 @@ from middleware.api.business_logic.ports import BusinessLogicPorts
 from middleware.api.config import Config
 from middleware.api.document_store import ArcStoreResult
 from middleware.api.document_store.config import CouchDBConfig
+from middleware.api.rdi_registry import RdiRegistryEntry
 from middleware.api.utils import calculate_arc_id
 from middleware.api.worker.config import CeleryConfig
 from middleware.shared.api_models.common.rocrate import RoCratePayload
@@ -63,7 +64,7 @@ def config(oid: x509.ObjectIdentifier, known_rdis: list[str]) -> Config:
     return Config(
         log_level="DEBUG",
         client_auth_oid=oid,
-        known_rdis=known_rdis,
+        known_rdis=[RdiRegistryEntry(id=rdi) for rdi in known_rdis],
         arc_store=ArcStoreConfig(
             git_repo=GitRepoConfig(
                 url="http://localhost:8080",
@@ -137,6 +138,7 @@ def service(config: Config) -> BusinessLogic:
     doc_store.connect = AsyncMock()
     doc_store.close = AsyncMock()
     doc_store.setup = AsyncMock()
+    doc_store.ensure_initialized = AsyncMock()
 
     git_sync_task = MagicMock()
     broker_health_checker = MagicMock()

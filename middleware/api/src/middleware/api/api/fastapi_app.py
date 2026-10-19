@@ -38,6 +38,7 @@ from ..celery_integration import (
     build_api_celery_app,
 )
 from ..config import Config
+from ..document_store import DocumentStoreUnavailableError
 from ..health_service import ApiHealthService
 from .admission_control import AdmissionControlMiddleware
 from .common.dependencies import CommonApiDependencies
@@ -157,6 +158,7 @@ class Api:
             worker_health_checker=CeleryWorkerHealthChecker(api_celery_app),
             arc_store=self.business_logic.arc_store,
             consolidated_store=self.business_logic.consolidated_store,
+            document_store=self.business_logic.document_store,
         )
         self.common_deps = CommonApiDependencies(self._config)
 
@@ -294,6 +296,15 @@ class Api:
 
         @self._app.exception_handler(TransientError)
         async def transient_error_handler(_request: Request, exc: TransientError) -> JSONResponse:
+            return JSONResponse(
+                status_code=HTTPStatus.SERVICE_UNAVAILABLE,
+                content={"detail": str(exc)},
+            )
+
+        @self._app.exception_handler(DocumentStoreUnavailableError)
+        async def document_store_unavailable_handler(
+            _request: Request, exc: DocumentStoreUnavailableError
+        ) -> JSONResponse:
             return JSONResponse(
                 status_code=HTTPStatus.SERVICE_UNAVAILABLE,
                 content={"detail": str(exc)},

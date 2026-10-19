@@ -2,15 +2,13 @@
 
 import asyncio
 import logging
-from http import HTTPStatus
-
-import aiohttp
 
 from .arc_store import ArcStore
 from .arc_store.factory import create_arc_stores
 from .business_logic.ports import BrokerHealthChecker
 from .celery_integration import CeleryWorkerHealthChecker
 from .config import Config
+from .document_store import DocumentStore
 from .document_store.couchdb import CouchDB
 
 logger = logging.getLogger(__name__)
@@ -19,11 +17,13 @@ logger = logging.getLogger(__name__)
 class ApiHealthService:
     """Aggregates health checks for API endpoints."""
 
-    def __init__(
+    def __init__(  # noqa: PLR0913 — health adapters are injected explicitly (no service locator)
         self,
         config: Config,
         broker_health_checker: BrokerHealthChecker,
         worker_health_checker: CeleryWorkerHealthChecker,
+        *,
+        document_store: DocumentStore,
         arc_store: ArcStore | None = None,
         consolidated_store: ArcStore | None = None,
     ) -> None:
@@ -33,6 +33,8 @@ class ApiHealthService:
             config: API configuration (feature-toggle flags).
             broker_health_checker: Adapter to check RabbitMQ reachability.
             worker_health_checker: Adapter to check live Celery workers.
+            document_store: Live document store used for CouchDB readiness
+                       (application DB presence + optional re-init).
             arc_store: Existing per-ARC ArcStore reused for the git-backend
                        health check. When ``None`` and the git-backend check
                        is enabled, stores are created from config (legacy
@@ -43,6 +45,7 @@ class ApiHealthService:
         self._config = config
         self._broker_health_checker = broker_health_checker
         self._worker_health_checker = worker_health_checker
+        self._document_store = document_store
         self._arc_store = arc_store
         self._consolidated_store = consolidated_store
 
@@ -76,16 +79,11 @@ class ApiHealthService:
         return checks
 
     async def _check_couchdb(self) -> bool:
-        """Check whether CouchDB is reachable from API."""
+        """Check whether the configured CouchDB application database is available."""
         try:
-            timeout = aiohttp.ClientTimeout(total=5)
-            async with (
-                aiohttp.ClientSession(timeout=timeout) as session,
-                session.get(str(self._config.couchdb.url)) as resp,
-            ):
-                return resp.status == HTTPStatus.OK
+            return await self._document_store.health_check()
         except Exception as e:  # noqa: BLE001
-            logger.error("CouchDB health check failed: %s", e)
+            logger.error("CouchDB document-store health check failed: %s", e)
             return False
 
     async def _check_git_backends(self) -> dict[str, bool]:
