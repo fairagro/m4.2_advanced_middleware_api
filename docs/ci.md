@@ -501,8 +501,13 @@ branches already advanced the counter). On the same path, `pep440_version` is `X
 
 Secrets: `DOCKERHUB_USER`, `DOCKERHUB_TOKEN` (optional — if missing, DockerHub push is skipped and the GitHub Release
 body states why). GHCR uses `GITHUB_TOKEN` (`packages: write` on the reusable job). Git tags / GitHub Releases are
-created even when a registry push fails; the release body includes a **Registry status** section and an **Image licenses
-(Trivy)** section (informational). To re-push without a new tag, use
+created even when a registry push fails; the release body includes a **Registry status** section, a git-cliff
+**Changelog** section (Conventional Commits since the previous `*-docker-v*` tag — same R1 range as
+`version_bump: auto`), and an **Image licenses (Trivy)** section (informational). GitHub’s generic
+`generate_release_notes` dump is **disabled**; the Changelog section may include a compare (“Full Changelog”) link.
+Empty cliff output soft-fails with a placeholder (Release still created); real cliff errors are logged. Pre-release / RC
+paths that do not create a persisted GitHub Release do not use this Changelog wiring. Helper:
+[`scripts/generate-release-changelog.sh`](../scripts/generate-release-changelog.sh). To re-push without a new tag, use
 [`reusable-registry-retry.yml`](#reusable-registry-retryyml) (DockerHub and/or GHCR flags).
 
 GHCR image tag shape: `ghcr.io/<ghcr_namespace>/<image_base_name>-<component>:<version>` (aligned with DockerHub
@@ -543,8 +548,11 @@ see [`docs/quality.md`](quality.md); it does **not** replace this Feature-PR reu
 Helm CLI version comes from the caller’s `versions.env` (`HELM_VERSION`). Secrets `DOCKERHUB_USER` / `DOCKERHUB_TOKEN`
 are optional; if missing or a push fails, the Helm GitHub Release body (final) or job summary (pre-release) MUST state
 the registry status and reason. GHCR uses `GITHUB_TOKEN`. Chart tags are created before registry pushes (same tag-first
-policy as Docker release). Helm **pre-release** chart versions use `…-rc.<branch>.<run>` with the same meaning of
-`<run>` as Docker (`github.run_number`, repo-wide) and MUST run only on `build/*` (hard cut; not `feature/*`).
+policy as Docker release). **Final** Helm GitHub Release bodies include a git-cliff **Changelog** since the previous
+`*-chart-v*` tag (R1; same helper/soft-fail rules as Docker Final; `generate_release_notes: false`). Pre-release does
+not create a persisted GitHub Release changelog. Helm **pre-release** chart versions use `…-rc.<branch>.<run>` with the
+same meaning of `<run>` as Docker (`github.run_number`, repo-wide) and MUST run only on `build/*` (hard cut; not
+`feature/*`).
 
 ### `reusable-registry-retry.yml`
 
