@@ -5,8 +5,8 @@
 # Example:
 #   ./scripts/run-quality-cli.sh ruff check --config ruff.toml middleware/
 #
-# Soft-loads MYPYPATH / PYLINT_SOURCE_ROOTS from .devcontainer/product.env when unset
-# (same keys as reusable code-quality; process env wins if already set).
+# Loads MYPYPATH / PYLINT_SOURCE_ROOTS from .devcontainer/product.env on every
+# invoke (file wins over a stale process/container env_file snapshot).
 
 set -euo pipefail
 

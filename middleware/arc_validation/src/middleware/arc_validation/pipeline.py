@@ -68,6 +68,15 @@ def write_arc_scaffold(rocrate: str, out_dir: str | Path) -> Path:
     return target
 
 
+def _normalize_formats(formats: Sequence[str] | None) -> tuple[str, ...]:
+    """Resolve export formats; a bare ``str`` is one format name (not char-iterated)."""
+    if formats is None:
+        return DEFAULT_ARC_EXPORT_FORMATS
+    if isinstance(formats, str):
+        return (formats,)
+    return tuple(formats)
+
+
 def _build_docker_argv(
     arc_dir: Path,
     *,
@@ -91,6 +100,16 @@ def _build_docker_argv(
     return argv
 
 
+def _failed_result(message: str, *, exit_code: int = _WRITE_FAILURE_EXIT_CODE) -> ArcExportResult:
+    return ArcExportResult(
+        ok=False,
+        exit_code=exit_code,
+        stdout="",
+        stderr=message,
+        cause_excerpt=extract_cause_excerpt(fallback=message),
+    )
+
+
 def run_arc_export(
     arc_dir: str | Path,
     *,
@@ -100,23 +119,20 @@ def run_arc_export(
     """Run DataHUB-equivalent ``arc-export`` against a written ARC directory."""
     arc_path = Path(arc_dir)
     if not arc_path.is_dir():
-        message = f"arc_dir is not an existing directory: {arc_path}"
-        return ArcExportResult(
-            ok=False,
-            exit_code=_WRITE_FAILURE_EXIT_CODE,
-            stdout="",
-            stderr=message,
-            cause_excerpt=extract_cause_excerpt(fallback=message),
-        )
+        return _failed_result(f"arc_dir is not an existing directory: {arc_path}")
     resolved_image = resolve_arc_export_image(image)
-    resolved_formats = tuple(formats) if formats is not None else DEFAULT_ARC_EXPORT_FORMATS
+    resolved_formats = _normalize_formats(formats)
     argv = _build_docker_argv(arc_path, image=resolved_image, formats=resolved_formats)
-    completed = subprocess.run(  # noqa: S603 — argv is built locally; no shell
-        argv,
-        check=False,
-        capture_output=True,
-        text=True,
-    )
+    try:
+        completed = subprocess.run(  # noqa: S603 — argv is built locally; no shell
+            argv,
+            check=False,
+            capture_output=True,
+            text=True,
+        )
+    except OSError as exc:
+        message = f"Failed to invoke docker: {exc}"
+        return _failed_result(message)
     stdout = completed.stdout or ""
     stderr = completed.stderr or ""
     ok = completed.returncode == 0
@@ -143,11 +159,5 @@ def validate_rocrate(
             write_arc_scaffold(rocrate, out_dir)
         except Exception as exc:  # noqa: BLE001 — map any write failure into ArcExportResult
             message = str(exc) or exc.__class__.__name__
-            return ArcExportResult(
-                ok=False,
-                exit_code=_WRITE_FAILURE_EXIT_CODE,
-                stdout="",
-                stderr=message,
-                cause_excerpt=extract_cause_excerpt(fallback=message),
-            )
+            return _failed_result(message)
         return run_arc_export(out_dir, image=image, formats=formats)

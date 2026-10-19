@@ -1,6 +1,11 @@
 #!/usr/bin/env bash
-# Soft-load MYPYPATH / PYLINT_SOURCE_ROOTS from a product env file when unset/empty.
+# Load MYPYPATH / PYLINT_SOURCE_ROOTS from a product env file on every invoke.
 # Only those keys are read (no full `source` of the file). Missing file = no-op.
+#
+# File wins over a pre-existing process value so a stale Dev Container env_file
+# snapshot (Compose applies product.env only at create) cannot shadow an updated
+# .devcontainer/product.env. Prefer product.env as the single source; CI should
+# use quality_env_file / the same keys rather than relying on process-env wins.
 #
 # Usage:
 #   source scripts/load-quality-path-env.sh [path-to-env-file]
@@ -27,10 +32,7 @@ _load_quality_path_env() {
     elif [[ "${val}" =~ ^\'(.*)\'$ ]]; then
       val="${BASH_REMATCH[1]}"
     fi
-    # only fill when unset or empty
-    if [[ -z "${!key:-}" ]]; then
-      export "${key}=${val}"
-    fi
+    export "${key}=${val}"
   done <"${env_file}"
 }
 

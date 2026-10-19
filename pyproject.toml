@@ -7,6 +7,7 @@ requires-python = ">=3.12"
 dependencies = [
   "api",
   "fairagro-middleware-api-client",
+  "fairagro-middleware-arc-validation",
   "fairagro-middleware-shared",
 ]
 

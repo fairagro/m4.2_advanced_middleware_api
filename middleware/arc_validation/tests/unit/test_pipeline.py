@@ -95,6 +95,32 @@ def test_run_arc_export_failure_keeps_logs_and_excerpt(tmp_path: Path) -> None:
     assert "Internal Error" in result.stderr
 
 
+def test_run_arc_export_string_format_is_one_name(tmp_path: Path) -> None:
+    """A bare str must not be expanded into per-character -f args."""
+    arc_dir = tmp_path / "arc"
+    arc_dir.mkdir()
+    completed = MagicMock(returncode=0, stdout="ok", stderr="")
+    with patch("middleware.arc_validation.pipeline.subprocess.run", return_value=completed) as run:
+        result = run_arc_export(arc_dir, formats="isa-json")
+    assert result.ok is True
+    argv = run.call_args.args[0]
+    assert argv.count("-f") == 1
+    assert argv[argv.index("-f") + 1] == "isa-json"
+
+
+def test_run_arc_export_missing_docker_returns_result(tmp_path: Path) -> None:
+    arc_dir = tmp_path / "arc"
+    arc_dir.mkdir()
+    with patch(
+        "middleware.arc_validation.pipeline.subprocess.run",
+        side_effect=FileNotFoundError(2, "No such file or directory", "docker"),
+    ):
+        result = run_arc_export(arc_dir)
+    assert result.ok is False
+    assert result.exit_code == 1
+    assert "Failed to invoke docker" in result.cause_excerpt
+
+
 def test_validate_rocrate_pass() -> None:
     export_result = ArcExportResult(ok=True, exit_code=0, stdout="ok", stderr="", cause_excerpt="")
     with (
