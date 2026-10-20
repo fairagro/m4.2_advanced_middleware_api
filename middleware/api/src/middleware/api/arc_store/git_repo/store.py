@@ -11,10 +11,9 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import ParamSpec, TypeVar
 
-import git.cmd
 from arctrl import ARC
 from git.exc import GitCommandError
-from opentelemetry import context, trace
+from opentelemetry import context
 
 from middleware.api.arc_store import ArcStore
 from middleware.api.arc_store.git_cache_cleanup import GIT_REPO_SYNC_PREFIX, reclaim_stale_git_cache_dirs
@@ -221,51 +220,15 @@ class GitRepo(ArcStore):
         )
 
     async def _exists(self, arc_id: str) -> bool:
-        """Check if ARC repo exists."""
+        """Check whether a usable repo for this ARC already exists (provider probe; no create)."""
 
         def _task() -> bool:
             with self._tracer.start_as_current_span(
                 "api.GitRepo._exists",
                 attributes={"arc_id": arc_id},
-                set_status_on_exception=False,
             ) as span:
-                # We can try to ls-remote using the authenticated URL
-                url = self._remote_provider.get_repo_url(arc_id, authenticated=True)
-                span.set_attribute("git.repo_url", str(url))
-                remote = url.unredacted()
-
-                g = git.cmd.Git()
-                try:
-                    with self._tracer.start_as_current_span(
-                        "api.GitRepo._exists:ls-remote",
-                        set_status_on_exception=False,
-                    ) as inner_span:
-                        try:
-                            if self._config.command_timeout is not None:
-                                g.ls_remote(remote, kill_after_timeout=self._config.command_timeout)
-                            else:
-                                g.ls_remote(remote)
-                            inner_span.set_status(trace.Status(trace.StatusCode.OK))
-                        except GitCommandError as e:
-                            detail = format_git_error_detail(e)
-                            if is_soft_git_error(e):
-                                record_git_span_failure(inner_span, detail, expected=True)
-                            else:
-                                record_git_span_failure(inner_span, detail)
-                            raise
-
-                    logger.info("Git ls-remote for %s succeeded", arc_id)
-                    span.set_attribute("exists", True)
-                    return True
-                except GitCommandError as e:
-                    detail = format_git_error_detail(e)
-                    if is_soft_git_error(e):
-                        logger.debug("Git ls-remote for %s failed (repo not found)", arc_id)
-                        record_git_span_failure(span, detail, expected=True)
-                    else:
-                        logger.warning("Git ls-remote for %s failed: %s", arc_id, e)
-                        record_git_span_failure(span, detail)
-                    span.set_attribute("exists", False)
-                    return False
+                exists = self._remote_provider.repo_exists(arc_id)
+                span.set_attribute("exists", exists)
+                return exists
 
         return await self._run_in_executor(_task)

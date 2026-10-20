@@ -12,10 +12,10 @@ harvest, delegates to `arc-manager/`, and MUST remain retry-safe for identical c
 The harvest-scoped ARC upload endpoint MUST be retry-safe: when the same ARC identifier is submitted again to the same
 harvest with content that matches the already stored ARC for that harvest, the system MUST treat the request as a
 successful idempotent retry. It MUST return HTTP `200` with an `UPDATED` outcome, MUST NOT create a second document,
-MUST NOT schedule a second sync, and MUST NOT reject that request with HTTP `409` solely because the identifier was
-already seen in this harvest. HTTP `409` is reserved for true conflicts (different content for the same identifier in
-this harvest, or `arc_id` identity mismatch). Persisting per-item harvest errors MUST NOT change these status codes or
-turn identical-content retries into conflicts. Changes that would make a second identical-content submit return `409`
+MUST still schedule background Git sync, and MUST NOT reject that request with HTTP `409` solely because the identifier
+was already seen in this harvest. HTTP `409` is reserved for true conflicts (different content for the same identifier
+in this harvest, or `arc_id` identity mismatch). Persisting per-item harvest errors MUST NOT change these status codes
+or turn identical-content retries into conflicts. Changes that would make a second identical-content submit return `409`
 are forbidden — they would break lost-response and transport retries.
 
 #### Scenario: Lost-response retry of identical content succeeds
@@ -24,7 +24,7 @@ are forbidden — they would break lost-response and transport retries.
 - **WHEN** the client re-submits the same body after a lost response or transport failure
 - **THEN** the response is HTTP `200` with `UPDATED`
 - **AND** no second document is created
-- **AND** no second sync is scheduled
+- **AND** a background sync task is still scheduled
 - **AND** the response is not HTTP `409`
 
 #### Scenario: Error persistence does not reclassify identical retries
