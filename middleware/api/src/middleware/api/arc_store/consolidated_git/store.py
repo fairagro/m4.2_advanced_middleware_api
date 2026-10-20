@@ -221,7 +221,7 @@ class ConsolidatedGitArcStore(ArcStore):
         """Per-RDI single-flight: CouchDB claim when available, else process-local."""
         timeout = self._config.finalize_lock_wait_timeout_s
         if isinstance(self._doc_store, CouchDB):
-            return self._doc_store.catalog_finalize_lock(rdi, wait_timeout_s=timeout)
+            return self._doc_store.catalog_finalize_lock.acquire(rdi, wait_timeout_s=timeout)
         return process_local_catalog_finalize_lock(rdi, wait_timeout_s=timeout)
 
     @override

@@ -31,6 +31,7 @@ from .arc_document import (
     ArcEvent,
     ArcMetadata,
 )
+from .errors import DocumentStoreUnavailableError
 from .harvest_document import (
     HarvestCatalogEvent,
     HarvestDocument,
@@ -58,6 +59,9 @@ class CouchDB(DocumentStore):
         self._config = config
         self._db_name = config.db_name
         self._client = CouchDBClient.from_config(config)
+        self._ensure_lock = asyncio.Lock()
+        self.catalog_finalize_lock = _CatalogFinalizeClaim(self._client, self._config)
+        self._client.set_reinit_hook(self.ensure_initialized)
 
     @staticmethod
     def _new_arc_metadata(content_hash: str, now: datetime, harvest_id: str | None) -> ArcMetadata:
@@ -395,7 +399,7 @@ class CouchDB(DocumentStore):
         await self._client.save_document(doc_id, doc_data)
 
     async def health_check(self) -> bool:
-        """Check if document store is reachable."""
+        """Check if the application database exists (re-init via hook when needed)."""
         return await self._client.health_check()
 
     async def setup(self) -> None:
@@ -408,6 +412,33 @@ class CouchDB(DocumentStore):
         # Supports catalog finalize paging: selector on doc_type+rdi, sort including _id.
         await self._client.create_index(["doc_type", "rdi", "_id"], name="idx_doc_type_rdi_id")
         logger.info("CouchDB document store indices initialized")
+
+    async def ensure_initialized(self) -> None:
+        """Ensure system DBs, application DB, and indices exist (idempotent, single-flight).
+
+        Used at startup and when the application database disappears while the process
+        still holds a stale client handle (CouchDB wipe / recreated PVC).
+        """
+        async with self._ensure_lock:
+            self._client._inside_reinit = True  # noqa: SLF001
+            try:
+                if self._client._connected and await self._client.application_database_exists():  # noqa: SLF001
+                    # Refresh handle in case the prior Database object was stale.
+                    self._client._db = await self._client._client[self._db_name]  # noqa: SLF001
+                    return
+                logger.info(
+                    "Re-initializing CouchDB document store (application database %s missing or never connected)",
+                    self._db_name,
+                )
+                await self._client.close()
+                await self._client.connect()
+                await self.setup()
+            except Exception as e:
+                raise DocumentStoreUnavailableError(
+                    f"Failed to initialize CouchDB application database {self._db_name!r}"
+                ) from e
+            finally:
+                self._client._inside_reinit = False  # noqa: SLF001
 
     async def connect(self) -> None:
         """Connect to CouchDB."""
@@ -724,13 +755,22 @@ class CouchDB(DocumentStore):
             if len(docs) < page_size or bookmark is None:
                 break
 
+
+class _CatalogFinalizeClaim:
+    """Per-RDI CouchDB claim used to single-flight catalog finalize."""
+
+    def __init__(self, client: CouchDBClient, config: CouchDBConfig) -> None:
+        """Bind the claim to one client and its lock timing settings."""
+        self._client = client
+        self._config = config
+
     @staticmethod
-    def _catalog_finalize_lock_doc_id(rdi: str) -> str:
+    def _doc_id(rdi: str) -> str:
         """Stable CouchDB id for a per-RDI catalog finalize claim."""
         digest = hashlib.sha256(rdi.encode("utf-8")).hexdigest()
         return f"catalog_finalize_lock_{digest}"
 
-    async def _steal_stale_catalog_finalize_lock(self, doc_id: str, *, rdi: str, now: datetime, ttl_s: float) -> bool:
+    async def _steal_if_stale(self, doc_id: str, *, rdi: str, now: datetime, ttl_s: float) -> bool:
         """Delete a finalize claim if older than ``ttl_s``. Returns True if stolen."""
         existing = await self._client.get_document(doc_id)
         if existing is None:
@@ -755,9 +795,7 @@ class CouchDB(DocumentStore):
         return True
 
     @asynccontextmanager
-    async def catalog_finalize_lock(
-        self, rdi: str, *, wait_timeout_s: float | None = None
-    ) -> AsyncGenerator[None, None]:
+    async def acquire(self, rdi: str, *, wait_timeout_s: float | None = None) -> AsyncGenerator[None, None]:
         """Acquire an exclusive per-RDI finalize claim (multi-worker safe).
 
         Uses ``create_document_exclusive``; waits until the claim is free or stale
@@ -770,7 +808,7 @@ class CouchDB(DocumentStore):
         timeout = self._config.catalog_finalize_lock_wait_timeout_s if wait_timeout_s is None else wait_timeout_s
         ttl_s = self._config.catalog_finalize_lock_ttl_s
         poll_delay = self._config.catalog_finalize_lock_poll_delay_s
-        doc_id = self._catalog_finalize_lock_doc_id(rdi)
+        doc_id = self._doc_id(rdi)
         holder = str(uuid.uuid4())
         deadline = asyncio.get_running_loop().time() + timeout
 
@@ -790,7 +828,7 @@ class CouchDB(DocumentStore):
             except DocumentConflictError:
                 if asyncio.get_running_loop().time() >= deadline:
                     raise TimeoutError(f"Catalog finalize lock wait timed out for RDI {rdi}") from None
-                stolen = await self._steal_stale_catalog_finalize_lock(doc_id, rdi=rdi, now=now, ttl_s=ttl_s)
+                stolen = await self._steal_if_stale(doc_id, rdi=rdi, now=now, ttl_s=ttl_s)
                 if not stolen:
                     await asyncio.sleep(poll_delay)
 

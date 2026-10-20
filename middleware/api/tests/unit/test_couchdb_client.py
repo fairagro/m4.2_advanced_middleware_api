@@ -12,9 +12,11 @@ from pydantic import SecretStr
 from middleware.api.document_store.config import CouchDBConfig
 from middleware.api.document_store.couchdb_client import (
     CouchDBClient,
+    DatabaseMissingError,
     DocumentConflictError,
     _patch_aiocouch_aiohttp_auth,
 )
+from middleware.api.document_store.errors import DocumentStoreUnavailableError
 from middleware.shared.json_types import JsonObject
 
 
@@ -32,19 +34,31 @@ def couchdb_config() -> CouchDBConfig:
 
 @pytest.fixture
 def couchdb_client(couchdb_config: CouchDBConfig) -> CouchDBClient:
-    """Create a CouchDBClient instance from the provided configuration.
-
-    Parameters
-    ----------
-    couchdb_config : CouchDBConfig
-        Configuration object for CouchDB connection.
-
-    Returns
-    -------
-    CouchDBClient
-        An instance of CouchDBClient initialized with the provided configuration.
-    """
+    """Create a CouchDBClient; tests inject ``_handles`` before document ops."""
     return CouchDBClient.from_config(couchdb_config)
+
+
+def _inject_handles(
+    client: CouchDBClient,
+    *,
+    couch: MagicMock | None = None,
+    db: MagicMock | None = None,
+    session: MagicMock | None = None,
+    connected: bool = True,
+) -> tuple[MagicMock, MagicMock, MagicMock]:
+    """Attach mock network handles so ``_client`` / ``_db`` / ``_session`` work."""
+    mock_couch = couch if couch is not None else MagicMock()
+    if not hasattr(mock_couch, "__getitem__") or not isinstance(mock_couch.__getitem__, AsyncMock):
+        mock_couch.__getitem__ = AsyncMock(return_value=MagicMock())
+    mock_couch.close = AsyncMock()
+    mock_db = db if db is not None else MagicMock()
+    mock_session = session if session is not None else MagicMock()
+    mock_session.closed = getattr(mock_session, "closed", True)
+    if not hasattr(mock_session, "close") or not isinstance(mock_session.close, AsyncMock):
+        mock_session.close = AsyncMock()
+    client._handles = (mock_couch, mock_db, mock_session)  # noqa: SLF001
+    client._connected = connected  # noqa: SLF001
+    return mock_couch, mock_db, mock_session
 
 
 @pytest.mark.asyncio
@@ -96,67 +110,69 @@ async def test_aiocouch_remote_server_encodes_empty_string_credentials() -> None
 
 @pytest.mark.asyncio
 async def test_couchdb_client_connect_success(couchdb_client: CouchDBClient) -> None:
-    """Test successful connection to CouchDB.
+    """Test successful connection to CouchDB."""
+    mock_db = AsyncMock()
+    mock_instance = MagicMock()
+    mock_instance.__getitem__ = AsyncMock(return_value=mock_db)
+    mock_instance.close = AsyncMock()
+    mock_session = MagicMock()
+    mock_session.closed = True
+    mock_session.close = AsyncMock()
 
-    Parameters
-    ----------
-    couchdb_client : CouchDBClient
-        An instance of CouchDBClient initialized with the provided configuration.
-    """
-    with patch("middleware.api.document_store.couchdb_client.CouchDB") as mock_couchdb:
-        mock_instance = mock_couchdb.return_value
-        mock_db = AsyncMock()
-
-        # In aiocouch, db = await couchdb['db_name']
-        # So couchdb.__getitem__ must be an AsyncMock or similar
-        # It's called for _users, _replicator, _global_changes, then test_db
-        mock_instance.__getitem__ = AsyncMock(return_value=mock_db)
-
+    with (
+        patch("middleware.api.document_store.couchdb_client.CouchDB", return_value=mock_instance),
+        patch("middleware.api.document_store.couchdb_client.Database", return_value=mock_db),
+        patch("middleware.api.document_store.couchdb_client.aiohttp.ClientSession", return_value=mock_session),
+    ):
         await couchdb_client.connect()
 
-        assert couchdb_client._client == mock_instance  # noqa: SLF001
-        assert couchdb_client._db == mock_db  # noqa: SLF001
-        assert mock_instance.__getitem__.call_count == 4  # noqa: PLR2004
-        mock_instance.__getitem__.assert_any_call(couchdb_client._db_name)  # noqa: SLF001
-        mock_instance.__getitem__.assert_any_call("_users")
+    assert couchdb_client._db == mock_db  # noqa: SLF001
+    assert couchdb_client._connected is True  # noqa: SLF001
+    assert mock_instance.__getitem__.call_count == 4  # noqa: PLR2004
+    mock_instance.__getitem__.assert_any_call(couchdb_client._db_name)  # noqa: SLF001
+    mock_instance.__getitem__.assert_any_call("_users")
 
 
 @pytest.mark.asyncio
 async def test_couchdb_client_connect_create_db(couchdb_client: CouchDBClient) -> None:
-    """Test connecting to CouchDB and creating a new database if it does not exist.
+    """Test connecting to CouchDB and creating a new database if it does not exist."""
+    mock_instance = MagicMock()
+    mock_instance.__getitem__ = AsyncMock(
+        side_effect=[AsyncMock(), AsyncMock(), AsyncMock(), NotFoundError("Not Found")]
+    )
+    mock_db = AsyncMock()
+    mock_instance.create = AsyncMock(return_value=mock_db)
+    mock_instance.close = AsyncMock()
+    mock_session = MagicMock()
+    mock_session.closed = True
+    mock_session.close = AsyncMock()
 
-    Parameters
-    ----------
-    couchdb_client : CouchDBClient
-        An instance of CouchDBClient initialized with the provided configuration.
-    """
-    with patch("middleware.api.document_store.couchdb_client.CouchDB") as mock_couchdb:
-        mock_instance = mock_couchdb.return_value
-        # Succeed for system dbs, fail for test_db
-        mock_instance.__getitem__ = AsyncMock(
-            side_effect=[AsyncMock(), AsyncMock(), AsyncMock(), NotFoundError("Not Found")]
-        )
-        mock_db = AsyncMock()
-        mock_instance.create = AsyncMock(return_value=mock_db)
-
+    with (
+        patch("middleware.api.document_store.couchdb_client.CouchDB", return_value=mock_instance),
+        patch("middleware.api.document_store.couchdb_client.Database", return_value=MagicMock()),
+        patch("middleware.api.document_store.couchdb_client.aiohttp.ClientSession", return_value=mock_session),
+    ):
         await couchdb_client.connect()
 
-        assert couchdb_client._db == mock_db  # noqa: SLF001
-        mock_instance.create.assert_called_with(couchdb_client._db_name)  # noqa: SLF001
-        assert mock_instance.__getitem__.call_count == 4  # noqa: PLR2004
+    assert couchdb_client._db == mock_db  # noqa: SLF001
+    mock_instance.create.assert_called_with(couchdb_client._db_name)  # noqa: SLF001
+    assert mock_instance.__getitem__.call_count == 4  # noqa: PLR2004
 
 
 @pytest.mark.asyncio
 async def test_couchdb_client_connect_failure(couchdb_client: CouchDBClient) -> None:
-    """Test failure to connect to CouchDB.
+    """Test failure to connect to CouchDB."""
+    mock_instance = MagicMock()
+    mock_instance.__getitem__ = AsyncMock(side_effect=Exception("Connection Failed"))
+    mock_instance.close = AsyncMock()
+    mock_session = MagicMock()
+    mock_session.closed = True
+    mock_session.close = AsyncMock()
 
-    Parameters
-    ----------
-    couchdb_client : CouchDBClient
-        An instance of CouchDBClient initialized with the provided configuration.
-    """
     with (
-        patch("middleware.api.document_store.couchdb_client.CouchDB", side_effect=Exception("Connection Failed")),
+        patch("middleware.api.document_store.couchdb_client.CouchDB", return_value=mock_instance),
+        patch("middleware.api.document_store.couchdb_client.Database", return_value=MagicMock()),
+        patch("middleware.api.document_store.couchdb_client.aiohttp.ClientSession", return_value=mock_session),
         pytest.raises(Exception, match="Connection Failed"),
     ):
         await couchdb_client.connect()
@@ -164,52 +180,156 @@ async def test_couchdb_client_connect_failure(couchdb_client: CouchDBClient) -> 
 
 @pytest.mark.asyncio
 async def test_couchdb_client_health_check_success(couchdb_client: CouchDBClient) -> None:
-    """Test successful health check.
-
-    Parameters
-    ----------
-    couchdb_client : CouchDBClient
-        An instance of CouchDBClient initialized with the provided configuration.
-    """
+    """Health check succeeds when connected and the application database exists."""
     mock_client = MagicMock(spec=CouchDB)
-    mock_client.info = AsyncMock(return_value={"couchdb": "Welcome"})
-
-    couchdb_client._client = mock_client  # noqa: SLF001
+    mock_client.__getitem__ = AsyncMock(return_value=AsyncMock())
+    _inject_handles(couchdb_client, couch=mock_client)
 
     result = await couchdb_client.health_check()
     assert result is True
-    mock_client.info.assert_called_once()
+    mock_client.__getitem__.assert_awaited_once_with(couchdb_client._db_name)  # noqa: SLF001
 
 
 @pytest.mark.asyncio
-async def test_couchdb_client_health_check_failure(couchdb_client: CouchDBClient) -> None:
-    """Test failed health check.
-
-    Parameters
-    ----------
-    couchdb_client : CouchDBClient
-        An instance of CouchDBClient initialized with the provided configuration.
-    """
+async def test_couchdb_client_health_check_skips_reinit_when_healthy(couchdb_client: CouchDBClient) -> None:
+    """A present application database does not run the re-init hook."""
     mock_client = MagicMock(spec=CouchDB)
-    mock_client.info = AsyncMock(side_effect=Exception("error"))
-    couchdb_client._client = mock_client  # noqa: SLF001
+    mock_client.__getitem__ = AsyncMock(return_value=AsyncMock())
+    _inject_handles(couchdb_client, couch=mock_client)
+    reinit = AsyncMock()
+    couchdb_client.set_reinit_hook(reinit)
 
-    result = await couchdb_client.health_check()
-    assert result is False
-    mock_client.info.assert_called_once()
+    assert await couchdb_client.health_check() is True
+    reinit.assert_not_awaited()
 
 
 @pytest.mark.asyncio
-async def test_couchdb_client_health_check_no_client(couchdb_client: CouchDBClient) -> None:
-    """Test health check when not connected.
+async def test_couchdb_client_health_check_missing_app_db(couchdb_client: CouchDBClient) -> None:
+    """Health check fails when the application database is missing."""
+    mock_client = MagicMock(spec=CouchDB)
+    mock_client.__getitem__ = AsyncMock(side_effect=NotFoundError("missing"))
+    _inject_handles(couchdb_client, couch=mock_client)
 
-    Parameters
-    ----------
-    couchdb_client : CouchDBClient
-        An instance of CouchDBClient initialized with the provided configuration.
-    """
     result = await couchdb_client.health_check()
     assert result is False
+
+
+@pytest.mark.asyncio
+async def test_couchdb_client_health_check_reinit_when_app_db_missing(couchdb_client: CouchDBClient) -> None:
+    """A missing application database runs the re-init hook, then probes again."""
+    exists = False
+    mock_client = MagicMock(spec=CouchDB)
+
+    async def _getitem(_name: str) -> AsyncMock:
+        if not exists:
+            raise NotFoundError("missing")
+        return AsyncMock()
+
+    mock_client.__getitem__ = AsyncMock(side_effect=_getitem)
+    _inject_handles(couchdb_client, couch=mock_client)
+
+    async def _reinit() -> None:
+        nonlocal exists
+        exists = True
+
+    couchdb_client.set_reinit_hook(_reinit)
+
+    assert await couchdb_client.health_check() is True
+
+
+@pytest.mark.asyncio
+async def test_couchdb_client_health_check_not_connected(couchdb_client: CouchDBClient) -> None:
+    """Health check fails when connect() has not completed (noop re-init hook)."""
+    result = await couchdb_client.health_check()
+    assert result is False
+
+
+@pytest.mark.asyncio
+async def test_couchdb_client_health_check_runs_reinit_hook(couchdb_client: CouchDBClient) -> None:
+    """Health check invokes the re-init hook then probes the application DB."""
+    mock_client = MagicMock(spec=CouchDB)
+    mock_client.__getitem__ = AsyncMock(return_value=AsyncMock())
+
+    async def _reinit() -> None:
+        _inject_handles(couchdb_client, couch=mock_client)
+
+    couchdb_client.set_reinit_hook(_reinit)
+
+    assert await couchdb_client.health_check() is True
+
+
+@pytest.mark.asyncio
+async def test_save_document_recovers_after_database_wipe(couchdb_client: CouchDBClient) -> None:
+    """Missing application DB triggers re-init hook and retries the write once."""
+    reinit_calls = 0
+    db_exists = False
+
+    async def _reinit() -> None:
+        nonlocal reinit_calls, db_exists
+        reinit_calls += 1
+        db_exists = True
+        _inject_handles(couchdb_client, db=mock_db)
+
+    mock_db = MagicMock()
+    mock_db.__getitem__ = AsyncMock(side_effect=NotFoundError("db or doc missing"))
+    created = MagicMock()
+    created.save = AsyncMock()
+    created.__iter__ = MagicMock(return_value=iter({"_id": "doc1", "_rev": "1-b", "k": "v"}.items()))
+    mock_db.create = AsyncMock(return_value=created)
+
+    mock_server = MagicMock(spec=CouchDB)
+
+    async def _getitem(name: str) -> MagicMock:
+        if name == couchdb_client._db_name:  # noqa: SLF001
+            if not db_exists:
+                raise NotFoundError("no db")
+            return mock_db
+        return MagicMock()
+
+    mock_server.__getitem__ = AsyncMock(side_effect=_getitem)
+
+    _inject_handles(couchdb_client, couch=mock_server, db=mock_db)
+    couchdb_client.set_reinit_hook(_reinit)
+
+    await couchdb_client.save_document("doc1", {"k": "v"})
+    assert reinit_calls == 1
+    mock_db.create.assert_awaited_once()
+    created.save.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_get_document_missing_doc_does_not_reinit(couchdb_client: CouchDBClient) -> None:
+    """Document 404 with an existing application DB must not trigger re-init."""
+    reinit = AsyncMock()
+    couchdb_client.set_reinit_hook(reinit)
+
+    mock_db = MagicMock()
+    mock_db.__getitem__ = AsyncMock(side_effect=NotFoundError("no doc"))
+    mock_server = MagicMock(spec=CouchDB)
+    mock_server.__getitem__ = AsyncMock(return_value=mock_db)
+
+    _inject_handles(couchdb_client, couch=mock_server, db=mock_db)
+
+    assert await couchdb_client.get_document("missing") is None
+    reinit.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_with_db_recovery_raises_unavailable_when_reinit_fails(
+    couchdb_client: CouchDBClient,
+) -> None:
+    """Failed re-init becomes DocumentStoreUnavailableError (HTTP 503 at the API)."""
+
+    async def _boom() -> None:
+        raise RuntimeError("cannot create")
+
+    couchdb_client.set_reinit_hook(_boom)
+
+    async def _op() -> None:
+        raise DatabaseMissingError("gone")
+
+    with pytest.raises(DocumentStoreUnavailableError, match="re-initialization failed"):
+        await couchdb_client._with_db_recovery(_op)  # noqa: SLF001
 
 
 @pytest.mark.asyncio
@@ -224,7 +344,7 @@ async def test_couchdb_client_get_document_success(couchdb_client: CouchDBClient
     mock_db = MagicMock()
     mock_doc = {"_id": "doc1", "data": "value"}
     mock_db.__getitem__ = AsyncMock(return_value=mock_doc)
-    couchdb_client._db = mock_db  # noqa: SLF001
+    _inject_handles(couchdb_client, db=mock_db)
 
     result = await couchdb_client.get_document("doc1")
     assert result == mock_doc
@@ -241,7 +361,7 @@ async def test_couchdb_client_get_document_not_found(couchdb_client: CouchDBClie
     """
     mock_db = MagicMock()
     mock_db.__getitem__ = AsyncMock(side_effect=NotFoundError("Not Found"))
-    couchdb_client._db = mock_db  # noqa: SLF001
+    _inject_handles(couchdb_client, db=mock_db)
 
     result = await couchdb_client.get_document("nonexistent")
     assert result is None
@@ -276,7 +396,7 @@ async def test_couchdb_client_save_document_new(couchdb_client: CouchDBClient) -
     mock_doc.save = AsyncMock()
     mock_doc.__iter__ = MagicMock(return_value=iter({"_id": "new_doc", "val": 1}.items()))
     mock_db.create = AsyncMock(return_value=mock_doc)
-    couchdb_client._db = mock_db  # noqa: SLF001
+    _inject_handles(couchdb_client, db=mock_db)
 
     await couchdb_client.save_document("new_doc", {"val": 1})
 
@@ -304,7 +424,7 @@ async def test_couchdb_client_save_document_update(couchdb_client: CouchDBClient
     mock_doc.__getitem__.side_effect = existing_doc_data.__getitem__
 
     mock_db.__getitem__ = AsyncMock(return_value=mock_doc)
-    couchdb_client._db = mock_db  # noqa: SLF001
+    _inject_handles(couchdb_client, db=mock_db)
 
     await couchdb_client.save_document("doc1", {"val": 2})
 
@@ -327,7 +447,7 @@ async def test_couchdb_client_save_document_validator_called_with_fresh_doc(
 
     mock_db = MagicMock()
     mock_db.__getitem__ = AsyncMock(return_value=mock_doc)
-    couchdb_client._db = mock_db  # noqa: SLF001
+    _inject_handles(couchdb_client, db=mock_db)
 
     validator = MagicMock()
     await couchdb_client.save_document("doc1", {"val": 100}, pre_save_validator=validator)
@@ -351,7 +471,7 @@ async def test_couchdb_client_save_document_validator_exception_propagates(
 
     mock_db = MagicMock()
     mock_db.__getitem__ = AsyncMock(return_value=mock_doc)
-    couchdb_client._db = mock_db  # noqa: SLF001
+    _inject_handles(couchdb_client, db=mock_db)
 
     def raising_validator(doc: dict) -> None:  # noqa: ARG001
         raise SentinelError("invariant violated")
@@ -375,7 +495,7 @@ async def test_couchdb_client_delete_document_success(couchdb_client: CouchDBCli
     mock_db = MagicMock()
     mock_doc = AsyncMock()
     mock_db.__getitem__ = AsyncMock(return_value=mock_doc)
-    couchdb_client._db = mock_db  # noqa: SLF001
+    _inject_handles(couchdb_client, db=mock_db)
 
     result = await couchdb_client.delete_document("doc1")
     assert result is True
@@ -393,7 +513,7 @@ async def test_couchdb_client_delete_document_not_found(couchdb_client: CouchDBC
     """
     mock_db = MagicMock()
     mock_db.__getitem__ = AsyncMock(side_effect=NotFoundError("Not Found"))
-    couchdb_client._db = mock_db  # noqa: SLF001
+    _inject_handles(couchdb_client, db=mock_db)
 
     result = await couchdb_client.delete_document("doc1")
     assert result is False
@@ -416,7 +536,7 @@ async def test_couchdb_client_find(couchdb_client: CouchDBClient) -> None:
     mock_result.__aiter__.return_value = iter(docs)
 
     mock_db.find.return_value = mock_result
-    couchdb_client._db = mock_db  # noqa: SLF001
+    _inject_handles(couchdb_client, db=mock_db)
 
     selector: JsonObject = {"type": "arc"}
     result = await couchdb_client.find(selector, limit=10)
@@ -428,7 +548,6 @@ async def test_couchdb_client_find(couchdb_client: CouchDBClient) -> None:
 @pytest.mark.asyncio
 async def test_couchdb_client_find_projected(couchdb_client: CouchDBClient) -> None:
     """Test finding projected documents with a selector."""
-    couchdb_client._db = MagicMock()  # noqa: SLF001
     couchdb_client._db_name = "test_db"  # noqa: SLF001
 
     selector: JsonObject = {"type": "arc"}
@@ -442,8 +561,7 @@ async def test_couchdb_client_find_projected(couchdb_client: CouchDBClient) -> N
     mock_session = MagicMock()
     mock_session.post.return_value.__aenter__.return_value = mock_response
     mock_session.post.return_value.__aexit__.return_value = None
-
-    couchdb_client._session = mock_session  # noqa: SLF001
+    _inject_handles(couchdb_client, session=mock_session)
 
     result = await couchdb_client.find_projected(selector, fields, limit=10, skip=2)
 
@@ -462,7 +580,6 @@ async def test_couchdb_client_find_projected(couchdb_client: CouchDBClient) -> N
 @pytest.mark.asyncio
 async def test_couchdb_client_find_page_uses_bookmark_and_sort(couchdb_client: CouchDBClient) -> None:
     """find_page posts bookmark/sort and returns the next bookmark."""
-    couchdb_client._db = MagicMock()  # noqa: SLF001
     couchdb_client._db_name = "test_db"  # noqa: SLF001
 
     expected_docs = [{"_id": "arc_1"}, {"_id": "arc_2"}]
@@ -473,7 +590,7 @@ async def test_couchdb_client_find_page_uses_bookmark_and_sort(couchdb_client: C
     mock_session = MagicMock()
     mock_session.post.return_value.__aenter__.return_value = mock_response
     mock_session.post.return_value.__aexit__.return_value = None
-    couchdb_client._session = mock_session  # noqa: SLF001
+    _inject_handles(couchdb_client, session=mock_session)
 
     selector: JsonObject = {"doc_type": "arc", "rdi": "edal"}
     sort: list[JsonObject] = [{"doc_type": "asc"}, {"rdi": "asc"}, {"_id": "asc"}]
@@ -500,7 +617,6 @@ async def test_couchdb_client_find_page_uses_bookmark_and_sort(couchdb_client: C
 @pytest.mark.asyncio
 async def test_couchdb_client_find_projected_raises_on_http_error(couchdb_client: CouchDBClient) -> None:
     """Test projected find raises when CouchDB returns an error status."""
-    couchdb_client._db = MagicMock()  # noqa: SLF001
     couchdb_client._db_name = "test_db"  # noqa: SLF001
 
     mock_response = AsyncMock()
@@ -510,8 +626,7 @@ async def test_couchdb_client_find_projected_raises_on_http_error(couchdb_client
     mock_session = MagicMock()
     mock_session.post.return_value.__aenter__.return_value = mock_response
     mock_session.post.return_value.__aexit__.return_value = None
-
-    couchdb_client._session = mock_session  # noqa: SLF001
+    _inject_handles(couchdb_client, session=mock_session)
 
     with pytest.raises(RuntimeError, match="CouchDB _find failed with status 400"):
         await couchdb_client.find_projected({"type": "arc"}, ["metadata.events"])
@@ -520,7 +635,6 @@ async def test_couchdb_client_find_projected_raises_on_http_error(couchdb_client
 @pytest.mark.asyncio
 async def test_save_document_if_revision_matches_success(couchdb_client: CouchDBClient) -> None:
     """Test revision-checked save succeeds and returns updated _rev."""
-    couchdb_client._db = MagicMock()  # noqa: SLF001
     couchdb_client._db_name = "test_db"  # noqa: SLF001
 
     mock_response = AsyncMock()
@@ -530,7 +644,7 @@ async def test_save_document_if_revision_matches_success(couchdb_client: CouchDB
     mock_session = MagicMock()
     mock_session.put.return_value.__aenter__.return_value = mock_response
     mock_session.put.return_value.__aexit__.return_value = None
-    couchdb_client._session = mock_session  # noqa: SLF001
+    _inject_handles(couchdb_client, session=mock_session)
 
     result = await couchdb_client.save_document_if_revision_matches(
         "doc1",
@@ -545,7 +659,6 @@ async def test_save_document_if_revision_matches_success(couchdb_client: CouchDB
 @pytest.mark.asyncio
 async def test_save_document_if_revision_matches_conflict(couchdb_client: CouchDBClient) -> None:
     """Test revision-checked save raises DocumentConflictError on 409."""
-    couchdb_client._db = MagicMock()  # noqa: SLF001
     couchdb_client._db_name = "test_db"  # noqa: SLF001
 
     mock_response = AsyncMock()
@@ -554,7 +667,7 @@ async def test_save_document_if_revision_matches_conflict(couchdb_client: CouchD
     mock_session = MagicMock()
     mock_session.put.return_value.__aenter__.return_value = mock_response
     mock_session.put.return_value.__aexit__.return_value = None
-    couchdb_client._session = mock_session  # noqa: SLF001
+    _inject_handles(couchdb_client, session=mock_session)
 
     with pytest.raises(DocumentConflictError, match="Conflict updating document doc1"):
         await couchdb_client.save_document_if_revision_matches(
@@ -580,7 +693,7 @@ async def test_couchdb_client_ensure_system_databases(couchdb_client: CouchDBCli
         mock_instance.create = AsyncMock()
 
         # Manually set the client since connect() wasn't called
-        couchdb_client._client = mock_instance  # noqa: SLF001
+        _inject_handles(couchdb_client, couch=mock_instance)
 
         await couchdb_client.ensure_system_databases()
 
@@ -599,7 +712,7 @@ async def test_couchdb_client_ensure_system_databases_race(couchdb_client: Couch
         mock_instance.create = AsyncMock(side_effect=PreconditionFailedError("Already exists"))
 
         # Manually set the client
-        couchdb_client._client = mock_instance  # noqa: SLF001
+        _inject_handles(couchdb_client, couch=mock_instance)
 
         # Should not raise
         await couchdb_client.ensure_system_databases()
@@ -608,37 +721,32 @@ async def test_couchdb_client_ensure_system_databases_race(couchdb_client: Couch
 
 
 @pytest.mark.asyncio
-async def test_couchdb_client_ensure_system_databases_not_connected(couchdb_client: CouchDBClient) -> None:
-    """Test ensuring system databases when not connected."""
-    with pytest.raises(RuntimeError, match="Not connected to CouchDB server"):
-        await couchdb_client.ensure_system_databases()
-
-
-@pytest.mark.asyncio
 async def test_couchdb_client_connect_race_condition(couchdb_client: CouchDBClient) -> None:
     """Test connection with race condition where DB is created between check and create."""
-    with patch("middleware.api.document_store.couchdb_client.CouchDB") as mock_couchdb:
-        mock_instance = mock_couchdb.return_value
-        mock_db = AsyncMock()
+    mock_instance = MagicMock()
+    mock_db = AsyncMock()
+    mock_instance.__getitem__ = AsyncMock(
+        side_effect=[
+            AsyncMock(),
+            AsyncMock(),
+            AsyncMock(),
+            NotFoundError("Not Found"),
+            mock_db,
+        ]
+    )
+    mock_instance.create = AsyncMock(side_effect=PreconditionFailedError("Already exists"))
+    mock_instance.close = AsyncMock()
+    mock_session = MagicMock()
+    mock_session.closed = True
+    mock_session.close = AsyncMock()
 
-        # side_effect for __getitem__:
-        # 1-3. system dbs exist
-        # 4. test_db not found
-        # 5. test_db exists (after race)
-        mock_instance.__getitem__ = AsyncMock(
-            side_effect=[
-                AsyncMock(),
-                AsyncMock(),
-                AsyncMock(),
-                NotFoundError("Not Found"),
-                mock_db,
-            ]
-        )
-        # create fails with conflict/already exists (412)
-        mock_instance.create = AsyncMock(side_effect=PreconditionFailedError("Already exists"))
-
+    with (
+        patch("middleware.api.document_store.couchdb_client.CouchDB", return_value=mock_instance),
+        patch("middleware.api.document_store.couchdb_client.Database", return_value=MagicMock()),
+        patch("middleware.api.document_store.couchdb_client.aiohttp.ClientSession", return_value=mock_session),
+    ):
         await couchdb_client.connect()
 
-        assert couchdb_client._db == mock_db  # noqa: SLF001
-        assert mock_instance.__getitem__.call_count == 5  # noqa: PLR2004
-        mock_instance.create.assert_called_once_with(couchdb_client._db_name)  # noqa: SLF001
+    assert couchdb_client._db == mock_db  # noqa: SLF001
+    assert mock_instance.__getitem__.call_count == 5  # noqa: PLR2004
+    mock_instance.create.assert_called_once_with(couchdb_client._db_name)  # noqa: SLF001

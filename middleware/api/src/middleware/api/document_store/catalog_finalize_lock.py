@@ -7,7 +7,7 @@ from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 
 # Per-event-loop locks keyed by RDI. CouchDB overrides for multi-worker Celery
-# (see CouchDB.catalog_finalize_lock). Keying by loop id avoids pytest-asyncio
+# (see couchdb.catalog_finalize_lock). Keying by loop id avoids pytest-asyncio
 # "Lock is bound to a different event loop" when modules outlive a loop.
 _locks_by_loop: dict[int, dict[str, asyncio.Lock]] = {}
 _guards_by_loop: dict[int, asyncio.Lock] = {}

@@ -18,7 +18,12 @@ from middleware.api.business_logic.exceptions import (
 from middleware.api.business_logic.ports import TaskDispatcher
 from middleware.api.business_logic.rdi_comments import enrich_investigation_rdi_comments
 from middleware.api.business_logic.task_payloads import ArcSyncTask
-from middleware.api.document_store import ArcIdentityConflictError, DocumentStore, DuplicateArcError
+from middleware.api.document_store import (
+    ArcIdentityConflictError,
+    DocumentStore,
+    DocumentStoreUnavailableError,
+    DuplicateArcError,
+)
 from middleware.api.document_store.arc_document import ArcEvent, ArcEventType
 from middleware.api.document_store.harvest_document import CatalogPushEventType, HarvestCatalogEvent
 from middleware.api.rdi_registry import RdiRegistryEntry, lookup_rdi_entry
@@ -128,6 +133,8 @@ class ArcManager:
             ArcIdentityMismatchError: If an existing ``arc_{arc_id}`` has a different
                 strip-normalized identity (HTTP 409; distinct from harvest content 409;
                 NFC is #537).
+            DocumentStoreUnavailableError: If the document store cannot serve the write
+                (missing database or failed re-init). The API maps this to HTTP 503.
             BusinessLogicError: If an error occurs during the operation or if not in API mode.
         """
         if not self._dispatcher:
@@ -202,6 +209,8 @@ class ArcManager:
                 if isinstance(e, InvalidJsonSemanticError):
                     raise
                 if isinstance(e, BusinessLogicError):
+                    raise
+                if isinstance(e, DocumentStoreUnavailableError):
                     raise
                 if isinstance(e, ArcIdentityConflictError):
                     raise ArcIdentityMismatchError(str(e)) from e

@@ -36,6 +36,12 @@ def mock_client_instance() -> MagicMock:
     client.save_document = AsyncMock()
     client.save_document_if_revision_matches = AsyncMock()
     client.create_index = AsyncMock()
+    client.set_reinit_hook = MagicMock()
+    client.application_database_exists = AsyncMock(return_value=True)
+    client._inside_reinit = False
+    client._client = MagicMock()
+    client._db = MagicMock()
+    client._db_name = "test"
     return client
 
 
@@ -147,6 +153,76 @@ async def test_couchdb_store_setup(store: CouchDB, mock_client_instance: MagicMo
         ["doc_type", "rdi", "_id"],
         name="idx_doc_type_rdi_id",
     )
+
+
+@pytest.mark.asyncio
+async def test_couchdb_store_ensure_initialized_skips_when_db_exists(
+    store: CouchDB, mock_client_instance: MagicMock
+) -> None:
+    """ensure_initialized is a no-op reconnect when the application DB exists."""
+    mock_server = MagicMock()
+    mock_db = MagicMock()
+    mock_server.__getitem__ = AsyncMock(return_value=mock_db)
+    mock_client_instance._client = mock_server
+    mock_client_instance.application_database_exists = AsyncMock(return_value=True)
+
+    await store.ensure_initialized()
+
+    mock_client_instance.close.assert_not_called()
+    mock_client_instance.connect.assert_not_called()
+    mock_client_instance.create_index.assert_not_called()
+    assert mock_client_instance._db is mock_db
+
+
+@pytest.mark.asyncio
+async def test_couchdb_store_ensure_initialized_recreates_when_missing(
+    store: CouchDB, mock_client_instance: MagicMock
+) -> None:
+    """ensure_initialized closes, reconnects, and rebuilds indices when DB is gone."""
+    mock_client_instance.application_database_exists = AsyncMock(return_value=False)
+
+    await store.ensure_initialized()
+
+    mock_client_instance.close.assert_awaited()
+    mock_client_instance.connect.assert_awaited()
+    assert mock_client_instance.create_index.call_count == 4  # noqa: PLR2004
+
+
+@pytest.mark.asyncio
+async def test_couchdb_store_ensure_initialized_is_single_flight(
+    store: CouchDB, mock_client_instance: MagicMock
+) -> None:
+    """Concurrent ensure_initialized callers share one reconnect+setup."""
+    import asyncio
+
+    started = asyncio.Event()
+    release = asyncio.Event()
+    connect_calls = 0
+    db_ready = False
+
+    async def _exists() -> bool:
+        return db_ready
+
+    async def _slow_connect() -> None:
+        nonlocal connect_calls, db_ready
+        connect_calls += 1
+        started.set()
+        await release.wait()
+        db_ready = True
+
+    mock_server = MagicMock()
+    mock_server.__getitem__ = AsyncMock(return_value=MagicMock())
+    mock_client_instance._client = mock_server
+    mock_client_instance.application_database_exists = AsyncMock(side_effect=_exists)
+    mock_client_instance.connect = AsyncMock(side_effect=_slow_connect)
+
+    t1 = asyncio.create_task(store.ensure_initialized())
+    await started.wait()
+    t2 = asyncio.create_task(store.ensure_initialized())
+    release.set()
+    await asyncio.gather(t1, t2)
+
+    assert connect_calls == 1
 
 
 @pytest.mark.asyncio
@@ -891,7 +967,7 @@ async def test_catalog_finalize_lock_exclusive_create_and_release(
     mock_client_instance.delete_document = AsyncMock(return_value=True)
     mock_client_instance.get_document = AsyncMock(side_effect=_get_document)
 
-    async with store.catalog_finalize_lock("edal", wait_timeout_s=1.0):
+    async with store.catalog_finalize_lock.acquire("edal", wait_timeout_s=1.0):
         mock_client_instance.create_document_exclusive.assert_awaited_once()
         doc_id = mock_client_instance.create_document_exclusive.await_args.args[0]
         assert doc_id.startswith("catalog_finalize_lock_")
@@ -909,7 +985,7 @@ async def test_catalog_finalize_lock_release_failure_does_not_mask_success(
     mock_client_instance.get_document = AsyncMock(side_effect=RuntimeError("couch down"))
     mock_client_instance.delete_document = AsyncMock()
 
-    async with store.catalog_finalize_lock("edal", wait_timeout_s=1.0):
+    async with store.catalog_finalize_lock.acquire("edal", wait_timeout_s=1.0):
         pass
 
     mock_client_instance.delete_document.assert_not_called()
@@ -935,7 +1011,7 @@ async def test_catalog_finalize_lock_release_failure_preserves_body_error(
     mock_client_instance.delete_document = AsyncMock(side_effect=RuntimeError("couch down"))
 
     with pytest.raises(ValueError, match="finalize failed"):
-        async with store.catalog_finalize_lock("edal", wait_timeout_s=1.0):
+        async with store.catalog_finalize_lock.acquire("edal", wait_timeout_s=1.0):
             raise ValueError("finalize failed")
 
 
@@ -946,7 +1022,7 @@ async def test_catalog_finalize_lock_wait_timeout(
     config: CouchDBConfig,
 ) -> None:
     """Held non-stale claim times out as TimeoutError for transient mapping."""
-    store._config = config.model_copy(  # noqa: SLF001
+    store.catalog_finalize_lock._config = config.model_copy(  # noqa: SLF001
         update={
             "catalog_finalize_lock_wait_timeout_s": 0.05,
             "catalog_finalize_lock_poll_delay_s": 0.01,
@@ -963,5 +1039,5 @@ async def test_catalog_finalize_lock_wait_timeout(
     )
 
     with pytest.raises(TimeoutError, match="timed out"):
-        async with store.catalog_finalize_lock("edal"):
+        async with store.catalog_finalize_lock.acquire("edal"):
             pass  # pragma: no cover

@@ -143,8 +143,7 @@ class BusinessLogic:
         (like database indices) is present.
         """
         try:
-            await self._doc_store.connect()
-            await self._doc_store.setup()
+            await self._doc_store.ensure_initialized()
         except Exception as e:
             logger.error("Failed to setup business logic: %s", e, exc_info=True)
             raise SetupError(f"Failed to setup business logic: {e}") from e

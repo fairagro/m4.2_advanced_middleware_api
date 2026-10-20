@@ -4,9 +4,9 @@ Provides async access to CouchDB for ARC and Harvest document storage.
 """
 
 import logging
-from collections.abc import Callable
+from collections.abc import Awaitable, Callable
 from http import HTTPStatus
-from typing import Any, Self, cast
+from typing import Any, Self, TypeVar, cast
 from urllib.parse import quote
 
 import aiohttp
@@ -15,11 +15,22 @@ from aiocouch.exception import ConflictError, NotFoundError, PreconditionFailedE
 from aiocouch.remote import RemoteServer
 
 from middleware.api.document_store.config import CouchDBConfig
+from middleware.api.document_store.errors import DocumentStoreUnavailableError
 from middleware.shared.json_types import CouchDbDocument, JsonObject, JsonValue
 
 logger = logging.getLogger(__name__)
 
 _PATCH_MARKER = "_fairagro_encode_basic_auth"
+
+_T = TypeVar("_T")
+
+
+class DatabaseMissingError(RuntimeError):
+    """Configured application database does not exist on the CouchDB server."""
+
+
+async def _async_noop() -> None:
+    """Default re-init hook (no work)."""
 
 
 def _patch_aiocouch_aiohttp_auth() -> None:
@@ -73,6 +84,10 @@ class CouchDBClient:
     def __init__(self, config: CouchDBConfig) -> None:
         """Initialize CouchDB client.
 
+        Network handles (``_client``, ``_db``, ``_session``) are opened in
+        :meth:`connect` — ``aiohttp.ClientSession`` / aiocouch require a running
+        event loop, so they cannot be created in sync ``__init__``.
+
         Args:
             config: CouchDB configuration.
         """
@@ -82,11 +97,75 @@ class CouchDBClient:
         self._password = config.password.get_secret_value() if config.password else None
         self._default_query_limit = config.default_query_limit
         self._max_save_retries = config.max_save_retries
-        self._client: CouchDB | None = None
-        self._db: Database | None = None
-        # Shared HTTP session for raw CouchDB calls (e.g. index management).
-        # Created lazily on first use; closed alongside the aiocouch client.
-        self._session: aiohttp.ClientSession | None = None
+        self._reinit_hook: Callable[[], Awaitable[None]] = _async_noop
+        self._inside_reinit = False
+        self._connected = False
+        self._handles: tuple[CouchDB, Database, aiohttp.ClientSession] | None = None
+
+    @property
+    def _client(self) -> CouchDB:
+        """CouchDB server client via aiocouch (non-optional once connected)."""
+        return self._require_handles()[0]
+
+    @_client.setter
+    def _client(self, value: CouchDB) -> None:
+        handles = self._require_handles()
+        self._handles = (value, handles[1], handles[2])
+
+    @property
+    def _db(self) -> Database:
+        """Application database handle (non-optional once connected)."""
+        return self._require_handles()[1]
+
+    @_db.setter
+    def _db(self, value: Database) -> None:
+        handles = self._require_handles()
+        self._handles = (handles[0], value, handles[2])
+
+    @property
+    def _session(self) -> aiohttp.ClientSession:
+        """Shared HTTP session for raw CouchDB calls (non-optional once connected)."""
+        return self._require_handles()[2]
+
+    @_session.setter
+    def _session(self, value: aiohttp.ClientSession) -> None:
+        handles = self._require_handles()
+        self._handles = (handles[0], handles[1], value)
+
+    def _require_handles(self) -> tuple[CouchDB, Database, aiohttp.ClientSession]:
+        if self._handles is None:
+            raise RuntimeError("Not connected to CouchDB")
+        return self._handles
+
+    def _require_connected(self) -> None:
+        """Raise if ``connect()`` has not completed successfully."""
+        if not self._connected or self._handles is None:
+            raise RuntimeError("Not connected to CouchDB")
+
+    def _new_handles(self) -> tuple[CouchDB, Database, aiohttp.ClientSession]:
+        """Build a fresh aiocouch client, DB handle, and HTTP session.
+
+        Must run on a running event loop (``connect`` / ``close``).
+        """
+        _patch_aiocouch_aiohttp_auth()
+        client = CouchDB(
+            self._url,
+            user=self._user,
+            password=self._password,
+        )
+        db = Database(client, self._db_name)
+        headers: dict[str, str] = {"Content-Type": "application/json"}
+        if self._user is not None and self._password is not None:
+            headers["Authorization"] = aiohttp.encode_basic_auth(self._user, self._password)
+        session = aiohttp.ClientSession(headers=headers)
+        return client, db, session
+
+    def set_reinit_hook(self, hook: Callable[[], Awaitable[None]] | None) -> None:
+        """Register async callback that recreates DB + indices after a wipe.
+
+        Passing ``None`` restores the no-op default hook.
+        """
+        self._reinit_hook = hook if hook is not None else _async_noop
 
     @classmethod
     def from_config(cls, config: CouchDBConfig) -> Self:
@@ -102,16 +181,11 @@ class CouchDBClient:
 
     async def connect(self) -> None:
         """Connect to CouchDB and ensure database exists."""
-        if self._client is not None:
+        if self._connected:
             return
 
         try:
-            _patch_aiocouch_aiohttp_auth()
-            self._client = CouchDB(
-                self._url,
-                user=self._user,
-                password=self._password,
-            )
+            self._handles = self._new_handles()
 
             # Ensure system databases exist (required for CouchDB 3.x)
             await self.ensure_system_databases()
@@ -128,19 +202,37 @@ class CouchDBClient:
                     # Race condition: another process created it in the meantime
                     self._db = await self._client[self._db_name]
                     logger.info("Connected to CouchDB database (created by other process): %s", self._db_name)
+            self._connected = True
 
         except Exception as e:
             logger.error("Failed to connect to CouchDB: %s", e)
+            await self._discard_handles()
             raise
+
+    async def _discard_handles(self) -> None:
+        """Close and drop network handles without requiring a successful connect."""
+        handles = self._handles
+        self._handles = None
+        self._connected = False
+        if handles is None:
+            return
+        client, _db, session = handles
+        try:
+            if not session.closed:
+                await session.close()
+        except Exception as e:  # noqa: BLE001
+            logger.warning("Error closing CouchDB HTTP session: %s", e)
+        try:
+            await client.close()
+        except Exception as e:  # noqa: BLE001
+            logger.warning("Error closing CouchDB client: %s", e)
 
     async def ensure_system_databases(self) -> None:
         """Ensure CouchDB system databases exist.
 
         CouchDB 3.x requires _users, _replicator, and _global_changes to be present.
         """
-        if not self._client:
-            raise RuntimeError("Not connected to CouchDB server")
-
+        self._require_handles()
         system_dbs = ["_users", "_replicator", "_global_changes"]
         for db in system_dbs:
             try:
@@ -157,32 +249,80 @@ class CouchDBClient:
 
     async def close(self) -> None:
         """Close CouchDB connection."""
-        if self._session:
+        if self._handles is None:
+            return
+        await self._discard_handles()
+        logger.info("Closed CouchDB connection")
+
+    async def application_database_exists(self) -> bool:
+        """Return whether the configured application database exists on the server."""
+        if self._handles is None:
+            return False
+        try:
+            await self._client[self._db_name]
+            return True
+        except NotFoundError:
+            return False
+        except Exception as e:  # noqa: BLE001
+            logger.error("Failed to probe application database %s: %s", self._db_name, e)
+            return False
+
+    async def _raise_if_database_missing(self, cause: BaseException | None = None) -> None:
+        """Raise :class:`DatabaseMissingError` when the application DB is gone."""
+        if await self.application_database_exists():
+            return
+        message = f"CouchDB application database {self._db_name!r} does not exist"
+        if cause is not None:
+            raise DatabaseMissingError(message) from cause
+        raise DatabaseMissingError(message)
+
+    async def _with_db_recovery(self, operation: Callable[[], Awaitable[_T]]) -> _T:
+        """Run *operation*; on missing app DB, re-init once (via hook) and retry."""
+        try:
+            return await operation()
+        except DatabaseMissingError:
+            if self._inside_reinit:
+                raise DocumentStoreUnavailableError(
+                    "CouchDB application database is missing and cannot be re-initialized"
+                ) from None
+            logger.warning(
+                "CouchDB application database %s missing; running guarded re-initialization",
+                self._db_name,
+            )
             try:
-                await self._session.close()
-            finally:
-                self._session = None
-        if self._client:
+                await self._reinit_hook()
+            except Exception as e:
+                raise DocumentStoreUnavailableError(
+                    "CouchDB re-initialization failed after application database disappeared"
+                ) from e
             try:
-                await self._client.close()
-                logger.info("Closed CouchDB connection")
-            finally:
-                self._client = None
-                self._db = None
+                return await operation()
+            except DatabaseMissingError as e:
+                raise DocumentStoreUnavailableError(
+                    "CouchDB application database still missing after re-initialization"
+                ) from e
 
     async def health_check(self) -> bool:
-        """Check if CouchDB is accessible.
+        """Check whether the configured application database exists.
+
+        Runs the re-init hook only when disconnected or the application database
+        is missing, so readiness can recover after a wipe without a write request.
 
         Returns:
-            True if CouchDB is healthy, False otherwise
+            True if connected and the application database exists.
         """
         try:
-            if not self._client:
+            if self._connected and await self.application_database_exists():
+                return True
+            if not self._inside_reinit:
+                try:
+                    await self._reinit_hook()
+                except Exception as e:  # noqa: BLE001
+                    logger.error("CouchDB re-initialization during health check failed: %s", e)
+                    return False
+            if not self._connected:
                 return False
-            # Check the server info as a health check
-            # aiocouch's info() is async
-            await self._client.info()
-            return True
+            return await self.application_database_exists()
         except Exception as e:  # noqa: BLE001
             logger.error("CouchDB health check failed: %s", e)
             return False
@@ -196,14 +336,17 @@ class CouchDBClient:
         Returns:
             Document data as dict, or None if not found
         """
-        if not self._db:
-            raise RuntimeError("Not connected to CouchDB")
 
-        try:
-            doc = await self._db[doc_id]
-            return dict(doc)
-        except NotFoundError:
-            return None
+        async def _op() -> CouchDbDocument | None:
+            self._require_connected()
+            try:
+                doc = await self._db[doc_id]
+                return dict(doc)
+            except NotFoundError as err:
+                await self._raise_if_database_missing(err)
+                return None
+
+        return await self._with_db_recovery(_op)
 
     async def create_document_exclusive(self, doc_id: str, data: CouchDbDocument) -> CouchDbDocument:
         """Create a document only if it does not already exist.
@@ -214,17 +357,21 @@ class CouchDBClient:
         Raises:
             DocumentConflictError: If the document already exists or create races.
         """
-        if not self._db:
-            raise RuntimeError("Not connected to CouchDB")
 
-        content = {k: v for k, v in data.items() if k not in {"_id", "_rev"}}
+        async def _op() -> CouchDbDocument:
+            self._require_connected()
+            content = {k: v for k, v in data.items() if k not in {"_id", "_rev"}}
+            try:
+                doc = await self._db.create(doc_id, data=content)
+                await doc.save()
+            except ConflictError as err:
+                raise DocumentConflictError(f"Document {doc_id} already exists") from err
+            except NotFoundError as err:
+                await self._raise_if_database_missing(err)
+                raise
+            return dict(doc)
 
-        try:
-            doc = await self._db.create(doc_id, data=content)
-            await doc.save()
-        except ConflictError as err:
-            raise DocumentConflictError(f"Document {doc_id} already exists") from err
-        return dict(doc)
+        return await self._with_db_recovery(_op)
 
     async def save_document(
         self,
@@ -261,43 +408,48 @@ class CouchDBClient:
         Raises:
             DocumentConflictError: If the conflict persists after all retries.
         """
-        if not self._db:
-            raise RuntimeError("Not connected to CouchDB")
 
-        # Strip CouchDB internal fields: we always re-fetch to get the current
-        # _rev, so any _rev/_id carried in `data` would be stale and would
-        # cause a spurious 409 on concurrent writes.
-        content = {k: v for k, v in data.items() if k not in {"_id", "_rev"}}
+        async def _op() -> CouchDbDocument:
+            self._require_connected()
 
-        for attempt in range(1, self._max_save_retries + 1):
-            try:
+            # Strip CouchDB internal fields: we always re-fetch to get the current
+            # _rev, so any _rev/_id carried in `data` would be stale and would
+            # cause a spurious 409 on concurrent writes.
+            content = {k: v for k, v in data.items() if k not in {"_id", "_rev"}}
+
+            for attempt in range(1, self._max_save_retries + 1):
                 try:
-                    # Attempt to fetch the document (update path)
-                    doc = await self._db[doc_id]
-                    if pre_save_validator is not None:
-                        pre_save_validator(dict(doc))
-                    doc.update(content)
-                    await doc.save()
-                except NotFoundError:
-                    # Document does not exist yet (create path)
-                    # NOTE: aiocouch.Database.create() only creates a local object;
-                    # doc.save() is required to actually PUT the document to CouchDB.
-                    doc = await self._db.create(doc_id, data=content)
-                    await doc.save()
-                return dict(doc)
-            except ConflictError as err:
-                if attempt >= self._max_save_retries:
-                    raise DocumentConflictError(
-                        f"Concurrent modification conflict for document {doc_id} after {self._max_save_retries} retries"
-                    ) from err
-                logger.debug(
-                    "CouchDB write conflict on %s (attempt %d/%d), retrying",
-                    doc_id,
-                    attempt,
-                    self._max_save_retries,
-                )
+                    try:
+                        # Attempt to fetch the document (update path)
+                        doc = await self._db[doc_id]
+                        if pre_save_validator is not None:
+                            pre_save_validator(dict(doc))
+                        doc.update(content)
+                        await doc.save()
+                    except NotFoundError as err:
+                        await self._raise_if_database_missing(err)
+                        # Document does not exist yet (create path)
+                        # NOTE: aiocouch.Database.create() only creates a local object;
+                        # doc.save() is required to actually PUT the document to CouchDB.
+                        doc = await self._db.create(doc_id, data=content)
+                        await doc.save()
+                    return dict(doc)
+                except ConflictError as err:
+                    if attempt >= self._max_save_retries:
+                        raise DocumentConflictError(
+                            f"Concurrent modification conflict for document {doc_id} "
+                            f"after {self._max_save_retries} retries"
+                        ) from err
+                    logger.debug(
+                        "CouchDB write conflict on %s (attempt %d/%d), retrying",
+                        doc_id,
+                        attempt,
+                        self._max_save_retries,
+                    )
 
-        raise DocumentConflictError(f"Failed to save document {doc_id}")  # pragma: no cover
+            raise DocumentConflictError(f"Failed to save document {doc_id}")  # pragma: no cover
+
+        return await self._with_db_recovery(_op)
 
     async def delete_document(self, doc_id: str) -> bool:
         """Delete a document.
@@ -308,15 +460,18 @@ class CouchDBClient:
         Returns:
             True if deleted, False if not found
         """
-        if not self._db:
-            raise RuntimeError("Not connected to CouchDB")
 
-        try:
-            doc = await self._db[doc_id]
-            await doc.delete()
-            return True
-        except NotFoundError:
-            return False
+        async def _op() -> bool:
+            self._require_connected()
+            try:
+                doc = await self._db[doc_id]
+                await doc.delete()
+                return True
+            except NotFoundError as err:
+                await self._raise_if_database_missing(err)
+                return False
+
+        return await self._with_db_recovery(_op)
 
     async def find(
         self,
@@ -335,22 +490,28 @@ class CouchDBClient:
         Returns:
             List of matching documents
         """
-        if not self._db:
-            raise RuntimeError("Not connected to CouchDB")
 
-        effective_limit = limit if limit is not None else self._default_query_limit
-        result = self._db.find(selector, limit=effective_limit, skip=skip)
-        docs = [dict(doc) async for doc in result]
+        async def _op() -> list[CouchDbDocument]:
+            self._require_connected()
+            try:
+                effective_limit = limit if limit is not None else self._default_query_limit
+                result = self._db.find(selector, limit=effective_limit, skip=skip)
+                docs = [dict(doc) async for doc in result]
+            except NotFoundError as err:
+                await self._raise_if_database_missing(err)
+                raise
 
-        if limit is None and len(docs) == effective_limit:
-            logger.warning(
-                "CouchDB find() returned exactly %d documents for selector %s — "
-                "results may be silently truncated. Use skip/limit for pagination.",
-                effective_limit,
-                selector,
-            )
+            if limit is None and len(docs) == effective_limit:
+                logger.warning(
+                    "CouchDB find() returned exactly %d documents for selector %s — "
+                    "results may be silently truncated. Use skip/limit for pagination.",
+                    effective_limit,
+                    selector,
+                )
 
-        return docs
+            return docs
+
+        return await self._with_db_recovery(_op)
 
     async def find_page(
         self,
@@ -377,36 +538,41 @@ class CouchDBClient:
             response omits a bookmark; callers should stop when ``docs`` is
             empty or shorter than ``limit``.
         """
-        if not self._db:
-            raise RuntimeError("Not connected to CouchDB")
-        if not self._db_name:
-            raise RuntimeError("Database name is not set")
         if limit < 1:
             msg = "limit must be >= 1"
             raise ValueError(msg)
 
-        payload: JsonObject = {
-            "selector": selector,
-            "limit": limit,
-        }
-        if bookmark is not None:
-            payload["bookmark"] = bookmark
-        if sort is not None:
-            payload["sort"] = cast(JsonValue, sort)
+        async def _op() -> tuple[list[CouchDbDocument], str | None]:
+            self._require_connected()
+            if not self._db_name:
+                raise RuntimeError("Database name is not set")
 
-        url = f"{self._url}/{self._db_name}/_find"
-        session = self._get_session()
-        async with session.post(url, json=payload) as resp:
-            if resp.status != HTTPStatus.OK:
-                text = await resp.text()
-                logger.error("CouchDB _find page failed: %s", text)
-                raise RuntimeError(f"CouchDB _find failed with status {resp.status}: {text}")
-            response_data = await resp.json()
+            payload: JsonObject = {
+                "selector": selector,
+                "limit": limit,
+            }
+            if bookmark is not None:
+                payload["bookmark"] = bookmark
+            if sort is not None:
+                payload["sort"] = cast(JsonValue, sort)
 
-        docs_raw = response_data.get("docs", [])
-        docs: list[CouchDbDocument] = [dict(doc) for doc in docs_raw]
-        next_bookmark = response_data.get("bookmark")
-        return docs, next_bookmark if isinstance(next_bookmark, str) else None
+            url = f"{self._url}/{self._db_name}/_find"
+            session = self._get_session()
+            async with session.post(url, json=payload) as resp:
+                if resp.status == HTTPStatus.NOT_FOUND:
+                    await self._raise_if_database_missing()
+                if resp.status != HTTPStatus.OK:
+                    text = await resp.text()
+                    logger.error("CouchDB _find page failed: %s", text)
+                    raise RuntimeError(f"CouchDB _find failed with status {resp.status}: {text}")
+                response_data = await resp.json()
+
+            docs_raw = response_data.get("docs", [])
+            docs: list[CouchDbDocument] = [dict(doc) for doc in docs_raw]
+            next_bookmark = response_data.get("bookmark")
+            return docs, next_bookmark if isinstance(next_bookmark, str) else None
+
+        return await self._with_db_recovery(_op)
 
     async def find_projected(
         self,
@@ -431,42 +597,47 @@ class CouchDBClient:
         Returns:
             List of projected documents.
         """
-        if not self._db:
-            raise RuntimeError("Not connected to CouchDB")
-        if not self._db_name:
-            raise RuntimeError("Database name is not set")
 
-        effective_limit = limit if limit is not None else self._default_query_limit
+        async def _op() -> list[CouchDbDocument]:
+            self._require_connected()
+            if not self._db_name:
+                raise RuntimeError("Database name is not set")
 
-        payload: JsonObject = {
-            "selector": selector,
-            "fields": cast(JsonValue, fields),
-            "limit": effective_limit,
-            "skip": skip,
-        }
+            effective_limit = limit if limit is not None else self._default_query_limit
 
-        url = f"{self._url}/{self._db_name}/_find"
-        session = self._get_session()
-        async with session.post(url, json=payload) as resp:
-            if resp.status != HTTPStatus.OK:
-                text = await resp.text()
-                logger.error("CouchDB _find with projection failed: %s", text)
-                raise RuntimeError(f"CouchDB _find failed with status {resp.status}: {text}")
+            payload: JsonObject = {
+                "selector": selector,
+                "fields": cast(JsonValue, fields),
+                "limit": effective_limit,
+                "skip": skip,
+            }
 
-            response_data = await resp.json()
+            url = f"{self._url}/{self._db_name}/_find"
+            session = self._get_session()
+            async with session.post(url, json=payload) as resp:
+                if resp.status == HTTPStatus.NOT_FOUND:
+                    await self._raise_if_database_missing()
+                if resp.status != HTTPStatus.OK:
+                    text = await resp.text()
+                    logger.error("CouchDB _find with projection failed: %s", text)
+                    raise RuntimeError(f"CouchDB _find failed with status {resp.status}: {text}")
 
-        docs_raw = response_data.get("docs", [])
-        docs: list[CouchDbDocument] = [dict(doc) for doc in docs_raw]
+                response_data = await resp.json()
 
-        if limit is None and len(docs) == effective_limit:
-            logger.warning(
-                "CouchDB find_projected() returned exactly %d documents for selector %s — "
-                "results may be silently truncated. Use skip/limit for pagination.",
-                effective_limit,
-                selector,
-            )
+            docs_raw = response_data.get("docs", [])
+            docs: list[CouchDbDocument] = [dict(doc) for doc in docs_raw]
 
-        return docs
+            if limit is None and len(docs) == effective_limit:
+                logger.warning(
+                    "CouchDB find_projected() returned exactly %d documents for selector %s — "
+                    "results may be silently truncated. Use skip/limit for pagination.",
+                    effective_limit,
+                    selector,
+                )
+
+            return docs
+
+        return await self._with_db_recovery(_op)
 
     async def save_document_if_revision_matches(
         self,
@@ -492,40 +663,41 @@ class CouchDBClient:
             DocumentConflictError: If CouchDB returns 409 conflict.
             RuntimeError: For non-success HTTP errors.
         """
-        if not self._db:
-            raise RuntimeError("Not connected to CouchDB")
-        if not self._db_name:
-            raise RuntimeError("Database name is not set")
 
-        payload = dict(data)
-        payload["_id"] = doc_id
-        payload["_rev"] = expected_rev
+        async def _op() -> CouchDbDocument:
+            self._require_connected()
+            if not self._db_name:
+                raise RuntimeError("Database name is not set")
 
-        encoded_doc_id = quote(doc_id, safe="")
-        url = f"{self._url}/{self._db_name}/{encoded_doc_id}"
-        session = self._get_session()
+            payload = dict(data)
+            payload["_id"] = doc_id
+            payload["_rev"] = expected_rev
 
-        async with session.put(url, json=payload) as resp:
-            if resp.status in {HTTPStatus.CREATED, HTTPStatus.ACCEPTED, HTTPStatus.OK}:
-                response_data = await resp.json()
-                new_rev = response_data.get("rev")
-                if isinstance(new_rev, str):
-                    payload["_rev"] = new_rev
-                return payload
+            encoded_doc_id = quote(doc_id, safe="")
+            url = f"{self._url}/{self._db_name}/{encoded_doc_id}"
+            session = self._get_session()
 
-            if resp.status == HTTPStatus.CONFLICT:
-                raise DocumentConflictError(f"Conflict updating document {doc_id}")
+            async with session.put(url, json=payload) as resp:
+                if resp.status in {HTTPStatus.CREATED, HTTPStatus.ACCEPTED, HTTPStatus.OK}:
+                    response_data = await resp.json()
+                    new_rev = response_data.get("rev")
+                    if isinstance(new_rev, str):
+                        payload["_rev"] = new_rev
+                    return payload
 
-            text = await resp.text()
-            raise RuntimeError(f"Failed to update document {doc_id}: {resp.status} {text}")
+                if resp.status == HTTPStatus.CONFLICT:
+                    raise DocumentConflictError(f"Conflict updating document {doc_id}")
+
+                if resp.status == HTTPStatus.NOT_FOUND:
+                    await self._raise_if_database_missing()
+
+                text = await resp.text()
+                raise RuntimeError(f"Failed to update document {doc_id}: {resp.status} {text}")
+
+        return await self._with_db_recovery(_op)
 
     def _get_session(self) -> aiohttp.ClientSession:
-        """Return the shared aiohttp session, creating it on first call."""
-        if self._session is None:
-            headers: dict[str, str] = {"Content-Type": "application/json"}
-            if self._user is not None and self._password is not None:
-                headers["Authorization"] = aiohttp.encode_basic_auth(self._user, self._password)
-            self._session = aiohttp.ClientSession(headers=headers)
+        """Return the shared aiohttp session used for raw CouchDB HTTP calls."""
         return self._session
 
     async def create_index(self, fields: list[str], name: str | None = None) -> None:
@@ -535,24 +707,29 @@ class CouchDBClient:
             fields: List of fields to index
             name: Optional name for the index
         """
-        if not self._db:
-            raise RuntimeError("Not connected to CouchDB")
 
-        index_def: JsonObject = {
-            "index": cast(JsonValue, {"fields": fields}),
-            "type": "json",
-        }
-        if name:
-            index_def["name"] = name
+        async def _op() -> None:
+            self._require_connected()
 
-        if not self._db_name:
-            raise RuntimeError("Database name is not set")
-        url = f"{self._url}/{self._db_name}/_index"
+            index_def: JsonObject = {
+                "index": cast(JsonValue, {"fields": fields}),
+                "type": "json",
+            }
+            if name:
+                index_def["name"] = name
 
-        session = self._get_session()
-        async with session.post(url, json=index_def) as resp:
-            if resp.status not in {HTTPStatus.OK, HTTPStatus.CREATED}:
-                text = await resp.text()
-                logger.error("Failed to create index on %s: %s", fields, text)
-            else:
-                logger.info("Ensured index on %s (name: %s)", fields, name)
+            if not self._db_name:
+                raise RuntimeError("Database name is not set")
+            url = f"{self._url}/{self._db_name}/_index"
+
+            session = self._get_session()
+            async with session.post(url, json=index_def) as resp:
+                if resp.status == HTTPStatus.NOT_FOUND:
+                    await self._raise_if_database_missing()
+                if resp.status not in {HTTPStatus.OK, HTTPStatus.CREATED}:
+                    text = await resp.text()
+                    logger.error("Failed to create index on %s: %s", fields, text)
+                else:
+                    logger.info("Ensured index on %s (name: %s)", fields, name)
+
+        await self._with_db_recovery(_op)
