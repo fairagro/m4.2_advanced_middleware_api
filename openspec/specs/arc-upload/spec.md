@@ -35,7 +35,7 @@ the current event log. It MUST apply the shared HTTP outcome mapping in `arc-man
 
 - **GIVEN** a prior standalone ARC with the same identifier, RDI, and content
 - **WHEN** the client re-submits it
-- **THEN** the response is HTTP `200` with `UPDATED`, one document exists, and no second sync is scheduled
+- **THEN** the response is HTTP `200` with `UPDATED`, one document exists, and a background sync task is still scheduled
 
 #### Scenario: Update changed content
 

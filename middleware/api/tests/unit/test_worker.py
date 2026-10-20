@@ -72,7 +72,15 @@ def test_sync_arc_to_gitlab_success() -> None:
 
         try:
             result = sync_arc_to_gitlab.apply(
-                args=({"rdi": "test-rdi", "arc": arc_json, "client_id": "test-client"},)
+                args=(
+                    {
+                        "rdi": "test-rdi",
+                        "arc": arc_json,
+                        "client_id": "test-client",
+                        "is_new": False,
+                        "has_changes": False,
+                    },
+                )
             ).get()
         finally:
             loop.close()
@@ -81,6 +89,8 @@ def test_sync_arc_to_gitlab_success() -> None:
         mock_bl.sync_to_gitlab.assert_called_once_with(
             "test-rdi",
             arc_json,
+            is_new=False,
+            has_changes=False,
             record_transient_as_failed=False,
         )
 
@@ -108,6 +118,8 @@ def test_sync_arc_to_gitlab_passes_exhausted_flag() -> None:
         mock_bl.sync_to_gitlab.assert_called_once_with(
             "test-rdi",
             arc_json,
+            is_new=True,
+            has_changes=True,
             record_transient_as_failed=True,
         )
 

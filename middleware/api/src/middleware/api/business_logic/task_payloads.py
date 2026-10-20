@@ -9,6 +9,9 @@ class ArcSyncTask(BaseModel):
     rdi: str
     arc: str
     client_id: str | None = None
+    # Defaults True keep old queue messages safe (always full sync until API+worker roll out).
+    is_new: bool = True
+    has_changes: bool = True
 
 
 class CatalogFinalizeTask(BaseModel):

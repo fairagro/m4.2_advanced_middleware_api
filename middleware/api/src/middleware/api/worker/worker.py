@@ -137,7 +137,15 @@ def sync_arc_to_gitlab(self: Task, task: ArcSyncTask) -> None:
 
     try:
         logic, loop = BusinessLogicManager.get()
-        loop.run_until_complete(logic.sync_to_gitlab(rdi, arc_data, record_transient_as_failed=record_failed))
+        loop.run_until_complete(
+            logic.sync_to_gitlab(
+                rdi,
+                arc_data,
+                is_new=task.is_new,
+                has_changes=task.has_changes,
+                record_transient_as_failed=record_failed,
+            )
+        )
         logger.info("[%s] Successfully completed GitLab sync task for RDI %s", client_id, rdi)
     except Exception:
         logger.error("[%s] GitLab sync task failed for RDI %s", client_id, rdi, exc_info=True)
