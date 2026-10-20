@@ -36,6 +36,12 @@ def mock_client_instance() -> MagicMock:
     client.save_document = AsyncMock()
     client.save_document_if_revision_matches = AsyncMock()
     client.create_index = AsyncMock()
+    client.set_reinit_hook = MagicMock()
+    client.application_database_exists = AsyncMock(return_value=True)
+    client._inside_reinit = False
+    client._client = MagicMock()
+    client._db = MagicMock()
+    client._db_name = "test"
     return client
 
 
@@ -147,6 +153,76 @@ async def test_couchdb_store_setup(store: CouchDB, mock_client_instance: MagicMo
         ["doc_type", "rdi", "_id"],
         name="idx_doc_type_rdi_id",
     )
+
+
+@pytest.mark.asyncio
+async def test_couchdb_store_ensure_initialized_skips_when_db_exists(
+    store: CouchDB, mock_client_instance: MagicMock
+) -> None:
+    """ensure_initialized is a no-op reconnect when the application DB exists."""
+    mock_server = MagicMock()
+    mock_db = MagicMock()
+    mock_server.__getitem__ = AsyncMock(return_value=mock_db)
+    mock_client_instance._client = mock_server
+    mock_client_instance.application_database_exists = AsyncMock(return_value=True)
+
+    await store.ensure_initialized()
+
+    mock_client_instance.close.assert_not_called()
+    mock_client_instance.connect.assert_not_called()
+    mock_client_instance.create_index.assert_not_called()
+    assert mock_client_instance._db is mock_db
+
+
+@pytest.mark.asyncio
+async def test_couchdb_store_ensure_initialized_recreates_when_missing(
+    store: CouchDB, mock_client_instance: MagicMock
+) -> None:
+    """ensure_initialized closes, reconnects, and rebuilds indices when DB is gone."""
+    mock_client_instance.application_database_exists = AsyncMock(return_value=False)
+
+    await store.ensure_initialized()
+
+    mock_client_instance.close.assert_awaited()
+    mock_client_instance.connect.assert_awaited()
+    assert mock_client_instance.create_index.call_count == 4  # noqa: PLR2004
+
+
+@pytest.mark.asyncio
+async def test_couchdb_store_ensure_initialized_is_single_flight(
+    store: CouchDB, mock_client_instance: MagicMock
+) -> None:
+    """Concurrent ensure_initialized callers share one reconnect+setup."""
+    import asyncio
+
+    started = asyncio.Event()
+    release = asyncio.Event()
+    connect_calls = 0
+    db_ready = False
+
+    async def _exists() -> bool:
+        return db_ready
+
+    async def _slow_connect() -> None:
+        nonlocal connect_calls, db_ready
+        connect_calls += 1
+        started.set()
+        await release.wait()
+        db_ready = True
+
+    mock_server = MagicMock()
+    mock_server.__getitem__ = AsyncMock(return_value=MagicMock())
+    mock_client_instance._client = mock_server
+    mock_client_instance.application_database_exists = AsyncMock(side_effect=_exists)
+    mock_client_instance.connect = AsyncMock(side_effect=_slow_connect)
+
+    t1 = asyncio.create_task(store.ensure_initialized())
+    await started.wait()
+    t2 = asyncio.create_task(store.ensure_initialized())
+    release.set()
+    await asyncio.gather(t1, t2)
+
+    assert connect_calls == 1
 
 
 @pytest.mark.asyncio

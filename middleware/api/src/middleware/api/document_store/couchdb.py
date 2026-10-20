@@ -30,6 +30,7 @@ from .arc_document import (
     ArcEvent,
     ArcMetadata,
 )
+from .errors import DocumentStoreUnavailableError
 from .harvest_document import (
     HarvestCatalogEvent,
     HarvestDocument,
@@ -57,6 +58,8 @@ class CouchDB(DocumentStore):
         self._config = config
         self._db_name = config.db_name
         self._client = CouchDBClient.from_config(config)
+        self._ensure_lock = asyncio.Lock()
+        self._client.set_reinit_hook(self.ensure_initialized)
 
     @staticmethod
     def _new_arc_metadata(content_hash: str, now: datetime, harvest_id: str | None) -> ArcMetadata:
@@ -394,7 +397,7 @@ class CouchDB(DocumentStore):
         await self._client.save_document(doc_id, doc_data)
 
     async def health_check(self) -> bool:
-        """Check if document store is reachable."""
+        """Check if the application database exists (re-init via hook when needed)."""
         return await self._client.health_check()
 
     async def setup(self) -> None:
@@ -407,6 +410,33 @@ class CouchDB(DocumentStore):
         # Supports catalog finalize paging: selector on doc_type+rdi, sort including _id.
         await self._client.create_index(["doc_type", "rdi", "_id"], name="idx_doc_type_rdi_id")
         logger.info("CouchDB document store indices initialized")
+
+    async def ensure_initialized(self) -> None:
+        """Ensure system DBs, application DB, and indices exist (idempotent, single-flight).
+
+        Used at startup and when the application database disappears while the process
+        still holds a stale client handle (CouchDB wipe / recreated PVC).
+        """
+        async with self._ensure_lock:
+            self._client._inside_reinit = True  # noqa: SLF001
+            try:
+                if self._client._connected and await self._client.application_database_exists():  # noqa: SLF001
+                    # Refresh handle in case the prior Database object was stale.
+                    self._client._db = await self._client._client[self._db_name]  # noqa: SLF001
+                    return
+                logger.info(
+                    "Re-initializing CouchDB document store (application database %s missing or never connected)",
+                    self._db_name,
+                )
+                await self._client.close()
+                await self._client.connect()
+                await self.setup()
+            except Exception as e:
+                raise DocumentStoreUnavailableError(
+                    f"Failed to initialize CouchDB application database {self._db_name!r}"
+                ) from e
+            finally:
+                self._client._inside_reinit = False  # noqa: SLF001
 
     async def connect(self) -> None:
         """Connect to CouchDB."""

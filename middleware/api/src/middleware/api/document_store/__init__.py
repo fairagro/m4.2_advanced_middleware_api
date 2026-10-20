@@ -5,14 +5,22 @@ from collections.abc import AsyncIterator
 from typing import cast
 
 from middleware.api.document_store.arc_document import ArcEvent, ArcMetadata
+from middleware.api.document_store.errors import DocumentStoreError, DocumentStoreUnavailableError
 from middleware.api.document_store.harvest_document import HarvestDocument, HarvestStatistics, HarvestUpdatePayload
 from middleware.api.document_store.task_record import TaskRecord
 from middleware.shared.api_models.v3.models import HarvestError
 from middleware.shared.json_types import RoCrateContent
 
-
-class DocumentStoreError(Exception):
-    """Base exception for document store errors."""
+__all__ = [
+    "ArcIdentityConflictError",
+    "ArcStoreResult",
+    "DocumentStore",
+    "DocumentStoreError",
+    "DocumentStoreUnavailableError",
+    "DuplicateArcError",
+    "IdempotencyBodyConflictError",
+    "IdempotencyPendingError",
+]
 
 
 class DuplicateArcError(DocumentStoreError):
@@ -128,6 +136,14 @@ class DocumentStore(ABC):
     @abstractmethod
     async def setup(self) -> None:
         """Initialize the document store and its dependencies."""
+        raise NotImplementedError
+
+    @abstractmethod
+    async def ensure_initialized(self) -> None:
+        """Ensure the store is connected and the application database is ready.
+
+        MUST be safe to call after process start when the backing database was wiped.
+        """
         raise NotImplementedError
 
     @abstractmethod

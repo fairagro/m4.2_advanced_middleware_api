@@ -21,7 +21,11 @@ from middleware.api.business_logic import (
 from middleware.api.business_logic.ports import BusinessLogicPorts
 from middleware.api.business_logic.rdi_comments import enrich_investigation_rdi_comments
 from middleware.api.business_logic.task_payloads import ArcSyncTask
-from middleware.api.document_store import ArcIdentityConflictError, ArcStoreResult
+from middleware.api.document_store import (
+    ArcIdentityConflictError,
+    ArcStoreResult,
+    DocumentStoreUnavailableError,
+)
 from middleware.api.document_store.arc_document import ArcEventType
 from middleware.api.document_store.harvest_document import HarvestDocument, HarvestStatistics
 from middleware.shared.api_models.common.models import ArcOperationResult, ArcStatus, HarvestStatus
@@ -50,6 +54,7 @@ def mock_doc_store() -> MagicMock:
     doc_store.health_check = AsyncMock(return_value=True)
     doc_store.setup = AsyncMock()
     doc_store.connect = AsyncMock()
+    doc_store.ensure_initialized = AsyncMock()
     doc_store.close = AsyncMock()
     return doc_store
 
@@ -619,8 +624,7 @@ async def test_lifecycle_methods(api_logic: BusinessLogic, mock_doc_store: Magic
     """Test lifecycle methods through the business logic."""
     async with api_logic as ctx:
         assert ctx == api_logic
-        mock_doc_store.setup.assert_called_once()
-        mock_doc_store.connect.assert_called_once()
+        mock_doc_store.ensure_initialized.assert_called_once()
 
     mock_doc_store.close.assert_called_once()
 
@@ -628,7 +632,7 @@ async def test_lifecycle_methods(api_logic: BusinessLogic, mock_doc_store: Magic
 @pytest.mark.asyncio
 async def test_setup_failure(api_logic: BusinessLogic, mock_doc_store: MagicMock) -> None:
     """Test setup failure."""
-    mock_doc_store.setup.side_effect = Exception("DB Fail")
+    mock_doc_store.ensure_initialized.side_effect = Exception("DB Fail")
     with pytest.raises(SetupError, match="Failed to setup business logic"):
         await api_logic.startup()
 
@@ -940,6 +944,18 @@ async def test_create_or_update_generic_exception(api_logic: BusinessLogic, mock
     arc_data = minimal_rocrate_dict("test")
 
     with pytest.raises(BusinessLogicError, match="unexpected error encountered"):
+        await api_logic.create_or_update_arc("test_rdi", cast(RoCrateContent, arc_data), "client_1")
+
+
+@pytest.mark.asyncio
+async def test_create_or_update_store_unavailable_is_not_wrapped(
+    api_logic: BusinessLogic, mock_doc_store: MagicMock
+) -> None:
+    """Store unavailability stays typed so ARC writes can return HTTP 503."""
+    mock_doc_store.store_arc.side_effect = DocumentStoreUnavailableError("re-initialization failed")
+    arc_data = minimal_rocrate_dict("test")
+
+    with pytest.raises(DocumentStoreUnavailableError, match="re-initialization failed"):
         await api_logic.create_or_update_arc("test_rdi", cast(RoCrateContent, arc_data), "client_1")
 
 
