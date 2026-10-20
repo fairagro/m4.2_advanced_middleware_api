@@ -193,6 +193,15 @@ class RemoteGitProvider(ABC):
         pass
 
     @abstractmethod
+    def repo_exists(self, arc_id: str) -> bool:
+        """Return whether a usable repository already exists for ``arc_id``.
+
+        Must not create or modify repositories. Pending-deletion / renamed paths
+        count as missing.
+        """
+        pass
+
+    @abstractmethod
     def get_repo_url(self, arc_id: str, authenticated: bool = True) -> UrlStr:
         """Construct the URL for the remote repository."""
         pass
@@ -245,24 +254,31 @@ class FileSystemGitProvider(RemoteGitProvider):
         self.base_url = base_url.rstrip("/")
         self.group = group.strip("/")
 
+    def _remote_path(self, arc_id: str) -> Path | None:
+        parsed_url = urlparse(self.base_url)
+        if parsed_url.scheme.lower() != "file":
+            return None
+        base_path = Path(unquote(parsed_url.path))
+        return base_path / self.group / f"{arc_id}.git"
+
     def ensure_repo_exists(self, arc_id: str, metadata: GitProjectMetadata) -> None:  # noqa: ARG002
         """Create a bare repository on the local filesystem if it doesn't exist.
 
         ``metadata`` is accepted for a uniform ``RemoteGitProvider`` interface but not used.
         """
-        parsed_url = urlparse(self.base_url)
-        if parsed_url.scheme.lower() != "file":
+        remote_path = self._remote_path(arc_id)
+        if remote_path is None:
             return
-
-        # The path from a file URL might be URL-encoded (e.g. spaces as %20).
-        # We assume the path is local and can ignore the netloc part.
-        base_path = Path(unquote(parsed_url.path))
-        remote_path = base_path / self.group / f"{arc_id}.git"
 
         if not remote_path.exists():
             logger.info("Creating local 'remote' bare repository at %s", remote_path)
             remote_path.parent.mkdir(parents=True, exist_ok=True)
             Repo.init(remote_path, bare=True)
+
+    def repo_exists(self, arc_id: str) -> bool:
+        """Return whether the local bare repository already exists."""
+        remote_path = self._remote_path(arc_id)
+        return remote_path is not None and remote_path.exists()
 
     def get_repo_url(self, arc_id: str, authenticated: bool = True) -> UrlStr:  # noqa: ARG002
         """Return the file:// URL for the repository."""
@@ -285,6 +301,22 @@ class GitlabGitProvider(RemoteGitProvider):
         if token:
             self._gl = gitlab.Gitlab(url=url, private_token=token)
         self._tracer = trace.get_tracer(__name__)
+        # Group ``full_path`` / ``id`` are invariant for this provider; cache after first resolve
+        # so steady-state ``repo_exists`` is a single ``projects.get`` (not groups.get + projects.get).
+        self._cached_group_full_path: str | None = None
+        self._cached_group_id: int | None = None
+
+    def _resolved_group(self) -> tuple[str, int]:
+        """Return ``(full_path, id)`` for ``group_name``, caching after the first API lookup."""
+        if self._gl is None:
+            msg = "GitLab client is not configured"
+            raise RuntimeError(msg)
+        if self._cached_group_full_path is not None and self._cached_group_id is not None:
+            return self._cached_group_full_path, self._cached_group_id
+        group = self._gl.groups.get(self.group_name)
+        self._cached_group_full_path = str(group.full_path)
+        self._cached_group_id = int(group.id)
+        return self._cached_group_full_path, self._cached_group_id
 
     def ensure_repo_exists(self, arc_id: str, metadata: GitProjectMetadata) -> None:
         """Ensure the project exists in the GitLab group and apply human-readable metadata."""
@@ -297,8 +329,8 @@ class GitlabGitProvider(RemoteGitProvider):
             attributes={"arc_id": arc_id, "group": self.group_name},
         ):
             try:
-                group = self._gl.groups.get(self.group_name)
-                project_path = f"{group.full_path}/{arc_id}"
+                group_full_path, group_id = self._resolved_group()
+                project_path = f"{group_full_path}/{arc_id}"
                 try:
                     project = self._gl.projects.get(project_path)
                     # Delayed deletion renames ``path`` to ``{path}-deletion_scheduled-{id}``.
@@ -318,7 +350,7 @@ class GitlabGitProvider(RemoteGitProvider):
                     create_attrs: dict[str, object] = {
                         "name": metadata.identifier,
                         "path": arc_id,
-                        "namespace_id": group.id,
+                        "namespace_id": group_id,
                         "visibility": "private",
                     }
                     project_description = build_gitlab_project_description(metadata)
@@ -337,6 +369,47 @@ class GitlabGitProvider(RemoteGitProvider):
 
                 logger.error("Failed to ensure GitLab project exists: %s", msg)
                 raise ArcStoreError(msg) from e
+
+    def repo_exists(self, arc_id: str) -> bool:
+        """Return whether a usable GitLab project exists for ``arc_id`` (GET only).
+
+        Pending deletion / deletion-scheduled path rewrite counts as missing.
+        Without a token, returns ``False`` so callers prefer a full sync attempt.
+        """
+        if not self._gl:
+            logger.debug("No GitLab token; treating project %s as missing for exists probe", arc_id)
+            return False
+
+        with self._tracer.start_as_current_span(
+            "api.GitlabGitProvider.repo_exists",
+            attributes={"arc_id": arc_id, "group": self.group_name},
+        ) as span:
+            try:
+                group_full_path, _group_id = self._resolved_group()
+                project_path = f"{group_full_path}/{arc_id}"
+                try:
+                    project = self._gl.projects.get(project_path)
+                except GitlabGetError:
+                    span.set_attribute("exists", False)
+                    return False
+                if getattr(project, "marked_for_deletion_on", None) or project.path != arc_id:
+                    logger.debug(
+                        "GitLab project %s pending deletion or path rewrite (path=%s); treating as missing",
+                        project_path,
+                        project.path,
+                    )
+                    span.set_attribute("exists", False)
+                    return False
+                span.set_attribute("exists", True)
+                return True
+            except GitlabError as e:
+                logger.warning(
+                    "GitLab exists probe failed for %s; treating as missing to allow full sync: %s",
+                    arc_id,
+                    e,
+                )
+                span.set_attribute("exists", False)
+                return False
 
     def get_repo_url(self, arc_id: str, authenticated: bool = True) -> UrlStr:
         """Construct the GitLab repository URL, optionally with auth token."""
