@@ -28,6 +28,14 @@ class ConsolidatedGitConfig(GitCliSettings):
             validate_default=True,
         ),
     ] = Field(default_factory=_default_catalog_git_cache_dir)
+    finalize_lock_wait_timeout_s: Annotated[
+        float,
+        Field(
+            default=60.0,
+            ge=0.1,
+            description="Max seconds to wait for per-RDI catalog finalize single-flight lock",
+        ),
+    ] = 60.0
 
     @field_validator("repo_url")
     @classmethod

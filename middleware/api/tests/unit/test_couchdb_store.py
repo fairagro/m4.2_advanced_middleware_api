@@ -870,3 +870,58 @@ async def test_update_harvest_append_catalog_event_retries_on_conflict(
     second_payload = mock_client_instance.save_document_if_revision_matches.await_args_list[1].args[1]
     assert len(second_payload["catalog_events"]) == 2
     mock_client_instance.save_document.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_catalog_finalize_lock_exclusive_create_and_release(
+    store: CouchDB,
+    mock_client_instance: MagicMock,
+) -> None:
+    """Finalize claim is created exclusively and deleted by the holder on exit."""
+    held: dict[str, str] = {}
+
+    async def _create_exclusive(doc_id: str, data: dict) -> dict:
+        held["holder"] = data["holder"]
+        return {"_id": doc_id, **data}
+
+    async def _get_document(_doc_id: str) -> dict:
+        return {"holder": held["holder"], "rdi": "edal"}
+
+    mock_client_instance.create_document_exclusive = AsyncMock(side_effect=_create_exclusive)
+    mock_client_instance.delete_document = AsyncMock(return_value=True)
+    mock_client_instance.get_document = AsyncMock(side_effect=_get_document)
+
+    async with store.catalog_finalize_lock("edal", wait_timeout_s=1.0):
+        mock_client_instance.create_document_exclusive.assert_awaited_once()
+        doc_id = mock_client_instance.create_document_exclusive.await_args.args[0]
+        assert doc_id.startswith("catalog_finalize_lock_")
+
+    mock_client_instance.delete_document.assert_awaited_once_with(doc_id)
+
+
+@pytest.mark.asyncio
+async def test_catalog_finalize_lock_wait_timeout(
+    store: CouchDB,
+    mock_client_instance: MagicMock,
+    config: CouchDBConfig,
+) -> None:
+    """Held non-stale claim times out as TimeoutError for transient mapping."""
+    store._config = config.model_copy(  # noqa: SLF001
+        update={
+            "catalog_finalize_lock_wait_timeout_s": 0.05,
+            "catalog_finalize_lock_poll_delay_s": 0.01,
+            "catalog_finalize_lock_ttl_s": 600.0,
+        }
+    )
+    mock_client_instance.create_document_exclusive = AsyncMock(side_effect=DocumentConflictError("held"))
+    mock_client_instance.get_document = AsyncMock(
+        return_value={
+            "holder": "other",
+            "rdi": "edal",
+            "acquired_at": datetime.now(UTC).isoformat(),
+        }
+    )
+
+    with pytest.raises(TimeoutError, match="timed out"):
+        async with store.catalog_finalize_lock("edal"):
+            pass  # pragma: no cover

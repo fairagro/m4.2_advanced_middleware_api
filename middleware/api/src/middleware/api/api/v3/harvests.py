@@ -16,6 +16,7 @@ from middleware.api.api.common.dependencies import (
 from middleware.api.business_logic import BusinessLogic, ConflictError
 from middleware.api.business_logic.exceptions import ArcIdentityMismatchError, DuplicateArcInHarvestError
 from middleware.api.document_store.harvest_document import HarvestDocument
+from middleware.shared.api_models.common.models import HarvestStatus
 from middleware.shared.api_models.v3 import models as v3_models
 
 router = APIRouter(prefix="/v3/harvests", tags=["v3", "harvests"])
@@ -185,9 +186,11 @@ async def submit_arc_in_harvest(  # noqa: PLR0913, PLR0917
 
     The ``rdi`` is resolved automatically from the harvest run.
 
-    HTTP ``409 Conflict`` covers two distinct cases: harvest-local content duplicates
-    (:class:`~middleware.api.business_logic.exceptions.DuplicateArcInHarvestError`) and
-    ``arc_id`` identity mismatch under strip() rules
+    HTTP ``409 Conflict`` covers three distinct cases: harvest not ``RUNNING``
+    (lifecycle cut-off; no ARC write and no per-item harvest error), harvest-local
+    content duplicates
+    (:class:`~middleware.api.business_logic.exceptions.DuplicateArcInHarvestError`),
+    and ``arc_id`` identity mismatch under strip() rules
     (:class:`~middleware.api.business_logic.exceptions.ArcIdentityMismatchError`).
     Unicode NFC canonicalize-before-hash is out of scope (issue #537).
     """
@@ -197,6 +200,11 @@ async def submit_arc_in_harvest(  # noqa: PLR0913, PLR0917
 
     rdi = harvest.rdi
     await deps.validate_rdi_authorized(rdi, request)
+
+    if harvest.status != HarvestStatus.RUNNING:
+        raise ConflictError(
+            f"Cannot submit ARC to harvest {harvest_id}: harvest status is {harvest.status.value}, expected RUNNING"
+        )
 
     try:
         result = await bl.create_or_update_arc(rdi, request_body.arc, client_id, harvest_id=harvest_id)

@@ -344,6 +344,64 @@ def test_submit_arc_in_harvest_identity_mismatch_returns_409(
 
 
 @pytest.mark.unit
+@pytest.mark.parametrize(
+    "terminal_status",
+    [HarvestStatus.COMPLETED, HarvestStatus.CANCELLED, HarvestStatus.FAILED],
+)
+def test_submit_arc_in_harvest_rejects_non_running(
+    client: TestClient,
+    cert: str,
+    middleware_api: Api,
+    terminal_status: HarvestStatus,
+) -> None:
+    """Harvest ARC submit returns 409 when harvest is not RUNNING (no write, no per-item error)."""
+    harvest_id = "harvest-123"
+    mock_harvest = HarvestDocument(
+        doc_id=harvest_id,
+        rdi="rdi-1",
+        client_id="test-client-cn",
+        status=terminal_status,
+        started_at=datetime.now(UTC),
+        statistics=HarvestStatistics(),
+    )
+    rocrate = {
+        "@context": "https://w3id.org/ro/crate/1.1/context",
+        "@graph": [{"@id": "./", "identifier": "ARC-late"}],
+    }
+
+    with (
+        patch.object(
+            middleware_api.business_logic.harvest_manager, "get_harvest", new_callable=AsyncMock
+        ) as mock_get_harvest,
+        patch.object(middleware_api.app.state.common_deps, "get_authorized_rdis", new_callable=AsyncMock) as mock_auth,
+        patch.object(middleware_api.business_logic, "create_or_update_arc", new_callable=AsyncMock) as mock_create_arc,
+        patch.object(
+            middleware_api.business_logic.harvest_manager, "try_append_error", new_callable=AsyncMock
+        ) as mock_append,
+    ):
+        mock_get_harvest.return_value = mock_harvest
+        mock_auth.return_value = ["rdi-1"]
+
+        r = client.post(
+            f"/v3/harvests/{harvest_id}/arcs",
+            headers={
+                "ssl-client-cert": cert,
+                "ssl-client-verify": "SUCCESS",
+                "content-type": "application/json",
+                "accept": "application/json",
+            },
+            json={"arc": rocrate},
+        )
+
+        assert r.status_code == http.HTTPStatus.CONFLICT
+        detail = r.json()["detail"]
+        assert terminal_status.value in detail
+        assert "RUNNING" in detail
+        mock_create_arc.assert_not_called()
+        mock_append.assert_not_called()
+
+
+@pytest.mark.unit
 def test_submit_arc_in_harvest_conflict_returns_409_when_error_append_fails(
     client: TestClient, cert: str, middleware_api: Api
 ) -> None:

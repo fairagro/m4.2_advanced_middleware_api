@@ -57,6 +57,30 @@ class CouchDBConfig(BaseModel):
             description="Mango page size (bookmark paging) when streaming ARC contents for catalog finalize",
         ),
     ] = 500
+    catalog_finalize_lock_wait_timeout_s: Annotated[
+        float,
+        Field(
+            default=60.0,
+            ge=0.1,
+            description="Max seconds to wait for the per-RDI catalog finalize claim before transient retry",
+        ),
+    ] = 60.0
+    catalog_finalize_lock_ttl_s: Annotated[
+        float,
+        Field(
+            default=600.0,
+            ge=1.0,
+            description="Stale finalize claim TTL (seconds); expired claims are stolen on wait",
+        ),
+    ] = 600.0
+    catalog_finalize_lock_poll_delay_s: Annotated[
+        float,
+        Field(
+            default=0.1,
+            ge=0.0,
+            description="Delay between polls while waiting for a held catalog finalize claim",
+        ),
+    ] = 0.1
 
     @field_validator("url")
     @classmethod
