@@ -2,7 +2,7 @@
 
 ## MODIFIED Requirements
 
-### Requirement: Dispatch sync only for new or changed content
+### Requirement: Dispatch background sync after every successful persist
 
 The system SHALL schedule background Git sync after every successful document persist for an ingested ARC (whether new
 or unchanged). The ingest path MUST NOT skip enqueue solely because document storage reports no content change. During a

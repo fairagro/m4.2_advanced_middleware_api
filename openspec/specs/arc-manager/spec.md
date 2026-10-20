@@ -33,7 +33,8 @@ in `@graph` while being exposed read-only.
 The system SHALL persist each validated ARC through `DocumentStore.store_arc` and return its identifier, `CREATED` or
 `UPDATED` status, timestamp, originating `rdi`, and caller `client_id`. It MUST report `CREATED` for a new record,
 `UPDATED` for changed content, and idempotent `UPDATED` for identical content. An identical standalone re-submit MUST
-refresh `last_seen` as applicable but MUST NOT write the ARC body or schedule sync.
+refresh `last_seen` as applicable and MUST NOT write the ARC body. It MUST still schedule background Git sync; the
+worker decides whether to skip write/push.
 
 #### Scenario: Update changed standalone content
 
@@ -47,7 +48,7 @@ refresh `last_seen` as applicable but MUST NOT write the ARC body or schedule sy
 - **WHEN** ingestion completes
 - **THEN** at most one ARC document exists for that key
 
-### Requirement: Dispatch sync only for new or changed content
+### Requirement: Dispatch background sync after every successful persist
 
 The system SHALL schedule background Git sync after every successful document persist for an ingested ARC (whether new
 or unchanged). The ingest path MUST NOT skip enqueue solely because document storage reports no content change. During a
@@ -120,8 +121,8 @@ When provided a harvest context, the system SHALL record `last_harvest_id` on th
 ### Requirement: Enforce harvest-scoped immutable identity
 
 Within a harvest, an identical re-submit for an already recorded identifier and content hash SHALL return idempotent
-`UPDATED`, without a second document or sync. A re-submit of that identifier with a different hash MUST raise
-`DuplicateArcError`, leave the stored document unchanged, and be mapped by harvest callers to
+`UPDATED` without a second document, and MUST still schedule background Git sync. A re-submit of that identifier with a
+different hash MUST raise `DuplicateArcError`, leave the stored document unchanged, and be mapped by harvest callers to
 `DuplicateArcInHarvestError` and HTTP `409`.
 
 #### Scenario: Retry an identical harvest submission
@@ -194,7 +195,7 @@ scheduled, the body queued for Git sync, so Git `arc.Write()` materializes the C
 - **WHEN** the client re-submits the same logical ARC (with or without the three Comments already present, matching the
   registry after enrichment)
 - **THEN** document storage reports no content change
-- **AND** no second Git sync is scheduled
+- **AND** a background Git sync is still scheduled
 
 ### Requirement: Reject conflicting Comment[RDI]
 

@@ -334,7 +334,7 @@ class ArcManager:
                 "Git sync for ARC %s: project missing on DataHub (reason=missing_on_datahub); running full sync",
                 arc_id,
             )
-            span.set_attribute("git.skip_reason", "missing_on_datahub")
+            span.set_attribute("git.sync_reason", "missing_on_datahub")
             return False
 
         await self._doc_store.add_event(
@@ -347,7 +347,7 @@ class ArcManager:
         )
         logger.info("Git sync for ARC %s skipped (reason=present_unchanged)", arc_id)
         span.set_attribute("git.pushed", False)
-        span.set_attribute("git.skip_reason", "present_unchanged")
+        span.set_attribute("git.sync_reason", "present_unchanged")
         span.set_attribute("success", True)
         return True
 
@@ -431,7 +431,7 @@ class ArcManager:
                         is_new,
                         has_changes,
                     )
-                    span.set_attribute("git.skip_reason", "changed")
+                    span.set_attribute("git.sync_reason", "changed")
                 elif await self._skip_if_present_unchanged(arc_id, span):
                     return
                 else:
