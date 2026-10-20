@@ -797,6 +797,11 @@ class CouchDB(DocumentStore):
         try:
             yield
         finally:
-            current = await self._client.get_document(doc_id)
-            if current is not None and current.get("holder") == holder:
-                await self._client.delete_document(doc_id)
+            # Best-effort: a release error must not mask the finalize outcome.
+            # A stale claim is reclaimed by the TTL steal path.
+            try:
+                current = await self._client.get_document(doc_id)
+                if current is not None and current.get("holder") == holder:
+                    await self._client.delete_document(doc_id)
+            except Exception:
+                logger.exception("Failed to release catalog finalize lock %s for RDI %s", doc_id, rdi)

@@ -900,6 +900,46 @@ async def test_catalog_finalize_lock_exclusive_create_and_release(
 
 
 @pytest.mark.asyncio
+async def test_catalog_finalize_lock_release_failure_does_not_mask_success(
+    store: CouchDB,
+    mock_client_instance: MagicMock,
+) -> None:
+    """A CouchDB error while releasing the claim must not fail a successful finalize."""
+    mock_client_instance.create_document_exclusive = AsyncMock(return_value={"ok": True})
+    mock_client_instance.get_document = AsyncMock(side_effect=RuntimeError("couch down"))
+    mock_client_instance.delete_document = AsyncMock()
+
+    async with store.catalog_finalize_lock("edal", wait_timeout_s=1.0):
+        pass
+
+    mock_client_instance.delete_document.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_catalog_finalize_lock_release_failure_preserves_body_error(
+    store: CouchDB,
+    mock_client_instance: MagicMock,
+) -> None:
+    """A release error must not replace the exception raised inside the lock."""
+    held: dict[str, str] = {}
+
+    async def _create_exclusive(_doc_id: str, data: dict) -> dict:
+        held["holder"] = data["holder"]
+        return {"ok": True}
+
+    async def _get_document(_doc_id: str) -> dict:
+        return {"holder": held["holder"]}
+
+    mock_client_instance.create_document_exclusive = AsyncMock(side_effect=_create_exclusive)
+    mock_client_instance.get_document = AsyncMock(side_effect=_get_document)
+    mock_client_instance.delete_document = AsyncMock(side_effect=RuntimeError("couch down"))
+
+    with pytest.raises(ValueError, match="finalize failed"):
+        async with store.catalog_finalize_lock("edal", wait_timeout_s=1.0):
+            raise ValueError("finalize failed")
+
+
+@pytest.mark.asyncio
 async def test_catalog_finalize_lock_wait_timeout(
     store: CouchDB,
     mock_client_instance: MagicMock,
