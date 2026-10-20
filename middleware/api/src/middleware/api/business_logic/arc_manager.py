@@ -351,8 +351,12 @@ class ArcManager:
         span.set_attribute("success", True)
         return True
 
-    async def _record_git_sync_outcome(self, arc_id: str, *, pushed: bool) -> None:
-        """Append success or no-commit skip event after create_or_update."""
+    async def _record_git_sync_outcome(self, arc_id: str, *, pushed: bool, skip_reason: str) -> None:
+        """Append success or no-commit skip event after create_or_update.
+
+        ``skip_reason`` is the sync-branch reason (``changed`` / ``missing_on_datahub``) so
+        no-push outcomes stay greppable when recreate ran but git had nothing to commit.
+        """
         if pushed:
             await self._doc_store.add_event(
                 arc_id,
@@ -370,10 +374,10 @@ class ArcManager:
             ArcEvent(
                 timestamp=datetime.now(UTC),
                 type=ArcEventType.GIT_PUSH_SKIPPED,
-                message="Git sync completed with no commit/push (reason=changed)",
+                message=f"Git sync completed with no commit/push (reason={skip_reason})",
             ),
         )
-        logger.info("Git sync for ARC %s completed with no commit/push", arc_id)
+        logger.info("Git sync for ARC %s completed with no commit/push (reason=%s)", arc_id, skip_reason)
 
     async def sync_to_gitlab(
         self,
@@ -419,6 +423,7 @@ class ArcManager:
                 arc_id = self._arc_id_from_sync_payload(arc, rdi)
                 span.set_attribute("arc_id", arc_id)
 
+                sync_reason = "changed"
                 if is_new or has_changes:
                     logger.info(
                         "Git sync for ARC %s: full sync (reason=changed, is_new=%s, has_changes=%s)",
@@ -429,11 +434,14 @@ class ArcManager:
                     span.set_attribute("git.skip_reason", "changed")
                 elif await self._skip_if_present_unchanged(arc_id, span):
                     return
+                else:
+                    # Unchanged content but DataHub missing → recreate; keep reason for no-push events.
+                    sync_reason = "missing_on_datahub"
 
                 arc_obj = ARC.from_rocrate_json_string(arc)
                 logger.info("Triggering Git storage for ARC %s", arc_id)
                 pushed = await self._store.create_or_update(arc_id, arc_obj, rdi=rdi)
-                await self._record_git_sync_outcome(arc_id, pushed=pushed)
+                await self._record_git_sync_outcome(arc_id, pushed=pushed, skip_reason=sync_reason)
                 span.set_attribute("git.pushed", pushed)
                 span.set_attribute("success", True)
 

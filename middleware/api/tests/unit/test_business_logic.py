@@ -680,6 +680,34 @@ async def test_sync_to_gitlab_logs_skipped_when_no_push(
     event = mock_doc_store.add_event.call_args.args[1]
     assert event.type is ArcEventType.GIT_PUSH_SKIPPED
     assert "no commit/push" in event.message
+    assert "reason=changed" in event.message
+
+
+@pytest.mark.asyncio
+async def test_sync_to_gitlab_no_push_after_missing_recreate_keeps_missing_reason(
+    worker_logic: BusinessLogic, mock_store: MagicMock, mock_doc_store: MagicMock
+) -> None:
+    """Unchanged+missing recreate with no commit must not mislabel reason as changed."""
+    mock_store.exists = AsyncMock(return_value=False)
+    mock_store.create_or_update = AsyncMock(return_value=False)
+    arc_json = json.dumps(minimal_rocrate_dict("ABC"))
+
+    with (
+        patch("middleware.api.business_logic.arc_manager.ARC") as mock_arc_class,
+        patch("middleware.api.business_logic.arc_manager.calculate_arc_id", return_value="arc_id"),
+    ):
+        mock_arc_class.from_rocrate_json_string.return_value = MagicMock(Identifier="ABC")
+        await worker_logic.sync_to_gitlab(
+            "test-rdi",
+            arc_json,
+            is_new=False,
+            has_changes=False,
+        )
+
+    event = mock_doc_store.add_event.call_args.args[1]
+    assert event.type is ArcEventType.GIT_PUSH_SKIPPED
+    assert "reason=missing_on_datahub" in event.message
+    assert "reason=changed" not in event.message
 
 
 @pytest.mark.asyncio

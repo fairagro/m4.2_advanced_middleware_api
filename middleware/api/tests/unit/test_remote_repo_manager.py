@@ -166,6 +166,7 @@ class TestGitlabGitProvider:
 
         mock_group = MagicMock()
         mock_group.full_path = "my-group-path"
+        mock_group.id = 123
         mock_gl.groups.get.return_value = mock_group
 
         mock_project = MagicMock()
@@ -203,6 +204,7 @@ class TestGitlabGitProvider:
 
         mock_group = MagicMock()
         mock_group.full_path = "my-group-path"
+        mock_group.id = 123
         mock_gl.groups.get.return_value = mock_group
 
         pending = MagicMock()
@@ -281,6 +283,7 @@ class TestGitlabGitProvider:
         mock_gitlab_class.return_value = mock_gl
         mock_group = MagicMock()
         mock_group.full_path = "my-group-path"
+        mock_group.id = 123
         mock_gl.groups.get.return_value = mock_group
         mock_project = MagicMock()
         mock_project.path = "abc123"
@@ -293,12 +296,34 @@ class TestGitlabGitProvider:
 
     @staticmethod
     @patch("middleware.api.arc_store.git_repo.remote_git_provider.gitlab.Gitlab")
+    def test_repo_exists_caches_group_lookup(mock_gitlab_class: MagicMock) -> None:
+        """Steady-state exists probes must not re-fetch the group on every call."""
+        mock_gl = MagicMock()
+        mock_gitlab_class.return_value = mock_gl
+        mock_group = MagicMock()
+        mock_group.full_path = "my-group-path"
+        mock_group.id = 123
+        mock_gl.groups.get.return_value = mock_group
+        mock_project = MagicMock()
+        mock_project.path = "abc123"
+        mock_project.marked_for_deletion_on = None
+        mock_gl.projects.get.return_value = mock_project
+
+        provider = GitlabGitProvider(url="https://gitlab.com", group_name="my-group", token="secret")  # nosec
+        assert provider.repo_exists("abc123") is True
+        assert provider.repo_exists("abc123") is True
+        mock_gl.groups.get.assert_called_once_with("my-group")
+        assert mock_gl.projects.get.call_count == 2
+
+    @staticmethod
+    @patch("middleware.api.arc_store.git_repo.remote_git_provider.gitlab.Gitlab")
     def test_repo_exists_missing(mock_gitlab_class: MagicMock) -> None:
         """GitlabGetError reports absent."""
         mock_gl = MagicMock()
         mock_gitlab_class.return_value = mock_gl
         mock_group = MagicMock()
         mock_group.full_path = "my-group-path"
+        mock_group.id = 123
         mock_gl.groups.get.return_value = mock_group
         mock_gl.projects.get.side_effect = GitlabGetError("Not Found", response_code=HTTPStatus.NOT_FOUND)
 
@@ -314,6 +339,7 @@ class TestGitlabGitProvider:
         mock_gitlab_class.return_value = mock_gl
         mock_group = MagicMock()
         mock_group.full_path = "my-group-path"
+        mock_group.id = 123
         mock_gl.groups.get.return_value = mock_group
         mock_project = MagicMock()
         mock_project.path = "abc123-deletion_scheduled-9"

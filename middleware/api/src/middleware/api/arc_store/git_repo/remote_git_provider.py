@@ -301,6 +301,22 @@ class GitlabGitProvider(RemoteGitProvider):
         if token:
             self._gl = gitlab.Gitlab(url=url, private_token=token)
         self._tracer = trace.get_tracer(__name__)
+        # Group ``full_path`` / ``id`` are invariant for this provider; cache after first resolve
+        # so steady-state ``repo_exists`` is a single ``projects.get`` (not groups.get + projects.get).
+        self._cached_group_full_path: str | None = None
+        self._cached_group_id: int | None = None
+
+    def _resolved_group(self) -> tuple[str, int]:
+        """Return ``(full_path, id)`` for ``group_name``, caching after the first API lookup."""
+        if self._gl is None:
+            msg = "GitLab client is not configured"
+            raise RuntimeError(msg)
+        if self._cached_group_full_path is not None and self._cached_group_id is not None:
+            return self._cached_group_full_path, self._cached_group_id
+        group = self._gl.groups.get(self.group_name)
+        self._cached_group_full_path = str(group.full_path)
+        self._cached_group_id = int(group.id)
+        return self._cached_group_full_path, self._cached_group_id
 
     def ensure_repo_exists(self, arc_id: str, metadata: GitProjectMetadata) -> None:
         """Ensure the project exists in the GitLab group and apply human-readable metadata."""
@@ -313,8 +329,8 @@ class GitlabGitProvider(RemoteGitProvider):
             attributes={"arc_id": arc_id, "group": self.group_name},
         ):
             try:
-                group = self._gl.groups.get(self.group_name)
-                project_path = f"{group.full_path}/{arc_id}"
+                group_full_path, group_id = self._resolved_group()
+                project_path = f"{group_full_path}/{arc_id}"
                 try:
                     project = self._gl.projects.get(project_path)
                     # Delayed deletion renames ``path`` to ``{path}-deletion_scheduled-{id}``.
@@ -334,7 +350,7 @@ class GitlabGitProvider(RemoteGitProvider):
                     create_attrs: dict[str, object] = {
                         "name": metadata.identifier,
                         "path": arc_id,
-                        "namespace_id": group.id,
+                        "namespace_id": group_id,
                         "visibility": "private",
                     }
                     project_description = build_gitlab_project_description(metadata)
@@ -369,8 +385,8 @@ class GitlabGitProvider(RemoteGitProvider):
             attributes={"arc_id": arc_id, "group": self.group_name},
         ) as span:
             try:
-                group = self._gl.groups.get(self.group_name)
-                project_path = f"{group.full_path}/{arc_id}"
+                group_full_path, _group_id = self._resolved_group()
+                project_path = f"{group_full_path}/{arc_id}"
                 try:
                     project = self._gl.projects.get(project_path)
                 except GitlabGetError:
