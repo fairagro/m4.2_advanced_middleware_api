@@ -305,13 +305,15 @@ class CouchDBClient:
     async def health_check(self) -> bool:
         """Check whether the configured application database exists.
 
-        Runs the re-init hook first (no-op by default; store registers ensure) so
-        readiness can recover after a wipe without a write request.
+        Runs the re-init hook only when disconnected or the application database
+        is missing, so readiness can recover after a wipe without a write request.
 
         Returns:
             True if connected and the application database exists.
         """
         try:
+            if self._connected and await self.application_database_exists():
+                return True
             if not self._inside_reinit:
                 try:
                     await self._reinit_hook()

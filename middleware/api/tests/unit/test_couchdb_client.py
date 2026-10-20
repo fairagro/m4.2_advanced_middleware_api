@@ -191,6 +191,19 @@ async def test_couchdb_client_health_check_success(couchdb_client: CouchDBClient
 
 
 @pytest.mark.asyncio
+async def test_couchdb_client_health_check_skips_reinit_when_healthy(couchdb_client: CouchDBClient) -> None:
+    """A present application database does not run the re-init hook."""
+    mock_client = MagicMock(spec=CouchDB)
+    mock_client.__getitem__ = AsyncMock(return_value=AsyncMock())
+    _inject_handles(couchdb_client, couch=mock_client)
+    reinit = AsyncMock()
+    couchdb_client.set_reinit_hook(reinit)
+
+    assert await couchdb_client.health_check() is True
+    reinit.assert_not_awaited()
+
+
+@pytest.mark.asyncio
 async def test_couchdb_client_health_check_missing_app_db(couchdb_client: CouchDBClient) -> None:
     """Health check fails when the application database is missing."""
     mock_client = MagicMock(spec=CouchDB)
@@ -199,6 +212,29 @@ async def test_couchdb_client_health_check_missing_app_db(couchdb_client: CouchD
 
     result = await couchdb_client.health_check()
     assert result is False
+
+
+@pytest.mark.asyncio
+async def test_couchdb_client_health_check_reinit_when_app_db_missing(couchdb_client: CouchDBClient) -> None:
+    """A missing application database runs the re-init hook, then probes again."""
+    exists = False
+    mock_client = MagicMock(spec=CouchDB)
+
+    async def _getitem(_name: str) -> AsyncMock:
+        if not exists:
+            raise NotFoundError("missing")
+        return AsyncMock()
+
+    mock_client.__getitem__ = AsyncMock(side_effect=_getitem)
+    _inject_handles(couchdb_client, couch=mock_client)
+
+    async def _reinit() -> None:
+        nonlocal exists
+        exists = True
+
+    couchdb_client.set_reinit_hook(_reinit)
+
+    assert await couchdb_client.health_check() is True
 
 
 @pytest.mark.asyncio
