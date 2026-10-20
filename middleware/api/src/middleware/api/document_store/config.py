@@ -54,7 +54,10 @@ class CouchDBConfig(BaseModel):
             default=500,
             ge=1,
             le=10_000,
-            description="Mango page size (bookmark paging) when streaming ARC contents for catalog finalize",
+            description=(
+                "Mango page size (bookmark paging) when streaming ARC contents for catalog finalize. "
+                "Lower this under memory pressure to shrink each page of full ARC bodies. Default is 500."
+            ),
         ),
     ] = 500
 
