@@ -282,7 +282,7 @@ async def test_get_document_missing_doc_does_not_reinit(couchdb_client: CouchDBC
 async def test_with_db_recovery_raises_unavailable_when_reinit_fails(
     couchdb_client: CouchDBClient,
 ) -> None:
-    """Failed re-init becomes CouchDBUnavailableError (HTTP 503 at the API)."""
+    """Failed re-init becomes DocumentStoreUnavailableError (HTTP 503 at the API)."""
 
     async def _boom() -> None:
         raise RuntimeError("cannot create")

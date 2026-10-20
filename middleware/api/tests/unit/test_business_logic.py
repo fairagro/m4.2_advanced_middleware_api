@@ -21,7 +21,11 @@ from middleware.api.business_logic import (
 from middleware.api.business_logic.ports import BusinessLogicPorts
 from middleware.api.business_logic.rdi_comments import enrich_investigation_rdi_comments
 from middleware.api.business_logic.task_payloads import ArcSyncTask
-from middleware.api.document_store import ArcIdentityConflictError, ArcStoreResult
+from middleware.api.document_store import (
+    ArcIdentityConflictError,
+    ArcStoreResult,
+    DocumentStoreUnavailableError,
+)
 from middleware.api.document_store.arc_document import ArcEventType
 from middleware.api.document_store.harvest_document import HarvestDocument, HarvestStatistics
 from middleware.shared.api_models.common.models import ArcOperationResult, ArcStatus, HarvestStatus
@@ -838,6 +842,18 @@ async def test_create_or_update_generic_exception(api_logic: BusinessLogic, mock
     arc_data = minimal_rocrate_dict("test")
 
     with pytest.raises(BusinessLogicError, match="unexpected error encountered"):
+        await api_logic.create_or_update_arc("test_rdi", cast(RoCrateContent, arc_data), "client_1")
+
+
+@pytest.mark.asyncio
+async def test_create_or_update_store_unavailable_is_not_wrapped(
+    api_logic: BusinessLogic, mock_doc_store: MagicMock
+) -> None:
+    """Store unavailability stays typed so ARC writes can return HTTP 503."""
+    mock_doc_store.store_arc.side_effect = DocumentStoreUnavailableError("re-initialization failed")
+    arc_data = minimal_rocrate_dict("test")
+
+    with pytest.raises(DocumentStoreUnavailableError, match="re-initialization failed"):
         await api_logic.create_or_update_arc("test_rdi", cast(RoCrateContent, arc_data), "client_1")
 
 
