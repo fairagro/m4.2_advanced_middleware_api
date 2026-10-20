@@ -9,6 +9,7 @@ import re
 import shutil
 import tempfile
 from collections.abc import Callable
+from contextlib import AbstractAsyncContextManager
 from pathlib import Path
 from typing import ParamSpec, TypeVar, override
 from urllib.parse import unquote, urlparse
@@ -33,6 +34,8 @@ from middleware.api.arc_store.git_context import (
     is_transient_git_error,
 )
 from middleware.api.document_store import DocumentStore
+from middleware.api.document_store.catalog_finalize_lock import process_local_catalog_finalize_lock
+from middleware.api.document_store.couchdb import CouchDB
 from middleware.shared.json_types import CatalogDatasetRecord
 from middleware.shared.security.url_redact import redact_url_userinfo
 
@@ -214,6 +217,13 @@ class ConsolidatedGitArcStore(ArcStore):
             logger.warning("%s", reason)
         return outcome.datasets, skipped, seen
 
+    def _finalize_lock(self, rdi: str) -> AbstractAsyncContextManager[None]:
+        """Per-RDI single-flight: CouchDB claim when available, else process-local."""
+        timeout = self._config.finalize_lock_wait_timeout_s
+        if isinstance(self._doc_store, CouchDB):
+            return self._doc_store.catalog_finalize_lock.acquire(rdi, wait_timeout_s=timeout)
+        return process_local_catalog_finalize_lock(rdi, wait_timeout_s=timeout)
+
     @override
     async def _finalize(self, *, rdi: str) -> CatalogFinalizeResult:
         """Rebuild ``{rdi}.json`` from CouchDB ARC bodies (streamed, Dataset-only retained).
@@ -223,7 +233,18 @@ class ConsolidatedGitArcStore(ArcStore):
         previously published Dataset may disappear until the ARC is repaired.
         If every ARC for a non-empty RDI fails, refuse to push an empty catalog
         (avoids wiping the remote).
+
+        Concurrent finalize for the same RDI waits on a single-flight lock (#348 A);
+        lock wait timeout becomes :class:`ArcStoreTransientError` for Celery retry.
         """
+        try:
+            async with self._finalize_lock(rdi):
+                return await self._finalize_under_lock(rdi=rdi)
+        except TimeoutError as exc:
+            raise ArcStoreTransientError(str(exc)) from exc
+
+    async def _finalize_under_lock(self, *, rdi: str) -> CatalogFinalizeResult:
+        """Critical section: collect Datasets, serialize, push (caller holds lock)."""
         datasets, skipped, seen = await self._collect_catalog_datasets(rdi)
         skipped_tuple = tuple(skipped)
 
