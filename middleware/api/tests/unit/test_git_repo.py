@@ -391,9 +391,9 @@ async def test_get_arc_load_fail(git_repo: GitRepo) -> None:
 
 @pytest.mark.asyncio
 async def test_exists_true(git_repo: GitRepo) -> None:
-    """Test _exists returns True."""
+    """Test _exists delegates to the provider probe and returns True."""
     with (
-        patch("git.cmd.Git") as mock_git,
+        patch.object(git_repo._remote_provider, "repo_exists", return_value=True) as mock_repo_exists,
         patch("asyncio.get_running_loop") as mock_get_loop,
     ):
         mock_loop = MagicMock()
@@ -407,18 +407,15 @@ async def test_exists_true(git_repo: GitRepo) -> None:
 
         mock_loop.run_in_executor.side_effect = run_and_return_future
 
-        mock_git_instance = mock_git.return_value
-        mock_git_instance.ls_remote.return_value = "hash ref"
-
         assert await git_repo._exists("arc1") is True
-        mock_git_instance.ls_remote.assert_called()
+        mock_repo_exists.assert_called_once_with("arc1")
 
 
 @pytest.mark.asyncio
 async def test_exists_false(git_repo: GitRepo) -> None:
-    """Test _exists returns False on error."""
+    """Test _exists returns False when the provider reports missing."""
     with (
-        patch("git.cmd.Git") as mock_git,
+        patch.object(git_repo._remote_provider, "repo_exists", return_value=False),
         patch("asyncio.get_running_loop") as mock_get_loop,
     ):
         mock_loop = MagicMock()
@@ -431,9 +428,6 @@ async def test_exists_false(git_repo: GitRepo) -> None:
             return f
 
         mock_loop.run_in_executor.side_effect = run_and_return_future
-
-        mock_git_instance = mock_git.return_value
-        mock_git_instance.ls_remote.side_effect = GitCommandError("ls-remote", "fail")
 
         assert await git_repo._exists("arc1") is False
 
@@ -666,28 +660,3 @@ def test_git_context_sync_fail(mock_repo: MagicMock, tmp_path: Path) -> None:
     with GitContext(config) as ctx:
         assert ctx.repo is not None
         # Should log warning and proceed (back to handles_init error logic if called from enter)
-
-
-@pytest.mark.asyncio
-async def test_exists_unexpected_error(git_repo: GitRepo) -> None:
-    """Test _exists handles unexpected (non-soft) git error."""
-    with (
-        patch("git.cmd.Git") as mock_git,
-        patch("asyncio.get_running_loop") as mock_get_loop,
-    ):
-        mock_loop = MagicMock()
-        mock_get_loop.return_value = mock_loop
-
-        def run_and_return_future(_executor: object, func: Callable[..., Any], *args: object) -> asyncio.Future[Any]:
-            res = func(*args)
-            f: asyncio.Future[Any] = asyncio.Future()
-            f.set_result(res)
-            return f
-
-        mock_loop.run_in_executor.side_effect = run_and_return_future
-
-        mock_git_instance = mock_git.return_value
-        # Unexpected error
-        mock_git_instance.ls_remote.side_effect = GitCommandError("ls-remote", "severe error")
-
-        assert await git_repo._exists("arc1") is False

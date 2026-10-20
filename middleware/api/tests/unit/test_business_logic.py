@@ -39,6 +39,7 @@ def mock_store() -> MagicMock:
     # Mock arc_id to use hashing or simpler return
     store.arc_id.side_effect = lambda i, r: f"arc_{i}_{r}"
     store.create_or_update = AsyncMock(return_value=True)
+    store.exists = AsyncMock(return_value=False)
     store.shutdown = AsyncMock()
     store.finalize = AsyncMock(return_value=CatalogFinalizeResult(pushed=False))
     return store
@@ -522,7 +523,13 @@ async def test_api_mode_create_or_update_success(
     }
     assert {"RDI", "RDI Description", "RDI URL"} <= comment_names
     mock_task_dispatcher.dispatch_sync_arc.assert_called_once_with(
-        ArcSyncTask(rdi=rdi, arc=json.dumps(stored_arc), client_id=client_id)
+        ArcSyncTask(
+            rdi=rdi,
+            arc=json.dumps(stored_arc),
+            client_id=client_id,
+            is_new=True,
+            has_changes=True,
+        )
     )
 
 
@@ -671,12 +678,110 @@ async def test_sync_to_gitlab_logs_skipped_when_no_push(
         patch("middleware.api.business_logic.arc_manager.calculate_arc_id", return_value="arc_id"),
     ):
         mock_arc_class.from_rocrate_json_string.return_value = MagicMock(Identifier="ABC")
-        await worker_logic.sync_to_gitlab("test-rdi", arc_json)
+        await worker_logic.sync_to_gitlab("test-rdi", arc_json, is_new=True, has_changes=True)
 
     mock_doc_store.add_event.assert_called_once()
     event = mock_doc_store.add_event.call_args.args[1]
     assert event.type is ArcEventType.GIT_PUSH_SKIPPED
     assert "no commit/push" in event.message
+    assert "reason=changed" in event.message
+
+
+@pytest.mark.asyncio
+async def test_sync_to_gitlab_no_push_after_missing_recreate_keeps_missing_reason(
+    worker_logic: BusinessLogic, mock_store: MagicMock, mock_doc_store: MagicMock
+) -> None:
+    """Unchanged+missing recreate with no commit must not mislabel reason as changed."""
+    mock_store.exists = AsyncMock(return_value=False)
+    mock_store.create_or_update = AsyncMock(return_value=False)
+    arc_json = json.dumps(minimal_rocrate_dict("ABC"))
+
+    with (
+        patch("middleware.api.business_logic.arc_manager.ARC") as mock_arc_class,
+        patch("middleware.api.business_logic.arc_manager.calculate_arc_id", return_value="arc_id"),
+    ):
+        mock_arc_class.from_rocrate_json_string.return_value = MagicMock(Identifier="ABC")
+        await worker_logic.sync_to_gitlab(
+            "test-rdi",
+            arc_json,
+            is_new=False,
+            has_changes=False,
+        )
+
+    event = mock_doc_store.add_event.call_args.args[1]
+    assert event.type is ArcEventType.GIT_PUSH_SKIPPED
+    assert "reason=missing_on_datahub" in event.message
+    assert "reason=changed" not in event.message
+
+
+@pytest.mark.asyncio
+async def test_sync_to_gitlab_skips_when_unchanged_and_store_exists(
+    worker_logic: BusinessLogic, mock_store: MagicMock, mock_doc_store: MagicMock
+) -> None:
+    """Unchanged + already in store → no create_or_update; GIT_PUSH_SKIPPED present_unchanged."""
+    mock_store.exists = AsyncMock(return_value=True)
+    arc_json = json.dumps(minimal_rocrate_dict("ABC"))
+
+    with patch("middleware.api.business_logic.arc_manager.calculate_arc_id", return_value="arc_id"):
+        await worker_logic.sync_to_gitlab(
+            "test-rdi",
+            arc_json,
+            is_new=False,
+            has_changes=False,
+        )
+
+    mock_store.exists.assert_awaited_once_with("arc_id")
+    mock_store.create_or_update.assert_not_called()
+    event = mock_doc_store.add_event.call_args.args[1]
+    assert event.type is ArcEventType.GIT_PUSH_SKIPPED
+    assert "present_unchanged" in event.message
+
+
+@pytest.mark.asyncio
+async def test_sync_to_gitlab_full_sync_when_unchanged_and_store_missing(
+    worker_logic: BusinessLogic, mock_store: MagicMock, mock_doc_store: MagicMock
+) -> None:
+    """Unchanged + missing in store → full create_or_update."""
+    mock_store.exists = AsyncMock(return_value=False)
+    arc_json = json.dumps(minimal_rocrate_dict("ABC"))
+
+    with (
+        patch("middleware.api.business_logic.arc_manager.ARC") as mock_arc_class,
+        patch("middleware.api.business_logic.arc_manager.calculate_arc_id", return_value="arc_id"),
+    ):
+        mock_arc_class.from_rocrate_json_string.return_value = MagicMock(Identifier="ABC")
+        await worker_logic.sync_to_gitlab(
+            "test-rdi",
+            arc_json,
+            is_new=False,
+            has_changes=False,
+        )
+
+    mock_store.exists.assert_awaited_once_with("arc_id")
+    mock_store.create_or_update.assert_called_once()
+    event = mock_doc_store.add_event.call_args.args[1]
+    assert event.type is ArcEventType.GIT_PUSH_SUCCESS
+
+
+@pytest.mark.asyncio
+async def test_sync_to_gitlab_changed_skips_exists_probe(worker_logic: BusinessLogic, mock_store: MagicMock) -> None:
+    """New/changed content always full-syncs without calling exists."""
+    arc_json = json.dumps(minimal_rocrate_dict("ABC"))
+
+    with (
+        patch("middleware.api.business_logic.arc_manager.ARC") as mock_arc_class,
+        patch("middleware.api.business_logic.arc_manager.calculate_arc_id", return_value="arc_id"),
+    ):
+        mock_arc_class.from_rocrate_json_string.return_value = MagicMock(Identifier="ABC")
+        await worker_logic.sync_to_gitlab(
+            "test-rdi",
+            arc_json,
+            is_new=False,
+            has_changes=True,
+        )
+
+    mock_store.exists.assert_not_called()
+    mock_store.create_or_update.assert_called_once()
 
 
 @pytest.mark.asyncio
@@ -738,44 +843,41 @@ async def test_worker_mode_create_or_update_forbidden(worker_logic: BusinessLogi
 
 
 @pytest.mark.asyncio
-async def test_api_mode_skips_sync_if_no_changes(
+async def test_api_mode_enqueues_sync_if_no_changes(
     api_logic: BusinessLogic, mock_doc_store: MagicMock, mock_task_dispatcher: MagicMock
 ) -> None:
-    """Test that GitLab sync is skipped if no changes."""
+    """Unchanged content still enqueues Git sync; worker decides skip vs recreate."""
     mock_doc_store.store_arc.return_value = ArcStoreResult(arc_id="arc_id", is_new=False, has_changes=False)
 
     rdi = "test-rdi"
     arc_data = minimal_rocrate_dict("ABC")
 
-    with patch("middleware.api.business_logic.arc_manager.ARC") as mock_arc_class:
-        mock_arc_instance = MagicMock()
-        mock_arc_instance.Identifier = "ABC"
-        mock_arc_class.from_rocrate_json_string.return_value = mock_arc_instance
-
-        with patch("middleware.api.business_logic.arc_manager.calculate_arc_id", return_value="arc_id"):
-            await api_logic.create_or_update_arc(rdi, arc_data, "client")
+    await api_logic.create_or_update_arc(rdi, arc_data, "client")
 
     mock_doc_store.store_arc.assert_called_once()
-    mock_task_dispatcher.dispatch_sync_arc.assert_not_called()
+    mock_task_dispatcher.dispatch_sync_arc.assert_called_once()
+    task = mock_task_dispatcher.dispatch_sync_arc.call_args.args[0]
+    assert task.is_new is False
+    assert task.has_changes is False
 
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize(
     "case",
     [
-        (True, True, "arcs_new"),
-        (False, True, "arcs_updated"),
-        (False, False, "arcs_unchanged"),
+        (True, True),
+        (False, True),
+        (False, False),
     ],
 )
-async def test_api_mode_dispatches_sync_arc_based_on_arc_status(
+async def test_api_mode_always_dispatches_sync_arc(
     api_logic: BusinessLogic,
     mock_doc_store: MagicMock,
     mock_task_dispatcher: MagicMock,
-    case: tuple[bool, bool, str],
+    case: tuple[bool, bool],
 ) -> None:
-    """ARC submissions in a harvest dispatch GitLab sync iff the ARC is new or changed."""
-    is_new, has_changes, _ = case
+    """Every successful harvest ARC persist enqueues Git sync with change flags."""
+    is_new, has_changes = case
     mock_doc_store.store_arc.return_value = ArcStoreResult(
         arc_id="arc_id",
         is_new=is_new,
@@ -789,10 +891,10 @@ async def test_api_mode_dispatches_sync_arc_based_on_arc_status(
 
     await api_logic.create_or_update_arc(rdi, arc_data, "client", harvest_id=harvest_id)
 
-    if is_new or has_changes:
-        mock_task_dispatcher.dispatch_sync_arc.assert_called_once()
-    else:
-        mock_task_dispatcher.dispatch_sync_arc.assert_not_called()
+    mock_task_dispatcher.dispatch_sync_arc.assert_called_once()
+    task = mock_task_dispatcher.dispatch_sync_arc.call_args.args[0]
+    assert task.is_new is is_new
+    assert task.has_changes is has_changes
 
 
 def test_factory_create_api_mode() -> None:

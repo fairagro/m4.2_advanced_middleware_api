@@ -169,31 +169,23 @@ class ArcManager:
 
                 is_new = doc_result.is_new
                 has_changes = doc_result.has_changes
-                should_trigger_git = is_new or has_changes
 
-                if should_trigger_git:
-                    logger.info(
-                        "[%s] Stored ARC %s in CouchDB (is_new=%s, has_changes=%s); enqueueing Git sync",
-                        client_id,
-                        arc_id,
-                        is_new,
-                        has_changes,
+                logger.info(
+                    "[%s] Stored ARC %s in CouchDB (is_new=%s, has_changes=%s); enqueueing Git sync",
+                    client_id,
+                    arc_id,
+                    is_new,
+                    has_changes,
+                )
+                self._dispatcher.dispatch_sync_arc(
+                    ArcSyncTask(
+                        rdi=rdi,
+                        arc=json.dumps(arc_content),
+                        client_id=client_id,
+                        is_new=is_new,
+                        has_changes=has_changes,
                     )
-                    self._dispatcher.dispatch_sync_arc(
-                        ArcSyncTask(
-                            rdi=rdi,
-                            arc=json.dumps(arc_content),
-                            client_id=client_id,
-                        )
-                    )
-                else:
-                    logger.info(
-                        "[%s] Stored ARC %s in CouchDB (is_new=%s, has_changes=%s); skipping Git sync (unchanged)",
-                        client_id,
-                        arc_id,
-                        is_new,
-                        has_changes,
-                    )
+                )
 
                 status = ArcStatus.CREATED if is_new else ArcStatus.UPDATED
                 result = ArcResponse(
@@ -330,11 +322,79 @@ class ArcManager:
         except Exception as log_error:  # noqa: BLE001
             logger.warning("Could not log sync failure to CouchDB: %s", log_error)
 
+    @staticmethod
+    def _arc_id_from_sync_payload(arc: str, rdi: str) -> str:
+        """Parse Celery RO-Crate JSON and return the document/store arc_id."""
+        try:
+            arc_content = json.loads(arc)
+            rocrate = parse_rocrate(arc_content)
+        except json.JSONDecodeError as exc:
+            raise InvalidJsonSemanticError(f"Invalid RO-Crate JSON: {exc}") from exc
+        except RocrateParseError as exc:
+            raise InvalidJsonSemanticError(str(exc)) from exc
+        return calculate_arc_id(rocrate.identifier, rdi)
+
+    async def _skip_if_present_unchanged(self, arc_id: str, span: trace.Span) -> bool:
+        """Return True after recording skip when store already has the ARC."""
+        already_present = await self._store.exists(arc_id)
+        span.set_attribute("arc_store.exists", already_present)
+        if not already_present:
+            logger.info(
+                "Git sync for ARC %s: project missing on DataHub (reason=missing_on_datahub); running full sync",
+                arc_id,
+            )
+            span.set_attribute("git.sync_reason", "missing_on_datahub")
+            return False
+
+        await self._doc_store.add_event(
+            arc_id,
+            ArcEvent(
+                timestamp=datetime.now(UTC),
+                type=ArcEventType.GIT_PUSH_SKIPPED,
+                message=("Git sync skipped: DataHub already has project, content unchanged (reason=present_unchanged)"),
+            ),
+        )
+        logger.info("Git sync for ARC %s skipped (reason=present_unchanged)", arc_id)
+        span.set_attribute("git.pushed", False)
+        span.set_attribute("git.sync_reason", "present_unchanged")
+        span.set_attribute("success", True)
+        return True
+
+    async def _record_git_sync_outcome(self, arc_id: str, *, pushed: bool, skip_reason: str) -> None:
+        """Append success or no-commit skip event after create_or_update.
+
+        ``skip_reason`` is the sync-branch reason (``changed`` / ``missing_on_datahub``) so
+        no-push outcomes stay greppable when recreate ran but git had nothing to commit.
+        """
+        if pushed:
+            await self._doc_store.add_event(
+                arc_id,
+                ArcEvent(
+                    timestamp=datetime.now(UTC),
+                    type=ArcEventType.GIT_PUSH_SUCCESS,
+                    message="Successfully synchronized to GitLab",
+                ),
+            )
+            logger.info("Successfully synced ARC %s to GitLab", arc_id)
+            return
+
+        await self._doc_store.add_event(
+            arc_id,
+            ArcEvent(
+                timestamp=datetime.now(UTC),
+                type=ArcEventType.GIT_PUSH_SKIPPED,
+                message=f"Git sync completed with no commit/push (reason={skip_reason})",
+            ),
+        )
+        logger.info("Git sync for ARC %s completed with no commit/push (reason=%s)", arc_id, skip_reason)
+
     async def sync_to_gitlab(
         self,
         rdi: str,
         arc: str,
         *,
+        is_new: bool = True,
+        has_changes: bool = True,
         record_transient_as_failed: bool = False,
     ) -> None:
         """Synchronize ARC to GitLab storage.
@@ -345,9 +405,14 @@ class ArcManager:
         When ``record_transient_as_failed`` is True (Celery retries exhausted), a
         still-transient error appends ``GIT_PUSH_FAILED`` once before re-raise.
 
+        For unchanged content, probes DataHub project existence first: skip write/push
+        when the project is already present; recreate when missing.
+
         Args:
             rdi: Research Data Infrastructure identifier.
             arc: RO-Crate JSON string (Celery hard-cut payload; no dict round-trip).
+            is_new: Whether document storage created a new ARC document.
+            has_changes: Whether document storage detected content changes.
             record_transient_as_failed: Persist GIT_PUSH_FAILED on exhausted transient retries.
 
         Raises:
@@ -359,51 +424,33 @@ class ArcManager:
 
         with self._tracer.start_as_current_span(
             "api.ArcManager.sync_to_gitlab",
-            attributes={"rdi": rdi},
+            attributes={"rdi": rdi, "is_new": is_new, "has_changes": has_changes},
         ) as span:
             logger.info("Starting GitLab sync for RDI: %s", rdi)
             arc_id: str | None = None
             try:
-                try:
-                    arc_content = json.loads(arc)
-                    rocrate = parse_rocrate(arc_content)
-                except json.JSONDecodeError as exc:
-                    raise InvalidJsonSemanticError(f"Invalid RO-Crate JSON: {exc}") from exc
-                except RocrateParseError as exc:
-                    raise InvalidJsonSemanticError(str(exc)) from exc
-                arc_id = calculate_arc_id(rocrate.identifier, rdi)
+                arc_id = self._arc_id_from_sync_payload(arc, rdi)
                 span.set_attribute("arc_id", arc_id)
 
-                arc_obj = ARC.from_rocrate_json_string(arc)
-
-                logger.info("Triggering Git storage for ARC %s", arc_id)
-                pushed = await self._store.create_or_update(
-                    arc_id,
-                    arc_obj,
-                    rdi=rdi,
-                )
-
-                if pushed:
-                    await self._doc_store.add_event(
+                sync_reason = "changed"
+                if is_new or has_changes:
+                    logger.info(
+                        "Git sync for ARC %s: full sync (reason=changed, is_new=%s, has_changes=%s)",
                         arc_id,
-                        ArcEvent(
-                            timestamp=datetime.now(UTC),
-                            type=ArcEventType.GIT_PUSH_SUCCESS,
-                            message="Successfully synchronized to GitLab",
-                        ),
+                        is_new,
+                        has_changes,
                     )
-                    logger.info("Successfully synced ARC %s to GitLab", arc_id)
+                    span.set_attribute("git.sync_reason", "changed")
+                elif await self._skip_if_present_unchanged(arc_id, span):
+                    return
                 else:
-                    await self._doc_store.add_event(
-                        arc_id,
-                        ArcEvent(
-                            timestamp=datetime.now(UTC),
-                            type=ArcEventType.GIT_PUSH_SKIPPED,
-                            message="Git sync completed with no commit/push",
-                        ),
-                    )
-                    logger.info("Git sync for ARC %s completed with no commit/push", arc_id)
+                    # Unchanged content but DataHub missing → recreate; keep reason for no-push events.
+                    sync_reason = "missing_on_datahub"
 
+                arc_obj = ARC.from_rocrate_json_string(arc)
+                logger.info("Triggering Git storage for ARC %s", arc_id)
+                pushed = await self._store.create_or_update(arc_id, arc_obj, rdi=rdi)
+                await self._record_git_sync_outcome(arc_id, pushed=pushed, skip_reason=sync_reason)
                 span.set_attribute("git.pushed", pushed)
                 span.set_attribute("success", True)
 
@@ -418,7 +465,6 @@ class ArcManager:
                 logger.error("Unexpected error while syncing ARC to GitLab: %s", e, exc_info=True)
                 span.record_exception(e)
                 await self._try_record_git_push_failure(arc_id, e)
-
                 if isinstance(e, InvalidJsonSemanticError):
                     raise
                 if isinstance(e, BusinessLogicError):
