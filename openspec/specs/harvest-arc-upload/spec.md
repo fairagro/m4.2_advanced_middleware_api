@@ -138,7 +138,7 @@ NOT schedule Git sync for that attempt. The harvest document RDI remains authori
 
 ### Requirement: Reject harvest-scoped ARC submit when harvest is not RUNNING
 
-After the harvest document is loaded and before RDI authorization succeeds into `create_or_update_arc`, the
+After the harvest document is loaded and RDI authorization succeeds, and before `create_or_update_arc`, the
 harvest-scoped ARC upload endpoint MUST require `harvest.status == RUNNING`. When the harvest is `COMPLETED`,
 `CANCELLED`, `FAILED`, or any other non-`RUNNING` status, the endpoint MUST return HTTP `409 Conflict`, MUST NOT persist
 ARC content for that attempt, MUST NOT enqueue Git sync for that attempt, and MUST NOT append a per-item harvest ARC
