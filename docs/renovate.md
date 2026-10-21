@@ -85,13 +85,21 @@ The **npm CLI** itself is pinned as `NPM_VERSION` in `versions.env` (regex custo
 It is independent of `NODE_VERSION` (Node tarball). Bump npm in Devinfra via Renovate; do not hand-edit the pin in
 product checkouts.
 
-**Grouping:** all Renovate updates that touch `versions.env` or `.python-version` share one PR group
-(`versions.env toolchain pins`), including former per-datasource splits (GitHub release CLIs, npm/pypi pins,
-`node-version`, …). **Mirrored** `package.json` / `package-lock.json` pins for `prettier` and `markdownlint-cli2` use
-that **same** group so a Prettier bump cannot land as a SoT-only PR while `npm ci` still sees the old lockfile.
-`NPM_VERSION` / `RENOVATE_VERSION` / `OPENSPEC_VERSION` live only in `versions.env` (not in `package.json`) and stay in
-that file group. Other managers (Actions, Dockerfiles outside those files) keep their own groups. Product Renovate still
-has those synced files **disabled** (bump in Devinfra, then sync).
+**Grouping (`versions.env` SoT):** updates that touch `versions.env` / `.python-version` are split so one stale branch
+cannot abort the whole toolchain (#316):
+
+| Group                            | Contents                                                                                          |
+| -------------------------------- | ------------------------------------------------------------------------------------------------- |
+| `versions.env mirrored npm pins` | `prettier` / `markdownlint-cli2` in `package.json` / lock **and** their `versions.env` regex pins |
+| `versions.env uv pin`            | `UV_VERSION` only (keeps `vulnerabilityAlerts` uv bumps off the daily CLI mega-branch)            |
+| `versions.env CLI pins`          | Remaining `versions.env` / `.python-version` pins (CLIs, Node, OpenSpec, Renovate, …)             |
+
+All three use **`recreateWhen: always`** so Renovate recreates the group branch from base instead of patching an
+inconsistent branch (`Cannot find replaceString` / `update failure`). Mirrored npm stays one group so Prettier /
+markdownlint SoT cannot diverge from the lockfile. `NPM_VERSION` / `RENOVATE_VERSION` / `OPENSPEC_VERSION` live only in
+`versions.env` (not in `package.json`) and stay in the CLI-pins group. Other managers (Actions, Dockerfiles outside
+those files) keep their own groups. Product Renovate still has those synced files **disabled** (bump in Devinfra, then
+sync).
 
 From the repo root (no PR creation):
 

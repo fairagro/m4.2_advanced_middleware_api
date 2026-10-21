@@ -4,7 +4,8 @@ import asyncio
 import hashlib
 import logging
 import uuid
-from collections.abc import AsyncIterator, Callable
+from collections.abc import AsyncGenerator, AsyncIterator, Callable
+from contextlib import asynccontextmanager
 from datetime import UTC, datetime
 from typing import cast
 
@@ -59,6 +60,7 @@ class CouchDB(DocumentStore):
         self._db_name = config.db_name
         self._client = CouchDBClient.from_config(config)
         self._ensure_lock = asyncio.Lock()
+        self.catalog_finalize_lock = _CatalogFinalizeClaim(self._client, self._config)
         self._client.set_reinit_hook(self.ensure_initialized)
 
     @staticmethod
@@ -752,3 +754,92 @@ class CouchDB(DocumentStore):
                 yield doc_id[len("arc_") :], cast(RoCrateContent, content)
             if len(docs) < page_size or bookmark is None:
                 break
+
+
+class _CatalogFinalizeClaim:
+    """Per-RDI CouchDB claim used to single-flight catalog finalize."""
+
+    def __init__(self, client: CouchDBClient, config: CouchDBConfig) -> None:
+        """Bind the claim to one client and its lock timing settings."""
+        self._client = client
+        self._config = config
+
+    @staticmethod
+    def _doc_id(rdi: str) -> str:
+        """Stable CouchDB id for a per-RDI catalog finalize claim."""
+        digest = hashlib.sha256(rdi.encode("utf-8")).hexdigest()
+        return f"catalog_finalize_lock_{digest}"
+
+    async def _steal_if_stale(self, doc_id: str, *, rdi: str, now: datetime, ttl_s: float) -> bool:
+        """Delete a finalize claim if older than ``ttl_s``. Returns True if stolen."""
+        existing = await self._client.get_document(doc_id)
+        if existing is None:
+            return False
+        acquired_raw = existing.get("acquired_at")
+        if not isinstance(acquired_raw, str):
+            return False
+        try:
+            acquired_at = datetime.fromisoformat(acquired_raw)
+        except ValueError:
+            return False
+        age_s = (now - acquired_at).total_seconds()
+        if age_s < ttl_s:
+            return False
+        logger.warning(
+            "Stealing stale catalog finalize lock for RDI %s (age=%.1fs, ttl=%.1fs)",
+            rdi,
+            age_s,
+            ttl_s,
+        )
+        await self._client.delete_document(doc_id)
+        return True
+
+    @asynccontextmanager
+    async def acquire(self, rdi: str, *, wait_timeout_s: float | None = None) -> AsyncGenerator[None, None]:
+        """Acquire an exclusive per-RDI finalize claim (multi-worker safe).
+
+        Uses ``create_document_exclusive``; waits until the claim is free or stale
+        (TTL) or ``wait_timeout_s`` elapses.
+
+        Raises:
+            TimeoutError: If the claim cannot be acquired in time (caller maps to
+                transient Celery retry).
+        """
+        timeout = self._config.catalog_finalize_lock_wait_timeout_s if wait_timeout_s is None else wait_timeout_s
+        ttl_s = self._config.catalog_finalize_lock_ttl_s
+        poll_delay = self._config.catalog_finalize_lock_poll_delay_s
+        doc_id = self._doc_id(rdi)
+        holder = str(uuid.uuid4())
+        deadline = asyncio.get_running_loop().time() + timeout
+
+        while True:
+            now = datetime.now(UTC)
+            try:
+                await self._client.create_document_exclusive(
+                    doc_id,
+                    {
+                        "doc_type": "catalog_finalize_lock",
+                        "rdi": rdi,
+                        "holder": holder,
+                        "acquired_at": now.isoformat(),
+                    },
+                )
+                break
+            except DocumentConflictError:
+                if asyncio.get_running_loop().time() >= deadline:
+                    raise TimeoutError(f"Catalog finalize lock wait timed out for RDI {rdi}") from None
+                stolen = await self._steal_if_stale(doc_id, rdi=rdi, now=now, ttl_s=ttl_s)
+                if not stolen:
+                    await asyncio.sleep(poll_delay)
+
+        try:
+            yield
+        finally:
+            # Best-effort: a release error must not mask the finalize outcome.
+            # A stale claim is reclaimed by the TTL steal path.
+            try:
+                current = await self._client.get_document(doc_id)
+                if current is not None and current.get("holder") == holder:
+                    await self._client.delete_document(doc_id)
+            except Exception:
+                logger.exception("Failed to release catalog finalize lock %s for RDI %s", doc_id, rdi)

@@ -1,5 +1,6 @@
 """Tests for ConsolidatedGitArcStore finalize and ephemeral clone behaviour."""
 
+import asyncio
 from collections.abc import AsyncIterator
 from pathlib import Path
 from typing import Any
@@ -10,7 +11,7 @@ from git.exc import GitCommandError
 from pydantic import SecretStr
 from rocrate_fixtures import minimal_rocrate_dict
 
-from middleware.api.arc_store import ArcStoreError, ArcStoreTransientError
+from middleware.api.arc_store import ArcStoreError, ArcStoreTransientError, CatalogFinalizeResult
 from middleware.api.arc_store.consolidated_git import ConsolidatedGitArcStore, ConsolidatedGitConfig
 from middleware.shared.config.logging import install_url_userinfo_redaction
 from middleware.shared.json_types import CatalogDatasetRecord
@@ -141,6 +142,62 @@ async def test_finalize_loads_arcs_from_couchdb(
     doc_store.iter_arc_contents_by_rdi.assert_called_once_with("edal")
     assert published["bytes"].startswith(b"[")
     assert not list(consolidated_config.cache_dir.glob("catalog_finalize_*"))
+
+
+@pytest.mark.asyncio
+async def test_finalize_same_rdi_is_single_flight(
+    consolidated_config: ConsolidatedGitConfig,
+    doc_store: MagicMock,
+) -> None:
+    """Overlapping finalize for one RDI must not enter the critical section concurrently."""
+    store = ConsolidatedGitArcStore(consolidated_config, doc_store)
+    in_critical = 0
+    max_in_critical = 0
+    gate = asyncio.Event()
+
+    async def _slow_under_lock(*, rdi: str) -> CatalogFinalizeResult:
+        del rdi
+        nonlocal in_critical, max_in_critical
+        in_critical += 1
+        max_in_critical = max(max_in_critical, in_critical)
+        gate.set()
+        await asyncio.sleep(0.05)
+        in_critical -= 1
+        return CatalogFinalizeResult(pushed=False, dataset_count=0, skipped=())
+
+    with patch.object(store, "_finalize_under_lock", side_effect=_slow_under_lock):
+        first = asyncio.create_task(store.finalize(rdi="edal"))
+        await gate.wait()
+        second = asyncio.create_task(store.finalize(rdi="edal"))
+        await asyncio.gather(first, second)
+
+    assert max_in_critical == 1
+
+
+@pytest.mark.asyncio
+async def test_finalize_lock_timeout_is_transient(
+    consolidated_config: ConsolidatedGitConfig,
+    doc_store: MagicMock,
+) -> None:
+    """Lock wait expiry maps to ArcStoreTransientError (Celery retry), not permanent."""
+    config = consolidated_config.model_copy(update={"finalize_lock_wait_timeout_s": 0.05})
+    store = ConsolidatedGitArcStore(config, doc_store)
+    hold = asyncio.Event()
+    entered = asyncio.Event()
+
+    async def _hold_under_lock(*, rdi: str) -> CatalogFinalizeResult:
+        del rdi
+        entered.set()
+        await hold.wait()
+        return CatalogFinalizeResult(pushed=False, dataset_count=0, skipped=())
+
+    with patch.object(store, "_finalize_under_lock", side_effect=_hold_under_lock):
+        holder = asyncio.create_task(store.finalize(rdi="edal"))
+        await entered.wait()
+        with pytest.raises(ArcStoreTransientError, match="timed out"):
+            await store.finalize(rdi="edal")
+        hold.set()
+        await holder
 
 
 @pytest.mark.asyncio
