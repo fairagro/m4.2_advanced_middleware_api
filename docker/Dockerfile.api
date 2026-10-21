@@ -21,7 +21,7 @@ WORKDIR /api
 
 # Runtime extras required by the API process (curl liveness, git for ArcStore).
 # Fleet apk pin style B (Trivy / update via scripts/update-dockerfile-pins.sh).
-ARG CA_CERTIFICATES_VERSION=20260909-r0
+ARG CA_CERTIFICATES_VERSION=20261020-r0
 ARG CURL_VERSION=8.22.0-r0
 ARG GIT_VERSION=2.54.0-r0
 ARG ZLIB_VERSION=1.3.2-r1
