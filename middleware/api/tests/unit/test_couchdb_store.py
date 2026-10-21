@@ -6,7 +6,7 @@ from datetime import UTC, datetime
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
-from pydantic import SecretStr
+from pydantic import SecretStr, ValidationError
 
 from middleware.api.document_store import ArcIdentityConflictError, DuplicateArcError
 from middleware.api.document_store.arc_document import ArcDocument, ArcEvent, ArcMetadata
@@ -22,6 +22,14 @@ from middleware.shared.api_models.common.models import ArcEventType, ArcLifecycl
 def config() -> CouchDBConfig:
     """Create test configuration."""
     return CouchDBConfig(url="http://test:5984", user="user", password=SecretStr("pass"))
+
+
+def test_max_catalog_event_log_size_defaults_to_100_and_rejects_below_one() -> None:
+    """Catalog-event cap defaults to 100 and cannot drop the event just appended."""
+    config = CouchDBConfig(url="http://test:5984")
+    assert config.max_catalog_event_log_size == 100
+    with pytest.raises(ValidationError):
+        CouchDBConfig(url="http://test:5984", max_catalog_event_log_size=0)
 
 
 @pytest.fixture
@@ -946,6 +954,92 @@ async def test_update_harvest_append_catalog_event_retries_on_conflict(
     second_payload = mock_client_instance.save_document_if_revision_matches.await_args_list[1].args[1]
     assert len(second_payload["catalog_events"]) == 2
     mock_client_instance.save_document.assert_not_called()
+
+
+def _harvest_with_catalog_events(messages: list[str]) -> dict[str, object]:
+    """Harvest document body with one catalog event per message."""
+    return {
+        "_id": "harvest-1",
+        "_rev": "1-aaa",
+        "type": "harvest",
+        "rdi": "edal",
+        "started_at": "2024-01-01T00:00:00+00:00",
+        "status": HarvestStatus.COMPLETED.value,
+        "statistics": {},
+        "catalog_events": [
+            {
+                "timestamp": f"2024-01-01T00:00:{index:02d}+00:00",
+                "type": "CATALOG_PUSH_SUCCESS",
+                "message": message,
+            }
+            for index, message in enumerate(messages)
+        ],
+    }
+
+
+@pytest.mark.asyncio
+async def test_update_harvest_append_catalog_event_drops_oldest_past_maximum(
+    store: CouchDB,
+    mock_client_instance: MagicMock,
+) -> None:
+    """An append past the cap keeps the newest events and drops the oldest."""
+    store._config.max_catalog_event_log_size = 2  # noqa: SLF001
+    mock_client_instance.get_document = AsyncMock(return_value=_harvest_with_catalog_events(["oldest", "middle"]))
+    mock_client_instance.save_document_if_revision_matches = AsyncMock(return_value={"_rev": "2-bbb"})
+
+    updated = await store.update_harvest(
+        "harvest-1",
+        {
+            "append_catalog_event": {
+                "timestamp": "2024-01-01T00:00:03+00:00",
+                "type": "CATALOG_PUSH_FAILED",
+                "message": "newest",
+            }
+        },
+    )
+
+    assert [event.message for event in updated.catalog_events] == ["middle", "newest"]
+    saved = mock_client_instance.save_document_if_revision_matches.await_args.args[1]
+    assert [event["message"] for event in saved["catalog_events"]] == ["middle", "newest"]
+
+
+@pytest.mark.asyncio
+async def test_update_harvest_append_catalog_event_keeps_events_under_maximum(
+    store: CouchDB,
+    mock_client_instance: MagicMock,
+) -> None:
+    """An append under the cap keeps every previous event and puts the new one last."""
+    store._config.max_catalog_event_log_size = 3  # noqa: SLF001
+    mock_client_instance.get_document = AsyncMock(return_value=_harvest_with_catalog_events(["first", "second"]))
+    mock_client_instance.save_document_if_revision_matches = AsyncMock(return_value={"_rev": "2-bbb"})
+
+    updated = await store.update_harvest(
+        "harvest-1",
+        {
+            "append_catalog_event": {
+                "timestamp": "2024-01-01T00:00:03+00:00",
+                "type": "CATALOG_PUSH_SUCCESS",
+                "message": "third",
+            }
+        },
+    )
+
+    assert [event.message for event in updated.catalog_events] == ["first", "second", "third"]
+
+
+@pytest.mark.asyncio
+async def test_update_harvest_without_catalog_event_leaves_over_maximum_list(
+    store: CouchDB,
+    mock_client_instance: MagicMock,
+) -> None:
+    """A status-only update does not trim a catalog-event list that is already over the cap."""
+    store._config.max_catalog_event_log_size = 1  # noqa: SLF001
+    mock_client_instance.get_document = AsyncMock(return_value=_harvest_with_catalog_events(["first", "second"]))
+    mock_client_instance.save_document_if_revision_matches = AsyncMock(return_value={"_rev": "2-bbb"})
+
+    updated = await store.update_harvest("harvest-1", {"status": HarvestStatus.RUNNING})
+
+    assert [event.message for event in updated.catalog_events] == ["first", "second"]
 
 
 @pytest.mark.asyncio

@@ -13,6 +13,14 @@ class CouchDBConfig(BaseModel):
     password: Annotated[SecretStr | None, Field(description="CouchDB password")] = None
     db_name: Annotated[str, Field(description="Name of the database for ARCs and harvests")] = "arcs"
     max_event_log_size: Annotated[int, Field(default=100, description="Maximum number of events in ARC metadata")] = 100
+    max_catalog_event_log_size: Annotated[
+        int,
+        Field(
+            default=100,
+            ge=1,
+            description="Maximum catalog_events retained on a harvest document (newest kept)",
+        ),
+    ] = 100
     default_query_limit: Annotated[
         int,
         Field(
