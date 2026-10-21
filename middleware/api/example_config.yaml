@@ -16,3 +16,4 @@ arc_store:
       edal: "e!DAL"
 couchdb:
     max_event_log_size: 100
+    max_catalog_event_log_size: 100

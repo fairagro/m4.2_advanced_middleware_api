@@ -590,8 +590,7 @@ class CouchDB(DocumentStore):
         doc = await self._client.get_document(harvest_id)
         return HarvestDocument.model_validate(doc) if doc else None
 
-    @staticmethod
-    def _apply_harvest_updates(doc: HarvestDocument, updates: HarvestUpdatePayload) -> None:
+    def _apply_harvest_updates(self, doc: HarvestDocument, updates: HarvestUpdatePayload) -> None:
         """Mutate *doc* in place with the fields present in *updates*."""
         if "status" in updates:
             doc.status = updates["status"]
@@ -602,6 +601,9 @@ class CouchDB(DocumentStore):
         if "append_catalog_event" in updates:
             event = HarvestCatalogEvent.model_validate(updates["append_catalog_event"])
             doc.catalog_events = [*doc.catalog_events, event]
+            limit = self._config.max_catalog_event_log_size
+            if len(doc.catalog_events) > limit:
+                doc.catalog_events = doc.catalog_events[-limit:]
         if "append_error" in updates:
             error = HarvestError.model_validate(updates["append_error"])
             doc.errors = [*doc.errors, error]
