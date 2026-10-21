@@ -408,16 +408,26 @@
       "enabled": false
     },
     {
-      "description": "Bundle all versions.env (+ .python-version mirror) pin bumps into one PR (overrides earlier datasource groupNames for these files only)",
+      "description": "versions.env / .python-version CLI and runtime pins (overrides earlier datasource groupNames for these files). recreateWhen always avoids stale-branch replaceString failures (#316).",
       "matchFileNames": ["versions.env", ".python-version"],
-      "groupName": "versions.env toolchain pins",
-      "separateMinorPatch": false
+      "groupName": "versions.env CLI pins",
+      "separateMinorPatch": false,
+      "recreateWhen": "always"
     },
     {
-      "description": "Mirrored npm pins: keep package.json/lock with versions.env (same group as file rule above)",
+      "description": "Isolate UV_VERSION pin in versions.env so vulnerabilityAlerts / security bumps do not share a mega-branch with other versions.env pins (#316).",
+      "matchFileNames": ["versions.env"],
+      "matchPackageNames": ["uv"],
+      "groupName": "versions.env uv pin",
+      "separateMinorPatch": false,
+      "recreateWhen": "always"
+    },
+    {
+      "description": "Mirrored npm: prettier + markdownlint-cli2 (package.json/lock + versions.env regex). Same group so SoT cannot diverge; recreateWhen always (#316).",
       "matchPackageNames": ["prettier", "markdownlint-cli2"],
-      "groupName": "versions.env toolchain pins",
-      "separateMinorPatch": false
+      "groupName": "versions.env mirrored npm pins",
+      "separateMinorPatch": false,
+      "recreateWhen": "always"
     }
   ],
 
