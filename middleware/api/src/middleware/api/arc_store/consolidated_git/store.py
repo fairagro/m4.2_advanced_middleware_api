@@ -6,7 +6,6 @@ import asyncio
 import concurrent.futures
 import logging
 import re
-import shutil
 import tempfile
 from collections.abc import Callable
 from contextlib import AbstractAsyncContextManager
@@ -25,6 +24,11 @@ from middleware.api.arc_store.consolidated_git.catalog_jsonld import normalize_c
 from middleware.api.arc_store.consolidated_git.catalog_materialize import materialize_catalog_dataset
 from middleware.api.arc_store.consolidated_git.catalog_serialize import extract_catalog_dataset, serialize_catalog_file
 from middleware.api.arc_store.consolidated_git.config import ConsolidatedGitConfig
+from middleware.api.arc_store.executor_shutdown import (
+    EXECUTOR_SHUTDOWN_TIMEOUT_S,
+    remove_ephemeral_workdir,
+    shutdown_executor,
+)
 from middleware.api.arc_store.git_cache_cleanup import reclaim_stale_git_cache_dirs
 from middleware.api.arc_store.git_cli_settings import GitContextConfig
 from middleware.api.arc_store.git_context import (
@@ -66,8 +70,8 @@ class ConsolidatedGitArcStore(ArcStore):
 
     @override
     async def shutdown(self) -> None:
-        """Shut down the thread-pool executor."""
-        self._executor.shutdown(wait=False, cancel_futures=True)
+        """Cancel unstarted Git work and wait a bounded time for work that has started."""
+        shutdown_executor(self._executor, timeout_s=EXECUTOR_SHUTDOWN_TIMEOUT_S)
 
     @override
     def _check_health(self) -> bool:
@@ -178,7 +182,7 @@ class ConsolidatedGitArcStore(ArcStore):
                         raise ArcStoreError(detail) from exc
                     raise ArcStoreError(f"Git failure publishing {filename}: {detail}") from exc
         finally:
-            shutil.rmtree(temp_dir, ignore_errors=True)
+            remove_ephemeral_workdir(temp_dir)
 
     async def _collect_catalog_datasets(
         self,

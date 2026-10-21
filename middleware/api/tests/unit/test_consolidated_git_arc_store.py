@@ -54,14 +54,47 @@ def test_publish_catalog_bytes_removes_ephemeral_clone(
     with (
         patch("middleware.api.arc_store.consolidated_git.store.tempfile.mkdtemp", return_value=str(work_dir)),
         patch("middleware.api.arc_store.consolidated_git.store.GitContext", return_value=ctx_instance),
-        patch("middleware.api.arc_store.consolidated_git.store.shutil.rmtree") as mock_rmtree,
+        patch("middleware.api.arc_store.executor_shutdown.shutil.rmtree") as mock_rmtree,
         patch("middleware.api.arc_store.consolidated_git.store.Path.exists", return_value=False),
         patch("middleware.api.arc_store.consolidated_git.store.Path.write_bytes"),
     ):
         pushed = store._publish_catalog_bytes("edal", b"[]\n")
 
     assert pushed is True
-    mock_rmtree.assert_called_once_with(work_dir, ignore_errors=True)
+    mock_rmtree.assert_called_once_with(work_dir)
+
+
+def test_publish_catalog_bytes_logs_failed_workdir_delete(
+    consolidated_config: ConsolidatedGitConfig,
+    tmp_path: Path,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """A failed ephemeral-workdir delete is a warning and does not change the publish result."""
+    store = ConsolidatedGitArcStore(consolidated_config, MagicMock())
+    work_dir = tmp_path / "catalog_finalize_work"
+    work_dir.mkdir()
+
+    ctx_instance = MagicMock()
+    ctx_instance.path = str(work_dir)
+    ctx_instance.__enter__.return_value = ctx_instance
+    ctx_instance.commit_and_push.return_value = True
+
+    with (
+        patch("middleware.api.arc_store.consolidated_git.store.tempfile.mkdtemp", return_value=str(work_dir)),
+        patch("middleware.api.arc_store.consolidated_git.store.GitContext", return_value=ctx_instance),
+        patch(
+            "middleware.api.arc_store.executor_shutdown.shutil.rmtree",
+            side_effect=OSError("workdir busy"),
+        ),
+        patch("middleware.api.arc_store.consolidated_git.store.Path.exists", return_value=False),
+        patch("middleware.api.arc_store.consolidated_git.store.Path.write_bytes"),
+        caplog.at_level("WARNING"),
+    ):
+        pushed = store._publish_catalog_bytes("edal", b"[]\n")
+
+    assert pushed is True
+    assert "workdir busy" in caplog.text
+    assert str(work_dir) in caplog.text
 
 
 def test_publish_catalog_bytes_rejects_unsafe_rdi(consolidated_config: ConsolidatedGitConfig) -> None:
@@ -100,7 +133,7 @@ def test_publish_catalog_bytes_push_conflict_is_transient(
     with (
         patch("middleware.api.arc_store.consolidated_git.store.tempfile.mkdtemp", return_value=str(work_dir)),
         patch("middleware.api.arc_store.consolidated_git.store.GitContext", return_value=ctx_instance),
-        patch("middleware.api.arc_store.consolidated_git.store.shutil.rmtree"),
+        patch("middleware.api.arc_store.executor_shutdown.shutil.rmtree"),
         patch("middleware.api.arc_store.consolidated_git.store.Path.exists", return_value=False),
         patch("middleware.api.arc_store.consolidated_git.store.Path.write_bytes"),
         pytest.raises(ArcStoreTransientError) as raised,
