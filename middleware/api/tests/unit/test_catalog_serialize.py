@@ -1,5 +1,6 @@
 """Tests for consolidated catalog Dataset extraction and serialization."""
 
+from pathlib import Path
 from typing import cast
 
 import pytest
@@ -9,6 +10,7 @@ from middleware.api.arc_store.consolidated_git.catalog_serialize import (
     catalog_dataset_identifier,
     extract_catalog_dataset,
     serialize_catalog_file,
+    write_catalog_file,
 )
 from middleware.shared.json_types import CatalogDatasetRecord, RoCrateContent
 
@@ -102,3 +104,14 @@ def test_serialize_catalog_file_non_ascii_stable() -> None:
     assert first == second
     assert "Äpfel".encode() in first
     assert b"\\u" not in first
+
+
+def test_write_catalog_file_matches_serialize(tmp_path: Path) -> None:
+    """The on-disk catalog is the same byte string ``serialize_catalog_file`` returns."""
+    datasets = [
+        cast(CatalogDatasetRecord, {"identifier": "https://b.example/ds", "name": "B"}),
+        cast(CatalogDatasetRecord, {"identifier": "https://a.example/ds", "name": "A"}),
+    ]
+    path = tmp_path / "catalog.json"
+    write_catalog_file(datasets, path)
+    assert path.read_bytes() == serialize_catalog_file(datasets)

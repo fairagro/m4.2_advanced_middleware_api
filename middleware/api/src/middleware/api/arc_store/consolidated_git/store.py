@@ -23,9 +23,9 @@ from opentelemetry import context
 from middleware.api.arc_store import ArcStore, ArcStoreError, ArcStoreTransientError, CatalogFinalizeResult
 from middleware.api.arc_store.consolidated_git.catalog_jsonld import normalize_catalog_datasets_best_effort
 from middleware.api.arc_store.consolidated_git.catalog_materialize import materialize_catalog_dataset
-from middleware.api.arc_store.consolidated_git.catalog_serialize import extract_catalog_dataset, serialize_catalog_file
+from middleware.api.arc_store.consolidated_git.catalog_serialize import extract_catalog_dataset, write_catalog_file
 from middleware.api.arc_store.consolidated_git.config import ConsolidatedGitConfig
-from middleware.api.arc_store.git_cache_cleanup import reclaim_stale_git_cache_dirs
+from middleware.api.arc_store.git_cache_cleanup import CATALOG_FINALIZE_PREFIX, reclaim_stale_git_cache_dirs
 from middleware.api.arc_store.git_cli_settings import GitContextConfig
 from middleware.api.arc_store.git_context import (
     GitContext,
@@ -153,21 +153,36 @@ class ConsolidatedGitArcStore(ArcStore):
     def _context_config(self, local_path: Path) -> GitContextConfig:
         return self._config.git_context_config(repo_url=self._config.repo_url, local_path=local_path)
 
-    def _publish_catalog_bytes(self, rdi: str, catalog_bytes: bytes) -> bool:
-        """Clone into a temp dir, write catalog file, push if bytes differ. Returns True if pushed."""
+    def _write_catalog_payload(self, rdi: str, datasets: list[CatalogDatasetRecord]) -> Path:
+        """Write canonical catalog bytes under the cache dir. Caller deletes the directory."""
+        _require_safe_catalog_rdi(rdi)
+        self._config.cache_dir.mkdir(parents=True, exist_ok=True)
+        payload_dir = Path(tempfile.mkdtemp(prefix=CATALOG_FINALIZE_PREFIX, dir=self._config.cache_dir))
+        catalog_path = payload_dir / f"{rdi}.json"
+        written = False
+        try:
+            write_catalog_file(datasets, catalog_path)
+            written = True
+        finally:
+            if not written:
+                shutil.rmtree(payload_dir, ignore_errors=True)
+        return catalog_path
+
+    def _publish_catalog_file(self, rdi: str, catalog_path: Path) -> bool:
+        """Clone into a temp dir, copy the serialized catalog, push if bytes differ."""
         _require_safe_catalog_rdi(rdi)
         self._config.cache_dir.mkdir(parents=True, exist_ok=True)
         reclaim_stale_git_cache_dirs(self._config.cache_dir)
-        temp_dir = Path(tempfile.mkdtemp(prefix="catalog_finalize_", dir=self._config.cache_dir))
+        temp_dir = Path(tempfile.mkdtemp(prefix=CATALOG_FINALIZE_PREFIX, dir=self._config.cache_dir))
         try:
             self._ensure_remote_bare_repo()
             filename = f"{rdi}.json"
             with GitContext(self._context_config(temp_dir)) as git_ctx:
                 target = Path(git_ctx.path) / filename
-                if target.exists() and target.read_bytes() == catalog_bytes:
+                if target.is_file() and target.read_bytes() == catalog_path.read_bytes():
                     logger.info("Catalog %s unchanged; skipping commit/push", filename)
                     return False
-                target.write_bytes(catalog_bytes)
+                shutil.copyfile(catalog_path, target)
                 try:
                     return git_ctx.commit_and_push(f"Update {filename}")
                 except GitCommandError as exc:
@@ -266,25 +281,29 @@ class ConsolidatedGitArcStore(ArcStore):
                 skipped_ids,
             )
 
-        catalog_bytes = serialize_catalog_file(datasets)
+        dataset_count = len(datasets)
+        catalog_path = self._write_catalog_payload(rdi, datasets)
+        datasets.clear()
         try:
-            pushed = await self._run_in_executor(self._publish_catalog_bytes, rdi, catalog_bytes)
+            pushed = await self._run_in_executor(self._publish_catalog_file, rdi, catalog_path)
         except ArcStoreTransientError:
             raise
         except ArcStoreError:
             raise
         except Exception as exc:
             raise ArcStoreError(f"Failed to publish catalog for RDI {rdi}: {exc}") from exc
+        finally:
+            shutil.rmtree(catalog_path.parent, ignore_errors=True)
 
         logger.info(
             "Finalized catalog for RDI %s (%d datasets, %d skipped, pushed=%s)",
             rdi,
-            len(datasets),
+            dataset_count,
             len(skipped),
             pushed,
         )
         return CatalogFinalizeResult(
             pushed=pushed,
-            dataset_count=len(datasets),
+            dataset_count=dataset_count,
             skipped=skipped_tuple,
         )
