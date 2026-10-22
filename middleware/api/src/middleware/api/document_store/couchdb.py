@@ -303,6 +303,10 @@ class CouchDB(DocumentStore):
         ``rdi`` must match the incoming pair (same rules as ``calculate_arc_id``). Mismatch
         raises :class:`ArcIdentityConflictError` without writing the body — distinct from
         harvest content :class:`DuplicateArcError`. Unicode NFC is deferred (#537).
+
+        A matching content hash keeps the stored RO-Crate body. Metadata such as
+        ``last_seen`` is still updated. Serialization timestamps that the hash ignores
+        therefore do not replace the body the catalog later publishes.
         """
         if not identifier:
             raise ValueError("ARC content must contain a valid identifier")
@@ -339,11 +343,14 @@ class CouchDB(DocumentStore):
         if len(metadata.events) > self._config.max_event_log_size:
             metadata.events = metadata.events[-self._config.max_event_log_size :]
 
+        # Hash match: keep the first stored body so volatile timestamps never land.
+        persisted_content = existing_doc.arc_content if existing_doc is not None and not has_changes else arc_content
+
         doc = ArcDocument(
             doc_id=doc_id,
             doc_rev=existing_doc.doc_rev if existing_doc else None,
             rdi=rdi,
-            arc_content=arc_content,
+            arc_content=persisted_content,
             metadata=metadata,
         )
         doc_data = doc.model_dump(mode="json", by_alias=True, exclude_none=True)

@@ -276,6 +276,7 @@ async def test_store_arc_update_changed(store: CouchDB, mock_client_instance: Ma
     args, _ = mock_client_instance.save_document.call_args
     _, doc_data = args
 
+    assert doc_data["arc_content"] == arc_content
     assert doc_data["metadata"]["arc_hash"] != existing_hash
     assert doc_data["metadata"]["events"][-1]["type"] == "ARC_UPDATED"
 
@@ -394,6 +395,7 @@ async def test_store_arc_timestamp_only_not_a_change(store: CouchDB, mock_client
     assert result.has_changes is False
     mock_client_instance.save_document.assert_called_once()
     _, doc_data = mock_client_instance.save_document.call_args[0]
+    assert doc_data["arc_content"] == stored_content
     assert doc_data["metadata"]["arc_hash"] == calculate_arc_content_hash(resubmitted_content)
     assert doc_data["metadata"]["events"] == []
 
