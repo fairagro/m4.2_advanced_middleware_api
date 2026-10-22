@@ -5,13 +5,14 @@ import asyncio
 import tempfile
 from collections.abc import Callable
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 from unittest.mock import MagicMock, PropertyMock, patch
 
 import pytest
 from git.exc import GitCommandError
 from pydantic import SecretStr
 
+from middleware.api.arc_store import ArcStoreTransientError
 from middleware.api.arc_store.consolidated_git import ConsolidatedGitConfig
 from middleware.api.arc_store.git_cli_settings import GitCliSettings, GitContextConfig
 from middleware.api.arc_store.git_context import (
@@ -168,6 +169,58 @@ def test_git_context_enter_clone(mock_repo: MagicMock, tmp_path: Path) -> None:
 
     # Verify close called
     mock_repo.clone_from.return_value.close.assert_called_once()
+
+
+def _clone_context(tmp_path: Path) -> GitContext:
+    target_path = tmp_path / "repo"
+    target_path.mkdir()
+    return GitContext(
+        GitContextConfig(
+            repo_url=UrlStr("https://example.com/repo.git"),
+            branch="main",
+            user_name=None,
+            user_email=None,
+            local_path=target_path,
+        )
+    )
+
+
+@patch("middleware.api.arc_store.git_context.Repo")
+def test_git_context_soft_clone_failure_inits_local_repo(mock_repo: MagicMock, tmp_path: Path) -> None:
+    """A not-found clone still initializes a local repo with origin."""
+    mock_repo.clone_from.side_effect = GitCommandError("clone", 128, stderr="repository not found")
+    context = _clone_context(tmp_path)
+
+    initialized = cast(MagicMock, mock_repo.init.return_value)
+    with context as ctx:
+        assert ctx.repo is initialized
+
+    mock_repo.init.assert_called_once_with(context.config.local_path)
+    initialized.create_remote.assert_called_once_with("origin", "https://example.com/repo.git")
+
+
+@patch("middleware.api.arc_store.git_context.Repo")
+def test_git_context_non_soft_clone_failure_propagates(mock_repo: MagicMock, tmp_path: Path) -> None:
+    """Auth and other non-soft clone errors must not fall back to an empty init."""
+    mock_repo.clone_from.side_effect = GitCommandError("clone", 128, stderr="Authentication failed")
+    context = _clone_context(tmp_path)
+
+    with pytest.raises(GitCommandError, match="Authentication failed"):
+        context.__enter__()
+
+    mock_repo.init.assert_not_called()
+
+
+@patch("middleware.api.arc_store.git_context.Repo")
+def test_git_context_transient_clone_failure_is_retryable(mock_repo: MagicMock, tmp_path: Path) -> None:
+    """Transient clone failures stay ArcStoreTransientError and do not init."""
+    mock_repo.clone_from.side_effect = GitCommandError("clone", 128, stderr="connection timed out")
+    context = _clone_context(tmp_path)
+
+    with pytest.raises(ArcStoreTransientError, match="connection timed out"):
+        context.__enter__()
+
+    mock_repo.init.assert_not_called()
 
 
 @patch("middleware.api.arc_store.git_context.Repo")

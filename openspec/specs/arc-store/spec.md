@@ -598,9 +598,23 @@ store shutdown.
 
 When the Git CLI backends create a fresh local working copy by cloning a remote, the clone MUST be shallow with depth 1.
 The tip working tree MUST still contain the files needed for catalog finalize and per-ARC sync or get. Tip content after
-clone, commit, and push MUST match what a full-history clone would produce for the same tip-only operations. Empty or
-missing remotes that fall back to local repository initialization are unchanged. Operators MUST NOT need a configuration
-knob to enable this depth.
+clone, commit, and push MUST match what a full-history clone would produce for the same tip-only operations. A soft
+not-found clone failure (empty or missing remote) MUST still fall back to local repository initialization. Any other
+clone `GitCommandError` MUST propagate and MUST NOT initialize an empty local repository. Transient clone failures
+remain retryable store errors. Operators MUST NOT need a configuration knob to enable this depth.
+
+#### Scenario: Soft not-found clone initializes a local repo
+
+- **GIVEN** a Git CLI backend operation that clones into a new local working directory
+- **WHEN** the clone fails because the remote or branch is not found
+- **THEN** the store initializes a local repository with `origin` set to that remote
+
+#### Scenario: Non-soft clone failure does not initialize
+
+- **GIVEN** a Git CLI backend operation that clones into a new local working directory
+- **WHEN** the clone fails with a Git error that is not a soft not-found and not transient
+- **THEN** that error propagates
+- **AND** no empty local repository is initialized
 
 #### Scenario: Fresh clone is shallow
 

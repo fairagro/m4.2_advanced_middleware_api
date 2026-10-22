@@ -212,7 +212,9 @@ class GitContext:
                     branch=self.config.branch,
                     depth=1,
                 )
-        except GitCommandError:
+        except GitCommandError as exc:
+            if not is_soft_git_error(exc):
+                raise
             self._handle_repo_init_error(repo_path, url)
 
         # Configure user
