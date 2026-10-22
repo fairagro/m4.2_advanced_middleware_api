@@ -155,14 +155,17 @@ On every run that will implement, after explore (when it ran) or immediately whe
 2. **Feature / Refactoring** (OpenSpec path), unless docs-only with no skill file — also any type with a skill file in
    scope, or Task/Bug with explicit `use opsx`:
 
-   1. Follow openspec-propose → **pause** (user reviews proposal / specs / design / tasks).
-   2. On `go`: follow openspec-apply → **pause** (user reviews working tree; they commit/push).
+   1. Follow openspec-propose → **pause** (user reviews proposal / specs / design / tasks). If the working tree is
+      dirty from propose, apply [Handoff commit message](#handoff-commit-message).
+   2. On `go`: follow openspec-apply → **pause** (user reviews working tree; they commit/push). Apply
+      [Handoff commit message](#handoff-commit-message).
    3. On `go`: ensure a **draft** PR when the tip is ahead of `main` (next section).
-   4. On `go` (**last**): follow openspec-archive → **pause** so the user can commit archive results.
+   4. On `go` (**last**): follow openspec-archive → **pause** so the user can commit archive results. Apply
+      [Handoff commit message](#handoff-commit-message).
 
 3. **Task / Bug / cheap Security**, and **docs-only** Feature/Refactoring that do not touch a skill file: implement in
-   the working tree → **pause** → on `go`: draft PR when ahead of `main`. Do **not** create an OpenSpec change for
-   process.
+   the working tree → **pause** (apply [Handoff commit message](#handoff-commit-message)) → on `go`: draft PR when
+   ahead of `main`. Do **not** create an OpenSpec change for process.
 
 Early exits that never implement skip this cadence. Once the user asks to implement a `Discussion`, start at branch +
 the type-routed path (OpenSpec if they retyped it as Feature/Refactoring).
@@ -190,7 +193,8 @@ If a draft PR already exists, skip create. Always prefer `m42-ai pr-strip-footer
 footer may have been injected) instead of hand-editing with ad-hoc `gh` regexes.
 
 If the tip still equals `main`, do **not** open a PR and do **not** create an empty commit — ask the user to commit
-first. For OpenSpec types, archive is still the last `go` after this step (working-tree archive, then pause for commit).
+first and apply [Handoff commit message](#handoff-commit-message). For OpenSpec types, archive is still the last `go`
+after this step (working-tree archive, then pause for commit with handoff message).
 
 **PR body hygiene:** Do **not** append tool marketing footers (e.g. `Made with Cursor`, `Made with [Cursor](…)`). Body
 is Summary + `Fixes #<issue_number>` (+ deferred issue links when needed). Prefer:
@@ -285,6 +289,34 @@ implementation — not only to review triage.
 happy-path contract. Do not expand the MVP with “also support worktrees / host X / legacy Y”. If that work is real but
 out of done-when, split via `/create-issue` (`relation: linked`) — do not sneak it into the MVP slice.
 
+## Handoff commit message
+
+Whenever this skill **pauses and returns control to the user** after it has left **uncommitted** changes in the working
+tree or index (propose artifacts, apply/implement edits, archive move/sync, Bug/Task fixes, etc.), the pause message
+**MUST** include a ready-to-use **Conventional Commits** subject (and a short body only when needed for multiple
+independent themes).
+
+Rules for that subject:
+
+- Follow fleet Conventional Commits + hard overrides in synced `.cursorrules` / `docs/quality.md` (scan the **full**
+  dirty/staged diff — not only the last hunk or OpenSpec folder title).
+- **OpenSpec archive / opsx-archive** (move under `openspec/changes/archive/` and/or sync into `openspec/specs/`) →
+  always `chore` (optional scope `openspec`), never `feat`.
+- Propose/apply planning-only trees → `chore` / `docs`, not `feat`, unless shipped runtime also changed in the same
+  tree.
+- Prefer an optional short scope when one area is clear from the paths.
+- Do **not** auto-commit. Do **not** tell the user to use Cursor Source Control sparkle for that handoff — paste or
+  `git commit -m '…'` / `-F` is enough.
+- If the pause has **no** dirty tree (explore-only lock-in, Discussion decision, auth wait), omit the commit-message
+  block.
+
+Format in the user-visible pause (example):
+
+```text
+Suggested commit message:
+fix(quality): soft-load MYPYPATH from product.env with file wins
+```
+
 ## Output to the user
 
 Provide:
@@ -296,3 +328,4 @@ Provide:
 - Draft PR URL when opened (or “PR deferred until real commits” / “skipped PR creation”)
 - Created sub-issue / linked-issue URLs (or none)
 - Reminder: user commits, pushes, and marks the PR ready; agent does not auto-commit fix commits
+- When applicable: the [Handoff commit message](#handoff-commit-message) block

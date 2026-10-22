@@ -61,15 +61,18 @@ requirements. Sparkle/Copilot MUST NOT treat those ADDED requirements as a produ
 `uv run pre-commit install --hook-type pre-commit --hook-type commit-msg` (Dev Container postCreate does both). Type
 `deps` is allowed for Renovate’s `deps:` prefix.
 
-**Editor generation (keep the buttons):**
+**Editor / agent generation:**
 
-| Surface                                          | How Conventional Commits are steered                                                                                              |
-| ------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------- |
-| **VS Code Copilot**                              | synced `.vscode/settings.json` → `github.copilot.chat.commitMessageGeneration.instructions`                                       |
-| **Cursor sparkle** (SCM generate commit message) | synced root **`.cursorrules`** (Cursor does **not** apply `.cursor/rules` / AGENTS.md / the Copilot setting to that button today) |
-| **Agents**                                       | `.github/copilot-instructions.md` + commitlint                                                                                    |
+| Surface                                          | How Conventional Commits are steered                                                                                            |
+| ------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------- |
+| **`/issue-fixer` / `/review-fixer` handoff**     | Skills **must** print a Suggested commit message when they pause after leaving uncommitted changes (prefer this over sparkle)   |
+| **VS Code Copilot**                              | synced `.vscode/settings.json` → `github.copilot.chat.commitMessageGeneration.instructions`                                     |
+| **Cursor sparkle** (SCM generate commit message) | synced root **`.cursorrules`** only — **discourage** for release-bearing commits (`version_bump: auto`); no official prompt API |
+| **Agents (other)**                               | `.github/copilot-instructions.md` + commitlint                                                                                  |
 
-After pulling `.cursorrules`, retry the sparkle button. commitlint still rejects non-conventional messages on commit.
+Sparkle often misses the staged diff (planning-only/`feat`, archive not `chore(openspec)`). Prefer the agent handoff
+subject (or a future `m42-ai suggest-commit`). commitlint still rejects non-conventional messages on commit; a future
+path-check hook will reject `feat`/`fix` on OpenSpec-only / test-only indexes (#320).
 
 ## Environment parity (IDE, hooks, CI)
 

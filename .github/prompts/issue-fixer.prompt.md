@@ -19,6 +19,8 @@ Triage and fix a GitHub issue following `.agents/skills/issue-fixer/SKILL.md`:
 - Real delta specs when a capability contract changes; `skip_specs: true` only for docs/tooling with no spec delta
 - Draft PR only when the tip has **real** commits ahead of `main` — never empty bootstrap
 - Implement only in the working tree — do **not** auto-commit or auto-push fix commits
+- Every pause after uncommitted skill edits: print a Suggested Conventional Commits subject (skill Handoff commit
+  message); do not steer to Cursor sparkle for that handoff
 - Split deferred work via create-issue (`sub-of` vs `linked`)
 
 Do not mark the PR ready.
