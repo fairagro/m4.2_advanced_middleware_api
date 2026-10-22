@@ -14,8 +14,8 @@ Issue: [#5](https://github.com/fairagro/m4.2_middleware_devinfra/issues/5).
   failure (no stash/improvise); dirty on the PR head is OK. Then triage unresolved threads (**any** author) **and**
   `summary_only_findings` from finder reviews (Copilot suppressed packing **and** `/code-review` marked COMMENT bodies —
   not only the latest submission).
-- Two phases when anything is `fix`: local fixes + dismiss/follow-up replies first (**no commit**); `Fixed in <sha>`
-  only after the user commits.
+- Two phases when anything is `fix`: local fixes + dismiss/follow-up replies first (**no commit**); Phase-1 pause MUST
+  include a Suggested Conventional Commits subject for the dirty tree; `Fixed in <sha>` only after the user commits.
 - In **product** repos: do not `fix` paths on [`synced-paths.yaml`](synced-paths.yaml); `follow-up` to Devinfra or
   `dismiss` (synced — upstream) instead.
 - Follow-ups open via [`/create-issue`](create-issue.md): **linked** by default; `relation: sub-of #<issue_number>` only

@@ -15,4 +15,5 @@ not re-triage resolved threads.
 
 Read and follow `.agents/skills/review-fixer/SKILL.md` (first hard gate: `m42-ai review-open` before triage; stop on
 checkout failure). Use `docs/ai_review_policy.md` as the decision source of truth. Do not commit or push. When fixes
-need a SHA, pause for the user to commit, then post `Fixed in <sha>.` replies.
+need a SHA, pause for the user to commit with a Suggested Conventional Commits subject, then post `Fixed in <sha>.`
+replies.

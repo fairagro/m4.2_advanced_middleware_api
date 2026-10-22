@@ -39,6 +39,14 @@ repos:
         language: system
         stages: [commit-msg]
 
+      - id: commit-path-check
+        name: commit path check (feat/fix vs staged paths)
+        # Requires commit-msg stage (same install as commitlint). Rejects feat/fix on
+        # OpenSpec-planning-only, archive/spec-sync-only, or test-only indexes (#320).
+        entry: bash scripts/commit-path-check.sh
+        language: system
+        stages: [commit-msg]
+
       - id: ggshield
         name: ggshield secret scan
         # Fleet CLI via scripts/run-quality-cli.sh (no product pyproject dep required)
