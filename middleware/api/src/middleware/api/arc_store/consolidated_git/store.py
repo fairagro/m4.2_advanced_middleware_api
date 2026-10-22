@@ -67,7 +67,8 @@ class ConsolidatedGitArcStore(ArcStore):
         super().__init__()
         self._config = config
         self._doc_store = doc_store
-        self._executor = concurrent.futures.ThreadPoolExecutor(max_workers=self._config.max_workers)
+        # One blocking Git call at a time in this process.
+        self._executor = concurrent.futures.ThreadPoolExecutor(max_workers=1)
 
     @override
     async def shutdown(self) -> None:

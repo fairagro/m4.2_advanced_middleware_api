@@ -10,7 +10,7 @@ from unittest.mock import MagicMock, PropertyMock, patch
 
 import pytest
 from git.exc import GitCommandError
-from pydantic import SecretStr
+from pydantic import SecretStr, ValidationError
 
 from middleware.api.arc_store.consolidated_git import ConsolidatedGitConfig
 from middleware.api.arc_store.git_cli_settings import GitCliSettings, GitContextConfig
@@ -101,6 +101,27 @@ def test_git_repo_context_config_embeds_token_once(tmp_path: Path) -> None:
     assert repo_url == "https://oauth2:secret-token@gitlab.example.com/mygroup/arc123.git"
     assert "secret-token" not in str(ctx_config.repo_url)
     assert repo_url.count("oauth2:") == 1
+
+
+def test_max_workers_is_deprecated_and_unknown_keys_are_rejected(
+    caplog: pytest.LogCaptureFixture,
+    tmp_path: Path,
+) -> None:
+    """A set ``max_workers`` warns and is ignored. Any other unknown key fails validation."""
+    with caplog.at_level("WARNING"):
+        config = GitRepoConfig(
+            url="https://gitlab.example.com",
+            group="mygroup",
+            cache_dir=tmp_path / "git_cache",
+            max_workers=10,
+        )
+    assert "max_workers is deprecated and ignored" in caplog.text
+    repo = GitRepo(config)
+    assert repo._executor._max_workers == 1
+    repo._executor.shutdown(wait=False, cancel_futures=True)
+
+    with pytest.raises(ValidationError):
+        GitCliSettings.model_validate({"not_a_setting": 1})
 
 
 def test_authenticated_repo_url_skips_already_embedded_credentials() -> None:

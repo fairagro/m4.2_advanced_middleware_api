@@ -52,7 +52,8 @@ class GitRepo(ArcStore):
         """Initialize GitRepo."""
         super().__init__()
         self._config = config
-        self._executor = concurrent.futures.ThreadPoolExecutor(max_workers=self._config.max_workers)
+        # One blocking Git call at a time in this process.
+        self._executor = concurrent.futures.ThreadPoolExecutor(max_workers=1)
 
         # Initialize RemoteGitProvider
         token = self._config.token.get_secret_value() if self._config.token else None

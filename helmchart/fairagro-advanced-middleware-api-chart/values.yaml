@@ -12,7 +12,6 @@ config:
   #   git_repo:
   #     url: https://datahub-dev.ipk-gatersleben.de
   #     group: FAIRagro-advanced-middleware-dev
-  #     max_workers: 10
   #     rdi_gitlab_topics:
   #       bonares: bonares
   #       edal: "e!DAL"
@@ -167,6 +166,8 @@ celery:
   worker:
     enabled: true
     replicaCount: 1
+    # Prefork child processes. This is the harvest/finalize throughput knob.
+    # --pool=threads is unsupported (one event loop per worker process).
     concurrency: 4
     persistence:
       enabled: true

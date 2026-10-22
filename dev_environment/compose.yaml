@@ -59,12 +59,14 @@ services:
       - COUCHDB_PASSWORD
     volumes:
       - ./middleware-api-config.yaml:/run/secrets/middleware-api-config:ro
-    # Command to run celery worker
+    # Prefork only. --pool=threads is unsupported (one event loop per process).
+    # --concurrency is the harvest/finalize throughput knob.
     command: [
       "/api/middleware-api/middleware-api",
       "celery",
       "-A", "middleware.api.worker.celery_app:celery_app",
       "worker",
+      "--pool=prefork",
       "--loglevel=info",
       "--concurrency=8",]
     restart: unless-stopped

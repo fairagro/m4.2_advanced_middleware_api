@@ -269,6 +269,7 @@ def worker_process(
                 "-A",
                 _CELERY_APP,
                 "worker",
+                "--pool=prefork",
                 "--concurrency=2",
                 "--loglevel=info",
             ],
