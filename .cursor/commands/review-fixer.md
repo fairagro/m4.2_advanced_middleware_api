@@ -15,7 +15,8 @@ suppressed findings (Copilot “Suppressed comments” **and** `/code-review` ma
 not re-triage resolved threads.
 
 **Two phases when anything is `fix`:** (1) local fixes + immediate dismiss/follow-up replies — **no commit**; pause for
-your commit. (2) after you commit, `Fixed in <sha>.` + resolve. Dismiss/follow-up-only runs finish in phase 1.
+your commit with a Suggested Conventional Commits subject. (2) after you commit, `Fixed in <sha>.` + resolve.
+Dismiss/follow-up-only runs finish in phase 1.
 
 **Input:** PR number or URL, optional review permalink, or pasted comments. After a pause, “continue” / a SHA resumes
 phase 2.

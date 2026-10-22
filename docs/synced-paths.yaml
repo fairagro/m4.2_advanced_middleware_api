@@ -52,6 +52,7 @@ allow:
   - scripts/run-import-linter.sh
   - scripts/run-quality-cli.sh
   - scripts/load-quality-path-env.sh
+  - scripts/commit-path-check.sh
   - scripts/quality-tools-pins.txt
   - scripts/run-uv-audit.sh
   - scripts/run-helm-lint.sh
