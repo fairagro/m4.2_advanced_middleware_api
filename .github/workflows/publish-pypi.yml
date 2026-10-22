@@ -1,6 +1,6 @@
 # Product-local PyPI / TestPyPI publish (Devinfra reusable-release does not publish wheels).
 # Packages: fairagro-middleware-shared, fairagro-middleware-api-client,
-# fairagro-middleware-arc-validation.
+# fairagro-middleware-arc-validation, fairagro-middleware-api-local-offline.
 name: Publish PyPI
 
 on:
@@ -40,6 +40,7 @@ jobs:
           - fairagro-middleware-shared
           - fairagro-middleware-api-client
           - fairagro-middleware-arc-validation
+          - fairagro-middleware-api-local-offline
     steps:
       - name: Check publish credentials
         id: creds

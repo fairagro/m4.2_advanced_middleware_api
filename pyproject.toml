@@ -7,6 +7,7 @@ requires-python = ">=3.12"
 dependencies = [
   "api",
   "fairagro-middleware-api-client",
+  "fairagro-middleware-api-local-offline",
   "fairagro-middleware-arc-validation",
   "fairagro-middleware-shared",
 ]
@@ -37,6 +38,7 @@ dev = [
 [tool.uv.sources]
 api = { workspace = true }
 fairagro-middleware-api-client = { workspace = true }
+fairagro-middleware-api-local-offline = { workspace = true }
 fairagro-middleware-shared = { workspace = true }
 fairagro-middleware-arc-validation = { workspace = true }
 
@@ -44,6 +46,7 @@ fairagro-middleware-arc-validation = { workspace = true }
 members = [
     "middleware/api",
     "middleware/api_client",
+    "middleware/api_local_offline",
     "middleware/arc_validation",
     "middleware/shared",
     "middleware/tools",
