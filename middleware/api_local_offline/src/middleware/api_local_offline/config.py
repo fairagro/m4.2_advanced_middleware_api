@@ -3,11 +3,12 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Annotated, ClassVar
+from typing import Annotated, ClassVar, Self, cast
 
 from pydantic import ConfigDict, Field, field_validator
 
 from middleware.shared.config.config_base import ConfigBase
+from middleware.shared.config.config_wrapper import ConfigWrapper
 
 # Reject production stack keys if someone points the stand-in at a full API config.
 _FORBIDDEN_TOP_LEVEL_KEYS = frozenset({
@@ -42,9 +43,16 @@ class LocalOfflineConfig(ConfigBase):
         return value
 
     @classmethod
-    def from_data(cls, data: dict) -> LocalOfflineConfig:
-        """Load config and reject production Middleware API config keys."""
-        unknown_forbidden = sorted(_FORBIDDEN_TOP_LEVEL_KEYS.intersection(data))
+    def from_config_wrapper(cls, wrapper: ConfigWrapper) -> Self:
+        """Load config and reject production Middleware API config keys.
+
+        Runs for both ``from_data`` and ``from_yaml_file`` (CLI path), so the clear
+        refusal message is not bypassed by the base YAML loader.
+        """
+        unwrapped = wrapper.unwrap()
+        if not isinstance(unwrapped, dict):
+            raise TypeError("local offline config must unwrap to a mapping")
+        unknown_forbidden = sorted(_FORBIDDEN_TOP_LEVEL_KEYS.intersection(unwrapped))
         if unknown_forbidden:
             raise ValueError("local offline stand-in refuses production config keys: " + ", ".join(unknown_forbidden))
-        return super().from_data(data)
+        return cast(Self, cls.model_validate(unwrapped))

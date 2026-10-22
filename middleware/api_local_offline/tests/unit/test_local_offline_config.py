@@ -29,6 +29,16 @@ def test_from_data_rejects_celery_and_arc_store_keys() -> None:
         })
 
 
+def test_from_yaml_file_rejects_production_keys(tmp_path: Path) -> None:
+    path = tmp_path / "mixed.yaml"
+    path.write_text(
+        "output_root: /data/arcs\ncouchdb:\n  url: http://x\n",
+        encoding="utf-8",
+    )
+    with pytest.raises(ValueError, match="refuses production config keys"):
+        LocalOfflineConfig.from_yaml_file(path)
+
+
 def test_extra_forbid_rejects_unknown_key() -> None:
     with pytest.raises(ValidationError):
         LocalOfflineConfig.model_validate({"output_root": "/data/arcs", "not_a_setting": 1})
