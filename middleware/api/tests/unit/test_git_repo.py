@@ -495,7 +495,7 @@ async def test_get_arc_cleanup_os_error(git_repo: GitRepo) -> None:
     with (
         patch("middleware.api.arc_store.git_repo.store.GitContext") as mock_ctx,
         patch("middleware.api.arc_store.git_repo.store.ARC") as mock_arc,
-        patch("middleware.api.arc_store.git_repo.store.shutil.rmtree") as mock_rmtree,
+        patch("middleware.api.arc_store.executor_shutdown.shutil.rmtree") as mock_rmtree,
         patch("asyncio.get_running_loop") as mock_get_loop,
     ):
         mock_loop = MagicMock()

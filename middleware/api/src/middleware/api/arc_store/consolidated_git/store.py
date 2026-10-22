@@ -25,6 +25,11 @@ from middleware.api.arc_store.consolidated_git.catalog_jsonld import normalize_c
 from middleware.api.arc_store.consolidated_git.catalog_materialize import materialize_catalog_dataset
 from middleware.api.arc_store.consolidated_git.catalog_serialize import extract_catalog_dataset, write_catalog_file
 from middleware.api.arc_store.consolidated_git.config import ConsolidatedGitConfig
+from middleware.api.arc_store.executor_shutdown import (
+    EXECUTOR_SHUTDOWN_TIMEOUT_S,
+    remove_ephemeral_workdir,
+    shutdown_executor,
+)
 from middleware.api.arc_store.git_cache_cleanup import CATALOG_FINALIZE_PREFIX, reclaim_stale_git_cache_dirs
 from middleware.api.arc_store.git_cli_settings import GitContextConfig
 from middleware.api.arc_store.git_context import (
@@ -67,8 +72,8 @@ class ConsolidatedGitArcStore(ArcStore):
 
     @override
     async def shutdown(self) -> None:
-        """Shut down the thread-pool executor."""
-        self._executor.shutdown(wait=False, cancel_futures=True)
+        """Cancel unstarted Git work and wait a bounded time for work that has started."""
+        shutdown_executor(self._executor, timeout_s=EXECUTOR_SHUTDOWN_TIMEOUT_S)
 
     @override
     def _check_health(self) -> bool:
@@ -166,7 +171,7 @@ class ConsolidatedGitArcStore(ArcStore):
             written = True
         finally:
             if not written:
-                shutil.rmtree(payload_dir, ignore_errors=True)
+                remove_ephemeral_workdir(payload_dir)
         return catalog_path
 
     def _publish_catalog_file(self, rdi: str, catalog_path: Path) -> bool:
@@ -194,7 +199,7 @@ class ConsolidatedGitArcStore(ArcStore):
                         raise ArcStoreError(detail) from exc
                     raise ArcStoreError(f"Git failure publishing {filename}: {detail}") from exc
         finally:
-            shutil.rmtree(temp_dir, ignore_errors=True)
+            remove_ephemeral_workdir(temp_dir)
 
     async def _collect_catalog_datasets(
         self,
@@ -294,7 +299,7 @@ class ConsolidatedGitArcStore(ArcStore):
         except Exception as exc:
             raise ArcStoreError(f"Failed to publish catalog for RDI {rdi}: {exc}") from exc
         finally:
-            shutil.rmtree(catalog_path.parent, ignore_errors=True)
+            remove_ephemeral_workdir(catalog_path.parent)
 
         logger.info(
             "Finalized catalog for RDI %s (%d datasets, %d skipped, pushed=%s)",
