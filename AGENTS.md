@@ -96,10 +96,10 @@ uv run pytest middleware/api_client/tests/unit/ -v
 # Quality checks (synced fragments — see docs/quality.md)
 uv run ruff check --config ruff.toml middleware/
 uv run ruff format --check --diff --config ruff.toml middleware/
-export MYPYPATH=middleware/api/src:middleware/api_client/src:middleware/arc_validation/src:middleware/shared/src:middleware/api/tests/unit:middleware/api_client/tests/unit:middleware/arc_validation/tests/unit:middleware/shared/tests
+export MYPYPATH=middleware/api/src:middleware/api_client/src:middleware/api_local_offline/src:middleware/arc_validation/src:middleware/shared/src:middleware/api/tests/unit:middleware/api_client/tests/unit:middleware/api_local_offline/tests/unit:middleware/arc_validation/tests/unit:middleware/shared/tests
 uv run mypy --config-file mypy.ini middleware/
 uv run pylint --rcfile .pylintrc \
-  --source-roots=middleware/api/src,middleware/api/tests/unit,middleware/api_client/tests/unit,middleware/arc_validation/src,middleware/arc_validation/tests/unit,middleware/shared/tests \
+  --source-roots=middleware/api/src,middleware/api/tests/unit,middleware/api_client/tests/unit,middleware/api_local_offline/src,middleware/api_local_offline/tests/unit,middleware/arc_validation/src,middleware/arc_validation/tests/unit,middleware/shared/tests \
   middleware/
 uv run bandit -r middleware/ -c .bandit -ll
 
@@ -323,7 +323,8 @@ Before generating or modifying code, read the relevant specs:
   CouchDB storage, content-hash + harvest-scoped idempotency, Celery dispatch. Shared by both upload endpoints and
   accessible from the worker context.
 - **[`openspec/specs/arc-store/`](openspec/specs/arc-store/)** — `ArcStore` Git-backend interface: `GitRepo` (primary),
-  error classification, and credential injection.
+  error classification, and credential injection. Filesystem persistence for the local offline stand-in lives in
+  `fairagro-middleware-api-local-offline` (see change `local-api-offline-profile`).
 - **[`openspec/specs/document-store/`](openspec/specs/document-store/)** — CouchDB persistence layer,
   race-condition-safe initialization, and content-hash idempotency.
 - **[`openspec/specs/arc-content-hash/`](openspec/specs/arc-content-hash/)** — RO-Crate canonicalization contract for
@@ -367,6 +368,7 @@ mode) use it to locate affected code.
 | --------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `openspec/specs/arc-manager/`           | `middleware/api/src/middleware/api/business_logic/arc_manager.py`, `middleware/api/src/middleware/api/business_logic/rdi_comments.py`; `middleware/api/src/middleware/api/rdi_registry.py`          |
 | `openspec/specs/arc-store/`             | `middleware/api/src/middleware/api/arc_store/git_repo/`, `consolidated_git/`, `factory.py`, `resolution.py`, `arc_store_config.py`, `git_cli_settings.py`, `git_context.py`, `git_cache_cleanup.py` |
+| `local-offline-profile` (change)        | `middleware/api_local_offline/` (`fairagro-middleware-api-local-offline`)                                                                                                                           |
 | `openspec/specs/url-str/`               | `middleware/shared/src/middleware/shared/security/url_str.py`, `url_redact.py`                                                                                                                      |
 | `openspec/specs/document-store/`        | `middleware/api/src/middleware/api/document_store/couchdb_client.py`, `couchdb.py`                                                                                                                  |
 | `openspec/specs/arc-content-hash/`      | `middleware/api/src/middleware/api/document_store/content_hash.py`                                                                                                                                  |
