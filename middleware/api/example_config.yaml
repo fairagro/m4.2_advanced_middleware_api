@@ -10,7 +10,6 @@ arc_store:
   git_repo:
     url: https://datahub-dev.ipk-gatersleben.de
     group: FAIRagro-advanced-middleware-integration-tests
-    max_workers: 5
     rdi_gitlab_topics:
       bonares: bonares
       edal: "e!DAL"

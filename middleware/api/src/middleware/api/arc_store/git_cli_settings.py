@@ -39,7 +39,6 @@ class GitCliSettings(BaseModel):
     token: Annotated[SecretStr | None, Field(description="Auth token for HTTPS remotes")] = None
     user_name: Annotated[str, Field(description="Git user.name")] = "Middleware API"
     user_email: Annotated[str, Field(description="Git user.email")] = "middleware@fairagro.net"
-    max_workers: Annotated[int, Field(description="Max threads for git operations", ge=1)] = 5
     command_timeout: Annotated[float | None, Field(description="Timeout (s) for git commands")] = None
     http_low_speed_limit: Annotated[int | None, Field(description="http.lowSpeedLimit in bytes/sec")] = None
     http_low_speed_time: Annotated[int | None, Field(description="http.lowSpeedTime in seconds")] = None

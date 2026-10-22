@@ -75,6 +75,7 @@ spec:
             - -A
             - middleware.api.worker.celery_app:celery_app
             - worker
+            - --pool=prefork
             - --loglevel=info
             - --concurrency={{ .Values.celery.worker.concurrency }}
           {{- with .Values.celery.worker.livenessProbe }}
