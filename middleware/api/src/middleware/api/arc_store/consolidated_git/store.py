@@ -62,7 +62,7 @@ class ConsolidatedGitArcStore(ArcStore):
         super().__init__()
         self._config = config
         self._doc_store = doc_store
-        # One blocking Git call at a time. Throughput is Celery prefork --concurrency.
+        # One blocking Git call at a time in this process.
         self._executor = concurrent.futures.ThreadPoolExecutor(max_workers=1)
 
     @override

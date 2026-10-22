@@ -52,7 +52,7 @@ class GitRepo(ArcStore):
         """Initialize GitRepo."""
         super().__init__()
         self._config = config
-        # One blocking Git call at a time. Throughput is Celery prefork --concurrency.
+        # One blocking Git call at a time in this process.
         self._executor = concurrent.futures.ThreadPoolExecutor(max_workers=1)
 
         # Initialize RemoteGitProvider

@@ -35,10 +35,10 @@ def _celery_retries_exhausted(task: Task) -> bool:
 class BusinessLogicManager:
     """Manages a single, long-lived BusinessLogic instance per worker process.
 
-    Celery prefork is the supported pool (``--pool=prefork``, one task per child).
-    ``--pool=threads`` is unsupported: this class owns one event loop per process,
-    and concurrent tasks on that loop are unsafe. Harvest and finalize throughput
-    is ``--concurrency``. Each task runs in a regular (non-async) thread.
+    Celery prefork is the supported pool (``--pool=prefork``): each child process
+    runs one task at a time and owns one event loop. ``--pool=threads`` is
+    unsupported because concurrent ``run_until_complete()`` calls on that loop
+    are unsafe. Harvest and finalize throughput is ``--concurrency``.
     Rather than connecting to CouchDB on every task invocation, this class
     owns a persistent event loop and a persistent CouchDB connection that are
     created once and reused across all tasks in the process lifetime.
