@@ -57,13 +57,46 @@ def test_publish_catalog_file_removes_ephemeral_clone(
     with (
         patch("middleware.api.arc_store.consolidated_git.store.tempfile.mkdtemp", return_value=str(work_dir)),
         patch("middleware.api.arc_store.consolidated_git.store.GitContext", return_value=ctx_instance),
-        patch("middleware.api.arc_store.consolidated_git.store.shutil.rmtree") as mock_rmtree,
+        patch("middleware.api.arc_store.executor_shutdown.shutil.rmtree") as mock_rmtree,
     ):
         pushed = store._publish_catalog_file("edal", catalog_path)
 
     assert pushed is True
     assert (work_dir / "edal.json").read_bytes() == b"[]\n"
-    mock_rmtree.assert_called_once_with(work_dir, ignore_errors=True)
+    mock_rmtree.assert_called_once_with(work_dir)
+
+
+def test_publish_catalog_file_logs_failed_workdir_delete(
+    consolidated_config: ConsolidatedGitConfig,
+    tmp_path: Path,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """A failed ephemeral-workdir delete is a warning and does not change the publish result."""
+    store = ConsolidatedGitArcStore(consolidated_config, MagicMock())
+    work_dir = tmp_path / "catalog_finalize_work"
+    work_dir.mkdir()
+    catalog_path = tmp_path / "edal.json"
+    catalog_path.write_bytes(b"[]\n")
+
+    ctx_instance = MagicMock()
+    ctx_instance.path = str(work_dir)
+    ctx_instance.__enter__.return_value = ctx_instance
+    ctx_instance.commit_and_push.return_value = True
+
+    with (
+        patch("middleware.api.arc_store.consolidated_git.store.tempfile.mkdtemp", return_value=str(work_dir)),
+        patch("middleware.api.arc_store.consolidated_git.store.GitContext", return_value=ctx_instance),
+        patch(
+            "middleware.api.arc_store.executor_shutdown.shutil.rmtree",
+            side_effect=OSError("workdir busy"),
+        ),
+        caplog.at_level("WARNING"),
+    ):
+        pushed = store._publish_catalog_file("edal", catalog_path)
+
+    assert pushed is True
+    assert "workdir busy" in caplog.text
+    assert str(work_dir) in caplog.text
 
 
 def test_publish_catalog_file_rejects_unsafe_rdi(
@@ -108,7 +141,7 @@ def test_publish_catalog_file_push_conflict_is_transient(
     with (
         patch("middleware.api.arc_store.consolidated_git.store.tempfile.mkdtemp", return_value=str(work_dir)),
         patch("middleware.api.arc_store.consolidated_git.store.GitContext", return_value=ctx_instance),
-        patch("middleware.api.arc_store.consolidated_git.store.shutil.rmtree"),
+        patch("middleware.api.arc_store.executor_shutdown.shutil.rmtree"),
         pytest.raises(ArcStoreTransientError) as raised,
     ):
         store._publish_catalog_file("edal", catalog_path)

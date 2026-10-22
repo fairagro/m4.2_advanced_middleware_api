@@ -16,6 +16,11 @@ from git.exc import GitCommandError
 from opentelemetry import context
 
 from middleware.api.arc_store import ArcStore
+from middleware.api.arc_store.executor_shutdown import (
+    EXECUTOR_SHUTDOWN_TIMEOUT_S,
+    remove_ephemeral_workdir,
+    shutdown_executor,
+)
 from middleware.api.arc_store.git_cache_cleanup import GIT_REPO_SYNC_PREFIX, reclaim_stale_git_cache_dirs
 from middleware.api.arc_store.git_cli_settings import GitContextConfig
 from middleware.api.arc_store.git_context import (
@@ -37,12 +42,7 @@ P = ParamSpec("P")
 
 
 def _cleanup_workdir(local_path: Path) -> None:
-    if not local_path.exists():
-        return
-    try:
-        shutil.rmtree(local_path)
-    except OSError as e:
-        logger.warning("Failed to clean up local path %s: %s", local_path, e)
+    remove_ephemeral_workdir(local_path)
 
 
 class GitRepo(ArcStore):
@@ -78,8 +78,8 @@ class GitRepo(ArcStore):
         return await loop.run_in_executor(self._executor, _wrapper)
 
     async def shutdown(self) -> None:
-        """Shut down the thread-pool executor, cancelling any pending futures."""
-        self._executor.shutdown(wait=False, cancel_futures=True)
+        """Cancel unstarted Git work and wait a bounded time for work that has started."""
+        shutdown_executor(self._executor, timeout_s=EXECUTOR_SHUTDOWN_TIMEOUT_S)
         logger.debug("GitRepo thread-pool executor shut down")
 
     def _check_health(self) -> bool:
