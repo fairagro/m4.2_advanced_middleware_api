@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 from collections import Counter
+from pathlib import Path
 
 from middleware.shared.api_models.common.rocrate import extract_identifier
 from middleware.shared.json_types import CatalogDatasetRecord, JsonValue, RoCrateContent
@@ -99,3 +100,8 @@ def serialize_catalog_file(datasets: list[CatalogDatasetRecord]) -> bytes:
     ]
     text = json.dumps(ordered, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
     return (text + "\n").encode("utf-8")
+
+
+def write_catalog_file(datasets: list[CatalogDatasetRecord], path: Path) -> None:
+    """Write canonical catalog bytes to ``path`` (same bytes as ``serialize_catalog_file``)."""
+    path.write_bytes(serialize_catalog_file(datasets))

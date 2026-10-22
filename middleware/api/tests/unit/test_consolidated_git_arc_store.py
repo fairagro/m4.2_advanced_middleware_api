@@ -14,6 +14,7 @@ from rocrate_fixtures import minimal_rocrate_dict
 from middleware.api.arc_store import ArcStoreError, ArcStoreTransientError, CatalogFinalizeResult
 from middleware.api.arc_store.consolidated_git import ConsolidatedGitArcStore, ConsolidatedGitConfig
 from middleware.shared.config.logging import install_url_userinfo_redaction
+from middleware.shared.json_types import CatalogDatasetRecord
 
 
 @pytest.fixture
@@ -37,14 +38,16 @@ def doc_store() -> MagicMock:
     return store
 
 
-def test_publish_catalog_bytes_removes_ephemeral_clone(
+def test_publish_catalog_file_removes_ephemeral_clone(
     consolidated_config: ConsolidatedGitConfig,
     tmp_path: Path,
 ) -> None:
-    """``_publish_catalog_bytes`` always deletes its temp working directory."""
+    """``_publish_catalog_file`` always deletes its temp working directory."""
     store = ConsolidatedGitArcStore(consolidated_config, MagicMock())
     work_dir = tmp_path / "catalog_finalize_work"
     work_dir.mkdir()
+    catalog_path = tmp_path / "edal.json"
+    catalog_path.write_bytes(b"[]\n")
 
     ctx_instance = MagicMock()
     ctx_instance.path = str(work_dir)
@@ -55,16 +58,15 @@ def test_publish_catalog_bytes_removes_ephemeral_clone(
         patch("middleware.api.arc_store.consolidated_git.store.tempfile.mkdtemp", return_value=str(work_dir)),
         patch("middleware.api.arc_store.consolidated_git.store.GitContext", return_value=ctx_instance),
         patch("middleware.api.arc_store.executor_shutdown.shutil.rmtree") as mock_rmtree,
-        patch("middleware.api.arc_store.consolidated_git.store.Path.exists", return_value=False),
-        patch("middleware.api.arc_store.consolidated_git.store.Path.write_bytes"),
     ):
-        pushed = store._publish_catalog_bytes("edal", b"[]\n")
+        pushed = store._publish_catalog_file("edal", catalog_path)
 
     assert pushed is True
+    assert (work_dir / "edal.json").read_bytes() == b"[]\n"
     mock_rmtree.assert_called_once_with(work_dir)
 
 
-def test_publish_catalog_bytes_logs_failed_workdir_delete(
+def test_publish_catalog_file_logs_failed_workdir_delete(
     consolidated_config: ConsolidatedGitConfig,
     tmp_path: Path,
     caplog: pytest.LogCaptureFixture,
@@ -73,6 +75,8 @@ def test_publish_catalog_bytes_logs_failed_workdir_delete(
     store = ConsolidatedGitArcStore(consolidated_config, MagicMock())
     work_dir = tmp_path / "catalog_finalize_work"
     work_dir.mkdir()
+    catalog_path = tmp_path / "edal.json"
+    catalog_path.write_bytes(b"[]\n")
 
     ctx_instance = MagicMock()
     ctx_instance.path = str(work_dir)
@@ -86,29 +90,31 @@ def test_publish_catalog_bytes_logs_failed_workdir_delete(
             "middleware.api.arc_store.executor_shutdown.shutil.rmtree",
             side_effect=OSError("workdir busy"),
         ),
-        patch("middleware.api.arc_store.consolidated_git.store.Path.exists", return_value=False),
-        patch("middleware.api.arc_store.consolidated_git.store.Path.write_bytes"),
         caplog.at_level("WARNING"),
     ):
-        pushed = store._publish_catalog_bytes("edal", b"[]\n")
+        pushed = store._publish_catalog_file("edal", catalog_path)
 
     assert pushed is True
     assert "workdir busy" in caplog.text
     assert str(work_dir) in caplog.text
 
 
-def test_publish_catalog_bytes_rejects_unsafe_rdi(consolidated_config: ConsolidatedGitConfig) -> None:
+def test_publish_catalog_file_rejects_unsafe_rdi(
+    consolidated_config: ConsolidatedGitConfig,
+    tmp_path: Path,
+) -> None:
     """RDI must be a single safe filename segment (same charset as known_rdis)."""
     store = ConsolidatedGitArcStore(consolidated_config, MagicMock())
+    catalog_path = tmp_path / "unused.json"
     with pytest.raises(ArcStoreError, match="Invalid RDI for catalog filename"):
-        store._publish_catalog_bytes("../etc/passwd", b"[]\n")
+        store._publish_catalog_file("../etc/passwd", catalog_path)
     with pytest.raises(ArcStoreError, match="Invalid RDI for catalog filename"):
-        store._publish_catalog_bytes("edal/nested", b"[]\n")
+        store._publish_catalog_file("edal/nested", catalog_path)
     with pytest.raises(ArcStoreError, match="Invalid RDI for catalog filename"):
-        store._publish_catalog_bytes("", b"[]\n")
+        store._publish_catalog_file("", catalog_path)
 
 
-def test_publish_catalog_bytes_push_conflict_is_transient(
+def test_publish_catalog_file_push_conflict_is_transient(
     consolidated_config: ConsolidatedGitConfig,
     tmp_path: Path,
 ) -> None:
@@ -116,6 +122,8 @@ def test_publish_catalog_bytes_push_conflict_is_transient(
     store = ConsolidatedGitArcStore(consolidated_config, MagicMock())
     work_dir = tmp_path / "catalog_finalize_work"
     work_dir.mkdir()
+    catalog_path = tmp_path / "edal.json"
+    catalog_path.write_bytes(b"[]\n")
 
     ctx_instance = MagicMock()
     ctx_instance.path = str(work_dir)
@@ -134,11 +142,9 @@ def test_publish_catalog_bytes_push_conflict_is_transient(
         patch("middleware.api.arc_store.consolidated_git.store.tempfile.mkdtemp", return_value=str(work_dir)),
         patch("middleware.api.arc_store.consolidated_git.store.GitContext", return_value=ctx_instance),
         patch("middleware.api.arc_store.executor_shutdown.shutil.rmtree"),
-        patch("middleware.api.arc_store.consolidated_git.store.Path.exists", return_value=False),
-        patch("middleware.api.arc_store.consolidated_git.store.Path.write_bytes"),
         pytest.raises(ArcStoreTransientError) as raised,
     ):
-        store._publish_catalog_bytes("edal", b"[]\n")
+        store._publish_catalog_file("edal", catalog_path)
 
     message = str(raised.value)
     assert "secret-token" not in message
@@ -154,16 +160,21 @@ async def test_finalize_loads_arcs_from_couchdb(
     """Finalize rebuilds catalog bytes from CouchDB ARC bodies."""
     store = ConsolidatedGitArcStore(consolidated_config, doc_store)
 
-    with patch.object(store, "_publish_catalog_bytes", return_value=False) as mock_publish:
+    published: dict[str, bytes] = {}
+
+    def _publish(_rdi: str, path: Path) -> bool:
+        published["bytes"] = path.read_bytes()
+        return False
+
+    with patch.object(store, "_publish_catalog_file", side_effect=_publish):
         outcome = await store.finalize(rdi="edal")
 
     assert outcome.pushed is False
     assert outcome.dataset_count >= 1
     assert outcome.skipped == ()
     doc_store.iter_arc_contents_by_rdi.assert_called_once_with("edal")
-    mock_publish.assert_called_once()
-    catalog_bytes = mock_publish.call_args[0][1]
-    assert catalog_bytes.startswith(b"[")
+    assert published["bytes"].startswith(b"[")
+    assert not list(consolidated_config.cache_dir.glob("catalog_finalize_*"))
 
 
 @pytest.mark.asyncio
@@ -242,16 +253,21 @@ async def test_finalize_partial_push_skips_bad_arc_keeps_good(
     doc_store.iter_arc_contents_by_rdi = MagicMock(side_effect=_iter_arcs)
     store = ConsolidatedGitArcStore(consolidated_config, doc_store)
 
-    with patch.object(store, "_publish_catalog_bytes", return_value=True) as mock_publish:
+    published: dict[str, bytes] = {}
+
+    def _publish(_rdi: str, path: Path) -> bool:
+        published["bytes"] = path.read_bytes()
+        return True
+
+    with patch.object(store, "_publish_catalog_file", side_effect=_publish):
         outcome = await store.finalize(rdi="edal")
 
     assert outcome.pushed is True
     assert outcome.dataset_count == 1
     assert len(outcome.skipped) == 1
     assert outcome.skipped[0][0] == "bad-arc"
-    catalog_bytes = mock_publish.call_args[0][1]
-    assert b"DS-GOOD" in catalog_bytes
-    assert b"Broken context" not in catalog_bytes
+    assert b"DS-GOOD" in published["bytes"]
+    assert b"Broken context" not in published["bytes"]
 
 
 @pytest.mark.asyncio
@@ -269,7 +285,7 @@ async def test_finalize_all_arcs_fail_refuses_empty_wipe(
     store = ConsolidatedGitArcStore(consolidated_config, doc_store)
 
     with (
-        patch.object(store, "_publish_catalog_bytes") as mock_publish,
+        patch.object(store, "_publish_catalog_file") as mock_publish,
         pytest.raises(ArcStoreError, match="refusing to publish an empty catalog"),
     ):
         await store.finalize(rdi="edal")
@@ -292,13 +308,71 @@ async def test_finalize_empty_rdi_still_publishes_empty_catalog(
     doc_store.iter_arc_contents_by_rdi = MagicMock(side_effect=_iter_arcs)
     store = ConsolidatedGitArcStore(consolidated_config, doc_store)
 
-    with patch.object(store, "_publish_catalog_bytes", return_value=True) as mock_publish:
+    published: dict[str, bytes] = {}
+
+    def _publish(_rdi: str, path: Path) -> bool:
+        published["bytes"] = path.read_bytes()
+        return True
+
+    with patch.object(store, "_publish_catalog_file", side_effect=_publish):
         outcome = await store.finalize(rdi="edal")
 
     assert outcome.pushed is True
     assert outcome.dataset_count == 0
     assert outcome.skipped == ()
-    assert mock_publish.call_args[0][1].strip() == b"[]"
+    assert published["bytes"].strip() == b"[]"
+
+
+@pytest.mark.asyncio
+async def test_finalize_clears_datasets_before_publish(
+    consolidated_config: ConsolidatedGitConfig,
+    doc_store: MagicMock,
+) -> None:
+    """The Dataset list is empty once publish starts, while the file still holds the bytes."""
+    store = ConsolidatedGitArcStore(consolidated_config, doc_store)
+    held: list[list[CatalogDatasetRecord]] = []
+    real_collect = store._collect_catalog_datasets
+
+    async def _collect(rdi: str) -> tuple[list[CatalogDatasetRecord], list[tuple[str, str]], int]:
+        datasets, skipped, seen = await real_collect(rdi)
+        held.append(datasets)
+        return datasets, skipped, seen
+
+    def _publish(_rdi: str, path: Path) -> bool:
+        assert held[0] == []
+        assert path.is_file()
+        assert path.read_bytes().startswith(b"[")
+        return True
+
+    with (
+        patch.object(store, "_collect_catalog_datasets", new=_collect),
+        patch.object(store, "_publish_catalog_file", side_effect=_publish),
+    ):
+        outcome = await store.finalize(rdi="edal")
+
+    assert outcome.dataset_count >= 1
+    assert outcome.pushed is True
+
+
+@pytest.mark.asyncio
+async def test_finalize_removes_serialized_catalog_when_publish_fails(
+    consolidated_config: ConsolidatedGitConfig,
+    doc_store: MagicMock,
+) -> None:
+    """A publish error still deletes the serialized catalog directory."""
+    store = ConsolidatedGitArcStore(consolidated_config, doc_store)
+
+    def _publish(_rdi: str, path: Path) -> bool:
+        assert path.is_file()
+        raise ArcStoreError("git down")
+
+    with (
+        patch.object(store, "_publish_catalog_file", side_effect=_publish),
+        pytest.raises(ArcStoreError, match="git down"),
+    ):
+        await store.finalize(rdi="edal")
+
+    assert not list(consolidated_config.cache_dir.glob("catalog_finalize_*"))
 
 
 def test_check_health_file_url_without_existing_path(tmp_path: Path) -> None:

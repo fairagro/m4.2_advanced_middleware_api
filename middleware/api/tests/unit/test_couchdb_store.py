@@ -24,6 +24,14 @@ def config() -> CouchDBConfig:
     return CouchDBConfig(url="http://test:5984", user="user", password=SecretStr("pass"))
 
 
+def test_catalog_list_page_size_default_stays_500() -> None:
+    """Operators can lower the page size; the default stays 500."""
+    field = CouchDBConfig.model_fields["catalog_list_page_size"]
+    assert field.default == 500
+    assert CouchDBConfig(url="http://test:5984").catalog_list_page_size == 500
+    assert "Lower this under memory pressure" in (field.description or "")
+
+
 @pytest.fixture
 def mock_client_instance() -> MagicMock:
     """Create a mock client instance."""
