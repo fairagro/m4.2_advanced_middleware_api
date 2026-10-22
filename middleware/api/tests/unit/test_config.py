@@ -24,7 +24,6 @@ def _git_repo(tmp_path: Path, group: str = "g") -> dict[str, str | dict[str, str
     return {
         "url": repo_dir.as_uri(),
         "group": group,
-        "path": str(repo_dir),
         "rdi_gitlab_topics": {
             "valid-rdi": "valid-rdi",
             "rdi.123": "rdi.123",
@@ -223,7 +222,6 @@ def test_config_from_yaml_file_success(tmp_path: Path) -> None:
           git_repo:
             url: {tmp_path.as_uri()}
             group: my-group
-            path: {tmp_path}
         couchdb:
           url: http://localhost:5984
         celery:
