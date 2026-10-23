@@ -83,7 +83,7 @@ jobs:
 
       - name: Install uv
         if: steps.creds.outputs.skip != 'true'
-        uses: astral-sh/setup-uv@v10.3.1
+        uses: astral-sh/setup-uv@v10.3.2
         with:
           version: ${{ steps.uv-version.outputs.version }}
 
