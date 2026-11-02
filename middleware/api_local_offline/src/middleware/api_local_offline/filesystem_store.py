@@ -32,17 +32,16 @@ class FilesystemArcStore:
         """Configured output root (resolved)."""
         return self._output_root
 
-    def resolve_arc_dir(self, arc_id: str, *, identifier: str | None = None) -> Path:
-        """Return a directory path under the output root for this ARC."""
-        base_real = Path(os.path.realpath(self._output_root))
-        candidates: list[str] = []
-        if identifier is not None and identifier.strip():
-            candidates.append(os.path.basename(identifier.strip()))
-        candidates.append(os.path.basename(arc_id.strip()) if arc_id.strip() else "")
+    def resolve_arc_dir(self, arc_id: str) -> Path:
+        """Return a directory under the output root keyed by *arc_id* (production id).
 
-        for name in candidates:
-            if not name or name in {".", ".."} or not _SAFE_NAME_PATTERN.match(name):
-                continue
+        Directory names follow ``calculate_arc_id(identifier, rdi)``, not the ARC
+        identifier basename, so distinct RDI/identifier pairs do not collide when
+        they share a basename (e.g. DOI suffix).
+        """
+        base_real = Path(os.path.realpath(self._output_root))
+        name = os.path.basename(arc_id.strip()) if arc_id.strip() else ""
+        if name and name not in {".", ".."} and _SAFE_NAME_PATTERN.match(name):
             candidate = Path(os.path.realpath(base_real / name))
             if str(candidate).startswith(str(base_real) + os.sep):
                 return candidate
@@ -54,10 +53,7 @@ class FilesystemArcStore:
         """Write *arc* under the output root. Returns True when a write completed."""
         _ = rdi
         self._output_root.mkdir(parents=True, exist_ok=True)
-        identifier = getattr(arc, "Identifier", None)
-        if not isinstance(identifier, str):
-            identifier = None
-        target = self.resolve_arc_dir(arc_id, identifier=identifier)
+        target = self.resolve_arc_dir(arc_id)
         try:
             target.mkdir(parents=True, exist_ok=True)
             await start_as_task(arc.WriteAsync(str(target)))
