@@ -51,6 +51,12 @@ Run the API locally:
 uv run uvicorn middleware.api.main:app --reload
 ```
 
+### Local offline stand-in (ARC on disk)
+
+For consumer tests without CouchDB/RabbitMQ/DataHUB, use the separate PyPI package
+[`fairagro-middleware-api-local-offline`](../api_local_offline/README.md) (`middleware-api-local-offline` CLI). It is
+not part of the production API process.
+
 ## Deployment
 
 The API is containerized using Docker and is built as a standalone binary with PyInstaller within an Alpine Linux
