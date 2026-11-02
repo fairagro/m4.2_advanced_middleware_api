@@ -71,6 +71,36 @@ async def test_live_and_harvest_lifecycle_writes_disk(offline_app: tuple[FastAPI
 
 
 @pytest.mark.asyncio
+async def test_get_patch_and_standalone_arc_helpers(offline_app: tuple[FastAPI, Path]) -> None:
+    """Cover GET harvest, PATCH FAILED/CANCELLED, and standalone POST /v3/arcs."""
+    app, output_root = offline_app
+    transport = ASGITransport(app=app)
+    async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
+        created = await client.post("/v3/harvests", json={"rdi": "publisso"})
+        assert created.status_code == 200
+        harvest_id = created.json()["harvest_id"]
+
+        fetched = await client.get(f"/v3/harvests/{harvest_id}")
+        assert fetched.status_code == 200
+        assert HarvestResult.model_validate(fetched.json()).status.value == "RUNNING"
+
+        failed = await client.patch(f"/v3/harvests/{harvest_id}", json={"status": "FAILED"})
+        assert failed.status_code == 200
+        assert HarvestResult.model_validate(failed.json()).status.value == "FAILED"
+
+        other = await client.post("/v3/harvests", json={"rdi": "publisso"})
+        other_id = other.json()["harvest_id"]
+        cancelled = await client.patch(f"/v3/harvests/{other_id}", json={"status": "CANCELLED"})
+        assert cancelled.status_code == 200
+        assert HarvestResult.model_validate(cancelled.json()).status.value == "CANCELLED"
+
+        standalone = await client.post("/v3/arcs", json={"rdi": "publisso", "arc": _MINIMAL_ARC})
+        assert standalone.status_code == 200
+        assert ArcResult.model_validate(standalone.json()).arc_id
+        assert any(output_root.iterdir()), "standalone upload must write ARC before success"
+
+
+@pytest.mark.asyncio
 async def test_disk_write_failure_is_server_error(
     offline_app: tuple[FastAPI, Path], monkeypatch: pytest.MonkeyPatch
 ) -> None:
