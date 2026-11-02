@@ -1,0 +1,5 @@
+# Local offline Middleware stand-in (no CouchDB / Celery / Git).
+# Usage:
+#   middleware-api-local-offline --config middleware/api_local_offline/example_config.yaml
+log_level: INFO
+output_root: /data/arcs
