@@ -8,11 +8,14 @@ on:
   workflow_dispatch:
     inputs:
       version_bump:
-        description: 'Version bump type for Helm chart release'
+        description: >-
+          Chart version bump: auto = Conventional Commits via git-cliff;
+          or explicit major / minor / patch
         required: true
-        default: 'patch'
+        default: 'auto'
         type: choice
         options:
+          - auto
           - major
           - minor
           - patch
