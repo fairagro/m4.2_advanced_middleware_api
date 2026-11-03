@@ -103,8 +103,11 @@ jobs:
           rm -rf dist
           uv build --package "${{ matrix.package }}" --out-dir dist
           # Fail closed if pretend version was ignored (would produce +g… local versions).
+          # PEP 427: {dist}-{ver}(-{build})?-{py}-{abi}-{plat}.whl — do not rsplit('-',3)[1]
+          # (that yields the python tag). Dist names use underscores, so one '-' before version.
           wheel="$(ls dist/*.whl)"
-          ver="$(python3 -c "import pathlib,sys; print(pathlib.Path(sys.argv[1]).name.rsplit('-', 3)[1])" "$wheel")"
+          # Single-line -c: multiline python inside YAML `run: |` trips "Implicit keys…" linters.
+          ver="$(python3 -c "import pathlib,sys; s=pathlib.Path(sys.argv[1]).name.removesuffix('.whl'); print(s.rsplit('-',3)[0].split('-',1)[1])" "$wheel")"
           expected="${{ inputs.pep440_version }}"
           if [[ "$ver" != "$expected" ]]; then
             echo "::error::Built version '${ver}' != pep440_version '${expected}'" >&2
