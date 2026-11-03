@@ -137,6 +137,12 @@ default and may be omitted there.
 
 ### Trivy: licenses vs vulnerabilities
 
+**Binary pin:** `reusable-check.yml` (Licence Check + Security Check) and `reusable-release.yml` (release-body license
+scan) pass `version:` into `aquasecurity/trivy-action` from the **caller** checkout’s `versions.env` (`TRIVY_VERSION`),
+fail closed if missing — same SoT as the Dev Container / Renovate CLI pin. The Action **SHA** pin is independent:
+bumping `TRIVY_VERSION` moves the scanned binary without waiting for a new Action release. Products that temporarily
+vendor `reusable-check-local.yml` should mirror this wiring when syncing.
+
 - **Licences (report-only):** `reusable-check` **Licence Check** still runs Trivy `scanners: license` and uploads a JSON
   artifact, but **does not fail** the job on findings (Alpine base GPL / `restricted` is expected). When
   `reusable-release` creates a GitHub Release, it re-scans each component image and appends an **Image licenses
