@@ -95,11 +95,21 @@ jobs:
       - name: Build package
         if: steps.creds.outputs.skip != 'true'
         env:
-          HATCH_VCS_PRETEND_VERSION: ${{ inputs.pep440_version }}
+          # hatch-vcs → setuptools_scm; only SETUPTOOLS_SCM_PRETEND_VERSION is honored
+          # (HATCH_VCS_PRETEND_VERSION is a no-op and yields dirty local versions on PyPI).
+          SETUPTOOLS_SCM_PRETEND_VERSION: ${{ inputs.pep440_version }}
         run: |
           set -euo pipefail
           rm -rf dist
           uv build --package "${{ matrix.package }}" --out-dir dist
+          # Fail closed if pretend version was ignored (would produce +g… local versions).
+          wheel="$(ls dist/*.whl)"
+          ver="$(python3 -c "import pathlib,sys; print(pathlib.Path(sys.argv[1]).name.rsplit('-', 3)[1])" "$wheel")"
+          expected="${{ inputs.pep440_version }}"
+          if [[ "$ver" != "$expected" ]]; then
+            echo "::error::Built version '${ver}' != pep440_version '${expected}'" >&2
+            exit 1
+          fi
 
       - name: Publish to PyPI
         if: steps.creds.outputs.skip != 'true' && inputs.release_type == 'final'
