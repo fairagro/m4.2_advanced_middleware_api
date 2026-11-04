@@ -4,7 +4,10 @@
 #   - Alpine apk pins via ARG defaults (fleet style B):
 #       ARG CA_CERTIFICATES_VERSION=20260611-r0
 #       RUN apk add --no-cache "ca-certificates=${CA_CERTIFICATES_VERSION}"
-#     ARG NAME maps to apk package by stripping _VERSION, lower-casing, '_' → '-'.
+#     Resolve apk package name (in order):
+#       1) ARG → strip _VERSION, lower-case, '_' → '-' (e.g. CA_CERTIFICATES → ca-certificates)
+#       2) If that name is missing from APKINDEX: first "pkg=${ARG}" / pkg=${ARG} usage in the Dockerfile
+#       3) Else optional override map (e.g. LIBSTDCXX_VERSION → libstdc++ when '+' cannot be in an ARG name)
 #   - Inline pip-style pins in the Dockerfile: name==X.Y.Z (from PyPI)
 #
 # Does NOT edit versions.env / .python-version (Devinfra Renovate + sync SoT).
@@ -95,11 +98,66 @@ arg_name_to_apk_pkg() {
   printf '%s' "$base" | tr '[:upper:]' '[:lower:]' | tr '_' '-'
 }
 
-TMP_DIR="$(mktemp -d)"
-trap 'rm -rf "$TMP_DIR"' EXIT
+# When the ARG→pkg transform cannot spell the real apk name (e.g. '+').
+declare -A APK_PKG_OVERRIDES=(
+  [LIBSTDCXX_VERSION]="libstdc++"
+)
+
+# First apk package referenced as "pkg=${ARG}" or pkg=${ARG} in the Dockerfile.
+apk_pkg_from_usage() {
+  local dockerfile="$1" arg="$2"
+  local hit
+  hit="$(grep -oE "\"[^\"]+=\\$\\{${arg}\\}\"" "$dockerfile" 2>/dev/null | head -1 || true)"
+  if [[ -n "$hit" ]]; then
+    hit="${hit#\"}"
+    hit="${hit%\"}"
+    printf '%s' "${hit%%=*}"
+    return 0
+  fi
+  hit="$(grep -oE "[a-zA-Z0-9_+:.-]+=\\$\\{${arg}\\}" "$dockerfile" 2>/dev/null | head -1 || true)"
+  if [[ -n "$hit" ]]; then
+    printf '%s' "${hit%%=*}"
+    return 0
+  fi
+  return 1
+}
+
+# Prefer derived name when present in APKINDEX; else Dockerfile usage; else override map.
+resolve_apk_pkg() {
+  local dockerfile="$1" arg_name="$2"
+  local derived usage override
+
+  derived="$(arg_name_to_apk_pkg "$arg_name")"
+  if latest_apk_version "$derived" >/dev/null 2>&1; then
+    printf '%s' "$derived"
+    return 0
+  fi
+
+  usage="$(apk_pkg_from_usage "$dockerfile" "$arg_name" || true)"
+  if [[ -n "$usage" ]] && latest_apk_version "$usage" >/dev/null 2>&1; then
+    printf '%s' "$usage"
+    return 0
+  fi
+
+  override="${APK_PKG_OVERRIDES[$arg_name]:-}"
+  if [[ -n "$override" ]] && latest_apk_version "$override" >/dev/null 2>&1; then
+    printf '%s' "$override"
+    return 0
+  fi
+
+  if [[ -n "$usage" ]]; then
+    printf '%s' "$usage"
+  elif [[ -n "$override" ]]; then
+    printf '%s' "$override"
+  else
+    printf '%s' "$derived"
+  fi
+  return 1
+}
 
 declare -A PKG_VERSIONS=()
 LOADED_ALPINE_MINOR=""
+TMP_DIR=""
 
 parse_apkindex() {
   local index_file="$1"
@@ -185,9 +243,12 @@ update_one_dockerfile() {
     current="${BASH_REMATCH[2]}"
     [[ "$arg_name" == *_VERSION ]] || continue
 
-    pkg="$(arg_name_to_apk_pkg "$arg_name")"
+    if ! pkg="$(resolve_apk_pkg "$dockerfile" "$arg_name")"; then
+      echo "ERROR: ${arg_name} → apk '${pkg}' not in APKINDEX (Alpine ${alpine_minor})" >&2
+      failed=1
+      continue
+    fi
     latest="$(latest_apk_version "$pkg" || true)"
-
     if [[ -z "$latest" ]]; then
       echo "ERROR: ${arg_name} → apk '${pkg}' not in APKINDEX (Alpine ${alpine_minor})" >&2
       failed=1
@@ -230,17 +291,27 @@ update_one_dockerfile() {
   echo "Done: ${dockerfile} (no .bak; roll back with git if needed)"
 }
 
-LIST_FILE="${TMP_DIR}/dockerfiles.txt"
-resolve_dockerfiles "$@" >"$LIST_FILE"
-mapfile -t DOCKERFILES <"$LIST_FILE"
-if ((${#DOCKERFILES[@]} == 0)); then
-  echo "ERROR: no Dockerfiles to update" >&2
-  exit 1
-fi
-OVERALL=0
-for DOCKERFILE in "${DOCKERFILES[@]}"; do
-  if ! update_one_dockerfile "$DOCKERFILE"; then
-    OVERALL=1
+main() {
+  TMP_DIR="$(mktemp -d)"
+  trap 'rm -rf "$TMP_DIR"' EXIT
+
+  local list_file="${TMP_DIR}/dockerfiles.txt"
+  resolve_dockerfiles "$@" >"$list_file"
+  local dockerfiles=()
+  mapfile -t dockerfiles <"$list_file"
+  if ((${#dockerfiles[@]} == 0)); then
+    echo "ERROR: no Dockerfiles to update" >&2
+    exit 1
   fi
-done
-exit "$OVERALL"
+  local overall=0 dockerfile
+  for dockerfile in "${dockerfiles[@]}"; do
+    if ! update_one_dockerfile "$dockerfile"; then
+      overall=1
+    fi
+  done
+  exit "$overall"
+}
+
+if [[ "${BASH_SOURCE[0]}" == "$0" ]]; then
+  main "$@"
+fi

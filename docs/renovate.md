@@ -188,9 +188,11 @@ ARG CA_CERTIFICATES_VERSION=20260611-r0
 RUN apk add --no-cache "ca-certificates=${CA_CERTIFICATES_VERSION}"
 ```
 
-`ARG FOO_BAR_VERSION` maps to apk package `foo-bar`. Do **not** use inline literals `pkg=X.Y.Z-rN` (style A) — the
-updater fails loud if it finds them. Toolchain pins (`PYTHON_VERSION`, …) stay in `versions.env`, not as apk ARG
-defaults.
+`ARG FOO_BAR_VERSION` maps to apk package `foo-bar` when that name exists in APKINDEX. If the derived name is missing
+(e.g. `LIBSTDCXX_VERSION` → `libstdcxx`), the updater resolves the package from the first `"pkg=${ARG}"` / `pkg=${ARG}`
+usage in the same Dockerfile, then from a small override map (`LIBSTDCXX_VERSION` → `libstdc++`). Do **not** use inline
+literals `pkg=X.Y.Z-rN` (style A) — the updater fails loud if it finds them. Toolchain pins (`PYTHON_VERSION`, …) stay
+in `versions.env`, not as apk ARG defaults.
 
 For those pins, run the synced helper:
 
