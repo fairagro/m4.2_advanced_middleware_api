@@ -65,7 +65,8 @@ Update the health check routes to properly monitor CouchDB using the unified cli
 ### Automated Tests
 
 - Run `uv run pytest middleware/api/tests/unit` to ensure existing logic still works with the consolidated client.
-- Test the health check endpoint `/v1/health` and `/v2/health` to confirm `couchdb_reachable` reports correctly.
+- Test the health check endpoint `/v3/health` (and legacy `/v1/health` / `/v2/health` if still enabled) to confirm
+  dependency reachability reports correctly.
 
 ### Manual Verification
 

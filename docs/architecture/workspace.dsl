@@ -37,7 +37,7 @@ workspace "FAIRagro Advanced Middleware API" "Architecture of the FAIRagro Advan
 
                 # ── API Layer ─────────────────────────────────────────────────
 
-                v1Router = component "API v1 Router" "Deprecated system endpoints only: GET /v1/whoami, GET /v1/liveness, and GET /v1/health. POST /v1/arcs and GET /v1/tasks have been removed." "FastAPI APIRouter"
+                v1Router = component "API v1 Router" "Deprecated compatibility system endpoints only: GET /v1/whoami, GET /v1/liveness, and GET /v1/health. Prefer /v3 equivalents. POST /v1/arcs and GET /v1/tasks have been removed." "FastAPI APIRouter"
 
                 v2Router = component "API v2 Router" "Task-based async ARC submission. POST /v2/arcs returns task_id immediately; clients poll GET /v2/tasks/{id} for the SUCCESS/FAILURE status." "FastAPI APIRouter"
 
@@ -45,7 +45,7 @@ workspace "FAIRagro Advanced Middleware API" "Architecture of the FAIRagro Advan
 
                 v3HarvestRouter = component "API v3 Harvest Router" "Harvest lifecycle management. Supports create, list, get, complete, cancel, and bulk ARC submission within a harvest run." "FastAPI APIRouter"
 
-                v3SystemRouter = component "API v3 System Router" "Health check endpoints: GET /v3/liveness, /v3/readiness, /v3/health." "FastAPI APIRouter"
+                v3SystemRouter = component "API v3 System Router" "System endpoints: GET /v3/whoami, /v3/liveness, /v3/readiness, /v3/health." "FastAPI APIRouter"
 
                 # ── Business Logic ────────────────────────────────────────────
 

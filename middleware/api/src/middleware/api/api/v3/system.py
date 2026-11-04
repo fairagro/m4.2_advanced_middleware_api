@@ -3,18 +3,44 @@
 from http import HTTPStatus
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, Response
+from fastapi import APIRouter, Depends, Request, Response
 
-from middleware.api.api.common.dependencies import get_accept_type, get_health_service
+from middleware.api.api.common.dependencies import (
+    CommonApiDependencies,
+    get_accept_type,
+    get_client_id,
+    get_common_deps,
+    get_health_service,
+)
 from middleware.api.health_service import ApiHealthService
 from middleware.shared.api_models.v3.models import (
     HealthResponse,
     LivenessResponse,
     ReadinessResponse,
     StatusResponse,
+    WhoamiResponse,
 )
 
 router = APIRouter(prefix="/v3", tags=["v3", "system"])
+
+
+@router.get("/whoami", response_model=WhoamiResponse)
+async def whoami(
+    request: Request,
+    deps: Annotated[CommonApiDependencies, Depends(get_common_deps)],
+    client_id: Annotated[str | None, Depends(get_client_id)],
+    _: Annotated[None, Depends(get_accept_type)],
+) -> WhoamiResponse:
+    """Identify the current client and authorized RDIs."""
+    authorized_rdis = await deps.get_authorized_rdis(request)
+    known_rdis = deps.get_known_rdis()
+    accessible_rdis = list(set(authorized_rdis) & set(known_rdis))
+
+    return WhoamiResponse(
+        client_id=client_id,
+        message="Client authenticated successfully",
+        accessible_rdis=accessible_rdis,
+    )
 
 
 @router.get("/liveness", response_model=LivenessResponse)

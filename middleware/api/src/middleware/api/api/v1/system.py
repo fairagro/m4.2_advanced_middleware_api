@@ -21,14 +21,19 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/v1", tags=["v1", "system"], deprecated=True)
 
 
-@router.get("/whoami", response_model=v1_models.WhoamiResponse)
+@router.get(
+    "/whoami",
+    response_model=v1_models.WhoamiResponse,
+    deprecated=True,
+    summary="Identify client (deprecated — use GET /v3/whoami)",
+)
 async def whoami(
     request: Request,
     deps: Annotated[CommonApiDependencies, Depends(get_common_deps)],
     client_id: Annotated[str | None, Depends(get_client_id)],
     _: Annotated[None, Depends(get_accept_type)],
 ) -> v1_models.WhoamiResponse:
-    """Identify the current client and authorized RDIs."""
+    """Identify the current client and authorized RDIs. Prefer ``GET /v3/whoami``."""
     authorized_rdis = await deps.get_authorized_rdis(request)
     known_rdis = deps.get_known_rdis()
     accessible_rdis = list(set(authorized_rdis) & set(known_rdis))
@@ -40,21 +45,31 @@ async def whoami(
     )
 
 
-@router.get("/liveness", response_model=v1_models.LivenessResponse)
+@router.get(
+    "/liveness",
+    response_model=v1_models.LivenessResponse,
+    deprecated=True,
+    summary="Liveness probe (deprecated — use GET /v3/liveness)",
+)
 async def liveness(
     _: Annotated[None, Depends(get_accept_type)],
 ) -> v1_models.LivenessResponse:
-    """Perform a simple liveness check."""
+    """Perform a simple liveness check. Prefer ``GET /v3/liveness``."""
     return v1_models.LivenessResponse()
 
 
-@router.get("/health", response_model=v1_models.HealthResponse)
+@router.get(
+    "/health",
+    response_model=v1_models.HealthResponse,
+    deprecated=True,
+    summary="Health check (deprecated — use GET /v3/health or /v3/readiness)",
+)
 async def health_check(
     response: Response,
     bl: Annotated[BusinessLogic, Depends(get_business_logic)],
     _: Annotated[None, Depends(get_accept_type)],
 ) -> v1_models.HealthResponse:
-    """Detailed health check for v1."""
+    """Detailed health check for v1. Prefer ``GET /v3/health`` / ``GET /v3/readiness``."""
     services = await bl.health_check()
     is_healthy = all(services.values())
 

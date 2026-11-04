@@ -58,4 +58,4 @@ EXPOSE ${UVICORN_PORT}
 ENTRYPOINT ["/api/middleware-api/middleware-api"]
 
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
-  CMD ["sh", "-c", "curl -f http://127.0.0.1:${UVICORN_PORT}/v1/liveness"]
+  CMD ["sh", "-c", "curl -f http://127.0.0.1:${UVICORN_PORT}/v3/liveness"]
