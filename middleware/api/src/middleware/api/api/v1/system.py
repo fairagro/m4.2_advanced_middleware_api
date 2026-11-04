@@ -50,11 +50,12 @@ async def whoami(
     response_model=v1_models.LivenessResponse,
     deprecated=True,
     summary="Liveness probe (deprecated — use GET /v3/liveness)",
+    description=("Returns `{message}` only. Prefer `GET /v3/liveness`, which returns `{status, services}` instead."),
 )
 async def liveness(
     _: Annotated[None, Depends(get_accept_type)],
 ) -> v1_models.LivenessResponse:
-    """Perform a simple liveness check. Prefer ``GET /v3/liveness``."""
+    """Return simple liveness (`{message}`). Prefer ``/v3/liveness`` (`{status, services}`)."""
     return v1_models.LivenessResponse()
 
 
@@ -63,13 +64,18 @@ async def liveness(
     response_model=v1_models.HealthResponse,
     deprecated=True,
     summary="Health check (deprecated — use GET /v3/health or /v3/readiness)",
+    description=(
+        "Returns `{status, rabbitmq_reachable}` only. Prefer `GET /v3/readiness` / "
+        "`GET /v3/health`, which expose a `services` map and split readiness from "
+        "global health."
+    ),
 )
 async def health_check(
     response: Response,
     bl: Annotated[BusinessLogic, Depends(get_business_logic)],
     _: Annotated[None, Depends(get_accept_type)],
 ) -> v1_models.HealthResponse:
-    """Detailed health check for v1. Prefer ``GET /v3/health`` / ``GET /v3/readiness``."""
+    """Return v1 health (`rabbitmq_reachable`). Prefer ``/v3/readiness`` / ``/v3/health``."""
     services = await bl.health_check()
     is_healthy = all(services.values())
 

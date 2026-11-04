@@ -181,5 +181,9 @@ openssl s_client \
 **Expected successful response:**
 
 ```json
-{"client_id":"chart-example-client","message":"Client authenticated successfully"}
+{
+  "client_id": "chart-example-client",
+  "message": "Client authenticated successfully",
+  "accessible_rdis": ["example-rdi"]
+}
 ```
