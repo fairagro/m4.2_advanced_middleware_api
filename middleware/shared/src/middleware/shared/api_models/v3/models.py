@@ -55,6 +55,15 @@ class HealthResponse(BaseStatusResponse):
     """Response model for global health checks."""
 
 
+class WhoamiResponse(ApiResponse):
+    """Response model for whoami operation."""
+
+    accessible_rdis: Annotated[
+        list[str],
+        Field(description="List of Research Data Infrastructures the client is authorized for"),
+    ]
+
+
 class SubmitHarvestArcRequest(BaseModel):
     """Request model for submitting an ARC within an ongoing harvest run.
 

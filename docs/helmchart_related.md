@@ -149,7 +149,7 @@ Now that the service is hopefully up and running in the dev container, you can t
 #### Basic liveness check (no client certificate required)
 
 ```bash
-curl -k -H "Host: ${FQDN}" https://$(minikube ip)/v1/liveness
+curl -k -H "Host: ${FQDN}" https://$(minikube ip)/v3/liveness
 ```
 
 #### mTLS authentication test
@@ -161,14 +161,14 @@ curl -k \
     --resolve ${FQDN}:443:$(minikube ip) \
     --cert helmchart/fairagro-advanced-middleware-api-chart/client.crt \
     --key helmchart/fairagro-advanced-middleware-api-chart/client.key \
-     https://${FQDN}/v1/whoami
+     https://${FQDN}/v3/whoami
 ```
 
 **✅ Use OpenSSL instead** (this works reliably):
 
 ```bash
 # Method 2: Using OpenSSL (recommended for mTLS)
-echo -e "GET /v1/whoami HTTP/1.1\r\nHost: ${FQDN}\r\nAccept: application/json\r\nConnection: close\r\n\r\n" | \
+echo -e "GET /v3/whoami HTTP/1.1\r\nHost: ${FQDN}\r\nAccept: application/json\r\nConnection: close\r\n\r\n" | \
 openssl s_client \
     -connect $(minikube ip):443 \
     -cert helmchart/fairagro-advanced-middleware-api-chart/client.crt \
@@ -181,5 +181,9 @@ openssl s_client \
 **Expected successful response:**
 
 ```json
-{"client_id":"chart-example-client","message":"Client authenticated successfully"}
+{
+  "client_id": "chart-example-client",
+  "message": "Client authenticated successfully",
+  "accessible_rdis": ["example-rdi"]
+}
 ```
