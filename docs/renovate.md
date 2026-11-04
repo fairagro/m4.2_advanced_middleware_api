@@ -86,20 +86,26 @@ It is independent of `NODE_VERSION` (Node tarball). Bump npm in Devinfra via Ren
 product checkouts.
 
 **Grouping (`versions.env` SoT):** updates that touch `versions.env` / `.python-version` are split so one stale branch
-cannot abort the whole toolchain (#316):
+cannot abort the whole toolchain (#316 / Dependency Dashboard #80):
 
-| Group                            | Contents                                                                                          |
-| -------------------------------- | ------------------------------------------------------------------------------------------------- |
-| `versions.env mirrored npm pins` | `prettier` / `markdownlint-cli2` in `package.json` / lock **and** their `versions.env` regex pins |
-| `versions.env uv pin`            | `UV_VERSION` only (keeps `vulnerabilityAlerts` uv bumps off the daily CLI mega-branch)            |
-| `versions.env CLI pins`          | Remaining `versions.env` / `.python-version` pins (CLIs, Node, OpenSpec, Renovate, …)             |
+| Group                            | Contents                                                                                              |
+| -------------------------------- | ----------------------------------------------------------------------------------------------------- |
+| `versions.env mirrored npm pins` | `prettier` / `markdownlint-cli2` in `package.json` / lock **and** their `versions.env` regex pins     |
+| `versions.env uv pin`            | `UV_VERSION` only (keeps `vulnerabilityAlerts` uv bumps off the daily CLI mega-branch)                |
+| `versions.env runtime pins`      | `python` (incl. `.python-version`), `node`, `npm`, `alpine`, `pip`, `pyinstaller`, Dev Container base |
+| `versions.env CLI pins`          | Remaining `versions.env` tool pins (kubectl/helm/trivy/…, OpenSpec, Renovate CLI, …)                  |
 
-All three use **`recreateWhen: always`** so Renovate recreates the group branch from base instead of patching an
-inconsistent branch (`Cannot find replaceString` / `update failure`). Mirrored npm stays one group so Prettier /
-markdownlint SoT cannot diverge from the lockfile. `NPM_VERSION` / `RENOVATE_VERSION` / `OPENSPEC_VERSION` live only in
-`versions.env` (not in `package.json`) and stay in the CLI-pins group. Other managers (Actions, Dockerfiles outside
-those files) keep their own groups. Product Renovate still has those synced files **disabled** (bump in Devinfra, then
-sync).
+All four use **`recreateWhen: always`** so Renovate recreates the group branch from base instead of patching an
+inconsistent branch (`Cannot find replaceString` / `update failure`). The former single “CLI pins” mega-branch mixed
+runtime + tool bumps and failed when a mid-group replace missed an already-updated string (#80). Mirrored npm stays one
+group so Prettier / markdownlint SoT cannot diverge from the lockfile. `NPM_VERSION` lives in the **runtime** group;
+`RENOVATE_VERSION` / `OPENSPEC_VERSION` stay in the CLI-pins group (not in `package.json`).
+
+**Symlink:** `.devcontainer/.env` → `versions.env` is Compose SoT only. It is listed in Renovate `ignorePaths` so the
+regex managers do not scan the same pin file twice via the symlink (duplicate Detection / double apply).
+
+Other managers (Actions, Dockerfiles outside those files) keep their own groups. Product Renovate still has those synced
+files **disabled** (bump in Devinfra, then sync).
 
 From the repo root (no PR creation):
 
