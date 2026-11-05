@@ -1,5 +1,6 @@
 """Harvest report models and serializers (format-neutral counting API)."""
 
+from middleware.shared.report.distribution_version import read_distribution_version
 from middleware.shared.report.formats.base import ReportSerializer
 from middleware.shared.report.formats.jsonld import FAIRAGRO_HARVEST_REPORT_NS, JsonLdReportSerializer
 from middleware.shared.report.model import (
@@ -19,4 +20,5 @@ __all__ = [
     "ReportSerializer",
     "RepositoryReport",
     "RepositoryScope",
+    "read_distribution_version",
 ]

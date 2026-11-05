@@ -90,4 +90,9 @@ class JsonLdReportSerializer:
             "fairagro:harvestDurationSeconds": report.duration_seconds,
             "schema:result": [_entry_point(repo) for repo in report.repository_reports],
         }
+        if report.software_version is not None:
+            document["schema:instrument"] = {
+                "@type": "schema:SoftwareApplication",
+                "schema:softwareVersion": report.software_version,
+            }
         return json.dumps(document, indent=2, ensure_ascii=False) + "\n"

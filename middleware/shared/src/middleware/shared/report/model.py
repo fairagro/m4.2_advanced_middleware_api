@@ -207,9 +207,11 @@ class HarvestReport:
         *,
         name: str = "FAIRagro Harvest Run",
         start_time: datetime | None = None,
+        software_version: str | None = None,
     ) -> None:
         """Create a run report and record the authoritative start time."""
         self.name = name
+        self.software_version = software_version
         if start_time is None:
             self._start_time = datetime.now(UTC)
         else:
@@ -217,6 +219,19 @@ class HarvestReport:
         self._end_time: datetime | None = None
         self._scopes: list[RepositoryScope] = []
         self._scopes_lock = threading.Lock()
+
+    @property
+    def software_version(self) -> str | None:
+        """Optional PEP 440 tool/image version for this run (omit on wire when unset)."""
+        return self._software_version
+
+    @software_version.setter
+    def software_version(self, value: str | None) -> None:
+        """Set or clear the software version; empty strings are rejected."""
+        if value is not None and value.strip() == "":
+            msg = "HarvestReport.software_version must be None or a non-empty string"
+            raise ValueError(msg)
+        self._software_version = value
 
     @property
     def start_time(self) -> datetime:
