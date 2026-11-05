@@ -89,6 +89,18 @@ if [ -f "${repo_root}/package-lock.json" ]; then
   npm ci
 fi
 
+# ── gitleaks (pin from versions.env; image usually has it — refresh for pin bumps) ─
+echo "==> Ensure gitleaks matches versions.env"
+if [ -f "${script_dir}/install-gitleaks.sh" ]; then
+  if [ -w /usr/local/bin ] 2>/dev/null; then
+    bash "${script_dir}/install-gitleaks.sh" || echo "WARNING: install-gitleaks failed" >&2
+  else
+    sudo bash "${script_dir}/install-gitleaks.sh" || echo "WARNING: install-gitleaks failed" >&2
+  fi
+else
+  echo "No scripts/install-gitleaks.sh; skipping"
+fi
+
 # ── pre-commit commit-stage + commit-msg hooks ───────────────────────────────
 # Install each hook-type on its own guard: .git persists across Dev Container rebuilds,
 # so a pre-existing pre-commit hook must not skip commit-msg (commitlint) install.

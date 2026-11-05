@@ -4,7 +4,7 @@
 # Apply fixes with ./scripts/quality-fix.sh, then re-run this script.
 #
 # Environment: host or Dev Container (needs `uv`; markdownlint hook needs Node/`npm`;
-# ggshield needs GITGUARDIAN_API_KEY in env). Host clones: run `npm install` once if
+# gitleaks on PATH). Host clones: run `npm install` once if
 # markdownlint-cli2 is not on PATH. In the Dev Container, personal tokens load when
 # /commandhistory exists.
 #
@@ -19,7 +19,7 @@ if [ -d "${repo_root}/.venv/bin" ]; then
   export PATH="${repo_root}/.venv/bin:${PATH}"
 fi
 
-# Optional: Dev Container token store (ggshield). Do not require it on host checkouts.
+# Optional: Dev Container token store (GH_TOKEN). Do not require it on host checkouts.
 if [ -d /commandhistory ]; then
   # shellcheck source=scripts/dev-tokens.sh
   source "${repo_root}/scripts/dev-tokens.sh"

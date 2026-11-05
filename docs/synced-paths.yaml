@@ -60,6 +60,8 @@ allow:
   - scripts/generate-release-changelog.sh
   - scripts/install-git-cliff.sh
   - scripts/install-cst.sh
+  - scripts/install-gitleaks.sh
+  - .gitleaksignore
   - scripts/setup-git-hooks.sh
   - scripts/update-dockerfile-pins.sh
   - scripts/prune-merged-branches.sh

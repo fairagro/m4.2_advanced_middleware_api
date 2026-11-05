@@ -47,10 +47,10 @@ repos:
         language: system
         stages: [commit-msg]
 
-      - id: ggshield
-        name: ggshield secret scan
-        # Fleet CLI via scripts/run-quality-cli.sh (no product pyproject dep required)
-        entry: bash scripts/run-quality-cli.sh ggshield secret scan pre-commit
+      - id: gitleaks
+        name: gitleaks secret scan
+        # Binary from versions.env (Dev Container / scripts/install-gitleaks.sh); no SaaS API key
+        entry: gitleaks protect --staged --verbose
         language: system
         pass_filenames: false
 

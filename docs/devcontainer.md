@@ -123,8 +123,8 @@ ciphertext until that step. Product follow-ups for Jorge’s new key (`A9069D1B�
 [#227](https://github.com/fairagro/m4.2_sql_to_arc/issues/227), harvester
 [#324](https://github.com/fairagro/m4.2_middleware_harvester/issues/324).
 
-Python quality CLIs (ruff, mypy, pylint, bandit, vulture, import-linter, ggshield) for **hooks and reusable CI** come
-from synced [`scripts/quality-tools-pins.txt`](../scripts/quality-tools-pins.txt) via
+Python quality CLIs (ruff, mypy, pylint, bandit, vulture, import-linter) for **hooks and reusable CI** come from synced
+[`scripts/quality-tools-pins.txt`](../scripts/quality-tools-pins.txt) via
 [`scripts/run-quality-cli.sh`](../scripts/run-quality-cli.sh) — products do **not** need them in `pyproject.toml` for
 gates to spawn. IDE extensions **MAY** still use the same tools from the project `.venv` when listed as optional deps.
 `pre-commit`, pytest, and app/runtime deps stay project-owned via `uv`.
@@ -141,14 +141,14 @@ PATH string — Cursor agent shells leave it unexpanded, so `scripts/bin` wrappe
 in the prompt comes from `DEVCONTAINER_REPO_NAME` + synced `.devcontainer/starship.toml` (not from the `.venv` parent
 path, which is always `workspace`).
 
-| Need                            | Shared mechanism                                                                                                                                                                                            |
-| ------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `.venv/bin` + `scripts/bin`     | `remoteEnv.PATH` + `VIRTUAL_ENV=/workspace/.venv` in synced `devcontainer.json`                                                                                                                             |
-| Prompt repo identity            | `DEVCONTAINER_REPO_NAME` + synced [`.devcontainer/starship.toml`](../.devcontainer/starship.toml) (`STARSHIP_CONFIG`)                                                                                       |
-| Short `kubectl` / `docker`      | Synced wrappers [`scripts/bin/k`](../scripts/bin/k) and [`scripts/bin/d`](../scripts/bin/d)                                                                                                                 |
-| Bash completion for `k` / `d`   | Shared image files under `/usr/share/bash-completion/completions/` (rebuild after Dockerfile change)                                                                                                        |
-| Personal tokens                 | Host `GH_TOKEN` / `GITGUARDIAN_API_KEY` via `remoteEnv` `${localEnv:…}`; wrappers load store (non-empty wins) then host; `gh` may prompt; `git` load-only; `set-dev-tokens.sh` **writes** store to override |
-| `.env.integration.enc` → `.env` | Shared postCreate decrypt (writes the file; does **not** auto-`source` into every shell)                                                                                                                    |
+| Need                            | Shared mechanism                                                                                                                                                                    |
+| ------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `.venv/bin` + `scripts/bin`     | `remoteEnv.PATH` + `VIRTUAL_ENV=/workspace/.venv` in synced `devcontainer.json`                                                                                                     |
+| Prompt repo identity            | `DEVCONTAINER_REPO_NAME` + synced [`.devcontainer/starship.toml`](../.devcontainer/starship.toml) (`STARSHIP_CONFIG`)                                                               |
+| Short `kubectl` / `docker`      | Synced wrappers [`scripts/bin/k`](../scripts/bin/k) and [`scripts/bin/d`](../scripts/bin/d)                                                                                         |
+| Bash completion for `k` / `d`   | Shared image files under `/usr/share/bash-completion/completions/` (rebuild after Dockerfile change)                                                                                |
+| Personal tokens                 | Host `GH_TOKEN` via `remoteEnv` `${localEnv:…}`; wrappers load store (non-empty wins) then host; `gh` may prompt; `git` load-only; `set-dev-tokens.sh` **writes** store to override |
+| `.env.integration.enc` → `.env` | Shared postCreate decrypt (writes the file; does **not** auto-`source` into every shell)                                                                                            |
 
 Product-local `scripts/load-env.sh` and `setup-bashrc-load-env.sh` (or inline bashrc `source` lines) are **deprecated**.
 After sync of postCreate + wrappers + JSON, drop them in product adopt follow-ups (tracked from #58 / #65). Optional
@@ -234,8 +234,7 @@ Synced fleet `devcontainer.json` mounts only named volumes (`bashhistory`, `gh-c
 
 Prefer the personal-token helpers (see root README **Personal tokens**):
 
-- Host tokens can arrive via `remoteEnv` `${localEnv:GH_TOKEN}` / `${localEnv:GITGUARDIAN_API_KEY}` (rebuild so this
-  applies)
+- Host tokens can arrive via `remoteEnv` `${localEnv:GH_TOKEN}` (rebuild so this applies)
 - Non-empty store in `/commandhistory/tokens.env` wins over host/process env; otherwise host/process is kept. Default
   loads (`git` wrapper, quality, postCreate) do **not** prompt. `scripts/bin/gh` may prompt on a TTY when `GH_TOKEN` is
   still empty. Empty prompts are **not** persisted as skip markers

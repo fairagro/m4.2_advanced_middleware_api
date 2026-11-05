@@ -1,0 +1,2 @@
+# Fleet allowlist for gitleaks (synced). One fingerprint / path rule per line.
+# Docs: docs/quality.md — prefer fixing real leaks; use this only for documented false positives.

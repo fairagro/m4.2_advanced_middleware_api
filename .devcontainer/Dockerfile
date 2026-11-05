@@ -20,6 +20,7 @@ ARG XQ_VERSION
 ARG YAMLFMT_VERSION
 ARG HADOLINT_VERSION
 ARG CST_VERSION
+ARG GITLEAKS_VERSION
 ARG TRIVY_VERSION
 ARG RENOVATE_VERSION
 ARG GIT_CLIFF_VERSION
@@ -106,6 +107,10 @@ RUN curl -fsSL "https://github.com/GoogleContainerTools/container-structure-test
         -o /usr/local/bin/container-structure-test && \
         chmod +x /usr/local/bin/container-structure-test && \
         ln -sf /usr/local/bin/container-structure-test /usr/local/bin/cst
+
+# ── gitleaks (secret scan; commit-stage + reusable code-quality) ──────────────
+RUN curl -fsSL "https://github.com/gitleaks/gitleaks/releases/download/${GITLEAKS_VERSION}/gitleaks_${GITLEAKS_VERSION#v}_linux_x64.tar.gz" \
+        | tar -xz -C /usr/local/bin gitleaks && chmod +x /usr/local/bin/gitleaks
 
 # ── Trivy ─────────────────────────────────────────────────────────────────────
 RUN curl -fsSL "https://github.com/aquasecurity/trivy/releases/download/${TRIVY_VERSION}/trivy_${TRIVY_VERSION#v}_Linux-64bit.tar.gz" \
