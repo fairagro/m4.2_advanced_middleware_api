@@ -83,15 +83,17 @@ def _collapse_holder_comments(
 
     for comment in comments:
         name = comment.Name
-        if not isinstance(name, str) or not name.strip():
+        if not isinstance(name, str):
             result.append(comment)
             continue
-        existing = index_by_name.get(name)
+        # ISA/ARCtrl also key blank names (``Comment[]``); collapse those under "".
+        key = "" if not name.strip() else name
+        existing = index_by_name.get(key)
         if existing is not None:
             result[existing] = comment
-            collapsed_names.add(name)
+            collapsed_names.add(key if key else "(blank)")
             continue
-        index_by_name[name] = len(result)
+        index_by_name[key] = len(result)
         result.append(comment)
 
     if not collapsed_names:

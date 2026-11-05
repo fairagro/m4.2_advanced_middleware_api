@@ -77,3 +77,21 @@ def test_write_succeeds_after_collapse(tmp_path: Path) -> None:
     out.mkdir()
     arc.Write(str(out))
     assert (out / "isa.investigation.xlsx").is_file()
+
+
+def test_blank_comment_names_collapse_last_wins(tmp_path: Path, caplog: pytest.LogCaptureFixture) -> None:
+    """Empty/whitespace Comment names collapse so ARC.Write succeeds."""
+    arc = ARC.from_arc_investigation(ArcInvestigation.create(identifier="inv-blank", title="T"))
+    arc.Comments.append(Comment.create("", "first"))
+    arc.Comments.append(Comment.create("  ", "second"))
+
+    with caplog.at_level("WARNING"):
+        ensure_unique_comment_names(arc)
+
+    assert len(arc.Comments) == 1
+    assert arc.Comments[0].Value == "second"
+    assert any("blank" in r.message for r in caplog.records)
+    out = tmp_path / "arc"
+    out.mkdir()
+    arc.Write(str(out))
+    assert (out / "isa.investigation.xlsx").is_file()
