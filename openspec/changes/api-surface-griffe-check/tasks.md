@@ -2,15 +2,16 @@
 
 ## 1. Tooling
 
-- [ ] 1.1 Add griffe (or chosen inspector) as a dev dependency and an allowlist config for `api_client` + selected
+- [x] 1.1 Add griffe (or chosen inspector) as a dev dependency and an allowlist config for `api_client` + selected
       `shared` modules (`report`, `security`, ConfigWrapper)
-- [ ] 1.2 Implement a script that diffs allowlisted surface vs `main`, detects breaking changes, scans `main..HEAD` for
+- [x] 1.2 Implement a script that diffs allowlisted surface vs `main`, detects breaking changes, scans `main..HEAD` for
       Conventional Commit breaking markers, and exits non-zero only on undeclared breaks
-- [ ] 1.3 Wire the script into PR code-quality CI and document/local quality entry (hook or `scripts/` command) with the
+- [x] 1.3 Wire the script into PR code-quality CI and document/local quality entry (hook or `scripts/` command) with the
       same behaviour
 
 ## 2. Docs and verification
 
-- [ ] 2.1 Document the gate in `docs/quality.md` (and a one-line review-policy pointer if needed): toolchain-owned;
-      declare break or revert
-- [ ] 2.2 Verify with a fixture or dry-run: undeclared break fails; declared break / additive-only passes
+- [x] 2.1 Document the gate in product-local `docs/api-surface-check.md` (+ surface-quality-bar pointer; synced
+      `docs/quality.md` must not be hand-edited): toolchain-owned; declare break or revert
+- [x] 2.2 Verify with a fixture or dry-run: undeclared break fails; declared break / additive-only passes (regex unit
+      checks + live run vs `main`)

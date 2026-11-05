@@ -1,0 +1,15 @@
+# Public Python packages/modules checked by scripts/check-api-surface.sh (#570).
+# Breaking changes vs main require a Conventional Commit `type!:` or `BREAKING CHANGE:` footer.
+packages:
+  - name: middleware.api_client
+    search_paths:
+      - middleware/api_client/src
+  - name: middleware.shared.report
+    search_paths:
+      - middleware/shared/src
+  - name: middleware.shared.security
+    search_paths:
+      - middleware/shared/src
+  - name: middleware.shared.config.config_wrapper
+    search_paths:
+      - middleware/shared/src
