@@ -19,6 +19,7 @@ from middleware.shared.report import (
     IssueKind,
     JsonLdReportSerializer,
     RepositoryScope,
+    read_distribution_version,
 )
 
 _START = datetime(2026, 5, 6, 14, 0, 0, tzinfo=UTC)
@@ -499,3 +500,48 @@ def test_parallel_rdis_do_not_cross_count() -> None:
     t2.join()
     assert first.snapshot().harvested_datasets == _PARALLEL_HARVESTED
     assert second.snapshot().harvested_datasets == 0
+
+
+def test_software_version_ctor_and_assignment() -> None:
+    """software_version can be set at construction or later; empty string is rejected."""
+    report = HarvestReport(start_time=_START, software_version="1.2.3")
+    assert report.software_version == "1.2.3"
+    report.software_version = "2.0.0"
+    assert report.software_version == "2.0.0"
+    report.software_version = None
+    assert report.software_version is None
+    with pytest.raises(ValueError, match="non-empty"):
+        report.software_version = ""
+    with pytest.raises(ValueError, match="non-empty"):
+        HarvestReport(start_time=_START, software_version="   ")
+
+
+def test_jsonld_omits_instrument_without_software_version() -> None:
+    """Unset software_version leaves schema:instrument out of the document."""
+    report = _finished_report(populate=_open_sample_scope)
+    document = json.loads(JsonLdReportSerializer().render(report))
+    assert "schema:instrument" not in document
+
+
+def test_jsonld_emits_instrument_with_software_version() -> None:
+    """Set software_version becomes schema:instrument SoftwareApplication."""
+    report = HarvestReport(start_time=_START, software_version="9.9.9")
+    _open_sample_scope(report)
+    report.finish(end_time=_END)
+    document = json.loads(JsonLdReportSerializer().render(report))
+    assert document["schema:instrument"] == {
+        "@type": "schema:SoftwareApplication",
+        "schema:softwareVersion": "9.9.9",
+    }
+
+
+def test_read_distribution_version_missing_returns_none() -> None:
+    """Helper returns None when the distribution is not installed."""
+    assert read_distribution_version("definitely-not-an-installed-dist-xyz") is None
+
+
+def test_read_distribution_version_installed_package() -> None:
+    """Helper returns a non-empty string for an installed distribution (pytest)."""
+    resolved = read_distribution_version("pytest")
+    assert resolved is not None
+    assert resolved

@@ -7,7 +7,8 @@ Canonical namespace IRI:
 Machine-readable JSON-LD context: [context.jsonld](./context.jsonld)
 
 This vocabulary defines FAIRagro-specific terms used in the shared harvest-run report (`middleware.shared.report`).
-Schema.org terms (`Action`, `EntryPoint`, `startTime`, …) are not redefined here.
+Schema.org terms (`Action`, `EntryPoint`, `startTime`, `instrument` / `SoftwareApplication` / `softwareVersion`, …) are
+not redefined here. Tool/image version on the run uses schema.org `instrument`, not a `fairagro:` term.
 
 **Breaking vs [v1](../v1/):** `failedRecords` is replaced by `failures` (dataset or repository issues) plus `kind`
 (`dataset` | `repository`). `failedDatasets` still counts only dataset failures.
