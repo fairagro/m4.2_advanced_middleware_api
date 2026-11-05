@@ -35,7 +35,7 @@
   "lockFileMaintenance": {
     "enabled": true,
     "schedule": ["before 3am on monday"],
-    "recreateWhen": "auto"
+    "recreateWhen": "always"
   },
 
   "osvVulnerabilityAlerts": true,
@@ -408,9 +408,25 @@
       "enabled": false
     },
     {
-      "description": "versions.env / .python-version CLI and runtime pins (overrides earlier datasource groupNames for these files). recreateWhen always avoids stale-branch replaceString failures (#316).",
-      "matchFileNames": ["versions.env", ".python-version"],
+      "description": "Catch-all versions.env tool pins (k8s/security/query CLIs, Renovate, OpenSpec, …). Later rules below peel runtime/uv/mirrored-npm into smaller recreateWhen-always branches (#316 / #80).",
+      "matchFileNames": ["versions.env"],
       "groupName": "versions.env CLI pins",
+      "separateMinorPatch": false,
+      "recreateWhen": "always"
+    },
+    {
+      "description": "versions.env / .python-version language & image runtime pins — split from the CLI mega-branch so one replaceString miss cannot abort all toolchain bumps (#80).",
+      "matchFileNames": ["versions.env", ".python-version"],
+      "matchPackageNames": [
+        "python",
+        "node",
+        "npm",
+        "alpine",
+        "pip",
+        "pyinstaller",
+        "mcr.microsoft.com/devcontainers/base"
+      ],
+      "groupName": "versions.env runtime pins",
       "separateMinorPatch": false,
       "recreateWhen": "always"
     },
@@ -434,6 +450,7 @@
   "ignorePaths": [
     "**/node_modules/**",
     "**/__pycache__/**",
-    "openspec/changes/**"
+    "openspec/changes/**",
+    ".devcontainer/.env"
   ]
 }
