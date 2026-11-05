@@ -33,6 +33,7 @@ ARG MARKDOWNLINT_CLI2_VERSION
 ENV DEBIAN_FRONTEND=noninteractive
 
 # ── Base packages ─────────────────────────────────────────────────────────────
+# libatomic1: official Node 25+ linux-x64 binaries need libatomic.so.1 (Node 26 LTS).
 # hadolint ignore=DL3008
 RUN apt-get update && apt-get install -y --no-install-recommends \
         curl \
@@ -45,6 +46,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         bash-completion \
         default-jre-headless \
         graphviz \
+        libatomic1 \
         && rm -rf /var/lib/apt/lists/*
 
 # ── GitHub CLI (APT repos) ────────────────────────────────────────────────────
