@@ -122,11 +122,11 @@
       "description": "Trivy pin in versions.env",
       "customType": "regex",
       "managerFilePatterns": ["/^versions\\.env$/"],
-      "matchStrings": ["TRIVY_VERSION=(?<currentValue>v?[^\\s#]+)"],
+      "matchStrings": ["TRIVY_VERSION=v(?<currentValue>[^\\s#]+)"],
       "datasourceTemplate": "github-releases",
       "depNameTemplate": "aquasecurity/trivy",
       "extractVersionTemplate": "^v?(?<version>.*)$",
-      "autoReplaceStringTemplate": "TRIVY_VERSION=v{{newVersion}}"
+      "autoReplaceStringTemplate": "TRIVY_VERSION=v{{newValue}}"
     },
     {
       "description": "Renovate CLI pin in versions.env",
@@ -168,11 +168,11 @@
       "description": "Node pin in versions.env",
       "customType": "regex",
       "managerFilePatterns": ["/^versions\\.env$/"],
-      "matchStrings": ["NODE_VERSION=(?<currentValue>v?[^\\s#]+)"],
+      "matchStrings": ["NODE_VERSION=v(?<currentValue>[^\\s#]+)"],
       "datasourceTemplate": "node-version",
       "depNameTemplate": "node",
       "extractVersionTemplate": "^v?(?<version>.*)$",
-      "autoReplaceStringTemplate": "NODE_VERSION=v{{newVersion}}"
+      "autoReplaceStringTemplate": "NODE_VERSION=v{{newValue}}"
     },
     {
       "description": "npm CLI pin in versions.env",
@@ -187,111 +187,111 @@
       "description": "kubectl pin in versions.env",
       "customType": "regex",
       "managerFilePatterns": ["/^versions\\.env$/"],
-      "matchStrings": ["KUBECTL_VERSION=(?<currentValue>v?[^\\s#]+)"],
+      "matchStrings": ["KUBECTL_VERSION=v(?<currentValue>[^\\s#]+)"],
       "datasourceTemplate": "github-releases",
       "depNameTemplate": "kubernetes/kubernetes",
       "extractVersionTemplate": "^v?(?<version>.*)$",
-      "autoReplaceStringTemplate": "KUBECTL_VERSION=v{{newVersion}}"
+      "autoReplaceStringTemplate": "KUBECTL_VERSION=v{{newValue}}"
     },
     {
       "description": "Helm pin in versions.env",
       "customType": "regex",
       "managerFilePatterns": ["/^versions\\.env$/"],
-      "matchStrings": ["HELM_VERSION=(?<currentValue>v?[^\\s#]+)"],
+      "matchStrings": ["HELM_VERSION=v(?<currentValue>[^\\s#]+)"],
       "datasourceTemplate": "github-releases",
       "depNameTemplate": "helm/helm",
       "extractVersionTemplate": "^v?(?<version>.*)$",
-      "autoReplaceStringTemplate": "HELM_VERSION=v{{newVersion}}"
+      "autoReplaceStringTemplate": "HELM_VERSION=v{{newValue}}"
     },
     {
       "description": "Minikube pin in versions.env",
       "customType": "regex",
       "managerFilePatterns": ["/^versions\\.env$/"],
-      "matchStrings": ["MINIKUBE_VERSION=(?<currentValue>v?[^\\s#]+)"],
+      "matchStrings": ["MINIKUBE_VERSION=v(?<currentValue>[^\\s#]+)"],
       "datasourceTemplate": "github-releases",
       "depNameTemplate": "kubernetes/minikube",
       "extractVersionTemplate": "^v?(?<version>.*)$",
-      "autoReplaceStringTemplate": "MINIKUBE_VERSION=v{{newVersion}}"
+      "autoReplaceStringTemplate": "MINIKUBE_VERSION=v{{newValue}}"
     },
     {
       "description": "SOPS pin in versions.env",
       "customType": "regex",
       "managerFilePatterns": ["/^versions\\.env$/"],
-      "matchStrings": ["SOPS_VERSION=(?<currentValue>v?[^\\s#]+)"],
+      "matchStrings": ["SOPS_VERSION=v(?<currentValue>[^\\s#]+)"],
       "datasourceTemplate": "github-releases",
       "depNameTemplate": "getsops/sops",
       "extractVersionTemplate": "^v?(?<version>.*)$",
-      "autoReplaceStringTemplate": "SOPS_VERSION=v{{newVersion}}"
+      "autoReplaceStringTemplate": "SOPS_VERSION=v{{newValue}}"
     },
     {
       "description": "age pin in versions.env",
       "customType": "regex",
       "managerFilePatterns": ["/^versions\\.env$/"],
-      "matchStrings": ["AGE_VERSION=(?<currentValue>v?[^\\s#]+)"],
+      "matchStrings": ["AGE_VERSION=v(?<currentValue>[^\\s#]+)"],
       "datasourceTemplate": "github-releases",
       "depNameTemplate": "FiloSottile/age",
       "extractVersionTemplate": "^v?(?<version>.*)$",
-      "autoReplaceStringTemplate": "AGE_VERSION=v{{newVersion}}"
+      "autoReplaceStringTemplate": "AGE_VERSION=v{{newValue}}"
     },
     {
       "description": "yq pin in versions.env",
       "customType": "regex",
       "managerFilePatterns": ["/^versions\\.env$/"],
-      "matchStrings": ["YQ_VERSION=(?<currentValue>v?[^\\s#]+)"],
+      "matchStrings": ["YQ_VERSION=v(?<currentValue>[^\\s#]+)"],
       "datasourceTemplate": "github-releases",
       "depNameTemplate": "mikefarah/yq",
       "extractVersionTemplate": "^v?(?<version>.*)$",
-      "autoReplaceStringTemplate": "YQ_VERSION=v{{newVersion}}"
+      "autoReplaceStringTemplate": "YQ_VERSION=v{{newValue}}"
     },
     {
       "description": "xq pin in versions.env",
       "customType": "regex",
       "managerFilePatterns": ["/^versions\\.env$/"],
-      "matchStrings": ["XQ_VERSION=(?<currentValue>v?[^\\s#]+)"],
+      "matchStrings": ["XQ_VERSION=v(?<currentValue>[^\\s#]+)"],
       "datasourceTemplate": "github-releases",
       "depNameTemplate": "sibprogrammer/xq",
       "extractVersionTemplate": "^v?(?<version>.*)$",
-      "autoReplaceStringTemplate": "XQ_VERSION=v{{newVersion}}"
+      "autoReplaceStringTemplate": "XQ_VERSION=v{{newValue}}"
     },
     {
       "description": "yamlfmt pin in versions.env",
       "customType": "regex",
       "managerFilePatterns": ["/^versions\\.env$/"],
-      "matchStrings": ["YAMLFMT_VERSION=(?<currentValue>v?[^\\s#]+)"],
+      "matchStrings": ["YAMLFMT_VERSION=v(?<currentValue>[^\\s#]+)"],
       "datasourceTemplate": "github-releases",
       "depNameTemplate": "google/yamlfmt",
       "extractVersionTemplate": "^v?(?<version>.*)$",
-      "autoReplaceStringTemplate": "YAMLFMT_VERSION=v{{newVersion}}"
+      "autoReplaceStringTemplate": "YAMLFMT_VERSION=v{{newValue}}"
     },
     {
       "description": "hadolint pin in versions.env",
       "customType": "regex",
       "managerFilePatterns": ["/^versions\\.env$/"],
-      "matchStrings": ["HADOLINT_VERSION=(?<currentValue>v?[^\\s#]+)"],
+      "matchStrings": ["HADOLINT_VERSION=v(?<currentValue>[^\\s#]+)"],
       "datasourceTemplate": "github-releases",
       "depNameTemplate": "hadolint/hadolint",
       "extractVersionTemplate": "^v?(?<version>.*)$",
-      "autoReplaceStringTemplate": "HADOLINT_VERSION=v{{newVersion}}"
+      "autoReplaceStringTemplate": "HADOLINT_VERSION=v{{newValue}}"
     },
     {
       "description": "Starship pin in versions.env",
       "customType": "regex",
       "managerFilePatterns": ["/^versions\\.env$/"],
-      "matchStrings": ["STARSHIP_VERSION=(?<currentValue>v?[^\\s#]+)"],
+      "matchStrings": ["STARSHIP_VERSION=v(?<currentValue>[^\\s#]+)"],
       "datasourceTemplate": "github-releases",
       "depNameTemplate": "starship/starship",
       "extractVersionTemplate": "^v?(?<version>.*)$",
-      "autoReplaceStringTemplate": "STARSHIP_VERSION=v{{newVersion}}"
+      "autoReplaceStringTemplate": "STARSHIP_VERSION=v{{newValue}}"
     },
     {
       "description": "container-structure-test pin in versions.env",
       "customType": "regex",
       "managerFilePatterns": ["/^versions\\.env$/"],
-      "matchStrings": ["CST_VERSION=(?<currentValue>v?[^\\s#]+)"],
+      "matchStrings": ["CST_VERSION=v(?<currentValue>[^\\s#]+)"],
       "datasourceTemplate": "github-releases",
       "depNameTemplate": "GoogleContainerTools/container-structure-test",
       "extractVersionTemplate": "^v?(?<version>.*)$",
-      "autoReplaceStringTemplate": "CST_VERSION=v{{newVersion}}"
+      "autoReplaceStringTemplate": "CST_VERSION=v{{newValue}}"
     }
   ],
 
