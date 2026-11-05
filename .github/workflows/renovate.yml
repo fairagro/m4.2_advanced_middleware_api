@@ -5,6 +5,15 @@ name: Renovate
 
 on:
   workflow_dispatch:
+    inputs:
+      log_level:
+        description: "Renovate LOG_LEVEL (info or debug)"
+        required: false
+        default: "info"
+        type: choice
+        options:
+          - info
+          - debug
   schedule:
     - cron: "0 3 * * *"
   push:
@@ -26,10 +35,14 @@ jobs:
       - name: Self-hosted Renovate
         uses: renovatebot/github-action@v46.3.12
         with:
-          configurationFile: renovate.json
+          # Do NOT pass configurationFile: renovate.json. The Action mounts that path as
+          # RENOVATE_CONFIG_FILE (global/bot config). Renovate then also loads the cloned
+          # repo's renovate.json; customManagers is mergeable, so every regex manager runs
+          # twice → "Cannot find replaceString" / update failure (Dependency Dashboard #80).
+          # Repo config alone is enough; see docs/renovate.md.
           token: ${{ secrets.DEVINFRA_BOT_TOKEN }}
         env:
           # Scope the bot token to this step only (not checkout).
           GITHUB_COM_TOKEN: ${{ secrets.DEVINFRA_BOT_TOKEN }}
           RENOVATE_REPOSITORIES: ${{ github.repository }}
-          LOG_LEVEL: info
+          LOG_LEVEL: ${{ github.event.inputs.log_level || 'info' }}
