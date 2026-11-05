@@ -72,45 +72,50 @@ def test_config_validate_rdi_gitlab_topics_rejects_unknown_keys(tmp_path: Path) 
         Config.model_validate(config_data)
 
 
-def test_config_validate_known_rdis_valid(tmp_path: Path, caplog: pytest.LogCaptureFixture) -> None:
-    """Test valid known RDIs (bare strings still load with a deprecation log warning)."""
+def test_config_validate_known_rdis_rejects_bare_strings(tmp_path: Path) -> None:
+    """Bare string known_rdis entries raise ValidationError."""
     config_data = {
         "known_rdis": ["valid-rdi", "rdi.123", "under_score"],
         "arc_store": _arc_store(tmp_path),
         "couchdb": {"url": "http://localhost:5984"},
         "celery": {"broker_url": "memory://"},
     }
-    with caplog.at_level("WARNING", logger="middleware.api.rdi_registry"):
-        config = Config.model_validate(config_data)
-    assert "Bare string entries in known_rdis are deprecated" in caplog.text
-    assert len(config.known_rdis) == 3  # noqa: PLR2004
-    assert [entry.id for entry in config.known_rdis] == ["valid-rdi", "rdi.123", "under_score"]
+    with pytest.raises(ValidationError, match="Bare string entries in known_rdis are no longer accepted"):
+        Config.model_validate(config_data)
 
 
-def test_config_validate_known_rdis_object_form(tmp_path: Path, caplog: pytest.LogCaptureFixture) -> None:
-    """Object-form known_rdis carry description and URL without deprecation log."""
+def test_config_validate_known_rdis_object_form(tmp_path: Path) -> None:
+    """Object-form known_rdis carry description and URL."""
     config_data = {
         "known_rdis": [
             {"id": "edal", "description": "e!DAL", "url": "https://edal.example"},
             {"id": "bonares"},
+            {"id": "valid-rdi"},
+            {"id": "rdi.123"},
+            {"id": "under_score"},
         ],
         "arc_store": {
             "git_repo": {
                 **_git_repo(tmp_path),
-                "rdi_gitlab_topics": {"edal": "e!DAL", "bonares": "bonares"},
+                "rdi_gitlab_topics": {
+                    "edal": "e!DAL",
+                    "bonares": "bonares",
+                    "valid-rdi": "valid-rdi",
+                    "rdi.123": "rdi.123",
+                    "under_score": "under_score",
+                },
             },
         },
         "couchdb": {"url": "http://localhost:5984"},
         "celery": {"broker_url": "memory://"},
     }
-    with caplog.at_level("WARNING", logger="middleware.api.rdi_registry"):
-        config = Config.model_validate(config_data)
-    assert "known_rdis are deprecated" not in caplog.text
+    config = Config.model_validate(config_data)
     assert config.known_rdis[0].id == "edal"
     assert config.known_rdis[0].description == "e!DAL"
     assert config.known_rdis[0].url == "https://edal.example"
     assert config.known_rdis[1].id == "bonares"
     assert config.known_rdis[1].description == ""
+    assert [entry.id for entry in config.known_rdis[2:]] == ["valid-rdi", "rdi.123", "under_score"]
 
 
 def test_config_validate_known_rdis_invalid(tmp_path: Path) -> None:

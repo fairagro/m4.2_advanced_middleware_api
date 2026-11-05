@@ -44,7 +44,7 @@ def git_repo_config(git_server_root: Path, git_repo_cache_dir: Path, oid: x509.O
     """Provide configuration for GitRepo backend."""
     return {
         "log_level": "DEBUG",
-        "known_rdis": ["rdi-1"],
+        "known_rdis": [{"id": "rdi-1"}],
         "client_auth_oid": oid.dotted_string,
         "require_client_cert": True,
         "arc_store": {

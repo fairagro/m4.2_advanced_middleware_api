@@ -13,18 +13,10 @@ logger = logging.getLogger(__name__)
 
 _RDI_ID_PATTERN = re.compile(r"^[a-zA-Z0-9_.-]+$")
 
-_BARE_STRING_KNOWN_RDIS_DEPRECATION = (
-    "Bare string entries in known_rdis are deprecated; use objects with 'id' and optional "
-    "'description'/'url' (e.g. {id: edal, description: …, url: …}). String form will be removed "
-    "in a future release."
+_BARE_STRING_KNOWN_RDIS_REJECTED = (
+    "Bare string entries in known_rdis are no longer accepted; use objects with 'id' and "
+    "optional 'description'/'url' (e.g. {id: edal, description: …, url: …})."
 )
-
-
-def warn_deprecated_string_known_rdis(raw_entries: Any) -> Any:
-    """Log one deprecation warning when any ``known_rdis`` list item is a bare string."""
-    if isinstance(raw_entries, list) and any(isinstance(item, str) for item in raw_entries):
-        logger.warning(_BARE_STRING_KNOWN_RDIS_DEPRECATION)
-    return raw_entries
 
 
 class RdiRegistryEntry(BaseModel):
@@ -38,10 +30,11 @@ class RdiRegistryEntry(BaseModel):
 
     @model_validator(mode="before")
     @classmethod
-    def accept_string_id(cls, data: Any) -> Any:
-        """Allow bare YAML strings: ``edal`` ≡ ``{id: edal}`` (deprecated; warn at list level)."""
+    def reject_string_id(cls, data: Any) -> Any:
+        """Reject bare YAML strings; require ``{id: …}`` object form."""
         if isinstance(data, str):
-            return {"id": data}
+            msg = f"{_BARE_STRING_KNOWN_RDIS_REJECTED} Got {data!r}."
+            raise ValueError(msg)
         return data
 
     @field_validator("id")

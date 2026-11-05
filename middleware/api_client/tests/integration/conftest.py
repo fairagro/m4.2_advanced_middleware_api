@@ -31,7 +31,7 @@ def api_config(known_rdis: list[str], oid: Any) -> dict[str, Any]:
     """
     return {
         "log_level": "DEBUG",
-        "known_rdis": known_rdis,
+        "known_rdis": [{"id": rdi} for rdi in known_rdis],
         "client_auth_oid": oid.dotted_string,
         "arc_store": {
             "git_repo": {

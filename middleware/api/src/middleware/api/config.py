@@ -13,7 +13,6 @@ from middleware.api.rdi_registry import (
     RdiRegistryEntry,
     known_rdi_ids,
     validate_unique_rdi_ids,
-    warn_deprecated_string_known_rdis,
 )
 from middleware.api.worker.config import CeleryConfig
 from middleware.shared.config.config_base import ConfigBase
@@ -86,7 +85,7 @@ class Config(ConfigBase):
         Field(
             description=(
                 "Known RDIs as objects with id and optional description/url (used for Investigation "
-                "Comment[RDI*] enrichment). Bare identifier strings remain accepted but are deprecated."
+                "Comment[RDI*] enrichment). Bare identifier strings are rejected."
             ),
         ),
     ] = []
@@ -140,12 +139,6 @@ class Config(ConfigBase):
     ] = True
 
     model_config: ClassVar[ConfigDict] = ConfigDict(arbitrary_types_allowed=True, extra="forbid")
-
-    @field_validator("known_rdis", mode="before")
-    @classmethod
-    def deprecate_string_known_rdis(cls, rdis: object) -> object:
-        """Keep bare-string known_rdis working while warning operators to migrate."""
-        return warn_deprecated_string_known_rdis(rdis)
 
     @field_validator("known_rdis")
     @classmethod
