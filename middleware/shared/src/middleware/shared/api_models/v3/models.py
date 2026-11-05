@@ -54,6 +54,14 @@ class ReadinessResponse(BaseStatusResponse):
 class HealthResponse(BaseStatusResponse):
     """Response model for global health checks."""
 
+    version: Annotated[str, Field(description="PEP 440 version of the installed api package")]
+
+
+class VersionResponse(BaseModel):
+    """Response model for the API package version probe."""
+
+    version: Annotated[str, Field(description="PEP 440 version of the installed api package")]
+
 
 class WhoamiResponse(ApiResponse):
     """Response model for whoami operation."""

@@ -18,6 +18,7 @@ _EXEMPT_PATHS: Final[frozenset[str]] = frozenset({
     "/v3/liveness",
     "/v3/readiness",
     "/v3/health",
+    "/v3/version",
     "/v1/health",
     "/v2/health",
 })

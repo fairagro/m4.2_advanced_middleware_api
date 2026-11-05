@@ -33,9 +33,9 @@ disabled.
 3. **`VersionResponse` model** — Dedicated `{version: str}` model for `/v3/version`. Reason: clear OpenAPI schema;
    avoids overloading health models.
 
-4. **HEAD via FastAPI GET registration** — Keep `@router.get` so Starlette/FastAPI adds HEAD with the same status and no
-   body. Reason: matches HTTP semantics and UptimeRobot-style HEAD probes without a second handler. Alternative:
-   explicit `@router.api_route(..., methods=["GET","HEAD"])` — only if auto-HEAD is disabled project-wide (it is not).
+4. **HEAD via explicit methods** — Register `GET` and `HEAD` with `@router.api_route(..., methods=["GET", "HEAD"])`.
+   Reason: FastAPI 0.162 / Starlette 1.x no longer auto-adds HEAD for `@router.get` (bare GET → HEAD is `405`); explicit
+   methods restore RFC-compatible HEAD for UptimeRobot-style probes.
 
 5. **Admission exempt `/v3/version`** — Add to `_EXEMPT_PATHS` and update admission-control design/spec. Reason: version
    must remain readable under overload like other probes.

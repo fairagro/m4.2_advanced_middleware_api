@@ -11,7 +11,6 @@ import sys
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 from http import HTTPStatus
-from importlib.metadata import PackageNotFoundError, version
 from pathlib import Path
 
 from fastapi import FastAPI, Request
@@ -40,6 +39,7 @@ from ..celery_integration import (
 from ..config import Config
 from ..document_store import DocumentStoreUnavailableError
 from ..health_service import ApiHealthService
+from ..package_version import resolve_api_package_version
 from .admission_control import AdmissionControlMiddleware
 from .common.dependencies import CommonApiDependencies
 from .legacy.task_status_store import LegacyTaskStatusStore
@@ -49,19 +49,7 @@ from .v1 import system as system_v1
 from .v2 import arcs as arcs_v2, system as system_v2, tasks as tasks_v2
 from .v3 import arcs as arcs_v3, harvests as harvests_v3, system as system_v3
 
-try:
-    __version__ = version("api")
-except PackageNotFoundError:
-    # Try to read from pyproject.toml as fallback (e.g. in development if not installed)
-    try:
-        import tomllib
-
-        pyproject_path = Path(__file__).parent.parent / "pyproject.toml"
-        with pyproject_path.open("rb") as f:
-            data = tomllib.load(f)
-        __version__ = data["project"]["version"]
-    except (FileNotFoundError, KeyError):
-        __version__ = "0.0.0"
+__version__ = resolve_api_package_version()
 
 
 if "pytest" in sys.modules:

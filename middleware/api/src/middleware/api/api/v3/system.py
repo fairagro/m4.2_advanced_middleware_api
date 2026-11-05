@@ -13,15 +13,25 @@ from middleware.api.api.common.dependencies import (
     get_health_service,
 )
 from middleware.api.health_service import ApiHealthService
+from middleware.api.package_version import resolve_api_package_version
 from middleware.shared.api_models.v3.models import (
     HealthResponse,
     LivenessResponse,
     ReadinessResponse,
     StatusResponse,
+    VersionResponse,
     WhoamiResponse,
 )
 
 router = APIRouter(prefix="/v3", tags=["v3", "system"])
+
+
+@router.api_route("/version", methods=["GET", "HEAD"], response_model=VersionResponse)
+async def package_version(
+    _: Annotated[None, Depends(get_accept_type)],
+) -> VersionResponse:
+    """Return the installed api package PEP 440 version."""
+    return VersionResponse(version=resolve_api_package_version())
 
 
 @router.get("/whoami", response_model=WhoamiResponse)
@@ -75,7 +85,7 @@ async def readiness(
     )
 
 
-@router.get("/health", response_model=HealthResponse)
+@router.api_route("/health", methods=["GET", "HEAD"], response_model=HealthResponse)
 async def health(
     response: Response,
     health_service: Annotated[ApiHealthService, Depends(get_health_service)],
@@ -91,4 +101,5 @@ async def health(
     return HealthResponse(
         status=StatusResponse.OK if is_healthy else StatusResponse.ERROR,
         services=checks,
+        version=resolve_api_package_version(),
     )

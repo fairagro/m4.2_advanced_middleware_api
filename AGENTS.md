@@ -335,6 +335,8 @@ Before generating or modifying code, read the relevant specs:
   validation, progress tracking, and typed per-item `errors` on the harvest document / wire response.
 - **[`openspec/specs/admission-control/`](openspec/specs/admission-control/)** — Process-local concurrent request
   admission: at capacity → `503` + `Retry-After` (probes exempt).
+- **[`openspec/specs/api-version/`](openspec/specs/api-version/)** — `GET`/`HEAD` `/v3/version` and additive `version`
+  on `/v3/health` (PEP 440 package version).
 - **[`openspec/specs/rate-limiting/`](openspec/specs/rate-limiting/)** — Process-local per-client rate limits on
   harvest/ARC write POSTs → `429` + `Retry-After`.
 - **[`openspec/specs/helm-httproute/`](openspec/specs/helm-httproute/)** — Optional Gateway API `HTTPRoute` in the
@@ -378,6 +380,7 @@ mode) use it to locate affected code.
 | `openspec/specs/arc-upload/`            | `middleware/api/src/middleware/api/api/v3/arcs.py`                                                                                                                                                                                                                |
 | `openspec/specs/harvest-arc-upload/`    | `middleware/api/src/middleware/api/api/v3/harvests.py`                                                                                                                                                                                                            |
 | `openspec/specs/admission-control/`     | `middleware/api/src/middleware/api/api/admission_control.py`, `fastapi_app.py`                                                                                                                                                                                    |
+| `openspec/specs/api-version/`           | `middleware/api/src/middleware/api/api/v3/system.py`, `middleware/api/src/middleware/api/package_version.py`, `middleware/shared/src/middleware/shared/api_models/v3/models.py`                                                                                   |
 | `openspec/specs/rate-limiting/`         | `middleware/api/src/middleware/api/api/rate_limiting.py`, `fastapi_app.py`, `middleware/api/src/middleware/api/config.py` (`RateLimitingConfig`)                                                                                                                  |
 | `openspec/specs/harvest-client/`        | `middleware/api_client/src/middleware/api_client/api_client.py`, `models.py`                                                                                                                                                                                      |
 | `openspec/specs/harvest-report/`        | `middleware/shared/src/middleware/shared/report/`, `ns/harvest-report/`                                                                                                                                                                                           |
