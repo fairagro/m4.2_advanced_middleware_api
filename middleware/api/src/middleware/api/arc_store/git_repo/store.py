@@ -34,6 +34,7 @@ from middleware.api.arc_store.git_repo.remote_git_provider import (
     RemoteGitProvider,
     git_project_metadata_from_arc,
 )
+from middleware.api.arc_store.unique_comment_names import ensure_unique_comment_names
 
 logger = logging.getLogger(__name__)
 
@@ -144,8 +145,9 @@ class GitRepo(ArcStore):
                             else:
                                 child.unlink()
 
-                        # Write ARC to repo path
+                        # Write ARC to repo path (unique Comment names required by ISA-XLSX / ARCtrl)
                         with self._tracer.start_as_current_span("api.GitRepo._create_or_update:arc_write"):
+                            ensure_unique_comment_names(arc)
                             arc.Write(str(repo_path))
 
                         pushed = ctx.commit_and_push(f"Update ARC {arc_id}")

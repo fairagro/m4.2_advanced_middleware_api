@@ -226,8 +226,8 @@ def test_git_context_non_soft_clone_failure_propagates(mock_repo: MagicMock, tmp
     mock_repo.clone_from.side_effect = GitCommandError("clone", 128, stderr="Authentication failed")
     context = _clone_context(tmp_path)
 
-    with pytest.raises(GitCommandError, match="Authentication failed"):
-        context.__enter__()
+    with pytest.raises(GitCommandError, match="Authentication failed"), context:
+        pass
 
     mock_repo.init.assert_not_called()
 
@@ -238,8 +238,8 @@ def test_git_context_transient_clone_failure_is_retryable(mock_repo: MagicMock, 
     mock_repo.clone_from.side_effect = GitCommandError("clone", 128, stderr="connection timed out")
     context = _clone_context(tmp_path)
 
-    with pytest.raises(ArcStoreTransientError, match="connection timed out"):
-        context.__enter__()
+    with pytest.raises(ArcStoreTransientError, match="connection timed out"), context:
+        pass
 
     mock_repo.init.assert_not_called()
 
@@ -355,9 +355,14 @@ async def test_create_or_update(git_repo: GitRepo, tmp_path: Path) -> None:
             # Ensure path property mocks correctly
             type(mock_ctx_instance).path = PropertyMock(return_value=str(fake_repo_path))
 
-            with patch(
-                "middleware.api.arc_store.git_repo.store.git_project_metadata_from_arc",
-                return_value=_TEST_GIT_METADATA,
+            with (
+                patch(
+                    "middleware.api.arc_store.git_repo.store.git_project_metadata_from_arc",
+                    return_value=_TEST_GIT_METADATA,
+                ),
+                patch(
+                    "middleware.api.arc_store.git_repo.store.ensure_unique_comment_names",
+                ) as mock_unique_comments,
             ):
                 await git_repo._create_or_update(arc_id, arc, rdi=_TEST_RDI)
 
@@ -365,6 +370,7 @@ async def test_create_or_update(git_repo: GitRepo, tmp_path: Path) -> None:
             assert not (fake_repo_path / "junk.txt").exists()
             assert (fake_repo_path / ".git").exists()
 
+            mock_unique_comments.assert_called_once_with(arc)
             # Check ARC write
             # pylint: disable=no-member
             arc.Write.assert_called_once_with(str(fake_repo_path))
