@@ -46,14 +46,22 @@ limit and current in-flight count.
 
 ### Requirement: Exempt probes and cover all other routes
 
-The limiter SHALL exempt liveness, readiness, and health paths, which MUST neither consume a slot nor receive a
-limiter-generated `503`. It MUST apply to every other HTTP method and API version, including ARC upload POSTs.
+The limiter SHALL exempt liveness, readiness, health, and version probe paths (`/v3/liveness`, `/v3/readiness`,
+`/v3/health`, `/v3/version`, and legacy `/v1/health` / `/v2/health` where still registered), which MUST neither consume
+a slot nor receive a limiter-generated `503`. Exemption MUST apply to both `GET` and `HEAD` on those paths. It MUST
+apply to every other HTTP method and API version, including ARC upload POSTs.
 
 #### Scenario: Serve a probe at capacity
 
 - **GIVEN** the process is at capacity
 - **WHEN** a request targets an exempt probe path
 - **THEN** it is handled normally without consuming a slot
+
+#### Scenario: Serve version at capacity
+
+- **GIVEN** the process is at capacity
+- **WHEN** a client sends `GET` or `HEAD` `/v3/version`
+- **THEN** the request is handled normally without consuming a slot
 
 #### Scenario: Limit ARC upload traffic
 
