@@ -16,17 +16,17 @@ arc_store:
 # consolidated_store:
 #   consolidated_git:
 #     repo_url: https://datahub-dev.ipk-gatersleben.de/group/catalog.git
-# Prefer object form (id + optional description/url). Bare strings still work but are deprecated.
+# Object form only (id + optional description/url).
 # - id: edaphobase
 #   description: Edaphobase soil biodiversity database
 #   url: https://www.edaphobase.org
 known_rdis:
-- bonares
-- edal
-- edaphobase
-- openagrar
-- publisso
-- thunen_atlas
+- id: bonares
+- id: edal
+- id: edaphobase
+- id: openagrar
+- id: publisso
+- id: thunen_atlas
 require_client_cert: false
 
 # Enable CouchDB and allow environment overrides (like COUCHDB_URL)

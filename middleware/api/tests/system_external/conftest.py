@@ -100,7 +100,7 @@ def config(
 
     return {
         "log_level": "DEBUG",
-        "known_rdis": list(known_rdis),
+        "known_rdis": [{"id": rdi} for rdi in known_rdis],
         "client_auth_oid": oid.dotted_string,
         "otel": {
             "endpoint": None,

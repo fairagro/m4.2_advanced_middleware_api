@@ -12,7 +12,6 @@ from middleware.api.rdi_registry import (
     RdiRegistryEntry,
     known_rdi_ids,
     validate_unique_rdi_ids,
-    warn_deprecated_string_known_rdis,
 )
 from middleware.shared.config.config_base import ConfigBase
 
@@ -41,8 +40,7 @@ class WorkerConfig(ConfigBase):
         list[RdiRegistryEntry],
         Field(
             description=(
-                "Known RDIs as objects with id and optional description/url. "
-                "Bare identifier strings remain accepted but are deprecated."
+                "Known RDIs as objects with id and optional description/url. Bare identifier strings are rejected."
             ),
         ),
     ] = []
@@ -57,12 +55,6 @@ class WorkerConfig(ConfigBase):
     couchdb: Annotated[CouchDBConfig, Field(description="CouchDB configuration")]
     celery: Annotated[CeleryConfig, Field(description="Celery configuration")]
     harvest: Annotated[HarvestConfig, Field(description="Default harvest configuration")] = HarvestConfig()
-
-    @field_validator("known_rdis", mode="before")
-    @classmethod
-    def deprecate_string_known_rdis(cls, rdis: object) -> object:
-        """Keep bare-string known_rdis working while warning operators to migrate."""
-        return warn_deprecated_string_known_rdis(rdis)
 
     @field_validator("known_rdis")
     @classmethod
