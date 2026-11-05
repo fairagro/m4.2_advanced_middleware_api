@@ -10,6 +10,19 @@ product repos ([#13](https://github.com/fairagro/m4.2_middleware_devinfra/issues
 
 **Do not** hand-edit these after sync in product checkouts — see [`docs/synced-paths.yaml`](synced-paths.yaml).
 
+## Workflow must not pass `configurationFile: renovate.json`
+
+[`renovatebot/github-action`](https://github.com/renovatebot/github-action) treats `configurationFile` as **global**
+config (`RENOVATE_CONFIG_FILE`). Renovate still loads the cloned repo’s `renovate.json` as **repository** config.
+`customManagers` is mergeable, so the same regex managers are registered twice → Dependency Extraction `regex`
+`fileCount` ≈ 2× pins, then `Cannot find replaceString` / `Error updating branch: update failure` on `versions.env-*`
+branches (Dependency Dashboard #80).
+
+The shared workflow therefore passes only `token` and lets Renovate discover in-repo `renovate.json` once. If you need a
+separate global/bot config file, name it something that is **not** a
+[repository config filename](https://docs.renovatebot.com/configuration-options/) (e.g. `renovate-global.json`) and keep
+repo rules in `renovate.json` only.
+
 ## GitHub Actions secret: `DEVINFRA_BOT_TOKEN`
 
 The workflow does **not** use SOPS and does **not** rely on `GITHUB_TOKEN` alone.
@@ -78,7 +91,7 @@ match (or set `RENOVATE_GIT_AUTHOR` in the workflow instead).
 
 The Dev Container pins the **Renovate npm CLI** via `RENOVATE_VERSION` in [`versions.env`](../versions.env) (`renovate`
 on `PATH`). That pin is for local dry-runs only. CI runs
-[`renovatebot/github-action`](../.github/workflows/renovate.yml) at its own Action version (currently `v46.2.6`) — keep
+[`renovatebot/github-action`](../.github/workflows/renovate.yml) at its own Action version (currently `v46.3.12`) — keep
 the Action major aware of the CLI major when bumping either pin; they are not the same artifact.
 
 The **npm CLI** itself is pinned as `NPM_VERSION` in `versions.env` (regex custom manager, `datasourceTemplate: npm`).

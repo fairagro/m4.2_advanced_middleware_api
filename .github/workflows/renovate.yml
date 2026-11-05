@@ -26,7 +26,11 @@ jobs:
       - name: Self-hosted Renovate
         uses: renovatebot/github-action@v46.3.12
         with:
-          configurationFile: renovate.json
+          # Do NOT pass configurationFile: renovate.json. The Action mounts that path as
+          # RENOVATE_CONFIG_FILE (global/bot config). Renovate then also loads the cloned
+          # repo's renovate.json; customManagers is mergeable, so every regex manager runs
+          # twice → "Cannot find replaceString" / update failure (Dependency Dashboard #80).
+          # Repo config alone is enough; see docs/renovate.md.
           token: ${{ secrets.DEVINFRA_BOT_TOKEN }}
         env:
           # Scope the bot token to this step only (not checkout).
