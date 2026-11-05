@@ -7,23 +7,24 @@ for sync into product consumers (`middleware/` package root — see [path conven
 
 Not every file under `scripts/` is Dev Container-only. Personal-token helpers are; quality runners are not.
 
-| Script / tree                         | Environment            | Notes                                                                                                                                                     |
-| ------------------------------------- | ---------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `quality-check.sh` / `quality-fix.sh` | Host or Dev Container  | Needs `uv`. Commit-stage also runs `npm run lint:md` (Node/`npm`; host: `npm install`). On the host, set `GITGUARDIAN_API_KEY` for ggshield if required.  |
-| `run-container-structure-test.sh`     | Host or Dev Container  | Needs Docker + `container-structure-test`                                                                                                                 |
-| `run-quality-cli.sh`                  | Host or Dev Container  | `uv run --with-requirements scripts/quality-tools-pins.txt` for fleet quality CLIs                                                                        |
-| `run-import-linter.sh`                | Host or Dev Container  | Product `.importlinter`; soft-skips without `middleware/`; uses `run-quality-cli.sh`                                                                      |
-| `run-uv-audit.sh`                     | Host or Dev Container  | Needs `uv` + network to OSV; optional `.uv-audit-ignore`                                                                                                  |
-| `run-helm-lint.sh`                    | Host or Dev Container  | Needs `helm` on `PATH` only when `helmchart/<chart>/` or `helm/<chart>/` exists; pin is Dev Container `HELM_VERSION`; optional `HELM_VALUES_FILE` overlay |
-| `detect-version-bump.sh`              | Host or Dev Container  | Release `version_bump=auto`; needs `git-cliff` + `jq` (pin `GIT_CLIFF_VERSION`)                                                                           |
-| `generate-release-changelog.sh`       | Host or CI             | Final Release `## Changelog` via git-cliff (R1 ranges); soft-fail placeholder                                                                             |
-| `install-git-cliff.sh`                | Host or CI             | Installs pinned `git-cliff` from `versions.env`                                                                                                           |
-| `setup-git-hooks.sh` / `git-hooks/`   | Host or Dev Container  | Dispatcher + `pre-push.d/50-quality`; no `git-lfs` required                                                                                               |
-| `load-versions-env.sh`                | Host or Dev Container  | Reads `versions.env`, writes `.python-version`                                                                                                            |
-| `scripts/ai/` (`m42-ai`)              | Host or Dev Container  | uv workspace member; `uv sync` then `uv run m42-ai` (needs `gh` + auth)                                                                                   |
-| `dev-tokens.sh` / `set-dev-tokens.sh` | **Dev Container only** | Store: `/commandhistory/tokens.env`                                                                                                                       |
-| `scripts/bin/gh`, `scripts/bin/git`   | **Dev Container only** | On `PATH` via `remoteEnv`; load the token store                                                                                                           |
-| `devcontainer-post-create.sh`         | **Dev Container only** | Invoked from `devcontainer.json`                                                                                                                          |
+| Script / tree                         | Environment            | Notes                                                                                                                                                                                |
+| ------------------------------------- | ---------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `quality-check.sh` / `quality-fix.sh` | Host or Dev Container  | Needs `uv`. Commit-stage also runs `npm run lint:md` (Node/`npm`; host: `npm install`). Secret scan needs `gitleaks` on `PATH` (`GITLEAKS_VERSION` / `scripts/install-gitleaks.sh`). |
+| `install-gitleaks.sh`                 | Host or CI             | Installs pinned `gitleaks` from `versions.env`                                                                                                                                       |
+| `run-container-structure-test.sh`     | Host or Dev Container  | Needs Docker + `container-structure-test`                                                                                                                                            |
+| `run-quality-cli.sh`                  | Host or Dev Container  | `uv run --with-requirements scripts/quality-tools-pins.txt` for fleet quality CLIs                                                                                                   |
+| `run-import-linter.sh`                | Host or Dev Container  | Product `.importlinter`; soft-skips without `middleware/`; uses `run-quality-cli.sh`                                                                                                 |
+| `run-uv-audit.sh`                     | Host or Dev Container  | Needs `uv` + network to OSV; optional `.uv-audit-ignore`                                                                                                                             |
+| `run-helm-lint.sh`                    | Host or Dev Container  | Needs `helm` on `PATH` only when `helmchart/<chart>/` or `helm/<chart>/` exists; pin is Dev Container `HELM_VERSION`; optional `HELM_VALUES_FILE` overlay                            |
+| `detect-version-bump.sh`              | Host or Dev Container  | Release `version_bump=auto`; needs `git-cliff` + `jq` (pin `GIT_CLIFF_VERSION`)                                                                                                      |
+| `generate-release-changelog.sh`       | Host or CI             | Final Release `## Changelog` via git-cliff (R1 ranges); soft-fail placeholder                                                                                                        |
+| `install-git-cliff.sh`                | Host or CI             | Installs pinned `git-cliff` from `versions.env`                                                                                                                                      |
+| `setup-git-hooks.sh` / `git-hooks/`   | Host or Dev Container  | Dispatcher + `pre-push.d/50-quality`; no `git-lfs` required                                                                                                                          |
+| `load-versions-env.sh`                | Host or Dev Container  | Reads `versions.env`, writes `.python-version`                                                                                                                                       |
+| `scripts/ai/` (`m42-ai`)              | Host or Dev Container  | uv workspace member; `uv sync` then `uv run m42-ai` (needs `gh` + auth)                                                                                                              |
+| `dev-tokens.sh` / `set-dev-tokens.sh` | **Dev Container only** | Store: `/commandhistory/tokens.env`                                                                                                                                                  |
+| `scripts/bin/gh`, `scripts/bin/git`   | **Dev Container only** | On `PATH` via `remoteEnv`; load the token store                                                                                                                                      |
+| `devcontainer-post-create.sh`         | **Dev Container only** | Invoked from `devcontainer.json`                                                                                                                                                     |
 
 Supported day-to-day development remains the Linux Dev Container ([principles](../openspec/principles.global.md)). Host
 checkouts may run the **host-or-DC** scripts above; they do not get the personal-token store or PATH wrappers — use
@@ -124,12 +125,19 @@ only). CI runs without `-ll`, logs all severities (JSON + wrapper), and still fa
 as hooks, matching [principles Code Quality](../openspec/principles.global.md#code-quality). Do not reintroduce a second
 fail policy only on one surface.
 
-**Fleet quality CLIs (hooks + reusable CI):** ggshield, ruff, mypy, pylint, bandit, vulture, and import-linter run via
+**Fleet quality CLIs (hooks + reusable CI):** ruff, mypy, pylint, bandit, vulture, and import-linter run via
 [`scripts/quality-tools-pins.txt`](../scripts/quality-tools-pins.txt) (`bash scripts/run-quality-cli.sh` /
 `scripts/quality-tools-pins.txt`). Pins live in that synced requirements file (Renovate `pip_requirements`) — **not** in
 product `pyproject.toml`. Gates must not fail with `Failed to spawn` when a product omits those packages. Products
 **MAY** still list the same tools as optional project deps for IDE extensions; pytest and other test-only deps stay
 product-owned (`uv run pytest`).
+
+**gitleaks (secret scan):** commit-stage hook (`gitleaks protect --staged`) and reusable code-quality
+(`gitleaks detect --source . --no-git --verbose --redact`) use the binary pinned as `GITLEAKS_VERSION` in `versions.env`
+(Dev Container image + `scripts/install-gitleaks.sh` in CI). CI uses `--no-git` so the PR tip tree is scanned even on
+shallow/merge checkouts, and `--redact` so findings do not print secret values into Actions logs. No GitGuardian / SaaS
+API key. False positives: add a documented entry to synced [`.gitleaksignore`](../.gitleaksignore) (prefer fixing real
+leaks). Escape hatch for local hooks only: `SKIP=gitleaks`.
 
 **Vulture (named IDE exception):** unused-definition gate for `middleware/` (or reusable `python_package_root`). Hooks
 and CI both run `bash scripts/run-quality-cli.sh vulture <root> --min-confidence 100` with **no** synced whitelist file.
@@ -207,7 +215,9 @@ lazy imports solely to break cycles) stay principles / other tools / `/code-revi
 | `scripts/run-container-structure-test.sh`           | Templated Docker build + `container-structure-test`                                                             |
 | `scripts/run-import-linter.sh`                      | Thin import-linter runner (product `.importlinter`; see above)                                                  |
 | `scripts/run-quality-cli.sh`                        | `uv run --with-requirements` wrapper for fleet quality CLIs                                                     |
-| `scripts/quality-tools-pins.txt`                    | Fleet pins for ggshield/ruff/mypy/pylint/bandit/vulture/import-linter (hooks + CI)                              |
+| `scripts/quality-tools-pins.txt`                    | Fleet pins for ruff/mypy/pylint/bandit/vulture/import-linter (hooks + CI)                                       |
+| `scripts/install-gitleaks.sh`                       | Install pinned `gitleaks` from `versions.env` (CI / host)                                                       |
+| `.gitleaksignore`                                   | Synced gitleaks allowlist (false positives only)                                                                |
 | `scripts/run-uv-audit.sh`                           | Frozen `uv audit` + optional product `.uv-audit-ignore` (hooks + CI)                                            |
 | `.importlinter`                                     | Product-owned import-linter config (fleet-required settings in this doc) — **not** synced from Devinfra         |
 | `scripts/setup-git-hooks.sh`                        | Install dispatcher + `pre-push.d/50-quality` from `scripts/git-hooks/`                                          |
@@ -451,8 +461,20 @@ uv run pre-commit run --all-files --hook-stage pre-push
 uv run pre-commit run --all-files   # full commit stage (includes autofixers)
 ```
 
-On a **host** checkout, export `GITGUARDIAN_API_KEY` (and any other secrets hooks need) yourself — there is no
-`~/.config/…` token helper outside the Dev Container.
+On a **host** checkout, install `gitleaks` via `bash scripts/install-gitleaks.sh` (or ensure it is on `PATH`) before
+commit-stage secret scan. There is no `~/.config/…` token helper outside the Dev Container for `GH_TOKEN` either — use
+your shell env / `gh auth` as you prefer.
+
+### Migration: ggshield → gitleaks (products)
+
+After syncing this change from Devinfra (#13):
+
+1. Drop any product-local `ggshield` / GitGuardian pins from `pyproject.toml` / lockfiles (fleet pins no longer include
+   it).
+2. Unset unused `GITGUARDIAN_API_KEY` secrets (Actions / local store) — the fleet secret-scan gate does not use them.
+3. Rebuild or refresh the Dev Container so `gitleaks` matches `GITLEAKS_VERSION`; CI installs via
+   `scripts/install-gitleaks.sh` in reusable code-quality.
+4. Infra follow-up: [`m4.2_infrastructure#74`](https://github.com/fairagro/m4.2_infrastructure/issues/74).
 
 ## Container structure test parameters
 

@@ -21,8 +21,8 @@ Historical short slugs (docs / older volume names). Shared `devcontainer.json` n
 
 ## Personal tokens
 
-Personal developer tokens (e.g. `GH_TOKEN`, `GITGUARDIAN_API_KEY`) are **per-product Dev Container**, not shared across
-containers on the same machine.
+Personal developer tokens (e.g. `GH_TOKEN`) are **per-product Dev Container**, not shared across containers on the same
+machine.
 
 | Environment   | Path                         |
 | ------------- | ---------------------------- |
@@ -37,11 +37,11 @@ supported host `~/.config/…` token store — personal-token helpers (`dev-toke
 or load-env.
 
 **Store vs host:** sourcing `dev-tokens.sh` (including via `scripts/bin/gh` / `scripts/bin/git`) applies
-`/commandhistory/tokens.env` for `GH_TOKEN` / `GITGUARDIAN_API_KEY`. A non-empty store value wins over process/host env
-(stale agent `GH_TOKEN` cannot shadow a freshly written store). Missing or empty store keys **keep** a non-empty
-process/host value (e.g. `remoteEnv` `${localEnv:…}`). Default sourcing is **load-only** (no TTY prompt) so Cursor SCM
-`git` polls stay quiet. Prompting happens only from `scripts/bin/gh` (when still empty on a TTY) or
-`source ./scripts/set-dev-tokens.sh` (force / override).
+`/commandhistory/tokens.env` for `GH_TOKEN`. A non-empty store value wins over process/host env (stale agent `GH_TOKEN`
+cannot shadow a freshly written store). Missing or empty store keys **keep** a non-empty process/host value (e.g.
+`remoteEnv` `${localEnv:…}`). Default sourcing is **load-only** (no TTY prompt) so Cursor SCM `git` polls stay quiet.
+Prompting happens only from `scripts/bin/gh` (when still empty on a TTY) or `source ./scripts/set-dev-tokens.sh` (force
+/ override).
 
 ## Docker volumes
 

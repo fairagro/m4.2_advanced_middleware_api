@@ -1,4 +1,4 @@
-# Personal GH_TOKEN / GITGUARDIAN_API_KEY. Source this file.
+# Personal GH_TOKEN (and legacy GITGUARDIAN_API_KEY if still in the store). Source this file.
 # Environment: Linux Dev Container only (requires /commandhistory).
 # Default: load only (store → keep non-empty process/host env). No TTY prompt.
 # Prompt only when DEV_TOKENS_FORCE=1 (set-dev-tokens.sh) or DEV_TOKENS_PROMPT=1 (scripts/bin/gh).
@@ -56,6 +56,8 @@ _DEV_TOKENS_FILE="$(_dev_tokens_file)" || return 1
 
 # If the environment already holds a store-encoded value (e.g. someone ran
 # `source /commandhistory/tokens.env`), decode it in place before applying the store.
+# Still decode/load legacy GITGUARDIAN_API_KEY from store/env if present (products mid-migration).
+# Fleet secret scan is gitleaks — do not prompt for a GitGuardian key below.
 for _dev_tokens_var in GH_TOKEN GITGUARDIAN_API_KEY; do
   _dev_tokens_cur="${!_dev_tokens_var-}"
   if [ -n "${_dev_tokens_cur}" ] && [ "${_dev_tokens_cur#b64:}" != "${_dev_tokens_cur}" ]; then
@@ -140,7 +142,6 @@ _dev_tokens_ask() {
 # Interactive ask: set-dev-tokens (FORCE) or the gh wrapper (PROMPT).
 if [ -n "${DEV_TOKENS_FORCE:-}" ] || [ -n "${DEV_TOKENS_PROMPT:-}" ]; then
   _dev_tokens_ask GH_TOKEN "GitHub PAT (issues + PRs)"
-  _dev_tokens_ask GITGUARDIAN_API_KEY "GitGuardian API key"
 fi
 unset -f _dev_tokens_file _dev_tokens_write _dev_tokens_ask
 unset -f _dev_tokens_decode_raw _dev_tokens_get_stored

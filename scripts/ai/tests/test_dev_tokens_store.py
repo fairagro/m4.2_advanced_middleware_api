@@ -162,7 +162,7 @@ test -z "${{GITGUARDIAN_API_KEY-}}"
         os.close(slave)
         slave = -1
         deadline = time.monotonic() + 5.0
-        answers_left = 2  # GH_TOKEN + GITGUARDIAN_API_KEY
+        answers_left = 1  # GH_TOKEN only (gitleaks; no GitGuardian prompt)
         while proc.poll() is None and time.monotonic() < deadline:
             ready, _, _ = select.select([master], [], [], 0.1)
             if ready:

@@ -26,7 +26,7 @@ Issue: [#171](https://github.com/fairagro/m4.2_middleware_devinfra/issues/171) (
 
 ## Anti-duplication
 
-Do not restate findings owned by Ruff, mypy, pylint, Bandit, markdownlint, Prettier, ggshield, CodeQL, Trivy,
+Do not restate findings owned by Ruff, mypy, pylint, Bandit, markdownlint, Prettier, gitleaks, CodeQL, Trivy,
 **vulture**, or **import-linter**. Mechanical unused definitions are vulture’s; mechanical cycle/layer/forbidden
 violations are import-linter’s. Keep judgment-only notes for Import-policy rules outside the linter (module-level
 imports, relative imports, `sys.path` mutation, lazy imports used only to break cycles) — see

@@ -98,7 +98,7 @@ Severity / cost language: [`docs/ai_review_policy.md`](../../../docs/ai_review_p
 
 ## Anti-duplication (hard rule)
 
-Do **not** restate findings owned by: Ruff, mypy, pylint, Bandit, markdownlint, Prettier, ggshield, CodeQL, Trivy,
+Do **not** restate findings owned by: Ruff, mypy, pylint, Bandit, markdownlint, Prettier, gitleaks, CodeQL, Trivy,
 **vulture**, and **import-linter**. Out of scope: format, import sort, line-length, type noise CI already fails. Do not
 re-report mechanical unused-definition hits that the fleet vulture gate (`--min-confidence 100`) would catch, or
 cycle/layer/forbidden hits that import-linter would catch. Judgment MAY still cover Import-policy rules outside the

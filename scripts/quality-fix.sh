@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Apply autofixes using the same hooks as pre-commit (commit stage).
-# Runs only mutating hooks; does not run mypy/pylint/bandit/ggshield/pre-push.
+# Runs only mutating hooks; does not run mypy/pylint/bandit/gitleaks/pre-push.
 #
 # Environment: host or Dev Container (needs `uv`).
 #
