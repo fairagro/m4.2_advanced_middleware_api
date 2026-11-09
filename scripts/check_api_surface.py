@@ -76,14 +76,17 @@ def _package_breakages(
     base: str,
     cwd: Path,
 ) -> list[Any]:
-    paths = [str(cwd / p) for p in search_paths]
+    # load_git joins each path onto a temporary worktree; absolute paths drop that
+    # prefix on POSIX and would load HEAD instead of ``base``.
+    relative_paths = list(search_paths)
+    head_paths = [str(cwd / p) for p in relative_paths]
     try:
-        old = load_git(name, ref=base, search_paths=paths, repo=str(cwd))
+        old = load_git(name, ref=base, search_paths=relative_paths, repo=str(cwd))
     except Exception as exc:  # noqa: BLE001 — surface load errors as gate failures
         print(f"error: failed to load {name!r} at {base}: {exc}", file=sys.stderr)
         raise SystemExit(2) from exc
     try:
-        new = load(name, search_paths=paths)
+        new = load(name, search_paths=head_paths)
     except Exception as exc:  # noqa: BLE001
         print(f"error: failed to load {name!r} at HEAD: {exc}", file=sys.stderr)
         raise SystemExit(2) from exc
