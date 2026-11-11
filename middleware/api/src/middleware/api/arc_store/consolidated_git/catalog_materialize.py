@@ -43,6 +43,7 @@ _LDComment_NAME_MAP = {
 }
 _CREATOR_ORGANIZATION_COMMENT = "creator organization"
 _CREATOR_ORGANIZATION_URL_COMMENT = "creator organization url"
+_LANDING_PAGE_COMMENT = "landing page"
 
 
 @dataclass
@@ -456,6 +457,12 @@ def _consume_mapped_comment(
         return True
     if name_key == _CREATOR_ORGANIZATION_URL_COMMENT:
         creator_orgs.urls.extend(_split_semicolon_list(text_str))
+        return True
+    if name_key == _LANDING_PAGE_COMMENT:
+        # IRI as ``{"@id": …}`` so catalog compact keeps the ``url`` term (not ``schema:url``).
+        landing_url = text_str.strip()
+        if "url" not in record and landing_url:
+            record["url"] = {"@id": landing_url}
         return True
     mapped = _LDComment_NAME_MAP.get(name_key)
     if mapped == "keywords":
