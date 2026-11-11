@@ -163,6 +163,9 @@ a substitute for Trivy on images. See
 **Secret scan:** the same reusable installs `gitleaks` from caller `GITLEAKS_VERSION` and fails on findings (no
 GitGuardian API key). See [quality.md](quality.md) (gitleaks section).
 
+**Actionlint:** the same reusable installs `actionlint` from caller `ACTIONLINT_VERSION` and fails the job on workflow
+findings (blocking). Same pin as Dev Container / commit-stage — see [quality.md](quality.md) (actionlint section).
+
 Bump the product `uses:` ref after this policy lands so callers pick up report-only Licence Check.
 
 ### Feature PR (Docker build + check + Helm lint)
@@ -469,6 +472,11 @@ invoke (**file wins** over a stale Compose `env_file` snapshot) unless `QUALITY_
 synced `.gitleaksignore`). `--no-git` scans the PR tip tree (avoids empty scans on shallow merge checkouts); `--redact`
 keeps secret values out of Actions logs. No GitGuardian API key. Same tool as the commit-stage
 `gitleaks protect --staged` hook — see [quality.md](quality.md).
+
+**actionlint:** when `skip` is false, the job installs the caller’s `ACTIONLINT_VERSION` via
+`scripts/install-actionlint.sh` and runs `actionlint` (fail closed / blocking). Same pin as the Dev Container image and
+commit-stage hook. Devinfra-only `.github/actionlint.yaml` ignores false positives on `$/.github/workflows/…` nested
+reusable `uses:` — see [quality.md](quality.md).
 
 **pytest vs pre-push:** this workflow runs `uv run pytest "${PKG}" …` **without** the synced pre-push marker filter
 (`-m "not system_external and not system_local"`). CI stays the broader gate; local push excludes `system_*` by default
