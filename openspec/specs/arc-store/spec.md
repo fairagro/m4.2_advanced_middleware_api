@@ -2,9 +2,9 @@
 
 ## Purpose
 
-`ArcStore` is the Git-backend persistence abstraction for parsed ARC objects. It creates or updates their repositories
-without depending on Celery, CouchDB, or HTTP; its caller, described in `arc-manager/`, owns parsing, events, and retry
-policy.
+Git-backend ports for parsed ARC objects: a per-ARC `ArcStore` (create/update repositories by `arc_id`) and an optional
+`ConsolidatedArcStore` (RDI catalog `finalize`). Both share lifecycle (health / shutdown) only. They do not depend on
+Celery, CouchDB, or HTTP; the caller in `arc-manager/` owns parsing, events, and retry policy.
 
 ## Requirements
 
