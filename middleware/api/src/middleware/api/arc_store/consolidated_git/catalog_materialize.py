@@ -460,8 +460,9 @@ def _consume_mapped_comment(
         return True
     if name_key == _LANDING_PAGE_COMMENT:
         # IRI as ``{"@id": …}`` so catalog compact keeps the ``url`` term (not ``schema:url``).
-        if "url" not in record and text_str:
-            record["url"] = {"@id": text_str}
+        landing_url = text_str.strip()
+        if "url" not in record and landing_url:
+            record["url"] = {"@id": landing_url}
         return True
     mapped = _LDComment_NAME_MAP.get(name_key)
     if mapped == "keywords":

@@ -836,7 +836,7 @@ def test_materialize_landing_page_comment_sets_url() -> None:
                     "@id": "#LDComment_Landing_Page",
                     "@type": "Comment",
                     "name": "Landing Page",
-                    "text": "https://example.org/landing",
+                    "text": "  https://example.org/landing\n",
                 },
                 {
                     "@id": "./",
