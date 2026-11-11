@@ -104,11 +104,12 @@ class ProductionLifecyclePort:
     ) -> v3_models.HarvestResponse:
         """Transition a harvest to a terminal client status."""
         await self._deps.validate_content_type(self._request)
+        # Cert/client-id before store lookup — avoid 404 vs 401 harvest-existence leaks.
+        client_id = await self._require_client_id()
         harvest = await self._bl.harvest_manager.get_harvest(harvest_id)
         if not harvest:
             raise HTTPException(status_code=HTTPStatus.NOT_FOUND, detail="Harvest not found")
         await self._deps.validate_rdi_authorized(harvest.rdi, self._request)
-        client_id = await self._require_client_id()
         try:
             harvest = await self._bl.transition_harvest(harvest, body.status, client_id=client_id)
         except ConflictError as exc:
@@ -117,11 +118,11 @@ class ProductionLifecyclePort:
 
     async def complete_harvest(self, harvest_id: str) -> v3_models.HarvestResponse:
         """Complete a harvest (deprecated POST complete path)."""
+        client_id = await self._require_client_id()
         harvest = await self._bl.harvest_manager.get_harvest(harvest_id)
         if not harvest:
             raise HTTPException(status_code=HTTPStatus.NOT_FOUND, detail="Harvest not found")
         await self._deps.validate_rdi_authorized(harvest.rdi, self._request)
-        client_id = await self._require_client_id()
         harvest = await self._bl.complete_harvest(harvest, client_id=client_id)
         return _map_harvest(harvest)
 
@@ -131,6 +132,7 @@ class ProductionLifecyclePort:
         body: v3_models.SubmitHarvestArcRequest,
     ) -> v3_models.ArcResponse:
         """Submit an ARC within a harvest context."""
+        client_id = await self._require_client_id()
         harvest = await self._bl.harvest_manager.get_harvest(harvest_id)
         if not harvest:
             raise HTTPException(status_code=HTTPStatus.NOT_FOUND, detail="Harvest not found")
@@ -140,7 +142,6 @@ class ProductionLifecyclePort:
             raise ConflictError(
                 f"Cannot submit ARC to harvest {harvest_id}: harvest status is {harvest.status.value}, expected RUNNING"
             )
-        client_id = await self._require_client_id()
         try:
             result = await self._bl.create_or_update_arc(rdi, body.arc, client_id, harvest_id=harvest_id)
         except DuplicateArcInHarvestError as exc:
@@ -219,8 +220,9 @@ class ProductionLifecyclePort:
 def production_port_factory(request: Request) -> ProductionLifecyclePort:
     """Build a request-scoped production lifecycle port.
 
-    Client-cert resolution is deferred until harvest/ARC mutations so probes like
-    ``GET /v3/liveness`` stay unauthenticated (same as the former system route).
+    Client-cert resolution is deferred until harvest/ARC handlers (not liveness) so
+    probes like ``GET /v3/liveness`` stay unauthenticated (same as the former system
+    route). Harvest handlers call ``_require_client_id`` before store lookups.
     """
     return ProductionLifecyclePort(
         request,

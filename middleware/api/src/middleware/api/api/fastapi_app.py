@@ -48,7 +48,7 @@ from .rate_limiting import RateLimitingMiddleware
 from .tracing import setup_api_tracing
 from .v1 import system as system_v1
 from .v2 import arcs as arcs_v2, system as system_v2, tasks as tasks_v2
-from .v3 import arcs as arcs_v3, harvests as harvests_v3, system as system_v3
+from .v3 import harvests as harvests_v3, system as system_v3
 from .v3.lifecycle_port import production_port_factory
 
 __version__ = resolve_api_package_version()
@@ -331,9 +331,8 @@ class Api:
         # body-less POST complete match the previous per-route Depends set.
         mount_lifecycle_routes(self._app, production_port_factory)
 
-        # Register V3 deferred / production-only routes
+        # Register V3 deferred / production-only routes (standalone POST /v3/arcs is in api_v3).
         self._app.include_router(system_v3.router)
-        self._app.include_router(arcs_v3.router)
         self._app.include_router(harvests_v3.router)
 
 
