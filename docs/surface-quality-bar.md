@@ -33,3 +33,9 @@ errors).
 
 Agent CLI (`scripts/ai/`), synced Devinfra scripts, vendor skills, and pure docs/OpenSpec cadence stay on the **global**
 rows — do not restate them unless this product needs a different bar for a path the global table mis-classifies.
+
+## Related product gates
+
+Public **Python** library surface (`api_client` + selected `shared`) is gated by
+[`docs/api-surface-check.md`](api-surface-check.md) (griffe vs `main`, synced to Conventional Commit breaking markers).
+That check is CI/toolchain-owned — not a Finder/Fixer nit surface.
