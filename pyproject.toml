@@ -33,6 +33,9 @@ dev = [
   # Starlette TestClient (FastAPI API tests) uses httpx2 when installed; avoids
   # StarletteDeprecationWarning. Production api_client still uses httpx + respx.
   "httpx2>=2.4.0",
+  # Library API lives in griffelib (import name stays `griffe`). The PyPI
+  # meta-package `griffe` is CLI-only and confuses IDE import resolution.
+  "griffelib>=2.0",
 ]
 
 [tool.uv.sources]
