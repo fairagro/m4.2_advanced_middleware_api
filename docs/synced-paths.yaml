@@ -1,104 +1,126 @@
-# Sole source of truth for paths synced from Devinfra into product repos.
+# Sole source of truth for paths synced from Devinfra into consumer repos.
 # Consumers must not hand-edit allowlisted files after sync (corrections → Devinfra → sync).
 # No product-local synced-paths overlay. Human inventory + overlay patterns: docs/sync.md
 # Policy / review-fixer: docs/ai_review_policy.md#synced-paths-sync-source-of-truth
 # Synced Markdown must not use in-repo relative links to paths outside allow (minus exclude);
 # use absolute Devinfra URLs (blob/main) or plain non-linked names — see docs/sync.md.
+#
+# Layout B (#350): profiles + targets. Effective allow = union of the target's profiles.
+# Slice 1 foundation = skills/commands/prompts/skill docs + m42-ai / token plumbing (no Renovate).
 
-allow:
-  - docs/ai_review_policy.md
-  - docs/surface-quality-bar.global.md
-  - docs/synced-paths.yaml
-  - docs/sync.md
-  - docs/renovate.md
-  - docs/review-fixer.md
-  - docs/create-issue.md
-  - docs/code-review.md
-  - docs/issue-fixer.md
-  - docs/quality.md
-  - docs/devcontainer.md
-  - docs/conventions.md
-  - docs/ci.md
-  - .cursor/BUGBOT.md
-  - .github/copilot-instructions.md
-  - .cursor/commands/review-fixer.md
-  - .cursor/commands/create-issue.md
-  - .cursor/commands/code-review.md
-  - .cursor/commands/issue-fixer.md
-  - .github/prompts/review-fixer.prompt.md
-  - .github/prompts/create-issue.prompt.md
-  - .github/prompts/code-review.prompt.md
-  - .github/prompts/issue-fixer.prompt.md
-  - .agents/skills/review-fixer/**
-  - .agents/skills/create-issue/**
-  - .agents/skills/code-review/**
-  - .agents/skills/issue-fixer/**
-  - .agents/skills/arctrl/**
-  - .agents/skills/gh/**
-  - .agents/skills/docker/**
-  - .agents/skills/hadolint/**
-  - .agents/skills/uv/**
-  - scripts/ai/**
-  - scripts/dev-tokens.sh
-  - scripts/set-dev-tokens.sh
-  - scripts/bin/gh
-  - scripts/bin/git
-  - scripts/bin/k
-  - scripts/bin/d
-  - scripts/bin/m42-ai
-  - scripts/quality-check.sh
-  - scripts/quality-fix.sh
-  - scripts/run-container-structure-test.sh
-  - scripts/run-import-linter.sh
-  - scripts/run-quality-cli.sh
-  - scripts/load-quality-path-env.sh
-  - scripts/commit-path-check.sh
-  - scripts/quality-tools-pins.txt
-  - scripts/run-uv-audit.sh
-  - scripts/run-helm-lint.sh
-  - scripts/detect-version-bump.sh
-  - scripts/generate-release-changelog.sh
-  - scripts/install-git-cliff.sh
-  - scripts/install-cst.sh
-  - scripts/install-gitleaks.sh
-  - .gitleaksignore
-  - scripts/setup-git-hooks.sh
-  - scripts/update-dockerfile-pins.sh
-  - scripts/prune-merged-branches.sh
-  - scripts/git-hooks/**
-  - scripts/load-versions-env.sh
-  - scripts/devcontainer-post-create.sh
-  - scripts/import-public-gpg-keys.sh
-  - openspec/principles.global.md
-  - renovate.json
-  - .github/workflows/renovate.yml
-  - .github/workflows/codeql.yml
-  - docker/Dockerfile.product-app.base
-  - versions.env
-  - .python-version
-  - .pre-commit-config.yaml
-  - .bandit
-  - ruff.toml
-  - mypy.ini
-  - .pylintrc
-  - pyrightconfig.json
-  - .markdownlint.json
-  - .markdownlint-cli2.jsonc
-  - .markdownlintignore
-  - .prettierrc.json
-  - .prettierignore
-  - package.json
-  - package-lock.json
-  - commitlint.config.cjs
-  - cliff.toml
-  - .vscode/settings.json
-  - .vscode/extensions.json
-  - .cursorrules
-  - .devcontainer/Dockerfile
-  - .devcontainer/devcontainer.json
-  - .devcontainer/docker-compose.yml
-  - .devcontainer/starship.toml
-  - .gitignore
+profiles:
+  foundation:
+    allow:
+      - docs/ai_review_policy.md
+      - docs/synced-paths.yaml
+      - docs/sync.md
+      - docs/review-fixer.md
+      - docs/create-issue.md
+      - docs/code-review.md
+      - docs/issue-fixer.md
+      - .cursor/BUGBOT.md
+      - .github/copilot-instructions.md
+      - .cursor/commands/review-fixer.md
+      - .cursor/commands/create-issue.md
+      - .cursor/commands/code-review.md
+      - .cursor/commands/issue-fixer.md
+      - .github/prompts/review-fixer.prompt.md
+      - .github/prompts/create-issue.prompt.md
+      - .github/prompts/code-review.prompt.md
+      - .github/prompts/issue-fixer.prompt.md
+      - .agents/skills/review-fixer/**
+      - .agents/skills/create-issue/**
+      - .agents/skills/code-review/**
+      - .agents/skills/issue-fixer/**
+      - .agents/skills/arctrl/**
+      - .agents/skills/gh/**
+      - .agents/skills/docker/**
+      - .agents/skills/hadolint/**
+      - .agents/skills/uv/**
+      - scripts/ai/**
+      - scripts/dev-tokens.sh
+      - scripts/set-dev-tokens.sh
+      - scripts/bin/gh
+      - scripts/bin/git
+      - scripts/bin/m42-ai
+
+  python-product:
+    allow:
+      - docs/surface-quality-bar.global.md
+      - docs/renovate.md
+      - docs/quality.md
+      - docs/devcontainer.md
+      - docs/conventions.md
+      - docs/ci.md
+      - scripts/bin/k
+      - scripts/bin/d
+      - scripts/quality-check.sh
+      - scripts/quality-fix.sh
+      - scripts/run-container-structure-test.sh
+      - scripts/run-import-linter.sh
+      - scripts/run-quality-cli.sh
+      - scripts/load-quality-path-env.sh
+      - scripts/commit-path-check.sh
+      - scripts/quality-tools-pins.txt
+      - scripts/run-uv-audit.sh
+      - scripts/run-helm-lint.sh
+      - scripts/detect-version-bump.sh
+      - scripts/generate-release-changelog.sh
+      - scripts/install-git-cliff.sh
+      - scripts/install-cst.sh
+      - scripts/install-gitleaks.sh
+      - .gitleaksignore
+      - scripts/setup-git-hooks.sh
+      - scripts/update-dockerfile-pins.sh
+      - scripts/prune-merged-branches.sh
+      - scripts/git-hooks/**
+      - scripts/load-versions-env.sh
+      - scripts/devcontainer-post-create.sh
+      - scripts/import-public-gpg-keys.sh
+      - openspec/principles.global.md
+      - renovate.json
+      - .github/workflows/renovate.yml
+      - .github/workflows/codeql.yml
+      - docker/Dockerfile.product-app.base
+      - versions.env
+      - .python-version
+      - .pre-commit-config.yaml
+      - .bandit
+      - ruff.toml
+      - mypy.ini
+      - .pylintrc
+      - pyrightconfig.json
+      - .markdownlint.json
+      - .markdownlint-cli2.jsonc
+      - .markdownlintignore
+      - .prettierrc.json
+      - .prettierignore
+      - package.json
+      - package-lock.json
+      - commitlint.config.cjs
+      - cliff.toml
+      - .vscode/settings.json
+      - .vscode/extensions.json
+      - .cursorrules
+      - .devcontainer/Dockerfile
+      - .devcontainer/devcontainer.json
+      - .devcontainer/docker-compose.yml
+      - .devcontainer/starship.toml
+      - .gitignore
+
+targets:
+  api:
+    repo: fairagro/m4.2_advanced_middleware_api
+    profiles: [foundation, python-product]
+  sql_to_arc:
+    repo: fairagro/m4.2_sql_to_arc
+    profiles: [foundation, python-product]
+  harvester:
+    repo: fairagro/m4.2_middleware_harvester
+    profiles: [foundation, python-product]
+  infrastructure:
+    repo: fairagro/m4.2_infrastructure
+    profiles: [foundation]
 
 # Never copy — even if mis-listed under allow.
 exclude:
