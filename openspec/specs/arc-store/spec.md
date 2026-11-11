@@ -304,20 +304,22 @@ succeed.
 When the consolidated backend rebuilds an RDI catalog during **finalize** (Celery worker), each extracted Schema.org
 `Dataset` SHALL be JSON-LD-expanded (using the source document’s `@context`) and then JSON-LD-compacted using a
 **vendored** schema.org JSON-LD context document plus a pinned ARC/Bioschemas extension term map (at least the ARC
-Lab/Sample terms commonly present in RO-Crate ARC contexts).
+Lab/Sample terms commonly present in RO-Crate ARC contexts) plus a transitional **catalog dump-shape** extension that
+overrides date-term typing and list `@container` rules for Search Hub–stable basic-layout dumps (not AgriSchemas).
 
-The compacted record MUST **emit** `@context` as `["https://schema.org", <ARC/Bioschemas extension map>]` (not the
-source RO-Crate context, and not an inline copy of the vendored release document). The vendored file governs compact
-term choice only. Terms unknown to the processing context MUST remain as absolute IRIs after compact. Expand/compact
-MUST NOT run on the API ingest path. For a fixed ARC body and the same vendored contexts, two compacted Dataset records
-MUST be byte-identical under the catalog’s canonical JSON serialization rules.
+The compacted record MUST **emit** `@context` as
+`["https://schema.org", <ARC/Bioschemas extension map>, <catalog dump-shape map>]` (not the source RO-Crate context, and
+not an inline copy of the vendored release document). The vendored file plus those extensions govern compact term
+choice. Terms unknown to the processing context MUST remain as absolute IRIs after compact. Expand/compact MUST NOT run
+on the API ingest path. For a fixed ARC body and the same vendored contexts, two compacted Dataset records MUST be
+byte-identical under the catalog’s canonical JSON serialization rules.
 
 #### Scenario: Worker finalize rewrites Dataset context
 
 - **GIVEN** an ARC RO-Crate whose top-level `@context` is an RO-Crate profile URL plus ARC/Bioschemas extensions
 - **WHEN** catalog finalize rebuilds `{rdi}.json` in the worker
-- **THEN** each Dataset’s `@context` is `https://schema.org` plus the ARC/Bioschemas extension map and schema.org
-  properties such as `name` remain short names
+- **THEN** each Dataset’s `@context` is `https://schema.org` plus the ARC/Bioschemas extension map plus the catalog
+  dump-shape map and schema.org properties such as `name` remain short names
 
 #### Scenario: API ingest does not compact
 
@@ -540,14 +542,14 @@ materialization.
 ### Requirement: Do not emit compact @base in public catalog context
 
 The `@context` written into each published catalog Dataset MUST remain
-`["https://schema.org", <ARC/Bioschemas extension map>]`. It MUST NOT include `@base` and MUST NOT include
-`http://example.org/base/` or `example.org`.
+`["https://schema.org", <ARC/Bioschemas extension map>, <catalog dump-shape map>]`. It MUST NOT include `@base` and MUST
+NOT include `http://example.org/base/` or `example.org`.
 
 #### Scenario: Public context has no @base
 
 - **GIVEN** a Dataset compacted for catalog publish
 - **WHEN** the Dataset is written into `{rdi}.json`
-- **THEN** its `@context` is the schema.org IRI plus the ARC/Bioschemas extension map
+- **THEN** its `@context` is the schema.org IRI plus the ARC/Bioschemas extension map plus the catalog dump-shape map
 - **AND** `@context` does not contain `@base`
 - **AND** `@context` does not contain `example.org`
 
