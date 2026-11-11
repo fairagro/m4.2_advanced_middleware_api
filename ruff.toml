@@ -54,7 +54,7 @@ combine-as-imports = true
 
 [lint.per-file-ignores]
 # Pytest fixtures / test data — argument-count and magic-number noise.
-"middleware/*/tests/**/*.py" = ["SLF001", "PLR0913", "PLR0917", "PLR2004", "D103"]
+"middleware/*/tests/**/*.py" = ["SLF001", "PLR0913", "PLR0917", "PLR2004", "D103", "PLR6301"]
 # Devinfra agent plumbing (`m42-ai`): not product middleware. IDE still uses this
 # ruff.toml; hooks/CI only lint middleware/. Keep import/bug rules; drop docstring
 # and complexity/magic noise that matches the product surface bar.

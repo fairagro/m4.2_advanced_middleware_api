@@ -14,8 +14,8 @@ from middleware.api.document_store.arc_document import ArcDocument, ArcEvent, Ar
 from middleware.api.document_store.config import CouchDBConfig
 from middleware.api.document_store.content_hash import RoCrateContent, calculate_arc_content_hash
 from middleware.api.document_store.couchdb import CouchDB
-from middleware.api.utils import calculate_arc_id
 from middleware.shared.api_models.common.models import ArcEventType, ArcLifecycleStatus
+from middleware.shared.identity import calculate_arc_id
 
 
 @pytest.fixture
@@ -26,7 +26,8 @@ def config() -> CouchDBConfig:
 
 def test_catalog_list_page_size_default_stays_500() -> None:
     """Operators can lower the page size; the default stays 500."""
-    field = CouchDBConfig.model_fields["catalog_list_page_size"]
+    field = CouchDBConfig.model_fields.get("catalog_list_page_size")
+    assert field is not None
     assert field.default == 500
     assert CouchDBConfig(url="http://test:5984").catalog_list_page_size == 500
     assert "Lower this under memory pressure" in (field.description or "")

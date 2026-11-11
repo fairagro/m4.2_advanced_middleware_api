@@ -23,10 +23,10 @@ from middleware.api.config import Config
 from middleware.api.document_store import ArcStoreResult
 from middleware.api.document_store.config import CouchDBConfig
 from middleware.api.rdi_registry import RdiRegistryEntry
-from middleware.api.utils import calculate_arc_id
 from middleware.api.worker.config import CeleryConfig
 from middleware.shared.api_models.common.rocrate import RoCratePayload
 from middleware.shared.config.config_base import OtelConfig
+from middleware.shared.identity import calculate_arc_id
 
 
 @pytest.fixture(scope="session", autouse=True)

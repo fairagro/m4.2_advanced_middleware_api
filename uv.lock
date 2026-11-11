@@ -13,6 +13,7 @@ members = [
     "api",
     "fairagro-middleware-api-client",
     "fairagro-middleware-api-local-offline",
+    "fairagro-middleware-api-v3",
     "fairagro-middleware-arc-validation",
     "fairagro-middleware-shared",
     "m4-2-advanced-middleware",
@@ -259,6 +260,7 @@ dependencies = [
     { name = "celery" },
     { name = "celery-types" },
     { name = "cryptography" },
+    { name = "fairagro-middleware-api-v3" },
     { name = "fairagro-middleware-shared" },
     { name = "fastapi" },
     { name = "gitpython" },
@@ -285,6 +287,7 @@ requires-dist = [
     { name = "celery", specifier = ">=5.3.6" },
     { name = "celery-types", specifier = ">=0.24.0" },
     { name = "cryptography", specifier = ">=45.0.6" },
+    { name = "fairagro-middleware-api-v3", editable = "middleware/api_v3" },
     { name = "fairagro-middleware-shared", editable = "middleware/shared" },
     { name = "fastapi", specifier = ">=0.124.0" },
     { name = "gitpython", specifier = ">=3.1.46" },
@@ -1138,6 +1141,7 @@ name = "fairagro-middleware-api-local-offline"
 source = { editable = "middleware/api_local_offline" }
 dependencies = [
     { name = "arctrl" },
+    { name = "fairagro-middleware-api-v3" },
     { name = "fairagro-middleware-shared" },
     { name = "fastapi" },
     { name = "uvicorn" },
@@ -1146,9 +1150,24 @@ dependencies = [
 [package.metadata]
 requires-dist = [
     { name = "arctrl", specifier = ">=3.2.2" },
+    { name = "fairagro-middleware-api-v3", editable = "middleware/api_v3" },
     { name = "fairagro-middleware-shared", editable = "middleware/shared" },
     { name = "fastapi", specifier = ">=0.124.0" },
     { name = "uvicorn", specifier = ">=0.35.0" },
+]
+
+[[package]]
+name = "fairagro-middleware-api-v3"
+source = { editable = "middleware/api_v3" }
+dependencies = [
+    { name = "fairagro-middleware-shared" },
+    { name = "fastapi" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "fairagro-middleware-shared", editable = "middleware/shared" },
+    { name = "fastapi", specifier = ">=0.124.0" },
 ]
 
 [[package]]
@@ -2046,6 +2065,7 @@ dependencies = [
     { name = "api" },
     { name = "fairagro-middleware-api-client" },
     { name = "fairagro-middleware-api-local-offline" },
+    { name = "fairagro-middleware-api-v3" },
     { name = "fairagro-middleware-arc-validation" },
     { name = "fairagro-middleware-shared" },
 ]
@@ -2074,6 +2094,7 @@ requires-dist = [
     { name = "api", editable = "middleware/api" },
     { name = "fairagro-middleware-api-client", editable = "middleware/api_client" },
     { name = "fairagro-middleware-api-local-offline", editable = "middleware/api_local_offline" },
+    { name = "fairagro-middleware-api-v3", editable = "middleware/api_v3" },
     { name = "fairagro-middleware-arc-validation", editable = "middleware/arc_validation" },
     { name = "fairagro-middleware-shared", editable = "middleware/shared" },
 ]

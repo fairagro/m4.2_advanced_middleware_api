@@ -31,14 +31,18 @@ Package manager: always `uv` (never pip/poetry directly). See also Python toolin
 ## Module Dependency Rules
 
 ```text
-middleware/api/          ← primary API component
-middleware/shared/       ← utilities shared across components (ConfigWrapper, models)
-middleware/api_client/   ← optional client library for API consumers
+middleware/api/                 ← primary API component
+middleware/api_v3/              ← shared FastAPI /v3 harvest+ARC lifecycle routers
+middleware/api_local_offline/   ← local offline stand-in (ApiClient test surface)
+middleware/shared/              ← utilities shared across components (ConfigWrapper, models, Protocol)
+middleware/api_client/          ← optional client library for API consumers
 ```
 
-- `api` may depend on `shared` and `api_client`.
-- `shared` must not depend on `api` or `api_client`.
-- `api_client` may depend on `shared`; it must not depend on `api`.
+- `api` may depend on `shared`, `api_client`, and `api_v3`.
+- `api_local_offline` may depend on `shared` and `api_v3`; it must not depend on `api`.
+- `api_v3` may depend on `shared`; it must not depend on `api`.
+- `shared` must not depend on `api`, `api_client`, `api_v3`, or `api_local_offline`.
+- `api_client` may depend on `shared`; it must not depend on `api` or `api_v3`.
 
 ---
 

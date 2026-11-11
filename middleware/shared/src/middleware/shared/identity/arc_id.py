@@ -1,4 +1,6 @@
-"""Utility functions for the FAIRagro Middleware API."""
+"""ARC document identity hashing shared by production API and local-offline."""
+
+from __future__ import annotations
 
 import hashlib
 

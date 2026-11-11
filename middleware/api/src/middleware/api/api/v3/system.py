@@ -16,7 +16,6 @@ from middleware.api.health_service import ApiHealthService
 from middleware.api.package_version import resolve_api_package_version
 from middleware.shared.api_models.v3.models import (
     HealthResponse,
-    LivenessResponse,
     ReadinessResponse,
     StatusResponse,
     VersionResponse,
@@ -53,17 +52,7 @@ async def whoami(
     )
 
 
-@router.get("/liveness", response_model=LivenessResponse)
-async def liveness(
-    health_service: Annotated[ApiHealthService, Depends(get_health_service)],
-    _: Annotated[None, Depends(get_accept_type)],
-) -> LivenessResponse:
-    """Return API process liveness status."""
-    checks = await health_service.liveness_checks()
-    return LivenessResponse(
-        status=StatusResponse.OK if all(checks.values()) else StatusResponse.ERROR,
-        services=checks,
-    )
+# GET /v3/liveness is registered by middleware.api_v3 (shared lifecycle surface).
 
 
 @router.get("/readiness", response_model=ReadinessResponse)
