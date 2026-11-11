@@ -1,5 +1,6 @@
-# Pre-commit configuration (shared Devinfra skeleton for product sync).
-# See https://pre-commit.com
+# Pre-commit for Devinfra + python-product consumers (foundation + python-product + gitops hooks).
+# See https://pre-commit.com and docs/quality.md.
+# Infra uses `.pre-commit-config.infrastructure.yaml` instead (#351) — do not sync this blob there.
 #
 # Commit stage: fast checks / autofixes.
 # Pre-push: pytest (excludes system_external/system_local) + container-structure-test
