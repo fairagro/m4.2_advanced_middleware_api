@@ -15,11 +15,20 @@ from middleware.api.arc_store.consolidated_git.catalog_jsonld import (
     normalize_catalog_datasets,
     normalize_catalog_datasets_best_effort,
 )
+from middleware.api.arc_store.consolidated_git.catalog_jsonld_dump_shape import CATALOG_DUMP_SHAPE_CONTEXT
 from middleware.api.arc_store.consolidated_git.catalog_jsonld_extensions import ARC_BIOSCHEMAS_EXTENSION_CONTEXT
 from middleware.api.arc_store.consolidated_git.catalog_materialize import materialize_catalog_dataset
 from middleware.api.arc_store.consolidated_git.catalog_serialize import extract_catalog_dataset
 from middleware.api.arc_store.consolidated_git.schema_org_context import load_schema_org_context
 from middleware.shared.json_types import CatalogDatasetRecord, JsonObject, RoCrateContent
+
+
+def _expected_emitted_context() -> list[object]:
+    return [
+        SCHEMA_ORG_CONTEXT_IRI,
+        dict(ARC_BIOSCHEMAS_EXTENSION_CONTEXT),
+        dict(CATALOG_DUMP_SHAPE_CONTEXT),
+    ]
 
 
 def _arc_with_rocrate_and_extension(identifier: str = "DS-1") -> RoCrateContent:
@@ -135,14 +144,15 @@ def test_vendored_schema_org_context_loads() -> None:
 
 
 def test_compact_uses_schema_org_and_extension_map() -> None:
-    """Compact with vendored document; emit https://schema.org + ARC/Bioschemas map."""
+    """Compact with vendored document; emit schema.org + ARC/Bioschemas + dump shape."""
     dataset = extract_catalog_dataset(_arc_with_rocrate_and_extension())
     compact_ctx = build_catalog_compact_context(load_schema_org_context())
     emitted_ctx = build_catalog_emitted_context()
-    assert emitted_ctx == [SCHEMA_ORG_CONTEXT_IRI, dict(ARC_BIOSCHEMAS_EXTENSION_CONTEXT)]
+    assert emitted_ctx == _expected_emitted_context()
     assert isinstance(compact_ctx, list)
     compact_parts = cast(list[object], compact_ctx)
     assert dict(ARC_BIOSCHEMAS_EXTENSION_CONTEXT) in compact_parts
+    assert dict(CATALOG_DUMP_SHAPE_CONTEXT) in compact_parts
 
     compacted = compact_catalog_dataset(dataset, compact_ctx, emitted_context=emitted_ctx)
     assert compacted["@context"] == emitted_ctx
@@ -154,9 +164,9 @@ def test_compact_uses_schema_org_and_extension_map() -> None:
 
 
 def test_emitted_context_is_schema_org_iri_plus_extensions() -> None:
-    """Published @context is the conventional schema.org IRI, not an inline release map."""
+    """Published @context is schema.org IRI plus ARC/Bioschemas and dump-shape maps."""
     emitted = build_catalog_emitted_context()
-    assert emitted == [SCHEMA_ORG_CONTEXT_IRI, dict(ARC_BIOSCHEMAS_EXTENSION_CONTEXT)]
+    assert emitted == _expected_emitted_context()
 
 
 @pytest.mark.asyncio
@@ -208,21 +218,29 @@ def _compact_arctrl_shaped() -> CatalogDatasetRecord:
 def test_compact_restores_arctrl_relative_ids() -> None:
     """B1: path @ids stay relative; inlined Person/Comment omit fragment ids."""
     compacted = _compact_arctrl_shaped()
-    creator = compacted.get("creator")
-    has_part = compacted.get("hasPart")
-    comment = compacted.get("comment")
-    citation = compacted.get("citation")
+    creators = compacted.get("creator")
+    has_parts = compacted.get("hasPart")
+    comments = compacted.get("comment")
+    citations = compacted.get("citation")
     assert compacted.get("id") == "./"
     assert compacted.get("@id", "./") == "./"
     assert compacted.get("license") == {"type": "CreativeWork", "text": "ALL RIGHTS RESERVED"}
+    assert isinstance(creators, list) and len(creators) == 1
+    creator = creators[0]
     assert isinstance(creator, dict)
     assert creator.get("givenName") == "Ada"
     assert "id" not in creator
+    assert isinstance(has_parts, list) and len(has_parts) == 1
+    has_part = has_parts[0]
     assert isinstance(has_part, dict)
     assert has_part.get("id") == "assays/assay-a/"
+    assert isinstance(comments, list) and len(comments) == 1
+    comment = comments[0]
     assert isinstance(comment, dict)
     assert comment.get("name") == "Notes"
     assert "id" not in comment
+    assert isinstance(citations, list) and len(citations) == 1
+    citation = citations[0]
     assert isinstance(citation, dict)
     assert citation.get("headline") == "Paper"
     assert "id" not in citation
@@ -235,7 +253,7 @@ def test_compact_emitted_context_has_no_base() -> None:
     compacted = _compact_arctrl_shaped()
     emitted = compacted["@context"]
     assert emitted == build_catalog_emitted_context()
-    assert emitted == [SCHEMA_ORG_CONTEXT_IRI, dict(ARC_BIOSCHEMAS_EXTENSION_CONTEXT)]
+    assert emitted == _expected_emitted_context()
     assert "@base" not in str(emitted)
     assert "example.org" not in str(emitted).lower()
 
@@ -243,9 +261,77 @@ def test_compact_emitted_context_has_no_base() -> None:
 def test_compact_preserves_identifier_and_absolute_iris() -> None:
     """Keep identifier and already-absolute HTTP(S) IRIs; keep schema.org short names."""
     compacted = _compact_arctrl_shaped()
-    creator = compacted.get("creator")
+    creators = compacted.get("creator")
     assert compacted.get("identifier") == "DS-ARCTRL"
     assert compacted.get("name") == "ARCtrl-shaped dataset"
     assert compacted.get("url") == "https://doi.org/10.1234/example"
+    assert isinstance(creators, list) and len(creators) == 1
+    creator = creators[0]
     assert isinstance(creator, dict)
     assert creator.get("sameAs") == "https://orcid.org/0000-0002-1825-0097"
+
+
+def test_compact_dump_shape_unprefixed_dates_and_set_arrays() -> None:
+    """Dump-shape context: plain date* keys and @set arrays for single values (#595)."""
+    arc = cast(
+        RoCrateContent,
+        {
+            "@context": "https://w3id.org/ro/crate/1.1/context",
+            "@graph": [
+                {
+                    "@id": "#Person_1",
+                    "@type": "Person",
+                    "givenName": "Ada",
+                    "familyName": "Lovelace",
+                },
+                {
+                    "@id": "#LDComment_Keywords_soil",
+                    "@type": "Comment",
+                    "name": "Keywords",
+                    "text": "soil",
+                },
+                {
+                    "@id": "#LDComment_Notes",
+                    "@type": "Comment",
+                    "name": "Notes",
+                    "text": "one note",
+                },
+                {
+                    "@id": "./",
+                    "@type": "Dataset",
+                    "identifier": "DS-SHAPE",
+                    "name": "Shape fixture",
+                    "datePublished": "2024-06-01",
+                    "dateCreated": "2024-01-01",
+                    "dateModified": "2024-06-02",
+                    "sdDatePublished": "2024-06-03",
+                    "creator": {"@id": "#Person_1"},
+                    "comment": [
+                        {"@id": "#LDComment_Keywords_soil"},
+                        {"@id": "#LDComment_Notes"},
+                    ],
+                },
+            ],
+        },
+    )
+    materialized = materialize_catalog_dataset(extract_catalog_dataset(arc), arc)
+    compacted = compact_catalog_dataset(
+        materialized,
+        build_catalog_compact_context(load_schema_org_context()),
+        emitted_context=build_catalog_emitted_context(),
+    )
+    assert compacted.get("datePublished") == "2024-06-01"
+    assert compacted.get("dateCreated") == "2024-01-01"
+    assert compacted.get("dateModified") == "2024-06-02"
+    assert compacted.get("sdDatePublished") == "2024-06-03"
+    assert "schema:datePublished" not in compacted
+    creators = compacted.get("creator")
+    keywords = compacted.get("keywords")
+    comments = compacted.get("comment")
+    assert isinstance(creators, list) and len(creators) == 1
+    assert isinstance(keywords, list) and keywords == ["soil"]
+    assert isinstance(comments, list) and len(comments) == 1
+    assert isinstance(creators[0], dict)
+    assert creators[0].get("givenName") == "Ada"
+    assert isinstance(comments[0], dict)
+    assert comments[0].get("name") == "Notes"
