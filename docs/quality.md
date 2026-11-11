@@ -15,7 +15,7 @@ Not every file under `scripts/` is Dev Container-only. Personal-token helpers ar
 | `run-quality-cli.sh`                  | Host or Dev Container  | `uv run --with-requirements scripts/quality-tools-pins.txt` for fleet quality CLIs                                                                                                   |
 | `run-import-linter.sh`                | Host or Dev Container  | Product `.importlinter`; soft-skips without `middleware/`; uses `run-quality-cli.sh`                                                                                                 |
 | `run-uv-audit.sh`                     | Host or Dev Container  | Needs `uv` + network to OSV; optional `.uv-audit-ignore`                                                                                                                             |
-| `run-helm-lint.sh`                    | Host or Dev Container  | Needs `helm` on `PATH` only when `helmchart/<chart>/` or `helm/<chart>/` exists; pin is Dev Container `HELM_VERSION`; optional `HELM_VALUES_FILE` overlay                            |
+| `run-helm-lint.sh`                    | Host or Dev Container  | Needs `helm` on `PATH` when `charts/<chart>/` exists (canonical; also deprecated `helmchart/` / `helm/`); pin is Dev Container `HELM_VERSION`; optional `HELM_VALUES_FILE` overlay   |
 | `detect-version-bump.sh`              | Host or Dev Container  | Release `version_bump=auto`; needs `git-cliff` + `jq` (pin `GIT_CLIFF_VERSION`)                                                                                                      |
 | `generate-release-changelog.sh`       | Host or CI             | Final Release `## Changelog` via git-cliff (R1 ranges); soft-fail placeholder                                                                                                        |
 | `install-git-cliff.sh`                | Host or CI             | Installs pinned `git-cliff` from `versions.env`                                                                                                                                      |
@@ -260,11 +260,13 @@ exception is a documented product-local surface that sync does **not** overwrite
 
 Examples already in the shared skeleton:
 
-- `check-yaml` excludes Go-templated Helm under `helm/**/templates/` and `helmchart/**/templates/` (and vendor skill
-  trees) — safe when those paths are absent. Helm validation is the commit-stage `helm-lint` hook
-  ([`scripts/run-helm-lint.sh`](../scripts/run-helm-lint.sh)): `helm lint` plus `helm template` smoke on each
-  `helmchart/<chart>/` or `helm/<chart>/` with `Chart.yaml`. No such chart → no-op (Helm not required). Charts without
-  `helm` on `PATH` fail closed (use the Dev Container pin from `versions.env` `HELM_VERSION`). Optional overlay: export
+- `check-yaml` excludes Go-templated Helm under `charts/**/templates/` (and deprecated `helm/**/templates/` /
+  `helmchart/**/templates/`, plus vendor skill trees) — safe when those paths are absent. Helm validation is the
+  commit-stage `helm-lint` hook ([`scripts/run-helm-lint.sh`](../scripts/run-helm-lint.sh)): `helm lint` plus
+  `helm template` smoke on each **`charts/<chart>/`** with `Chart.yaml` (canonical fleet root; folder name = Chart.yaml
+  `name`). Deprecated dual discovery still finds `helmchart/<chart>/` and `helm/<chart>/` until consumer renames land;
+  **`helmcharts/` is not a supported alias**. No such chart → no-op (Helm not required). Charts without `helm` on `PATH`
+  fail closed (use the Dev Container pin from `versions.env` `HELM_VERSION`). Optional overlay: export
   `HELM_VALUES_FILE` to a repo-relative values file (same `-f` semantics as Feature-PR
   [`reusable-helm-lint.yml`](ci.md#reusable-helm-lintyml) input `values_file`; empty/unset = bare chart; missing path
   fails closed). Feature-PR CI still uses that reusable with a **separate** chart detect-changes filter — do not put
@@ -353,10 +355,10 @@ cannot layer onto the synced blob without post-sync hand-edits ([`docs/sync.md`]
 It points the Python extension at the root `.venv` from `uv sync`, configures Ruff via `ruff.toml` like pre-commit/CI,
 wires `ms-python.mypy-type-checker` / `ms-python.pylint` to the same `.venv` and `mypy.ini` / `.pylintrc` (no product
 path overlays in settings — `MYPYPATH` / `pylint_source_roots` stay env/CI), and sets Prettier as default formatter for
-Markdown/JSON/YAML. Helm chart templates under `helmchart/**/templates/` and `helm/**/templates/` use language mode
-`helm` via Kubernetes Tools (`files.associations`); missing-kubeconfig toasts are suppressed
-(`vs-kubernetes.suppress-kubeconfig-not-found-alerts`) because Dev Containers often have no cluster config —
-kubectl-not-found alerts stay enabled.
+Markdown/JSON/YAML. Helm chart templates under `charts/**/templates/` (canonical; deprecated `helmchart/**` / `helm/**`
+associations remain during migration) use language mode `helm` via Kubernetes Tools (`files.associations`);
+missing-kubeconfig toasts are suppressed (`vs-kubernetes.suppress-kubeconfig-not-found-alerts`) because Dev Containers
+often have no cluster config — kubectl-not-found alerts stay enabled.
 
 **Cursor / OSS VS Code mypy extension pin:** Dev Container / postCreate install `ms-python.mypy-type-checker@2026.4.0`
 (`.vscode/extensions.json` recommendations stay unversioned `publisher.name` — schema forbids `@version`). **2026.6.0**

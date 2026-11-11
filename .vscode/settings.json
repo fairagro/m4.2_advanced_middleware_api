@@ -82,6 +82,9 @@
   // Helm Go templates (language mode from Kubernetes Tools). Avoid Red Hat YAML
   // false positives on {{ … }} in chart templates.
   "files.associations": {
+    "**/charts/**/templates/**/*.yaml": "helm",
+    "**/charts/**/templates/**/*.yml": "helm",
+    "**/charts/**/templates/**/*.tpl": "helm",
     "**/helmchart/**/templates/**/*.yaml": "helm",
     "**/helmchart/**/templates/**/*.yml": "helm",
     "**/helmchart/**/templates/**/*.tpl": "helm",
