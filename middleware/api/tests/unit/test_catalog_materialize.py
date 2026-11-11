@@ -491,6 +491,59 @@ def test_materialize_license_url() -> None:
     assert license_value.get("url") == "https://creativecommons.org/licenses/by/4.0/"
 
 
+def test_materialize_license_arctrl_path_id_with_http_text() -> None:
+    """ARCtrl License.Path ``LICENSE`` (no #) resolves; http text becomes CreativeWork url."""
+    arc = cast(
+        RoCrateContent,
+        {
+            "@context": "https://w3id.org/ro/crate/1.1/context",
+            "@graph": [
+                {
+                    "@id": "LICENSE",
+                    "@type": "CreativeWork",
+                    "text": "https://creativecommons.org/licenses/by/4.0",
+                },
+                {
+                    "@id": "./",
+                    "@type": "Dataset",
+                    "identifier": "DS-LIC-PATH",
+                    "license": {"@id": "LICENSE"},
+                },
+            ],
+        },
+    )
+    record = materialize_catalog_dataset(extract_catalog_dataset(arc), arc)
+    license_value = record.get("license")
+    assert isinstance(license_value, dict)
+    assert license_value.get("@type") == "CreativeWork"
+    assert license_value.get("url") == "https://creativecommons.org/licenses/by/4.0"
+    assert "text" not in license_value
+    assert license_value != "LICENSE"
+
+
+def test_materialize_license_direct_http_id_without_graph_node() -> None:
+    """Direct http(s) license @id with no CreativeWork node becomes CreativeWork.url."""
+    arc = cast(
+        RoCrateContent,
+        {
+            "@context": "https://w3id.org/ro/crate/1.1/context",
+            "@graph": [
+                {
+                    "@id": "./",
+                    "@type": "Dataset",
+                    "identifier": "DS-LIC-HTTP",
+                    "license": {"@id": "https://creativecommons.org/licenses/by/4.0/"},
+                },
+            ],
+        },
+    )
+    record = materialize_catalog_dataset(extract_catalog_dataset(arc), arc)
+    license_value = record.get("license")
+    assert isinstance(license_value, dict)
+    assert license_value.get("@type") == "CreativeWork"
+    assert license_value.get("url") == "https://creativecommons.org/licenses/by/4.0/"
+
+
 def test_materialize_has_part_study_and_assay_from_sample() -> None:
     """Root hasPart resolves Study/Assay Dataset nodes from sample RO-Crate."""
     arc = _load_rocrate("sample.json")

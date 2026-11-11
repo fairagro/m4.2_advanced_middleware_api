@@ -341,16 +341,23 @@ def _materialize_single_person(
     return person
 
 
+def _is_http_iri(value: str) -> bool:
+    return value.startswith("http://") or value.startswith("https://")
+
+
 def _license_from_node(license_node: JsonObject) -> JsonObject | None:
     url_value = license_node.get("url")
     if isinstance(url_value, str):
         return {"@type": "CreativeWork", "url": url_value}
     if isinstance(url_value, dict):
         url_ref = _extract_ref_id(url_value)
-        if isinstance(url_ref, str) and (url_ref.startswith("http://") or url_ref.startswith("https://")):
+        if isinstance(url_ref, str) and _is_http_iri(url_ref):
             return {"@type": "CreativeWork", "url": url_ref}
     text_value = license_node.get("text")
     if isinstance(text_value, str):
+        # ARCtrl often stores the licence IRI in ``text`` (harvester ≥ 3.2.0).
+        if _is_http_iri(text_value):
+            return {"@type": "CreativeWork", "url": text_value}
         return {"@type": "CreativeWork", "text": text_value}
     return None
 
@@ -363,15 +370,18 @@ def _materialize_license(
     if isinstance(value, str):
         return value
     ref_id = _extract_ref_id(value)
-    if ref_id != "#LICENSE":
+    if ref_id is None:
         return value
-    license_node = graph_index.get("#LICENSE")
+    license_node = graph_index.get(ref_id)
     if license_node is None:
-        warn("missing #LICENSE node")
+        # Direct schema.org license IRIs may have no CreativeWork node in @graph.
+        if _is_http_iri(ref_id):
+            return {"@type": "CreativeWork", "url": ref_id}
+        warn(f"missing license reference {ref_id}")
         return None
     resolved = _license_from_node(license_node)
     if resolved is None:
-        warn("#LICENSE node has no url or text")
+        warn(f"license node {ref_id} has no url or text")
     return resolved
 
 
