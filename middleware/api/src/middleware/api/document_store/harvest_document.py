@@ -32,6 +32,7 @@ class CatalogPushEventType(StrEnum):
     """Outcome of a consolidated catalog flush for a harvest."""
 
     CATALOG_PUSH_SUCCESS = "CATALOG_PUSH_SUCCESS"
+    CATALOG_PUSH_SKIPPED = "CATALOG_PUSH_SKIPPED"
     CATALOG_PUSH_FAILED = "CATALOG_PUSH_FAILED"
 
 
@@ -39,7 +40,10 @@ class HarvestCatalogEvent(BaseModel):
     """Catalog flush outcome for a completed harvest (consolidated Git backend)."""
 
     timestamp: Annotated[datetime, Field(description="When the catalog flush was recorded")]
-    type: Annotated[CatalogPushEventType, Field(description="CATALOG_PUSH_SUCCESS or CATALOG_PUSH_FAILED")]
+    type: Annotated[
+        CatalogPushEventType,
+        Field(description="CATALOG_PUSH_SUCCESS, CATALOG_PUSH_SKIPPED, or CATALOG_PUSH_FAILED"),
+    ]
     message: Annotated[str, Field(description="Human-readable outcome message")]
 
 
