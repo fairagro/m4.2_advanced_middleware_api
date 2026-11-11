@@ -90,7 +90,10 @@ def test_materialize_person_inline_without_fragment_id() -> None:
     """Person refs resolve to givenName/familyName without fragment @id."""
     arc = _dangling_ref_arc()
     record = materialize_catalog_dataset(extract_catalog_dataset(arc), arc)
-    creator = record.get("creator")
+    creators = record.get("creator")
+    assert isinstance(creators, list)
+    assert len(creators) == 1
+    creator = creators[0]
     assert isinstance(creator, dict)
     assert creator.get("givenName") == "Kevin"
     assert creator.get("familyName") == "Urbasch"
@@ -134,8 +137,12 @@ def test_materialize_splits_creator_jobtitle_contributor() -> None:
         },
     )
     record = materialize_catalog_dataset(extract_catalog_dataset(arc), arc)
-    creator = record.get("creator")
-    contributor = record.get("contributor")
+    creators = record.get("creator")
+    contributors = record.get("contributor")
+    assert isinstance(creators, list) and len(creators) == 1
+    assert isinstance(contributors, list) and len(contributors) == 1
+    creator = creators[0]
+    contributor = contributors[0]
     assert isinstance(creator, dict)
     assert creator.get("givenName") == "Ada"
     assert isinstance(contributor, dict)
@@ -170,12 +177,17 @@ def test_materialize_dual_role_person_in_creator_and_contributor() -> None:
         },
     )
     record = materialize_catalog_dataset(extract_catalog_dataset(arc), arc)
-    creator = record.get("creator")
-    contributor = record.get("contributor")
+    creators = record.get("creator")
+    contributors = record.get("contributor")
+    assert isinstance(creators, list) and len(creators) == 1
+    assert isinstance(contributors, list) and len(contributors) == 1
+    creator = creators[0]
+    contributor = contributors[0]
     assert isinstance(creator, dict)
     assert creator.get("givenName") == "Both"
     assert isinstance(contributor, dict)
     assert contributor.get("givenName") == "Both"
+    assert creator is not contributor
 
 
 def test_materialize_principal_investigator_stays_creator() -> None:
@@ -558,7 +570,9 @@ def test_materialize_has_part_study_and_assay_from_sample() -> None:
     assert isinstance(creators, list)
     creator_names = {c.get("givenName") for c in creators if isinstance(c, dict)}
     assert creator_names == {"Jasmine", "Viola"}
-    contributor = study.get("contributor")
+    contributors = study.get("contributor")
+    assert isinstance(contributors, list) and len(contributors) == 1
+    contributor = contributors[0]
     assert isinstance(contributor, dict)
     assert contributor.get("givenName") == "Oliver"
     assay = by_id["assays/Proteomics_MS/"]
@@ -703,8 +717,12 @@ def test_materialize_author_and_contributor() -> None:
         },
     )
     record = materialize_catalog_dataset(extract_catalog_dataset(arc), arc)
-    author = record.get("author")
-    contributor = record.get("contributor")
+    authors = record.get("author")
+    contributors = record.get("contributor")
+    assert isinstance(authors, list) and len(authors) == 1
+    assert isinstance(contributors, list) and len(contributors) == 1
+    author = authors[0]
+    contributor = contributors[0]
     assert isinstance(author, dict)
     assert isinstance(contributor, dict)
     assert author.get("givenName") == "Ann"

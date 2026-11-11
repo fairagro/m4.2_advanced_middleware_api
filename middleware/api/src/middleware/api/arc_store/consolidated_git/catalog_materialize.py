@@ -193,9 +193,10 @@ def _materialize_person_value(
 
 
 def _person_list_value(people: list[JsonObject]) -> JsonValue | None:
+    """Return person slots as a JSON array so single-author records stay iterable."""
     if not people:
         return None
-    return cast(JsonValue, people[0] if len(people) == 1 else people)
+    return cast(JsonValue, people)
 
 
 def _job_title_role_names(source: JsonObject, graph_index: dict[str, JsonObject]) -> list[str]:
@@ -286,7 +287,8 @@ def _materialize_person_properties_by_role(
             else:
                 creators.append(person)
         if contributor_like:
-            contributors.append(person)
+            # Shallow copy when also author-like so the two slots do not share one dict.
+            contributors.append(dict(person) if author_like else person)
 
     _set_person_slot(record, "creator", creators)
     _set_person_slot(record, "author", authors)
