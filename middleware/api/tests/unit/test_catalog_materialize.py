@@ -148,7 +148,7 @@ def test_materialize_creator_organization_only() -> None:
     assert isinstance(creator, dict)
     assert creator.get("@type") == "Organization"
     assert creator.get("name") == "Thünen Institute"
-    assert creator.get("url") == "https://www.thuenen.de"
+    assert creator.get("url") == {"@id": "https://www.thuenen.de"}
     assert "comment" not in record
 
 
@@ -233,9 +233,17 @@ def test_materialize_creator_organization_semicolon_urls() -> None:
     first = creators[0]
     second = creators[1]
     assert isinstance(first, dict)
-    assert first == {"@type": "Organization", "name": "Org A", "url": "https://a.example"}
+    assert first == {
+        "@type": "Organization",
+        "name": "Org A",
+        "url": {"@id": "https://a.example"},
+    }
     assert isinstance(second, dict)
-    assert second == {"@type": "Organization", "name": "Org B", "url": "https://b.example"}
+    assert second == {
+        "@type": "Organization",
+        "name": "Org B",
+        "url": {"@id": "https://b.example"},
+    }
 
     arc_partial = cast(
         RoCrateContent,
@@ -269,8 +277,58 @@ def test_materialize_creator_organization_semicolon_urls() -> None:
     partial = materialize_catalog_dataset(extract_catalog_dataset(arc_partial), arc_partial)
     partial_creators = partial.get("creator")
     assert isinstance(partial_creators, list)
-    assert partial_creators[0] == {"@type": "Organization", "name": "Org A", "url": "https://a.example"}
+    assert partial_creators[0] == {
+        "@type": "Organization",
+        "name": "Org A",
+        "url": {"@id": "https://a.example"},
+    }
     assert partial_creators[1] == {"@type": "Organization", "name": "Org B"}
+
+
+def test_materialize_creator_organization_url_survives_compact() -> None:
+    """Organization url @id shape compactifies to the ``url`` term (not schema:url)."""
+    arc = cast(
+        RoCrateContent,
+        {
+            "@context": "https://w3id.org/ro/crate/1.1/context",
+            "@graph": [
+                {
+                    "@id": "#LDComment_Creator_Organization",
+                    "@type": "Comment",
+                    "name": "Creator Organization",
+                    "text": "Org A",
+                },
+                {
+                    "@id": "#LDComment_Creator_Organization_URL",
+                    "@type": "Comment",
+                    "name": "Creator Organization URL",
+                    "text": "https://a.example",
+                },
+                {
+                    "@id": "./",
+                    "@type": "Dataset",
+                    "identifier": "DS-ORG-COMPACT",
+                    "name": "Org compact",
+                    "comment": [
+                        {"@id": "#LDComment_Creator_Organization"},
+                        {"@id": "#LDComment_Creator_Organization_URL"},
+                    ],
+                },
+            ],
+        },
+    )
+    materialized = materialize_catalog_dataset(extract_catalog_dataset(arc), arc)
+    compacted = compact_catalog_dataset(
+        materialized,
+        build_catalog_compact_context(load_schema_org_context()),
+        emitted_context=build_catalog_emitted_context(),
+    )
+    creator = compacted.get("creator")
+    assert isinstance(creator, dict)
+    assert creator.get("type") == "Organization"
+    assert creator.get("name") == "Org A"
+    assert creator.get("url") == "https://a.example"
+    assert "schema:url" not in creator
 
 
 def test_materialize_license_text_from_edaphobase_pattern() -> None:

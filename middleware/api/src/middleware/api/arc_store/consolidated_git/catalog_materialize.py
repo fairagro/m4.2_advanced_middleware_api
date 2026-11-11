@@ -286,7 +286,8 @@ def _build_creator_organizations(names: list[str], urls: list[str]) -> list[Json
     for index, name in enumerate(names):
         organization: JsonObject = {"@type": "Organization", "name": name}
         if index < len(urls):
-            organization["url"] = urls[index]
+            # IRI as ``{"@id": …}`` so catalog compact keeps the ``url`` term (not ``schema:url``).
+            organization["url"] = {"@id": urls[index]}
         organizations.append(organization)
     return organizations
 
