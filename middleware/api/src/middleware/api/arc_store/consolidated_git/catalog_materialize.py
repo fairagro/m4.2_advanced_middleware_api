@@ -262,6 +262,9 @@ def _materialize_license(
         return value
     license_node = graph_index.get(ref_id)
     if license_node is None:
+        # Direct schema.org license IRIs may have no CreativeWork node in @graph.
+        if _is_http_iri(ref_id):
+            return {"@type": "CreativeWork", "url": ref_id}
         warn(f"missing license reference {ref_id}")
         return None
     resolved = _license_from_node(license_node)
