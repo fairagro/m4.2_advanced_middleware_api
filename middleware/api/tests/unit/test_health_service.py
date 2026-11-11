@@ -15,6 +15,12 @@ def _doc_store() -> MagicMock:
     return store
 
 
+def _arc_store(*, healthy: bool = True) -> MagicMock:
+    store = MagicMock()
+    store.check_health = MagicMock(return_value=healthy)
+    return store
+
+
 @pytest.mark.asyncio
 async def test_readiness_couchdb_uses_document_store_health() -> None:
     """Readiness uses document-store health (application DB)."""
@@ -29,6 +35,7 @@ async def test_readiness_couchdb_uses_document_store_health() -> None:
         MagicMock(),
         MagicMock(),
         document_store=doc_store,
+        arc_store=_arc_store(),
     )
     checks = await service.readiness_checks()
 
@@ -37,58 +44,58 @@ async def test_readiness_couchdb_uses_document_store_health() -> None:
 
 
 @pytest.mark.asyncio
-async def test_git_backend_fallback_closes_doc_store_when_create_arc_stores_fails() -> None:
-    """Legacy fallback closes CouchDB even when ArcStore construction fails."""
-    transient_doc = MagicMock()
-    transient_doc.close = AsyncMock()
+async def test_git_backends_use_injected_arc_store() -> None:
+    """Git-backend check uses the injected ArcStore (no transient construction)."""
+    arc_store = _arc_store(healthy=True)
     config = MagicMock()
     config.consolidated_store = None
+    config.health_checks.global_health_check_workers = False
+    config.health_checks.global_health_check_git_backend = True
+    config.health_checks.readiness_check_couchdb = False
+    config.health_checks.readiness_check_rabbitmq = False
 
-    with (
-        patch("middleware.api.health_service.CouchDB", return_value=transient_doc),
-        patch(
-            "middleware.api.health_service.create_arc_stores",
-            side_effect=ValueError("invalid arc_store config"),
-        ),
-    ):
-        service = ApiHealthService(config, MagicMock(), MagicMock(), document_store=_doc_store(), arc_store=None)
-        results = await service._check_git_backends()
+    with patch("middleware.api.health_service.asyncio.to_thread", new=AsyncMock(return_value=True)):
+        service = ApiHealthService(
+            config,
+            MagicMock(),
+            MagicMock(),
+            document_store=_doc_store(),
+            arc_store=arc_store,
+        )
+        checks = await service.global_health_checks()
 
-    assert results["git_backend"] is False
-    transient_doc.close.assert_awaited_once()
+    assert checks["git_backend"] is True
+    assert "consolidated_store" not in checks
 
 
 @pytest.mark.asyncio
-async def test_git_backend_fallback_shuts_down_store_and_closes_doc_store() -> None:
-    """Legacy fallback cleans up ArcStore and CouchDB on success."""
-    transient_doc = MagicMock()
-    transient_doc.close = AsyncMock()
-    store = MagicMock()
-    store.check_health = MagicMock(return_value=True)
-    store.shutdown = AsyncMock()
+async def test_git_backends_mark_false_when_check_raises() -> None:
+    """Git-backend failures surface as False without constructing transient stores."""
+    arc_store = _arc_store()
     config = MagicMock()
-    config.consolidated_store = None
+    config.consolidated_store = MagicMock()
 
-    with (
-        patch("middleware.api.health_service.CouchDB", return_value=transient_doc),
-        patch("middleware.api.health_service.create_arc_stores", return_value=(store, None)),
-        patch("middleware.api.health_service.asyncio.to_thread", new=AsyncMock(return_value=True)),
+    with patch(
+        "middleware.api.health_service.asyncio.to_thread",
+        new=AsyncMock(side_effect=RuntimeError("unreachable")),
     ):
-        service = ApiHealthService(config, MagicMock(), MagicMock(), document_store=_doc_store(), arc_store=None)
+        service = ApiHealthService(
+            config,
+            MagicMock(),
+            MagicMock(),
+            document_store=_doc_store(),
+            arc_store=arc_store,
+        )
         results = await service._check_git_backends()
 
-    assert results == {"git_backend": True}
-    store.shutdown.assert_awaited_once()
-    transient_doc.close.assert_awaited_once()
+    assert results == {"git_backend": False, "consolidated_store": False}
 
 
 @pytest.mark.asyncio
 async def test_git_backends_include_consolidated_when_configured() -> None:
     """Both slots appear in health when consolidated_store is wired."""
-    arc_store = MagicMock()
-    arc_store.check_health = MagicMock(return_value=True)
-    consol = MagicMock()
-    consol.check_health = MagicMock(return_value=False)
+    arc_store = _arc_store(healthy=True)
+    consol = _arc_store(healthy=False)
     config = MagicMock()
     config.health_checks.global_health_check_workers = False
     config.health_checks.global_health_check_git_backend = True
