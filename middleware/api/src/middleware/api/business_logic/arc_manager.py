@@ -36,12 +36,12 @@ from middleware.shared.security.url_redact import redact_url_userinfo
 
 logger = logging.getLogger(__name__)
 
-# Cap skipped arc_ids embedded in CATALOG_PUSH_SUCCESS messages (CouchDB size).
+# Cap skipped arc_ids embedded in CATALOG_PUSH_* messages (CouchDB size).
 _CATALOG_SKIP_IDS_IN_MESSAGE = 20
 
 
-def _catalog_push_success_message(rdi: str, outcome: CatalogFinalizeResult) -> str:
-    """Build operator-facing SUCCESS text, including a bounded skip summary when needed."""
+def _catalog_push_event_message(rdi: str, outcome: CatalogFinalizeResult) -> str:
+    """Build operator-facing SUCCESS/SKIPPED text, including a bounded skip summary when needed."""
     base = f"Published catalog for RDI {rdi}" if outcome.pushed else f"Catalog for RDI {rdi} unchanged on remote"
     if not outcome.skipped:
         return base
@@ -247,10 +247,15 @@ class ArcManager:
                 span.set_attribute("dataset_count", outcome.dataset_count)
                 span.set_attribute("skipped_count", len(outcome.skipped))
                 if harvest_id is not None:
+                    event_type = (
+                        CatalogPushEventType.CATALOG_PUSH_SUCCESS
+                        if outcome.pushed
+                        else CatalogPushEventType.CATALOG_PUSH_SKIPPED
+                    )
                     await self._append_harvest_catalog_event(
                         harvest_id,
-                        CatalogPushEventType.CATALOG_PUSH_SUCCESS,
-                        _catalog_push_success_message(rdi, outcome),
+                        event_type,
+                        _catalog_push_event_message(rdi, outcome),
                     )
                 return outcome.pushed
             except ArcStoreTransientError as exc:

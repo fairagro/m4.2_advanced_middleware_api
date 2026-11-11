@@ -165,13 +165,19 @@ def test_harvest_document_stores_errors() -> None:
 
 
 def test_harvest_catalog_event_accepts_known_types() -> None:
-    """Catalog flush events accept the two CATALOG_PUSH_* outcomes."""
-    event = HarvestCatalogEvent(
+    """Catalog flush events accept the CATALOG_PUSH_* outcomes including SKIPPED."""
+    success = HarvestCatalogEvent(
         timestamp=datetime.now(),
         type=CatalogPushEventType.CATALOG_PUSH_SUCCESS,
         message="ok",
     )
-    assert event.type is CatalogPushEventType.CATALOG_PUSH_SUCCESS
+    skipped = HarvestCatalogEvent(
+        timestamp=datetime.now(),
+        type=CatalogPushEventType.CATALOG_PUSH_SKIPPED,
+        message="unchanged",
+    )
+    assert success.type is CatalogPushEventType.CATALOG_PUSH_SUCCESS
+    assert skipped.type is CatalogPushEventType.CATALOG_PUSH_SKIPPED
 
 
 def test_harvest_catalog_event_rejects_unknown_type() -> None:

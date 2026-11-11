@@ -14,6 +14,7 @@ from pydantic import SecretStr
 
 from middleware.api.api.fastapi_app import Api
 from middleware.api.api.legacy.task_types import SyncTaskResult, SyncTaskStatus
+from middleware.api.arc_store import CatalogFinalizeResult
 from middleware.api.arc_store.arc_store_config import ArcStoreConfig
 from middleware.api.arc_store.git_repo.config import GitRepoConfig
 from middleware.api.business_logic import BusinessLogic
@@ -153,4 +154,136 @@ def service(config: Config) -> BusinessLogic:
             task_dispatcher=git_sync_task,
             broker_health_checker=broker_health_checker,
         ),
+    )
+
+
+# --- Fixtures shared by test_business_logic*.py ---
+
+
+@pytest.fixture
+def mock_store() -> MagicMock:
+    """Mock ArcStore."""
+    store = MagicMock()
+    # Mock arc_id to use hashing or simpler return
+    store.arc_id.side_effect = lambda i, r: f"arc_{i}_{r}"
+    store.create_or_update = AsyncMock(return_value=True)
+    store.exists = AsyncMock(return_value=False)
+    store.shutdown = AsyncMock()
+    store.finalize = AsyncMock(return_value=CatalogFinalizeResult(pushed=False))
+    return store
+
+
+@pytest.fixture
+def mock_doc_store() -> MagicMock:
+    """Mock DocumentStore."""
+    doc_store = MagicMock()
+    doc_store.store_arc = AsyncMock()
+    doc_store.add_event = AsyncMock()
+    doc_store.health_check = AsyncMock(return_value=True)
+    doc_store.setup = AsyncMock()
+    doc_store.connect = AsyncMock()
+    doc_store.ensure_initialized = AsyncMock()
+    doc_store.close = AsyncMock()
+    return doc_store
+
+
+@pytest.fixture
+def mock_task_dispatcher() -> MagicMock:
+    """Mock TaskDispatcher."""
+    dispatcher = MagicMock()
+    dispatcher.dispatch_sync_arc = MagicMock()
+    dispatcher.dispatch_finalize_catalog = MagicMock()
+    return dispatcher
+
+
+@pytest.fixture
+def mock_broker_health_checker() -> MagicMock:
+    """Mock BrokerHealthChecker."""
+    broker_checker = MagicMock()
+    broker_checker.is_healthy = MagicMock(return_value=True)
+    return broker_checker
+
+
+@pytest.fixture
+def mock_consolidated_store() -> MagicMock:
+    """Mock consolidated catalog ArcStore."""
+    store = MagicMock()
+    store.finalize = AsyncMock(return_value=CatalogFinalizeResult(pushed=False))
+    store.shutdown = AsyncMock()
+    return store
+
+
+@pytest.fixture
+def mock_config() -> MagicMock:
+    """Mock Config."""
+    config = MagicMock()
+    config.known_rdis = []
+    return config
+
+
+@pytest.fixture
+def api_logic(
+    mock_config: MagicMock,
+    mock_store: MagicMock,
+    mock_doc_store: MagicMock,
+    api_ports: BusinessLogicPorts,
+) -> BusinessLogic:
+    """BusinessLogic in API mode without consolidated_store."""
+    return BusinessLogic(
+        config=mock_config,
+        store=mock_store,
+        doc_store=mock_doc_store,
+        ports=api_ports,
+    )
+
+
+@pytest.fixture
+def api_logic_with_catalog(
+    mock_config: MagicMock,
+    mock_store: MagicMock,
+    mock_consolidated_store: MagicMock,
+    mock_doc_store: MagicMock,
+    api_ports: BusinessLogicPorts,
+) -> BusinessLogic:
+    """BusinessLogic in API mode with consolidated_store configured."""
+    return BusinessLogic(
+        config=mock_config,
+        store=mock_store,
+        doc_store=mock_doc_store,
+        ports=api_ports,
+        consolidated_store=mock_consolidated_store,
+    )
+
+
+@pytest.fixture
+def api_ports(
+    mock_task_dispatcher: MagicMock,
+    mock_broker_health_checker: MagicMock,
+) -> BusinessLogicPorts:
+    """Bundle API mode ports for BusinessLogic."""
+    return BusinessLogicPorts(
+        task_dispatcher=mock_task_dispatcher,
+        broker_health_checker=mock_broker_health_checker,
+    )
+
+
+@pytest.fixture
+def worker_logic(mock_config: MagicMock, mock_store: MagicMock, mock_doc_store: MagicMock) -> BusinessLogic:
+    """BusinessLogic in Worker mode without consolidated_store."""
+    return BusinessLogic(config=mock_config, store=mock_store, doc_store=mock_doc_store)
+
+
+@pytest.fixture
+def worker_logic_with_catalog(
+    mock_config: MagicMock,
+    mock_store: MagicMock,
+    mock_consolidated_store: MagicMock,
+    mock_doc_store: MagicMock,
+) -> BusinessLogic:
+    """BusinessLogic in Worker mode with consolidated_store configured."""
+    return BusinessLogic(
+        config=mock_config,
+        store=mock_store,
+        doc_store=mock_doc_store,
+        consolidated_store=mock_consolidated_store,
     )
