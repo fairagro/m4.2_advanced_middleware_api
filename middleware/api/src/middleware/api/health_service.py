@@ -3,7 +3,7 @@
 import asyncio
 import logging
 
-from .arc_store import ArcStore
+from .arc_store import ArcStore, ConsolidatedArcStore
 from .business_logic.ports import BrokerHealthChecker
 from .celery_integration import CeleryWorkerHealthChecker
 from .config import Config
@@ -23,7 +23,7 @@ class ApiHealthService:
         *,
         document_store: DocumentStore,
         arc_store: ArcStore,
-        consolidated_store: ArcStore | None = None,
+        consolidated_store: ConsolidatedArcStore | None = None,
     ) -> None:
         """Initialize the health service with check adapters.
 
@@ -34,8 +34,8 @@ class ApiHealthService:
             document_store: Live document store used for CouchDB readiness
                        (application DB presence + optional re-init).
             arc_store: Live per-ARC ArcStore reused for the git-backend health check.
-            consolidated_store: Optional consolidated catalog ArcStore reused
-                       for its health check when configured.
+            consolidated_store: Optional ConsolidatedArcStore reused for its
+                       health check when configured.
         """
         self._config = config
         self._broker_health_checker = broker_health_checker

@@ -7,7 +7,12 @@ from datetime import UTC, datetime
 from arctrl import ARC
 from opentelemetry import trace
 
-from middleware.api.arc_store import ArcStore, ArcStoreTransientError, CatalogFinalizeResult
+from middleware.api.arc_store import (
+    ArcStore,
+    ArcStoreTransientError,
+    CatalogFinalizeResult,
+    ConsolidatedArcStore,
+)
 from middleware.api.business_logic.exceptions import (
     ArcIdentityMismatchError,
     BusinessLogicError,
@@ -62,8 +67,9 @@ class ArcManager:
     - ``create_or_update_arc``: fast CouchDB storage + enqueue GitLab sync (API mode)
     - ``sync_to_gitlab``: perform the slow GitLab sync (worker mode)
 
-    Dual-slot wiring: ``store`` is the required per-ARC ArcStore; ``consolidated_store``
-    is the optional catalog publisher used only for finalize / ``CATALOG_PUSH_*``.
+    Dual-slot wiring: ``store`` is the required per-ARC :class:`ArcStore`;
+    ``consolidated_store`` is the optional :class:`ConsolidatedArcStore` used only for
+    finalize / ``CATALOG_PUSH_*``.
     """
 
     def __init__(
@@ -71,7 +77,7 @@ class ArcManager:
         store: ArcStore,
         doc_store: DocumentStore,
         task_dispatcher: TaskDispatcher | None = None,
-        consolidated_store: ArcStore | None = None,
+        consolidated_store: ConsolidatedArcStore | None = None,
         rdi_registry: list[RdiRegistryEntry] | None = None,
     ) -> None:
         """Initialize the ArcManager.
@@ -80,7 +86,7 @@ class ArcManager:
             store: Per-ARC ArcStore for Git persistence.
             doc_store: DocumentStore for CouchDB persistence.
             task_dispatcher: Optional dispatcher for enqueueing GitLab sync jobs (API mode only).
-            consolidated_store: Optional consolidated catalog ArcStore for finalize.
+            consolidated_store: Optional ConsolidatedArcStore for catalog finalize.
             rdi_registry: Deployment RDI registry for Investigation Comment enrichment.
         """
         self._store = store
@@ -96,12 +102,12 @@ class ArcManager:
         return self._store
 
     @property
-    def consolidated_store(self) -> ArcStore | None:
-        """Optional consolidated catalog ArcStore, or ``None`` when unset."""
+    def consolidated_store(self) -> ConsolidatedArcStore | None:
+        """Optional ConsolidatedArcStore, or ``None`` when unset."""
         return self._consolidated_store
 
     async def shutdown(self) -> None:
-        """Release resources held by both ArcStore slots when present."""
+        """Release resources held by both store slots when present."""
         await self._store.shutdown()
         if self._consolidated_store is not None:
             await self._consolidated_store.shutdown()

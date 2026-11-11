@@ -162,14 +162,13 @@ def service(config: Config) -> BusinessLogic:
 
 @pytest.fixture
 def mock_store() -> MagicMock:
-    """Mock ArcStore."""
+    """Mock ArcStore (per-ARC port — no catalog finalize)."""
     store = MagicMock()
     # Mock arc_id to use hashing or simpler return
     store.arc_id.side_effect = lambda i, r: f"arc_{i}_{r}"
     store.create_or_update = AsyncMock(return_value=True)
     store.exists = AsyncMock(return_value=False)
     store.shutdown = AsyncMock()
-    store.finalize = AsyncMock(return_value=CatalogFinalizeResult(pushed=False))
     return store
 
 
