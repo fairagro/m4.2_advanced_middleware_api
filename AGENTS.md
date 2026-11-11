@@ -326,7 +326,10 @@ Before generating or modifying code, read the relevant specs:
   error classification, and credential injection. Filesystem persistence for the local offline stand-in is specified
   here and implemented in `fairagro-middleware-api-local-offline`.
 - **[`openspec/specs/local-offline-profile/`](openspec/specs/local-offline-profile/)** — Publishable local offline
-  Middleware stand-in (`fairagro-middleware-api-local-offline`): light `/v3` harvest HTTP for `ApiClient`, ARC on disk.
+  Middleware stand-in (`fairagro-middleware-api-local-offline`): mounts shared `v3-http-contract` for `ApiClient`, ARC
+  on disk.
+- **[`openspec/specs/v3-http-contract/`](openspec/specs/v3-http-contract/)** — Shared FastAPI harvest/ARC lifecycle
+  route surface and operation port (`fairagro-middleware-api-v3`); production and offline adapters.
 - **[`openspec/specs/document-store/`](openspec/specs/document-store/)** — CouchDB persistence layer,
   race-condition-safe initialization, and content-hash idempotency.
 - **[`openspec/specs/arc-content-hash/`](openspec/specs/arc-content-hash/)** — RO-Crate canonicalization contract for
