@@ -13,6 +13,17 @@ logger = logging.getLogger(__name__)
 
 _PERSON_PROPERTIES = ("creator", "author", "contributor")
 _PERSON_FIELDS = ("givenName", "familyName", "name", "email", "sameAs", "affiliation")
+# ARCtrl puts every Investigation contact under Dataset.creator and encodes the ARC role
+# as Person.jobTitle → DefinedTerm.name. Author-like roles stay on creator; any other
+# role (including contributor) goes to contributor. Dual roles → both lists (#594).
+# Comparison is alphanumeric-casefold so "Principal Investigator" matches.
+_AUTHOR_ROLE_NAMES = frozenset({
+    "author",
+    "creator",
+    "principalinvestigator",
+    "investigator",
+    "coauthor",
+})
 _DATASET_PART_FIELDS = (
     "additionalType",
     "identifier",
@@ -69,7 +80,7 @@ def materialize_catalog_dataset(
     def warn(message: str) -> None:
         logger.warning("Catalog materialize%s: %s", arc_label, message)
 
-    _replace_or_delete(result, _PERSON_PROPERTIES, graph_index, warn, _materialize_person_value)
+    _materialize_person_properties_by_role(result, graph_index, warn)
     _replace_or_delete(result, ("license",), graph_index, warn, _materialize_license)
     if "comment" in result:
         _materialize_dataset_comments(result, graph_index, warn)
@@ -179,6 +190,109 @@ def _materialize_person_value(
             return None
         return cast(JsonValue, people)
     return cast(JsonValue | None, _materialize_single_person(value, graph_index, warn))
+
+
+def _person_list_value(people: list[JsonObject]) -> JsonValue | None:
+    """Return person slots as a JSON array so single-author records stay iterable."""
+    if not people:
+        return None
+    return cast(JsonValue, people)
+
+
+def _job_title_role_names(source: JsonObject, graph_index: dict[str, JsonObject]) -> list[str]:
+    """Resolve Person.jobTitle (string, DefinedTerm ref, or list) to role name strings."""
+    job_title = source.get("jobTitle")
+    if job_title is None:
+        return []
+    items = job_title if isinstance(job_title, list) else [job_title]
+    names: list[str] = []
+    for item in items:
+        if isinstance(item, str) and item.strip():
+            names.append(item.strip())
+            continue
+        if not isinstance(item, dict):
+            continue
+        inline_name = item.get("name")
+        if isinstance(inline_name, str) and inline_name.strip():
+            names.append(inline_name.strip())
+            continue
+        ref_id = _extract_ref_id(item)
+        if ref_id is None:
+            continue
+        node = graph_index.get(ref_id)
+        if node is None:
+            continue
+        term_name = node.get("name")
+        if isinstance(term_name, str) and term_name.strip():
+            names.append(term_name.strip())
+    return names
+
+
+def _normalize_role_key(role_name: str) -> str:
+    return "".join(character for character in role_name.casefold() if character.isalnum())
+
+
+def _role_flags(role_names: list[str], *, source_property: str) -> tuple[bool, bool]:
+    """Return ``(author_like, contributor_like)`` for catalog slot assignment."""
+    role_keys = {_normalize_role_key(name) for name in role_names if _normalize_role_key(name)}
+    if role_keys:
+        author_like = bool(role_keys & _AUTHOR_ROLE_NAMES)
+        contributor_like = bool(role_keys - _AUTHOR_ROLE_NAMES)
+        return author_like, contributor_like
+    # No jobTitle: honour the RO-Crate property the Person was listed under.
+    if source_property == "contributor":
+        return False, True
+    if source_property == "author":
+        return True, False
+    return True, False
+
+
+def _set_person_slot(record: dict[str, JsonValue], key: str, people: list[JsonObject]) -> None:
+    value = _person_list_value(people)
+    if value is not None:
+        record[key] = value
+
+
+def _materialize_person_properties_by_role(
+    record: dict[str, JsonValue],
+    graph_index: dict[str, JsonObject],
+    warn: Callable[[str], None],
+) -> None:
+    """Materialize creator/author/contributor and split ARCtrl jobTitle roles (#594)."""
+    collected: list[tuple[JsonValue, str]] = []
+    for key in _PERSON_PROPERTIES:
+        if key not in record:
+            continue
+        value = record.pop(key)
+        items = value if isinstance(value, list) else [value]
+        collected.extend((item, key) for item in items)
+
+    creators: list[JsonObject] = []
+    authors: list[JsonObject] = []
+    contributors: list[JsonObject] = []
+    for item, source_property in collected:
+        source = _resolve_person_source(item, graph_index, warn)
+        if source is None:
+            continue
+        person = _materialize_single_person(item, graph_index, warn)
+        if person is None:
+            continue
+        author_like, contributor_like = _role_flags(
+            _job_title_role_names(source, graph_index),
+            source_property=source_property,
+        )
+        if author_like:
+            if source_property == "author":
+                authors.append(person)
+            else:
+                creators.append(person)
+        if contributor_like:
+            # Shallow copy when also author-like so the two slots do not share one dict.
+            contributors.append(dict(person) if author_like else person)
+
+    _set_person_slot(record, "creator", creators)
+    _set_person_slot(record, "author", authors)
+    _set_person_slot(record, "contributor", contributors)
 
 
 def _resolve_person_source(
@@ -509,11 +623,9 @@ def _materialize_has_part_item(
     part: JsonObject = {"@id": ref_id, "@type": "Dataset"}
     _copy_dataset_part_fields(part, node)
     for prop in _PERSON_PROPERTIES:
-        if prop not in node:
-            continue
-        materialized = _materialize_person_value(node[prop], graph_index, warn)
-        if materialized is not None:
-            part[prop] = materialized
+        if prop in node:
+            part[prop] = node[prop]
+    _materialize_person_properties_by_role(part, graph_index, warn)
 
     nested_has_part = node.get("hasPart")
     if depth < _MAX_HAS_PART_DEPTH and node.get("additionalType") == "Study" and nested_has_part is not None:
