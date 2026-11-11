@@ -1,13 +1,19 @@
 # Product-owned import-linter config (not synced). Fleet-required settings: docs/quality.md
 #
-# Inventory (top-level middleware.* portions / intended roles) — issue #482:
-#   middleware.shared      — ConfigWrapper, API models, tracing, security helpers
-#   middleware.api_client  — HTTP client for API consumers (optional)
-#   middleware.api         — FastAPI app, business_logic, arc_store, document_store, worker
-#   middleware.tools       — omitted (no installable portion under middleware/tools/src)
+# Inventory (top-level middleware.* portions / intended roles) — issue #482 / #613:
+#   middleware.shared           — ConfigWrapper, API models, tracing, security helpers, lifecycle Protocol
+#   middleware.api_v3           — Shared FastAPI /v3 harvest+ARC lifecycle routers (↛ api)
+#   middleware.api_client       — HTTP client for API consumers (optional)
+#   middleware.api              — FastAPI app, business_logic, arc_store, document_store, worker
+#   middleware.api_local_offline — Local offline stand-in (may → api_v3 → shared; ↛ api)
+#   middleware.tools            — omitted (no installable portion under middleware/tools/src)
 #
 # Cross-portion rules mirror openspec/principles.md (Module Dependency Rules):
-#   api may → shared, api_client; shared ↛ api|api_client; api_client may → shared, ↛ api.
+#   api may → shared, api_client, api_v3
+#   api_local_offline may → shared, api_v3 (↛ api)
+#   api_v3 may → shared (↛ api)
+#   shared ↛ api|api_client|api_v3|api_local_offline
+#   api_client may → shared, ↛ api|api_v3
 # Encoded as `forbidden` (not `independence` between api/api_client — api→api_client is allowed).
 #
 # PEP 420: grimp cannot use ancestors = middleware (namespace). Ancestors are the
@@ -19,6 +25,8 @@ exclude_type_checking_imports = True
 root_packages =
     middleware.api
     middleware.api_client
+    middleware.api_local_offline
+    middleware.api_v3
     middleware.shared
 
 [importlinter:contract:middleware-acyclic-siblings]
@@ -27,21 +35,42 @@ type = acyclic_siblings
 ancestors =
     middleware.api
     middleware.api_client
+    middleware.api_local_offline
+    middleware.api_v3
     middleware.shared
 
 [importlinter:contract:shared-isolation]
-name = shared must not import api or api_client
+name = shared must not import api, api_client, api_v3, or api_local_offline
 type = forbidden
 source_modules =
     middleware.shared
 forbidden_modules =
     middleware.api
     middleware.api_client
+    middleware.api_v3
+    middleware.api_local_offline
+
+[importlinter:contract:api-v3-not-api]
+name = api_v3 must not import api
+type = forbidden
+source_modules =
+    middleware.api_v3
+forbidden_modules =
+    middleware.api
+
+[importlinter:contract:api-local-offline-not-api]
+name = api_local_offline must not import api
+type = forbidden
+source_modules =
+    middleware.api_local_offline
+forbidden_modules =
+    middleware.api
 
 [importlinter:contract:api-client-not-api]
-name = api_client must not import api
+name = api_client must not import api or api_v3
 type = forbidden
 source_modules =
     middleware.api_client
 forbidden_modules =
     middleware.api
+    middleware.api_v3

@@ -1,9 +1,12 @@
-"""Modular V3 Harvest endpoints using APIRouter."""
+"""Production-only V3 harvest endpoints (list + deprecated cancel).
+
+Create/get/patch/complete/submit-arc lifecycle routes live in ``middleware.api_v3``.
+"""
 
 from http import HTTPStatus
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request, Response
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 
 from middleware.api.api.common.dependencies import (
     CommonApiDependencies,
@@ -11,47 +14,12 @@ from middleware.api.api.common.dependencies import (
     get_business_logic,
     get_client_id,
     get_common_deps,
-    get_content_type,
 )
-from middleware.api.business_logic import BusinessLogic, ConflictError
-from middleware.api.business_logic.exceptions import ArcIdentityMismatchError, DuplicateArcInHarvestError
-from middleware.api.document_store.harvest_document import HarvestDocument
-from middleware.shared.api_models.common.models import HarvestStatus
+from middleware.api.api.v3.lifecycle_port import _map_harvest
+from middleware.api.business_logic import BusinessLogic
 from middleware.shared.api_models.v3 import models as v3_models
 
 router = APIRouter(prefix="/v3/harvests", tags=["v3", "harvests"])
-
-
-@router.post("", response_model=v3_models.HarvestResponse)
-async def create_harvest(  # noqa: PLR0913, PLR0917
-    request: Request,
-    response: Response,
-    request_body: v3_models.CreateHarvestRequest,
-    bl: Annotated[BusinessLogic, Depends(get_business_logic)],
-    deps: Annotated[CommonApiDependencies, Depends(get_common_deps)],
-    client_id: Annotated[str | None, Depends(get_client_id)],
-    _content_type: Annotated[None, Depends(get_content_type)],
-    _accept_type: Annotated[None, Depends(get_accept_type)],
-    idempotency_key: Annotated[str | None, Header(alias="Idempotency-Key")] = None,
-) -> v3_models.HarvestResponse:
-    """Start a new harvest run."""
-    await deps.validate_rdi_authorized(request_body.rdi, request)
-
-    created = await bl.harvest_manager.create_harvest(
-        request_body.rdi,
-        client_id=client_id,
-        expected_datasets=request_body.expected_datasets,
-        idempotency_key=idempotency_key,
-    )
-
-    harvest = await bl.harvest_manager.get_harvest(created.harvest_id)
-    if not harvest:
-        raise HTTPException(status_code=HTTPStatus.INTERNAL_SERVER_ERROR, detail="Failed to create harvest")
-
-    if created.replayed:
-        response.headers["Idempotent-Replayed"] = "true"
-
-    return _map_harvest(harvest)
 
 
 @router.get("", response_model=list[v3_models.HarvestResponse])
@@ -73,85 +41,6 @@ async def list_harvests(  # noqa: PLR0913, PLR0917
     return [_map_harvest(h) for h in harvests]
 
 
-@router.get("/{harvest_id}", response_model=v3_models.HarvestResponse)
-async def get_harvest(
-    request: Request,
-    harvest_id: str,
-    bl: Annotated[BusinessLogic, Depends(get_business_logic)],
-    deps: Annotated[CommonApiDependencies, Depends(get_common_deps)],
-    _client_id: Annotated[str | None, Depends(get_client_id)],
-) -> v3_models.HarvestResponse:
-    """Get harvest details."""
-    harvest = await bl.harvest_manager.get_harvest(harvest_id)
-    if not harvest:
-        raise HTTPException(status_code=HTTPStatus.NOT_FOUND, detail="Harvest not found")
-
-    try:
-        await deps.validate_rdi_authorized(harvest.rdi, request)
-    except HTTPException as exc:
-        # Return 404 regardless of whether the harvest exists but the caller is
-        # not authorised: leaking the existence of a harvest (403 vs 404) is an
-        # information-disclosure vulnerability (C1).
-        if exc.status_code in {HTTPStatus.FORBIDDEN, HTTPStatus.UNAUTHORIZED}:
-            raise HTTPException(status_code=HTTPStatus.NOT_FOUND, detail="Harvest not found") from exc
-        raise
-    return _map_harvest(harvest)
-
-
-@router.post("/{harvest_id}/complete", response_model=v3_models.HarvestResponse, deprecated=True)
-async def complete_harvest(  # noqa: PLR0913, PLR0917
-    request: Request,
-    harvest_id: str,
-    bl: Annotated[BusinessLogic, Depends(get_business_logic)],
-    deps: Annotated[CommonApiDependencies, Depends(get_common_deps)],
-    client_id: Annotated[str | None, Depends(get_client_id)],
-) -> v3_models.HarvestResponse:
-    """Mark a harvest as completed. [DEPRECATED].
-
-    Use ``PATCH /v3/harvests/{harvest_id}`` with ``status=COMPLETED`` instead.
-    """
-    # Fetch once — used for both RDI auth and passed to complete_harvest (C2).
-    harvest = await bl.harvest_manager.get_harvest(harvest_id)
-    if not harvest:
-        raise HTTPException(status_code=HTTPStatus.NOT_FOUND, detail="Harvest not found")
-
-    await deps.validate_rdi_authorized(harvest.rdi, request)
-
-    harvest = await bl.complete_harvest(harvest, client_id=client_id)
-    return _map_harvest(harvest)
-
-
-@router.patch("/{harvest_id}", response_model=v3_models.HarvestResponse)
-async def patch_harvest_status(  # noqa: PLR0913, PLR0917
-    request: Request,
-    harvest_id: str,
-    request_body: v3_models.PatchHarvestRequest,
-    bl: Annotated[BusinessLogic, Depends(get_business_logic)],
-    deps: Annotated[CommonApiDependencies, Depends(get_common_deps)],
-    client_id: Annotated[str | None, Depends(get_client_id)],
-    _content_type: Annotated[None, Depends(get_content_type)],
-) -> v3_models.HarvestResponse:
-    """Transition a harvest run to a terminal status (COMPLETED, CANCELLED, or FAILED).
-
-    Only a ``RUNNING`` harvest may transition to a different terminal status.
-    Re-requesting ``COMPLETED`` on an already-``COMPLETED`` harvest is allowed
-    (idempotent; re-enqueues catalog finalize). Any other non-``RUNNING`` current
-    status returns 409 Conflict.
-    """
-    harvest = await bl.harvest_manager.get_harvest(harvest_id)
-    if not harvest:
-        raise HTTPException(status_code=HTTPStatus.NOT_FOUND, detail="Harvest not found")
-
-    await deps.validate_rdi_authorized(harvest.rdi, request)
-
-    try:
-        harvest = await bl.transition_harvest(harvest, request_body.status, client_id=client_id)
-    except ConflictError as exc:
-        raise HTTPException(status_code=HTTPStatus.CONFLICT, detail=str(exc)) from exc
-
-    return _map_harvest(harvest)
-
-
 @router.delete("/{harvest_id}", status_code=HTTPStatus.NO_CONTENT, deprecated=True)
 async def cancel_harvest(
     request: Request,
@@ -164,107 +53,9 @@ async def cancel_harvest(
 
     Use ``PATCH /v3/harvests/{harvest_id}`` with ``status=CANCELLED`` instead.
     """
-    # Fetch once — used for both RDI auth and passed to cancel_harvest (C2).
     harvest = await bl.harvest_manager.get_harvest(harvest_id)
     if not harvest:
         raise HTTPException(status_code=HTTPStatus.NOT_FOUND, detail="Harvest not found")
 
     await deps.validate_rdi_authorized(harvest.rdi, request)
     await bl.harvest_manager.cancel_harvest(harvest, client_id=client_id)
-
-
-@router.post("/{harvest_id}/arcs", response_model=v3_models.ArcResponse)
-async def submit_arc_in_harvest(  # noqa: PLR0913, PLR0917
-    request: Request,
-    harvest_id: str,
-    request_body: v3_models.SubmitHarvestArcRequest,
-    bl: Annotated[BusinessLogic, Depends(get_business_logic)],
-    deps: Annotated[CommonApiDependencies, Depends(get_common_deps)],
-    client_id: Annotated[str | None, Depends(get_client_id)],
-) -> v3_models.ArcResponse:
-    """Submit an ARC within a harvest context.
-
-    The ``rdi`` is resolved automatically from the harvest run.
-
-    HTTP ``409 Conflict`` covers three distinct cases: harvest not ``RUNNING``
-    (lifecycle cut-off; no ARC write and no per-item harvest error), harvest-local
-    content duplicates
-    (:class:`~middleware.api.business_logic.exceptions.DuplicateArcInHarvestError`),
-    and ``arc_id`` identity mismatch under strip() rules
-    (:class:`~middleware.api.business_logic.exceptions.ArcIdentityMismatchError`).
-    Unicode NFC canonicalize-before-hash is out of scope (issue #537).
-    """
-    harvest = await bl.harvest_manager.get_harvest(harvest_id)
-    if not harvest:
-        raise HTTPException(status_code=HTTPStatus.NOT_FOUND, detail="Harvest not found")
-
-    rdi = harvest.rdi
-    await deps.validate_rdi_authorized(rdi, request)
-
-    if harvest.status != HarvestStatus.RUNNING:
-        raise ConflictError(
-            f"Cannot submit ARC to harvest {harvest_id}: harvest status is {harvest.status.value}, expected RUNNING"
-        )
-
-    try:
-        result = await bl.create_or_update_arc(rdi, request_body.arc, client_id, harvest_id=harvest_id)
-    except DuplicateArcInHarvestError as exc:
-        await bl.harvest_manager.try_append_error(
-            harvest_id,
-            arc_id=request_body.arc.identifier,
-            error_type=v3_models.HarvestErrorType.DUPLICATE,
-            message=str(exc),
-        )
-        raise HTTPException(status_code=HTTPStatus.CONFLICT, detail=str(exc)) from exc
-    except ArcIdentityMismatchError as exc:
-        await bl.harvest_manager.try_append_error(
-            harvest_id,
-            arc_id=request_body.arc.identifier,
-            error_type=v3_models.HarvestErrorType.SUBMISSION_FAILED,
-            message=str(exc),
-        )
-        raise HTTPException(status_code=HTTPStatus.CONFLICT, detail=str(exc)) from exc
-
-    arc_id = result.arc.id
-    metadata = await bl.get_metadata(arc_id)
-
-    if not metadata:
-        raise HTTPException(status_code=HTTPStatus.INTERNAL_SERVER_ERROR, detail="Failed to retrieve ARC metadata")
-
-    return v3_models.ArcResponse(
-        client_id=client_id,
-        message="ARC processed successfully in harvest",
-        arc_id=arc_id,
-        status=result.arc.status,
-        metadata=v3_models.ArcMetadata(
-            arc_hash=metadata.arc_hash,
-            status=metadata.status,
-            first_seen=metadata.first_seen.isoformat() + "Z",
-            last_seen=metadata.last_seen.isoformat() + "Z",
-        ),
-        events=[
-            v3_models.ArcEventSummary(
-                timestamp=event.timestamp.isoformat() + "Z",
-                type=event.type,
-                message=event.message,
-            )
-            for event in metadata.events
-        ],
-    )
-
-
-def _map_harvest(harvest: HarvestDocument) -> v3_models.HarvestResponse:
-    """Map DB harvest record to API response model."""
-    completed_at = None
-    if harvest.completed_at:
-        completed_at = harvest.completed_at.isoformat().replace("+00:00", "Z")
-
-    return v3_models.HarvestResponse(
-        harvest_id=harvest.doc_id,
-        rdi=harvest.rdi,
-        status=v3_models.HarvestStatus(harvest.status),
-        started_at=harvest.started_at.isoformat().replace("+00:00", "Z"),
-        completed_at=completed_at,
-        statistics=harvest.statistics.model_dump() if harvest.statistics else {},
-        errors=list(harvest.errors),
-    )

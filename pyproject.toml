@@ -8,6 +8,7 @@ dependencies = [
   "api",
   "fairagro-middleware-api-client",
   "fairagro-middleware-api-local-offline",
+  "fairagro-middleware-api-v3",
   "fairagro-middleware-arc-validation",
   "fairagro-middleware-shared",
 ]
@@ -42,6 +43,7 @@ dev = [
 api = { workspace = true }
 fairagro-middleware-api-client = { workspace = true }
 fairagro-middleware-api-local-offline = { workspace = true }
+fairagro-middleware-api-v3 = { workspace = true }
 fairagro-middleware-shared = { workspace = true }
 fairagro-middleware-arc-validation = { workspace = true }
 
@@ -50,6 +52,7 @@ members = [
     "middleware/api",
     "middleware/api_client",
     "middleware/api_local_offline",
+    "middleware/api_v3",
     "middleware/arc_validation",
     "middleware/shared",
     "middleware/tools",
@@ -66,10 +69,14 @@ members = [
 extraPaths = [
   "middleware/api/src",
   "middleware/api_client/src",
+  "middleware/api_local_offline/src",
+  "middleware/api_v3/src",
   "middleware/arc_validation/src",
   "middleware/shared/src",
   "middleware/api/tests/unit",
   "middleware/api_client/tests",
+  "middleware/api_local_offline/tests",
+  "middleware/api_v3/tests",
   "middleware/arc_validation/tests",
   "middleware/shared/tests",
 ]

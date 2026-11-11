@@ -28,9 +28,9 @@ from middleware.api.document_store.arc_document import ArcEvent, ArcEventType
 from middleware.api.document_store.harvest_document import CatalogPushEventType, HarvestCatalogEvent
 from middleware.api.rdi_registry import RdiRegistryEntry, lookup_rdi_entry
 from middleware.api.rocrate import RocrateParseError, parse_rocrate
-from middleware.api.utils import calculate_arc_id
 from middleware.shared.api_models.common.models import ArcOperationResult, ArcResponse, ArcStatus
 from middleware.shared.api_models.common.rocrate import RoCratePayload
+from middleware.shared.identity import calculate_arc_id
 from middleware.shared.json_types import RoCrateContent
 from middleware.shared.security.url_redact import redact_url_userinfo
 

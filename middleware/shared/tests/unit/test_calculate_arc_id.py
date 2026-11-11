@@ -1,6 +1,6 @@
-"""Unit tests for middleware.api.utils."""
+"""Unit tests for shared calculate_arc_id."""
 
-from middleware.api.utils import calculate_arc_id
+from middleware.shared.identity import calculate_arc_id
 
 
 def test_calculate_arc_id_strips_whitespace() -> None:

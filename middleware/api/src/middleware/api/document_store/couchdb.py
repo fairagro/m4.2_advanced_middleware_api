@@ -12,10 +12,10 @@ from typing import cast
 from middleware.api.document_store.config import CouchDBConfig
 from middleware.api.document_store.content_hash import RoCrateContent, calculate_arc_content_hash
 from middleware.api.document_store.couchdb_client import CouchDBClient, DocumentConflictError
-from middleware.api.utils import calculate_arc_id
 from middleware.shared.api_models.common.models import ArcEventType, ArcLifecycleStatus, HarvestStatus
 from middleware.shared.api_models.common.rocrate import extract_identifier, validate_root_dataset
 from middleware.shared.api_models.v3.models import HarvestError
+from middleware.shared.identity import calculate_arc_id
 from middleware.shared.json_types import CouchDbDocument, JsonObject, RoCrateGraphNode
 
 from . import (

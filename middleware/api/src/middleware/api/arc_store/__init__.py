@@ -10,7 +10,7 @@ from typing import NoReturn
 from arctrl import ARC
 from opentelemetry import trace
 
-from middleware.api.utils import calculate_arc_id
+from middleware.shared.identity import calculate_arc_id
 from middleware.shared.security.url_redact import redact_url_userinfo
 
 logger = logging.getLogger(__name__)
