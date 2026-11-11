@@ -2,26 +2,17 @@
 
 from __future__ import annotations
 
-import logging
 import tempfile
 from collections.abc import Callable
 from pathlib import Path
-from typing import Annotated, ClassVar, Self, cast
+from typing import Annotated, ClassVar, cast
 from urllib.parse import quote, urlparse
 
-from pydantic import BaseModel, ConfigDict, Field, SecretStr, field_validator, model_validator
+from pydantic import BaseModel, ConfigDict, Field, SecretStr, field_validator
 
 from middleware.shared.security import UrlStr
 
-logger = logging.getLogger(__name__)
-
 _GIT_URL_SCHEMES = ("https://", "file://", "http://")
-
-_MAX_WORKERS_DEPRECATION = (
-    "GitCliSettings.max_workers is deprecated and ignored. "
-    "Each process runs one blocking Git call; tune Celery --concurrency. "
-    "This key will be removed in a future release."
-)
 
 
 def _default_git_cache_dir() -> Path:
@@ -50,17 +41,6 @@ class GitCliSettings(BaseModel):
     token: Annotated[SecretStr | None, Field(description="Auth token for HTTPS remotes")] = None
     user_name: Annotated[str, Field(description="Git user.name")] = "Middleware API"
     user_email: Annotated[str, Field(description="Git user.email")] = "middleware@fairagro.net"
-    max_workers: Annotated[
-        int,
-        Field(
-            deprecated=True,
-            ge=1,
-            description=(
-                "Deprecated and ignored. Each process runs one blocking Git call. "
-                "Tune Celery --concurrency. This key will be removed in a future release."
-            ),
-        ),
-    ] = 1
     command_timeout: Annotated[float | None, Field(description="Timeout (s) for git commands")] = None
     http_low_speed_limit: Annotated[int | None, Field(description="http.lowSpeedLimit in bytes/sec")] = None
     http_low_speed_time: Annotated[int | None, Field(description="http.lowSpeedTime in seconds")] = None
@@ -86,13 +66,6 @@ class GitCliSettings(BaseModel):
             msg = "Git URL must not embed credentials in userinfo; use the token field instead"
             raise ValueError(msg)
         return value
-
-    @model_validator(mode="after")
-    def warn_deprecated_max_workers(self) -> Self:
-        """Warn when a config still sets the ignored ``max_workers`` key."""
-        if "max_workers" in self.model_fields_set:
-            logger.warning("%s", _MAX_WORKERS_DEPRECATION)
-        return self
 
     @field_validator("cache_dir", mode="before")
     @classmethod
