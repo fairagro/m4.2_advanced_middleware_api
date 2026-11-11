@@ -104,23 +104,15 @@ def test_git_repo_context_config_embeds_token_once(tmp_path: Path) -> None:
     assert repo_url.count("oauth2:") == 1
 
 
-def test_max_workers_is_deprecated_and_unknown_keys_are_rejected(
-    caplog: pytest.LogCaptureFixture,
-    tmp_path: Path,
-) -> None:
-    """A set ``max_workers`` warns and is ignored. Any other unknown key fails validation."""
-    with caplog.at_level("WARNING"):
-        config = GitRepoConfig(
-            url="https://gitlab.example.com",
-            group="mygroup",
-            cache_dir=tmp_path / "git_cache",
-            max_workers=10,
-        )
-    assert "max_workers is deprecated and ignored" in caplog.text
-    repo = GitRepo(config)
-    assert repo._executor._max_workers == 1
-    repo._executor.shutdown(wait=False, cancel_futures=True)
-
+def test_max_workers_and_unknown_keys_are_rejected(tmp_path: Path) -> None:
+    """Leftover ``max_workers`` and any other unknown key fail validation (extra=forbid)."""
+    with pytest.raises(ValidationError):
+        GitRepoConfig.model_validate({
+            "url": "https://gitlab.example.com",
+            "group": "mygroup",
+            "cache_dir": tmp_path / "git_cache",
+            "max_workers": 10,
+        })
     with pytest.raises(ValidationError):
         GitCliSettings.model_validate({"not_a_setting": 1})
 
