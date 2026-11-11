@@ -15,12 +15,16 @@ from typing import ParamSpec, TypeVar, override
 from urllib.parse import unquote, urlparse
 
 import git.cmd
-from arctrl import ARC
 from git import Repo
 from git.exc import GitCommandError
 from opentelemetry import context
 
-from middleware.api.arc_store import ArcStore, ArcStoreError, ArcStoreTransientError, CatalogFinalizeResult
+from middleware.api.arc_store import (
+    ArcStoreError,
+    ArcStoreTransientError,
+    CatalogFinalizeResult,
+    ConsolidatedArcStore,
+)
 from middleware.api.arc_store.consolidated_git.catalog_jsonld import normalize_catalog_datasets_best_effort
 from middleware.api.arc_store.consolidated_git.catalog_materialize import materialize_catalog_dataset
 from middleware.api.arc_store.consolidated_git.catalog_serialize import extract_catalog_dataset, write_catalog_file
@@ -59,7 +63,7 @@ def _require_safe_catalog_rdi(rdi: str) -> None:
         raise ArcStoreError(f"Invalid RDI for catalog filename: {rdi!r}")
 
 
-class ConsolidatedGitArcStore(ArcStore):
+class ConsolidatedGitArcStore(ConsolidatedArcStore):
     """Publish ``{rdi}.json`` catalogs to one shared Git repo on finalize."""
 
     def __init__(self, config: ConsolidatedGitConfig, doc_store: DocumentStore) -> None:
@@ -117,31 +121,6 @@ class ConsolidatedGitArcStore(ArcStore):
                 context.detach(token)
 
         return await loop.run_in_executor(self._executor, _wrapper)
-
-    @override
-    async def _create_or_update(self, arc_id: str, arc: ARC, *, rdi: str) -> bool:
-        """Per-ARC Git sync is unused; catalog publish happens in ``finalize``."""
-        logger.debug(
-            "Ignoring create_or_update for consolidated catalog store (arc_id=%s, rdi=%s)",
-            arc_id,
-            rdi,
-        )
-        return False
-
-    @override
-    async def _get(self, arc_id: str) -> ARC | None:
-        """Per-ARC get is unsupported for the catalog backend."""
-        return None
-
-    @override
-    async def _delete(self, arc_id: str) -> None:
-        """Per-ARC delete is a no-op for the catalog backend."""
-        return
-
-    @override
-    async def _exists(self, arc_id: str) -> bool:
-        """Per-ARC exists is unsupported; always False."""
-        return False
 
     def _ensure_remote_bare_repo(self) -> None:
         """Create a local bare remote for file:// catalog URLs when missing."""

@@ -1,15 +1,20 @@
-"""Tests for ArcStore interface and error handling."""
+"""Tests for ArcStore / ConsolidatedArcStore interfaces and error handling."""
 
 from unittest.mock import MagicMock, patch
 
 import pytest
 from arctrl import ARC
 
-from middleware.api.arc_store import ArcStore, ArcStoreError
+from middleware.api.arc_store import (
+    ArcStore,
+    ArcStoreError,
+    CatalogFinalizeResult,
+    ConsolidatedArcStore,
+)
 
 
 def create_mock_arc_store() -> ArcStore:
-    """Create a mock ArcStore instance by patching abstract methods."""
+    """Create a concrete ArcStore by implementing abstract methods."""
 
     class ConcreteArcStore(ArcStore):
         arc_id = MagicMock()
@@ -32,6 +37,19 @@ def create_mock_arc_store() -> ArcStore:
     return ConcreteArcStore()
 
 
+def create_mock_consolidated_store() -> ConsolidatedArcStore:
+    """Create a concrete ConsolidatedArcStore by implementing abstract methods."""
+
+    class ConcreteConsolidatedArcStore(ConsolidatedArcStore):
+        async def _finalize(self, *, rdi: str) -> CatalogFinalizeResult:  # noqa: PLR6301, ARG002
+            return CatalogFinalizeResult(pushed=False)
+
+        def _check_health(self) -> bool:  # noqa: PLR6301
+            return True
+
+    return ConcreteConsolidatedArcStore()
+
+
 class TestArcStoreError:
     """Test suite for ArcStoreError exception."""
 
@@ -49,14 +67,25 @@ class TestArcStoreError:
         assert str(error) == message
 
 
-class TestArcStoreWrapperMethods:
-    """Test suite for ArcStore wrapper methods that handle errors."""
+class TestArcStorePortSurface:
+    """Per-ARC port has CRUD wrappers and no catalog finalize."""
+
+    @staticmethod
+    def test_arc_store_has_no_finalize() -> None:
+        """Split-ports: ArcStore must not expose catalog finalize."""
+        store = create_mock_arc_store()
+        assert not hasattr(store, "finalize")
+        assert not hasattr(store, "_finalize")
+
+
+class TestConsolidatedArcStoreWrapperMethods:
+    """Test suite for ConsolidatedArcStore finalize wrappers."""
 
     @pytest.mark.asyncio
     @staticmethod
-    async def test_finalize_default_no_op() -> None:
-        """Default finalize succeeds without pushing."""
-        store = create_mock_arc_store()
+    async def test_finalize_uses_implementation() -> None:
+        """Concrete catalog store finalize returns implementation outcome."""
+        store = create_mock_consolidated_store()
         outcome = await store.finalize(rdi="edal")
         assert outcome.pushed is False
         assert outcome.dataset_count == 0
@@ -66,7 +95,7 @@ class TestArcStoreWrapperMethods:
     @staticmethod
     async def test_finalize_generic_exception_records_redacted_error() -> None:
         """OTEL must record a redacted ArcStoreError, not a raw token-bearing exception."""
-        store = create_mock_arc_store()
+        store = create_mock_consolidated_store()
         leak = RuntimeError("push https://oauth2:secret-token@gitlab.example.com/g/c.git")
         mock_span = MagicMock()
         mock_cm = MagicMock()
@@ -86,6 +115,10 @@ class TestArcStoreWrapperMethods:
         assert isinstance(recorded, ArcStoreError)
         assert "secret-token" not in str(recorded)
         assert recorded is raised.value
+
+
+class TestArcStoreWrapperMethods:
+    """Test suite for ArcStore wrapper methods that handle errors."""
 
     @pytest.mark.asyncio
     @staticmethod

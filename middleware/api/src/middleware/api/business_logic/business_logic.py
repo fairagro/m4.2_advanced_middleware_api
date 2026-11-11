@@ -15,7 +15,7 @@ import logging
 from types import TracebackType
 from typing import Self
 
-from middleware.api.arc_store import ArcStore
+from middleware.api.arc_store import ArcStore, ConsolidatedArcStore
 from middleware.api.business_logic.arc_manager import ArcManager
 from middleware.api.business_logic.config import BusinessLogicConfig
 from middleware.api.business_logic.exceptions import (
@@ -62,7 +62,7 @@ class BusinessLogic:
         store: ArcStore,
         doc_store: DocumentStore,
         ports: BusinessLogicPorts | None = None,
-        consolidated_store: ArcStore | None = None,
+        consolidated_store: ConsolidatedArcStore | None = None,
     ) -> None:
         """Initialize the BusinessLogic.
 
@@ -71,7 +71,7 @@ class BusinessLogic:
             store: Per-ARC ArcStore for GitLab persistence.
             doc_store: DocumentStore for CouchDB persistence.
             ports: Optional infrastructure adapters for API mode integrations.
-            consolidated_store: Optional consolidated catalog ArcStore.
+            consolidated_store: Optional ConsolidatedArcStore for catalog finalize.
         """
         resolved_ports = ports or BusinessLogicPorts()
         self._config = config
@@ -108,8 +108,8 @@ class BusinessLogic:
         return self._arc_manager.store
 
     @property
-    def consolidated_store(self) -> ArcStore | None:
-        """Optional consolidated catalog store (used by health checks)."""
+    def consolidated_store(self) -> ConsolidatedArcStore | None:
+        """Optional ConsolidatedArcStore (used by health checks)."""
         return self._arc_manager.consolidated_store
 
     async def get_metadata(self, arc_id: str) -> ArcMetadata | None:

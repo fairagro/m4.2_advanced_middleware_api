@@ -33,7 +33,7 @@ class ArcStoreTransientError(ArcStoreError):
 
 @dataclass(frozen=True, slots=True)
 class CatalogFinalizeResult:
-    """Outcome of ``ArcStore.finalize`` (push flag plus partial-push skips)."""
+    """Outcome of ``ConsolidatedArcStore.finalize`` (push flag plus partial-push skips)."""
 
     pushed: bool
     dataset_count: int = 0
@@ -55,12 +55,45 @@ def _record_and_raise_arc_store_error(span: trace.Span, exc: BaseException, mess
 # ----------- Interface -----------
 
 
-class ArcStore(ABC):
-    """Abstract base class for ARC storage backends."""
+class ArcStoreBase(ABC):
+    """Shared lifecycle for Git-backend ports (health / shutdown / tracer).
+
+    Role operations live on :class:`ArcStore` (per-ARC) and
+    :class:`ConsolidatedArcStore` (catalog finalize) — not here.
+    """
 
     def __init__(self) -> None:
-        """Initialize ArcStore with tracer."""
+        """Initialize store with tracer."""
         self._tracer = trace.get_tracer(__name__)
+
+    @abstractmethod
+    def _check_health(self) -> bool:
+        """Check connection to the storage backend."""
+        raise NotImplementedError("`ArcStoreBase._check_health` is not implemented")
+
+    async def shutdown(self) -> None:  # noqa: PLR6301
+        """Release resources held by the store (e.g. thread-pool executors).
+
+        Subclasses should override this if they own background resources.
+        The default implementation is a no-op.
+        """
+        return  # no-op default; subclasses (e.g. GitRepo) override
+
+    def check_health(self) -> bool:
+        """Check connection to the storage backend.
+
+        Returns:
+            bool: True if backend is reachable, False otherwise.
+        """
+        try:
+            return self._check_health()
+        except (RuntimeError, OSError, ValueError, ConnectionError, TimeoutError) as e:
+            logger.exception("Caught exception during health check: %s", str(e))
+            return False
+
+
+class ArcStore(ArcStoreBase):
+    """Per-ARC Git persistence port (sync / get / delete / exists)."""
 
     @staticmethod
     def arc_id(identifier: str, rdi: str) -> str:
@@ -97,27 +130,6 @@ class ArcStore(ABC):
     async def _exists(self, arc_id: str) -> bool:
         """Check if an ARC of a given id already exists."""
         raise NotImplementedError("`ArcStore._exists` is not implemented")
-
-    @abstractmethod
-    def _check_health(self) -> bool:
-        """Check connection to the storage backend."""
-        raise NotImplementedError("`ArcStore._check_health` is not implemented")
-
-    async def _finalize(self, *, rdi: str) -> CatalogFinalizeResult:  # noqa: PLR6301, ARG002
-        """Publish pending catalog state for an RDI.
-
-        Default is a successful no-op (nothing pushed, no skips) so
-        orchestrators can call finalize for every backend without branching.
-        """
-        return CatalogFinalizeResult(pushed=False)
-
-    async def shutdown(self) -> None:  # noqa: PLR6301
-        """Release resources held by the store (e.g. thread-pool executors).
-
-        Subclasses should override this if they own background resources.
-        The default implementation is a no-op.
-        """
-        return  # no-op default; subclasses (e.g. GitRepo) override
 
     async def create_or_update(
         self,
@@ -162,39 +174,8 @@ class ArcStore(ABC):
                     "General exception caught in `ArcStore.create_or_update`",
                 )
 
-    async def finalize(self, *, rdi: str) -> CatalogFinalizeResult:
-        """Publish pending catalog state for an RDI.
-
-        Raises:
-            ArcStoreError: If an error occurs during the operation.
-        """
-        with self._tracer.start_as_current_span(
-            "api.ArcStore.finalize",
-            attributes={"rdi": rdi},
-        ) as span:
-            try:
-                outcome = await self._finalize(rdi=rdi)
-                span.set_attribute("pushed", outcome.pushed)
-                span.set_attribute("dataset_count", outcome.dataset_count)
-                span.set_attribute("skipped_count", len(outcome.skipped))
-                return outcome
-            except ArcStoreError as e:
-                span.record_exception(e)
-                raise
-            except Exception as e:
-                logger.exception(
-                    "Caught exception when finalizing catalog for RDI '%s': %s",
-                    rdi,
-                    redact_url_userinfo(str(e)),
-                )
-                _record_and_raise_arc_store_error(
-                    span,
-                    e,
-                    "General exception caught in `ArcStore.finalize`",
-                )
-
     async def get(self, arc_id: str) -> ARC | None:
-        """_Get an ARC by its ID.
+        """Get an ARC by its ID.
 
         Args:
             arc_id (str): ID of the ARC to retrieve.
@@ -227,17 +208,13 @@ class ArcStore(ABC):
                 )
 
     async def delete(self, arc_id: str) -> None:
-        """_Delete an ARC by its ID.
+        """Delete an ARC by its ID.
 
         Args:
             arc_id (str): ID of the ARC to delete.
 
         Raises:
             ArcStoreError: If an error occurs during the operation.
-
-        Returns:
-            _type_: None
-
         """
         with self._tracer.start_as_current_span(
             "api.ArcStore.delete",
@@ -261,7 +238,7 @@ class ArcStore(ABC):
                 )
 
     async def exists(self, arc_id: str) -> bool:
-        """_Check if an ARC exists by its ID.
+        """Check if an ARC exists by its ID.
 
         Args:
             arc_id (str): ID of the ARC to check.
@@ -296,14 +273,42 @@ class ArcStore(ABC):
                     f"Caught exception when trying to check if ARC '{arc_id}' exists",
                 )
 
-    def check_health(self) -> bool:
-        """Check connection to the storage backend.
 
-        Returns:
-            bool: True if backend is reachable, False otherwise.
+class ConsolidatedArcStore(ArcStoreBase):
+    """Catalog Git port: RDI-scoped ``finalize`` only."""
+
+    @abstractmethod
+    async def _finalize(self, *, rdi: str) -> CatalogFinalizeResult:
+        """Publish pending catalog state for an RDI."""
+        raise NotImplementedError("`ConsolidatedArcStore._finalize` is not implemented")
+
+    async def finalize(self, *, rdi: str) -> CatalogFinalizeResult:
+        """Publish pending catalog state for an RDI.
+
+        Raises:
+            ArcStoreError: If an error occurs during the operation.
         """
-        try:
-            return self._check_health()
-        except (RuntimeError, OSError, ValueError, ConnectionError, TimeoutError) as e:
-            logger.exception("Caught exception during health check: %s", str(e))
-            return False
+        with self._tracer.start_as_current_span(
+            "api.ConsolidatedArcStore.finalize",
+            attributes={"rdi": rdi},
+        ) as span:
+            try:
+                outcome = await self._finalize(rdi=rdi)
+                span.set_attribute("pushed", outcome.pushed)
+                span.set_attribute("dataset_count", outcome.dataset_count)
+                span.set_attribute("skipped_count", len(outcome.skipped))
+                return outcome
+            except ArcStoreError as e:
+                span.record_exception(e)
+                raise
+            except Exception as e:
+                logger.exception(
+                    "Caught exception when finalizing catalog for RDI '%s': %s",
+                    rdi,
+                    redact_url_userinfo(str(e)),
+                )
+                _record_and_raise_arc_store_error(
+                    span,
+                    e,
+                    "General exception caught in `ConsolidatedArcStore.finalize`",
+                )
