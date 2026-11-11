@@ -17,6 +17,7 @@ from pyld.jsonld import (  # type: ignore[import-untyped]
 from pyld.options import ContextObject, DocumentLoaderCallable  # type: ignore[import-untyped]
 
 from middleware.api.arc_store import ArcStoreError
+from middleware.api.arc_store.consolidated_git.catalog_jsonld_dump_shape import CATALOG_DUMP_SHAPE_CONTEXT
 from middleware.api.arc_store.consolidated_git.catalog_jsonld_extensions import (
     ARC_BIOSCHEMAS_EXTENSION_CONTEXT,
 )
@@ -35,23 +36,30 @@ SCHEMA_ORG_CONTEXT_IRI = "https://schema.org"
 CATALOG_JSONLD_COMPACT_BASE_IRI = DEFAULT_BASE_IRI
 
 
+def _catalog_extension_contexts() -> list[ContextObject]:
+    return [
+        cast(ContextObject, dict(ARC_BIOSCHEMAS_EXTENSION_CONTEXT)),
+        cast(ContextObject, dict(CATALOG_DUMP_SHAPE_CONTEXT)),
+    ]
+
+
 def build_catalog_emitted_context() -> Context:
-    """Public @context written into each catalog Dataset (URL + ARC/Bioschemas)."""
-    return [SCHEMA_ORG_CONTEXT_IRI, cast(ContextObject, dict(ARC_BIOSCHEMAS_EXTENSION_CONTEXT))]
+    """Public @context: schema.org + ARC/Bioschemas + transitional dump-shape overrides."""
+    return [SCHEMA_ORG_CONTEXT_IRI, *_catalog_extension_contexts()]
 
 
 def build_catalog_compact_context(schema_org_document: JsonObject) -> Context:
     """Build pyld compact context from vendored schema.org document + extensions."""
-    extension = cast(ContextObject, dict(ARC_BIOSCHEMAS_EXTENSION_CONTEXT))
+    extensions = _catalog_extension_contexts()
     nested = schema_org_document.get("@context")
     if nested is None:
-        return [cast(ContextObject, schema_org_document), extension]
+        return [cast(ContextObject, schema_org_document), *extensions]
     if isinstance(nested, str):
-        return [nested, extension]
+        return [nested, *extensions]
     if isinstance(nested, dict):
-        return [cast(ContextObject, nested), extension]
+        return [cast(ContextObject, nested), *extensions]
     if isinstance(nested, list):
-        return [*cast(list[str | ContextObject], nested), extension]
+        return [*cast(list[str | ContextObject], nested), *extensions]
     raise ArcStoreError("schema.org document @context must be a string, object, or array")
 
 

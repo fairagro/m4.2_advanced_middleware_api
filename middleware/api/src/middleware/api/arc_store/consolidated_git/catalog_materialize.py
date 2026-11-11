@@ -182,14 +182,11 @@ def _materialize_person_value(
     graph_index: dict[str, JsonObject],
     warn: Callable[[str], None],
 ) -> JsonValue | None:
-    if isinstance(value, list):
-        people = [
-            person for item in value if (person := _materialize_single_person(item, graph_index, warn)) is not None
-        ]
-        if not people:
-            return None
-        return cast(JsonValue, people)
-    return cast(JsonValue | None, _materialize_single_person(value, graph_index, warn))
+    items = value if isinstance(value, list) else [value]
+    people = [person for item in items if (person := _materialize_single_person(item, graph_index, warn)) is not None]
+    if not people:
+        return None
+    return cast(JsonValue, people)
 
 
 def _person_list_value(people: list[JsonObject]) -> JsonValue | None:
@@ -393,7 +390,7 @@ def _append_keywords(record: dict[str, JsonValue], text: str) -> None:
         return
     existing = record.get("keywords")
     if existing is None:
-        record["keywords"] = cast(JsonValue, parts if len(parts) > 1 else parts[0])
+        record["keywords"] = cast(JsonValue, parts)
         return
     if isinstance(existing, list):
         record["keywords"] = cast(JsonValue, [*existing, *parts])
@@ -421,10 +418,7 @@ def _append_organization_creators(record: dict[str, JsonValue], organizations: l
         return
     existing = record.get("creator")
     if existing is None:
-        record["creator"] = cast(
-            JsonValue,
-            organizations[0] if len(organizations) == 1 else organizations,
-        )
+        record["creator"] = cast(JsonValue, organizations)
         return
     if isinstance(existing, list):
         record["creator"] = cast(JsonValue, [*existing, *organizations])
@@ -514,10 +508,7 @@ def _materialize_dataset_comments(
         if (comment := _materialize_single_comment(item, record, graph_index, warn, creator_orgs)) is not None
     ]
     if inline_comments:
-        record["comment"] = cast(
-            JsonValue,
-            inline_comments if len(inline_comments) > 1 else inline_comments[0],
-        )
+        record["comment"] = cast(JsonValue, inline_comments)
     _append_organization_creators(
         record,
         _build_creator_organizations(creator_orgs.names, creator_orgs.urls),
@@ -529,16 +520,13 @@ def _materialize_citation(
     graph_index: dict[str, JsonObject],
     warn: Callable[[str], None],
 ) -> JsonValue | None:
-    if isinstance(value, list):
-        citations = [
-            citation
-            for item in value
-            if (citation := _materialize_single_citation(item, graph_index, warn)) is not None
-        ]
-        if not citations:
-            return None
-        return cast(JsonValue, citations if len(citations) > 1 else citations[0])
-    return cast(JsonValue | None, _materialize_single_citation(value, graph_index, warn))
+    items = value if isinstance(value, list) else [value]
+    citations = [
+        citation for item in items if (citation := _materialize_single_citation(item, graph_index, warn)) is not None
+    ]
+    if not citations:
+        return None
+    return cast(JsonValue, citations)
 
 
 def _materialize_single_citation(
@@ -580,20 +568,21 @@ def _materialize_has_part(
 ) -> JsonValue | None:
     if depth > _MAX_HAS_PART_DEPTH:
         return None
+    items: list[JsonValue]
     if isinstance(value, list):
-        parts = [
-            part
-            for item in value
-            if (part := _materialize_has_part_item(item, graph_index, depth=depth, warn=warn)) is not None
-        ]
-        if not parts:
-            return None
-        return cast(JsonValue, parts)
-    if isinstance(value, str):
-        return _materialize_has_part_item(value, graph_index, depth=depth, warn=warn)
-    if isinstance(value, dict):
-        return _materialize_has_part_item(value, graph_index, depth=depth, warn=warn)
-    return None
+        items = value
+    elif isinstance(value, str | dict):
+        items = [value]
+    else:
+        return None
+    parts = [
+        part
+        for item in items
+        if (part := _materialize_has_part_item(item, graph_index, depth=depth, warn=warn)) is not None
+    ]
+    if not parts:
+        return None
+    return cast(JsonValue, parts)
 
 
 def _copy_dataset_part_fields(part: JsonObject, node: JsonObject) -> None:

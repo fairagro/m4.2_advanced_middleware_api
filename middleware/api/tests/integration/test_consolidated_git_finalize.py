@@ -152,7 +152,9 @@ async def test_finalize_pushes_catalog_to_bare_remote(
     assert catalog_bytes == expected_bytes
     catalog = json.loads(catalog_bytes.decode("utf-8"))
     ds_a = next(item for item in catalog if item.get("identifier") == "DS-A")
-    creator = ds_a.get("creator")
+    creators = ds_a.get("creator")
+    assert isinstance(creators, list) and len(creators) == 1
+    creator = creators[0]
     assert isinstance(creator, dict)
     assert creator.get("givenName") == "Test"
     assert creator.get("familyName") == "Author"

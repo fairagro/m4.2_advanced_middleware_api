@@ -239,7 +239,9 @@ def test_materialize_ldcomment_maps_keywords_and_language() -> None:
     record = materialize_catalog_dataset(extract_catalog_dataset(arc), arc)
     assert record.get("inLanguage") == "eng"
     assert record.get("keywords") == ["soil", "field"]
-    comment = record.get("comment")
+    comments = record.get("comment")
+    assert isinstance(comments, list) and len(comments) == 1
+    comment = comments[0]
     assert isinstance(comment, dict)
     assert comment.get("name") == "Notes"
     assert comment.get("text") == "fallback comment"
@@ -279,7 +281,9 @@ def test_materialize_creator_organization_only() -> None:
         },
     )
     record = materialize_catalog_dataset(extract_catalog_dataset(arc), arc)
-    creator = record.get("creator")
+    creators = record.get("creator")
+    assert isinstance(creators, list) and len(creators) == 1
+    creator = creators[0]
     assert isinstance(creator, dict)
     assert creator.get("@type") == "Organization"
     assert creator.get("name") == "Thünen Institute"
@@ -458,7 +462,9 @@ def test_materialize_creator_organization_url_survives_compact() -> None:
         build_catalog_compact_context(load_schema_org_context()),
         emitted_context=build_catalog_emitted_context(),
     )
-    creator = compacted.get("creator")
+    creators = compacted.get("creator")
+    assert isinstance(creators, list) and len(creators) == 1
+    creator = creators[0]
     assert isinstance(creator, dict)
     assert creator.get("type") == "Organization"
     assert creator.get("name") == "Org A"
@@ -604,7 +610,9 @@ def test_materialize_has_part_scalar_string_ref() -> None:
         },
     )
     record = materialize_catalog_dataset(extract_catalog_dataset(arc), arc)
-    has_part = record.get("hasPart")
+    has_parts = record.get("hasPart")
+    assert isinstance(has_parts, list) and len(has_parts) == 1
+    has_part = has_parts[0]
     assert isinstance(has_part, dict)
     assert has_part.get("@id") == "assays/assay-a/"
     assert has_part.get("additionalType") == "Assay"
@@ -615,7 +623,9 @@ def test_materialize_citation_without_nested_comment() -> None:
     """Citation resolves ScholarlyArticle fields; nested Comment is omitted."""
     arc = _load_rocrate("sample.json")
     record = materialize_catalog_dataset(extract_catalog_dataset(arc), arc)
-    citation = record.get("citation")
+    citations = record.get("citation")
+    assert isinstance(citations, list) and len(citations) == 1
+    citation = citations[0]
     assert isinstance(citation, dict)
     assert citation.get("headline") == "test"
     assert "comment" not in citation
@@ -689,7 +699,9 @@ async def test_materialize_then_normalize_emits_schema_org_context() -> None:
     assert compacted["@context"] == build_catalog_emitted_context()
     data_without_context = {key: value for key, value in compacted.items() if key != "@context"}
     assert not _json_contains_compact_base(data_without_context)
-    creator = compacted.get("creator")
+    creators = compacted.get("creator")
+    assert isinstance(creators, list) and len(creators) == 1
+    creator = creators[0]
     assert isinstance(creator, dict)
     assert creator.get("givenName") == "Kevin"
     assert creator.get("familyName") == "Urbasch"
@@ -792,16 +804,22 @@ def test_materialized_compact_pipeline() -> None:
         compact_ctx,
         emitted_context=build_catalog_emitted_context(),
     )
-    creator = compacted.get("creator")
-    has_part = compacted.get("hasPart")
-    citation = compacted.get("citation")
+    creators = compacted.get("creator")
+    has_parts = compacted.get("hasPart")
+    citations = compacted.get("citation")
     assert compacted.get("license") == {"type": "CreativeWork", "text": "CC-BY 4.0"}
+    assert isinstance(creators, list) and len(creators) == 1
+    creator = creators[0]
     assert isinstance(creator, dict)
     assert creator.get("givenName") == "Ada"
     assert "id" not in creator
     assert creator.get("sameAs") == "https://orcid.org/0000-0002-1825-0097"
+    assert isinstance(has_parts, list) and len(has_parts) == 1
+    has_part = has_parts[0]
     assert isinstance(has_part, dict)
     assert has_part.get("id") == "assays/assay-a/"
+    assert isinstance(citations, list) and len(citations) == 1
+    citation = citations[0]
     assert isinstance(citation, dict)
     assert citation.get("headline") == "Example paper"
     assert "comment" not in citation
