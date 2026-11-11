@@ -98,6 +98,129 @@ def test_materialize_person_inline_without_fragment_id() -> None:
     assert "id" not in creator
 
 
+def test_materialize_splits_creator_jobtitle_contributor() -> None:
+    """ARCtrl creator+jobTitle contributor moves to Dataset.contributor (#594)."""
+    arc = cast(
+        RoCrateContent,
+        {
+            "@context": "https://w3id.org/ro/crate/1.1/context",
+            "@graph": [
+                {
+                    "@id": "http://orcid.org/0000-0001-0000-0001",
+                    "@type": "Person",
+                    "givenName": "Ada",
+                    "familyName": "Author",
+                    "jobTitle": {"@id": "#OA_author"},
+                },
+                {
+                    "@id": "http://orcid.org/0000-0002-0000-0002",
+                    "@type": "Person",
+                    "givenName": "Chris",
+                    "familyName": "Contributor",
+                    "jobTitle": {"@id": "#OA_contributor"},
+                },
+                {"@id": "#OA_author", "@type": "DefinedTerm", "name": "author"},
+                {"@id": "#OA_contributor", "@type": "DefinedTerm", "name": "contributor"},
+                {
+                    "@id": "./",
+                    "@type": "Dataset",
+                    "identifier": "DS-SPLIT",
+                    "creator": [
+                        {"@id": "http://orcid.org/0000-0001-0000-0001"},
+                        {"@id": "http://orcid.org/0000-0002-0000-0002"},
+                    ],
+                },
+            ],
+        },
+    )
+    record = materialize_catalog_dataset(extract_catalog_dataset(arc), arc)
+    creator = record.get("creator")
+    contributor = record.get("contributor")
+    assert isinstance(creator, dict)
+    assert creator.get("givenName") == "Ada"
+    assert isinstance(contributor, dict)
+    assert contributor.get("givenName") == "Chris"
+    assert "jobTitle" not in creator
+    assert "jobTitle" not in contributor
+
+
+def test_materialize_dual_role_person_in_creator_and_contributor() -> None:
+    """Persons with author+contributor jobTitles appear in both lists (#594)."""
+    arc = cast(
+        RoCrateContent,
+        {
+            "@context": "https://w3id.org/ro/crate/1.1/context",
+            "@graph": [
+                {
+                    "@id": "#Person_Both",
+                    "@type": "Person",
+                    "givenName": "Both",
+                    "familyName": "Roles",
+                    "jobTitle": [{"@id": "#OA_author"}, {"@id": "#OA_contributor"}],
+                },
+                {"@id": "#OA_author", "@type": "DefinedTerm", "name": "author"},
+                {"@id": "#OA_contributor", "@type": "DefinedTerm", "name": "contributor"},
+                {
+                    "@id": "./",
+                    "@type": "Dataset",
+                    "identifier": "DS-DUAL",
+                    "creator": {"@id": "#Person_Both"},
+                },
+            ],
+        },
+    )
+    record = materialize_catalog_dataset(extract_catalog_dataset(arc), arc)
+    creator = record.get("creator")
+    contributor = record.get("contributor")
+    assert isinstance(creator, dict)
+    assert creator.get("givenName") == "Both"
+    assert isinstance(contributor, dict)
+    assert contributor.get("givenName") == "Both"
+
+
+def test_materialize_principal_investigator_stays_creator() -> None:
+    """Principal Investigator / Investigator jobTitles stay on creator (#594)."""
+    arc = cast(
+        RoCrateContent,
+        {
+            "@context": "https://w3id.org/ro/crate/1.1/context",
+            "@graph": [
+                {
+                    "@id": "#Person_PI",
+                    "@type": "Person",
+                    "givenName": "Pat",
+                    "familyName": "Investigator",
+                    "jobTitle": {"@id": "https://bioregistry.io/EFO:EFO_0009736"},
+                },
+                {
+                    "@id": "#Person_Inv",
+                    "@type": "Person",
+                    "givenName": "Ivy",
+                    "familyName": "Researcher",
+                    "jobTitle": {"@id": "#OA_investigator"},
+                },
+                {
+                    "@id": "https://bioregistry.io/EFO:EFO_0009736",
+                    "@type": "DefinedTerm",
+                    "name": "principal investigator",
+                },
+                {"@id": "#OA_investigator", "@type": "DefinedTerm", "name": "Investigator"},
+                {
+                    "@id": "./",
+                    "@type": "Dataset",
+                    "identifier": "DS-PI",
+                    "creator": [{"@id": "#Person_PI"}, {"@id": "#Person_Inv"}],
+                },
+            ],
+        },
+    )
+    record = materialize_catalog_dataset(extract_catalog_dataset(arc), arc)
+    creators = record.get("creator")
+    assert isinstance(creators, list)
+    assert {c.get("givenName") for c in creators if isinstance(c, dict)} == {"Pat", "Ivy"}
+    assert "contributor" not in record
+
+
 def test_materialize_ldcomment_maps_keywords_and_language() -> None:
     """LDComment Keywords/Language become schema.org properties."""
     arc = _dangling_ref_arc()
@@ -380,9 +503,11 @@ def test_materialize_has_part_study_and_assay_from_sample() -> None:
     assert study.get("identifier") == "AthalianaColdStress"
     creators = study.get("creator")
     assert isinstance(creators, list)
-    first_creator = creators[0]
-    assert isinstance(first_creator, dict)
-    assert first_creator.get("givenName") == "Jasmine"
+    creator_names = {c.get("givenName") for c in creators if isinstance(c, dict)}
+    assert creator_names == {"Jasmine", "Viola"}
+    contributor = study.get("contributor")
+    assert isinstance(contributor, dict)
+    assert contributor.get("givenName") == "Oliver"
     assay = by_id["assays/Proteomics_MS/"]
     assert assay.get("additionalType") == "Assay"
     assert assay.get("identifier") == "Proteomics_MS"
