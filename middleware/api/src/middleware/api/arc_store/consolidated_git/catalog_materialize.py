@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 from collections.abc import Callable
+from dataclasses import dataclass
 from typing import cast
 
 from middleware.shared.json_types import CatalogDatasetRecord, JsonObject, JsonValue, RoCrateContent
@@ -29,6 +30,14 @@ _LDComment_NAME_MAP = {
     "keywords": "keywords",
     "language": "inLanguage",
 }
+_CREATOR_ORGANIZATION_COMMENT = "creator organization"
+_CREATOR_ORGANIZATION_URL_COMMENT = "creator organization url"
+
+
+@dataclass
+class _CreatorOrgBuffers:
+    names: list[str]
+    urls: list[str]
 
 
 def build_graph_index(arc_content: RoCrateContent) -> dict[str, JsonObject]:
@@ -268,9 +277,38 @@ def _append_keywords(record: dict[str, JsonValue], text: str) -> None:
     record["keywords"] = cast(JsonValue, [existing, *parts])
 
 
-def _materialize_single_comment(
+def _split_semicolon_list(text: str) -> list[str]:
+    return [part.strip() for part in text.split(";") if part.strip()]
+
+
+def _build_creator_organizations(names: list[str], urls: list[str]) -> list[JsonObject]:
+    organizations: list[JsonObject] = []
+    for index, name in enumerate(names):
+        organization: JsonObject = {"@type": "Organization", "name": name}
+        if index < len(urls):
+            organization["url"] = urls[index]
+        organizations.append(organization)
+    return organizations
+
+
+def _append_organization_creators(record: dict[str, JsonValue], organizations: list[JsonObject]) -> None:
+    if not organizations:
+        return
+    existing = record.get("creator")
+    if existing is None:
+        record["creator"] = cast(
+            JsonValue,
+            organizations[0] if len(organizations) == 1 else organizations,
+        )
+        return
+    if isinstance(existing, list):
+        record["creator"] = cast(JsonValue, [*existing, *organizations])
+        return
+    record["creator"] = cast(JsonValue, [existing, *organizations])
+
+
+def _resolve_comment_node(
     item: JsonValue,
-    record: dict[str, JsonValue],
     graph_index: dict[str, JsonObject],
     warn: Callable[[str], None],
 ) -> JsonObject | None:
@@ -284,16 +322,47 @@ def _materialize_single_comment(
     if not _node_has_type(node, "Comment"):
         warn(f"reference {ref_id} is not a Comment node")
         return None
+    return node
+
+
+def _consume_mapped_comment(
+    name_key: str,
+    text_str: str,
+    record: dict[str, JsonValue],
+    creator_orgs: _CreatorOrgBuffers,
+) -> bool:
+    """Apply first-class Comment mappings; return True when the Comment is consumed."""
+    if name_key == _CREATOR_ORGANIZATION_COMMENT:
+        creator_orgs.names.extend(_split_semicolon_list(text_str))
+        return True
+    if name_key == _CREATOR_ORGANIZATION_URL_COMMENT:
+        creator_orgs.urls.extend(_split_semicolon_list(text_str))
+        return True
+    mapped = _LDComment_NAME_MAP.get(name_key)
+    if mapped == "keywords":
+        _append_keywords(record, text_str)
+        return True
+    if mapped == "inLanguage":
+        record["inLanguage"] = text_str
+        return True
+    return False
+
+
+def _materialize_single_comment(
+    item: JsonValue,
+    record: dict[str, JsonValue],
+    graph_index: dict[str, JsonObject],
+    warn: Callable[[str], None],
+    creator_orgs: _CreatorOrgBuffers,
+) -> JsonObject | None:
+    node = _resolve_comment_node(item, graph_index, warn)
+    if node is None:
+        return None
     name = node.get("name")
     text = node.get("text")
     name_str = name if isinstance(name, str) else ""
     text_str = text if isinstance(text, str) else ""
-    mapped = _LDComment_NAME_MAP.get(name_str.casefold())
-    if mapped == "keywords":
-        _append_keywords(record, text_str)
-        return None
-    if mapped == "inLanguage":
-        record["inLanguage"] = text_str
+    if _consume_mapped_comment(name_str.casefold(), text_str, record, creator_orgs):
         return None
     comment: JsonObject = {"@type": "Comment"}
     if name_str:
@@ -313,16 +382,21 @@ def _materialize_dataset_comments(
     if comment_value is None:
         return
     items = comment_value if isinstance(comment_value, list) else [comment_value]
+    creator_orgs = _CreatorOrgBuffers(names=[], urls=[])
     inline_comments = [
         comment
         for item in items
-        if (comment := _materialize_single_comment(item, record, graph_index, warn)) is not None
+        if (comment := _materialize_single_comment(item, record, graph_index, warn, creator_orgs)) is not None
     ]
     if inline_comments:
         record["comment"] = cast(
             JsonValue,
             inline_comments if len(inline_comments) > 1 else inline_comments[0],
         )
+    _append_organization_creators(
+        record,
+        _build_creator_organizations(creator_orgs.names, creator_orgs.urls),
+    )
 
 
 def _materialize_citation(

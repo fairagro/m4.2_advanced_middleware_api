@@ -111,6 +111,168 @@ def test_materialize_ldcomment_maps_keywords_and_language() -> None:
     assert "@id" not in comment
 
 
+def test_materialize_creator_organization_only() -> None:
+    """Creator Organization Comments become Organization creators without Persons."""
+    arc = cast(
+        RoCrateContent,
+        {
+            "@context": "https://w3id.org/ro/crate/1.1/context",
+            "@graph": [
+                {
+                    "@id": "#LDComment_Creator_Organization",
+                    "@type": "Comment",
+                    "name": "Creator Organization",
+                    "text": "Thünen Institute",
+                },
+                {
+                    "@id": "#LDComment_Creator_Organization_URL",
+                    "@type": "Comment",
+                    "name": "Creator Organization URL",
+                    "text": "https://www.thuenen.de",
+                },
+                {
+                    "@id": "./",
+                    "@type": "Dataset",
+                    "identifier": "DS-ORG-ONLY",
+                    "name": "Org only",
+                    "comment": [
+                        {"@id": "#LDComment_Creator_Organization"},
+                        {"@id": "#LDComment_Creator_Organization_URL"},
+                    ],
+                },
+            ],
+        },
+    )
+    record = materialize_catalog_dataset(extract_catalog_dataset(arc), arc)
+    creator = record.get("creator")
+    assert isinstance(creator, dict)
+    assert creator.get("@type") == "Organization"
+    assert creator.get("name") == "Thünen Institute"
+    assert creator.get("url") == "https://www.thuenen.de"
+    assert "comment" not in record
+
+
+def test_materialize_creator_organization_beside_person() -> None:
+    """Organization creators append after existing Person creators."""
+    arc = cast(
+        RoCrateContent,
+        {
+            "@context": "https://w3id.org/ro/crate/1.1/context",
+            "@graph": [
+                {
+                    "@id": "#Person_Ada",
+                    "@type": "Person",
+                    "givenName": "Ada",
+                    "familyName": "Lovelace",
+                },
+                {
+                    "@id": "#LDComment_Creator_Organization",
+                    "@type": "Comment",
+                    "name": "Creator Organization",
+                    "text": "Analytical Engine Lab",
+                },
+                {
+                    "@id": "./",
+                    "@type": "Dataset",
+                    "identifier": "DS-MIXED",
+                    "creator": {"@id": "#Person_Ada"},
+                    "comment": {"@id": "#LDComment_Creator_Organization"},
+                },
+            ],
+        },
+    )
+    record = materialize_catalog_dataset(extract_catalog_dataset(arc), arc)
+    creators = record.get("creator")
+    assert isinstance(creators, list)
+    assert len(creators) == 2
+    person = creators[0]
+    organization = creators[1]
+    assert isinstance(person, dict)
+    assert person.get("givenName") == "Ada"
+    assert isinstance(organization, dict)
+    assert organization.get("@type") == "Organization"
+    assert organization.get("name") == "Analytical Engine Lab"
+    assert "comment" not in record
+
+
+def test_materialize_creator_organization_semicolon_urls() -> None:
+    """Semicolon-joined orgs pair URLs by index; unpaired names stay url-less."""
+    arc = cast(
+        RoCrateContent,
+        {
+            "@context": "https://w3id.org/ro/crate/1.1/context",
+            "@graph": [
+                {
+                    "@id": "#LDComment_Creator_Organization",
+                    "@type": "Comment",
+                    "name": "Creator Organization",
+                    "text": "Org A; Org B",
+                },
+                {
+                    "@id": "#LDComment_Creator_Organization_URL",
+                    "@type": "Comment",
+                    "name": "Creator Organization URL",
+                    "text": "https://a.example; https://b.example",
+                },
+                {
+                    "@id": "./",
+                    "@type": "Dataset",
+                    "identifier": "DS-MULTI-ORG",
+                    "comment": [
+                        {"@id": "#LDComment_Creator_Organization"},
+                        {"@id": "#LDComment_Creator_Organization_URL"},
+                    ],
+                },
+            ],
+        },
+    )
+    record = materialize_catalog_dataset(extract_catalog_dataset(arc), arc)
+    creators = record.get("creator")
+    assert isinstance(creators, list)
+    assert len(creators) == 2
+    first = creators[0]
+    second = creators[1]
+    assert isinstance(first, dict)
+    assert first == {"@type": "Organization", "name": "Org A", "url": "https://a.example"}
+    assert isinstance(second, dict)
+    assert second == {"@type": "Organization", "name": "Org B", "url": "https://b.example"}
+
+    arc_partial = cast(
+        RoCrateContent,
+        {
+            "@context": "https://w3id.org/ro/crate/1.1/context",
+            "@graph": [
+                {
+                    "@id": "#LDComment_Creator_Organization",
+                    "@type": "Comment",
+                    "name": "Creator Organization",
+                    "text": "Org A; Org B",
+                },
+                {
+                    "@id": "#LDComment_Creator_Organization_URL",
+                    "@type": "Comment",
+                    "name": "Creator Organization URL",
+                    "text": "https://a.example",
+                },
+                {
+                    "@id": "./",
+                    "@type": "Dataset",
+                    "identifier": "DS-MULTI-ORG-PARTIAL",
+                    "comment": [
+                        {"@id": "#LDComment_Creator_Organization"},
+                        {"@id": "#LDComment_Creator_Organization_URL"},
+                    ],
+                },
+            ],
+        },
+    )
+    partial = materialize_catalog_dataset(extract_catalog_dataset(arc_partial), arc_partial)
+    partial_creators = partial.get("creator")
+    assert isinstance(partial_creators, list)
+    assert partial_creators[0] == {"@type": "Organization", "name": "Org A", "url": "https://a.example"}
+    assert partial_creators[1] == {"@type": "Organization", "name": "Org B"}
+
+
 def test_materialize_license_text_from_edaphobase_pattern() -> None:
     """#LICENSE CreativeWork text becomes inline CreativeWork license."""
     arc = _load_rocrate("edaphobase.json")
