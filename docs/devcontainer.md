@@ -2,10 +2,16 @@
 
 Open this repo with **Dev Containers: Reopen in Container** (VS Code or Cursor).
 
-This image is the **shared product Dev Container toolchain** (issue #10): base pins in `versions.env`, fat tooling in
-`.devcontainer/Dockerfile`, generic postCreate. Products adopt **verbatim** `.devcontainer/devcontainer.json` and
-`.devcontainer/docker-compose.yml` from sync (#13,
+This image is the **shared python-product Dev Container toolchain** (issue #10): base pins in `versions.env`, fat
+tooling in `.devcontainer/Dockerfile`, generic postCreate. It syncs to **api / sql_to_arc / harvester** only
+(`python-product` profile — [#352](https://github.com/fairagro/m4.2_middleware_devinfra/issues/352)). Products adopt
+**verbatim** `.devcontainer/devcontainer.json` and `.devcontainer/docker-compose.yml` from sync (#13,
 [#65](https://github.com/fairagro/m4.2_middleware_devinfra/issues/65)) — do **not** hand-edit those blobs after sync.
+
+**`m4.2_infrastructure`** keeps its own fat **GitOps** Dev Container (argocd / kind / chart-testing / …) until a
+dedicated **adoption** issue. Sync must **not** copy this product `.devcontainer/*` onto Infra (see
+[`sync.md`](sync.md#dev-container-overlay--pin-ownership-352--354)).
+
 Repo-specific container env (`MYPYPATH`, `PYLINT_SOURCE_ROOTS`, `CST_*`, …) belongs in optional product-owned
 `.devcontainer/product.env` (not synced) and/or CI/hook env inputs. Compose `env_file` applies at **container create**
 only; synced [`scripts/run-quality-cli.sh`](../scripts/run-quality-cli.sh) re-applies `MYPYPATH` / `PYLINT_SOURCE_ROOTS`
@@ -50,13 +56,26 @@ cwd basename (`workspace`). The synced [`.devcontainer/starship.toml`](../.devco
 On sync, Prettier + markdownlint-cli2 (and their extensions) **replace or supplement** prior product markdown
 format/lint setups. Prefer `signageos.signageos-vscode-sops` (Open VSX / Cursor) over `shipitsmarter.sops-edit`.
 
-**Git LFS** is not part of the shared image or shared hook installer. Products that need it (e.g. sql-to-arc) own
-install and hook overlays entirely in the product repo (independent of Devinfra). Shared `setup-git-hooks.sh` installs a
-**dispatcher** (`.git/hooks/pre-push`) plus shared `.git/hooks/pre-push.d/50-quality`; it does not remove foreign
-`pre-push.d` fragments or manage LFS `post-*` hooks. Products add numbered fragments under `pre-push.d/` (e.g.
-`10-git-lfs` before `50-quality`). Shared postCreate does **not** hard-code `install-dev-hooks.sh` / `setup-git-lfs.sh`;
-optional product work runs via **`scripts/devcontainer-post-create.d/*.sh`** (sorted, T-late, hard-fail if present and
-non-executable or non-zero). Do **not** edit synced JSON `postCreate` for LFS.
+**Git LFS** is **shared-eligible** in the #352 pin-ownership table (fleet may pin it later) but is **not** a required
+install on today’s product image or shared hook installer. Products that need it (e.g. sql-to-arc) own install and hook
+overlays entirely in the product repo (independent of Devinfra). Shared `setup-git-hooks.sh` installs a **dispatcher**
+(`.git/hooks/pre-push`) plus shared `.git/hooks/pre-push.d/50-quality`; it does not remove foreign `pre-push.d`
+fragments or manage LFS `post-*` hooks. Products add numbered fragments under `pre-push.d/` (e.g. `10-git-lfs` before
+`50-quality`). Shared postCreate does **not** hard-code `install-dev-hooks.sh` / `setup-git-lfs.sh`; optional product
+work runs via **`scripts/devcontainer-post-create.d/*.sh`** (sorted, T-late, hard-fail if present and non-executable or
+non-zero). Do **not** edit synced JSON `postCreate` for LFS.
+
+### Pin ownership (product vs Infra)
+
+| Bucket                       | Examples                                                                                                                                                                               | Notes                                                                                                         |
+| ---------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------- |
+| Shared / foundation-eligible | Helm, **minikube** (current product local cluster), git-lfs (eligible, not required install today), Node/npm/OpenSpec/Prettier/markdownlint, gitleaks, **kubeconform**, starship, yq/… | Intent buckets in [`sync.md`](sync.md#dev-container-overlay--pin-ownership-352--354); one file `versions.env` |
+| python-product               | Python/uv, CST, Trivy, Renovate CLI, git-cliff, product-app pins                                                                                                                       | Same `versions.env` + this image                                                                              |
+| Infra-owned until adoption   | argocd, **kind**, **ct** (chart-testing)                                                                                                                                               | Infra GitOps image only                                                                                       |
+
+Replacing product **minikube → kind** is a separate Feature
+([#364](https://github.com/fairagro/m4.2_middleware_devinfra/issues/364)); API local smoke docs:
+[api#670](https://github.com/fairagro/m4.2_advanced_middleware_api/issues/670).
 
 ## Tool versions
 
@@ -98,7 +117,7 @@ git-cliff --version
 | GitHub / Node   | `gh`, Node, pinned `npm`, OpenSpec, Prettier, markdownlint-cli2, Renovate                      |
 | Release bump    | `git-cliff` (`GIT_CLIFF_VERSION`; `scripts/detect-version-bump.sh` for `version_bump=auto`)    |
 | Python          | `uv` + pinned Python; quality CLIs via `uv sync` / pre-commit (ruff, …)                        |
-| Query / lint    | `jq`, `yq`, `xq`, `yamlfmt`, `hadolint`                                                        |
+| Query / lint    | `jq`, `yq`, `xq`, `yamlfmt`, `hadolint`, `actionlint`, `kubeconform`                           |
 | K8s             | `kubectl`, `helm`, `minikube`                                                                  |
 | Secrets tooling | `sops`, `age`, `gpg` (ciphertext / `.sops.yaml` / `public_gpg_keys` **content** stay per repo) |
 | Containers      | DinD feature, `container-structure-test` (`cst`), `trivy`                                      |

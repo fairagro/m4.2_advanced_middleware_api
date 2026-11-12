@@ -1,3 +1,4 @@
+# shellcheck shell=bash
 # Personal GH_TOKEN (and legacy GITGUARDIAN_API_KEY if still in the store). Source this file.
 # Environment: Linux Dev Container only (requires /commandhistory).
 # Default: load only (store → keep non-empty process/host env). No TTY prompt.
