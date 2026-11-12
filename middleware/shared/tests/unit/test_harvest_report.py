@@ -171,7 +171,7 @@ def test_concurrent_scopes_are_isolated() -> None:
 
 
 def test_counting_increments() -> None:
-    """Counting methods increment harvested, failed, and skipped."""
+    """Counting methods increment harvested, failed, skipped, and warned."""
     report = HarvestReport(start_time=_START)
     scope = report.open_repository("bonares")
     scope.set_expected_datasets(_EXPECTED_COUNT)
@@ -180,6 +180,7 @@ def test_counting_increments() -> None:
     scope.record_harvested()
     scope.record_failed("bad", record_id="r1", url="https://x.test/r1")
     scope.record_skipped()
+    scope.record_warning("title fallback", record_id="r2", url="https://x.test/r2")
     scope.add_studies(_STUDIES)
     scope.add_assays(_ASSAYS)
     snap = scope.snapshot()
@@ -188,6 +189,7 @@ def test_counting_increments() -> None:
     assert snap.harvested_datasets == _HARVESTED_TWICE
     assert snap.failed_datasets == 1
     assert snap.skipped_datasets == 1
+    assert snap.warned_datasets == 1
     assert snap.total_studies == _STUDIES
     assert snap.total_assays == _ASSAYS
     assert snap.failures == (
@@ -198,6 +200,41 @@ def test_counting_increments() -> None:
             url="https://x.test/r1",
         ),
     )
+    assert snap.warnings == (
+        HarvestIssue(
+            message="title fallback",
+            kind=IssueKind.DATASET,
+            record_id="r2",
+            url="https://x.test/r2",
+        ),
+    )
+
+
+def test_record_warning_does_not_inflate_failed_or_skipped() -> None:
+    """Warnings leave failed/skipped/harvested unchanged unless callers record them."""
+    report = HarvestReport(start_time=_START)
+    scope = report.open_repository("openagrar")
+    scope.record_warning("used html title", record_id="mods:1")
+    snap = scope.snapshot()
+    assert snap.warned_datasets == 1
+    assert snap.harvested_datasets == 0
+    assert snap.failed_datasets == 0
+    assert snap.skipped_datasets == 0
+    assert not snap.failures
+    assert snap.warnings == (HarvestIssue(message="used html title", kind=IssueKind.DATASET, record_id="mods:1"),)
+
+
+def test_harvested_with_warning_needs_both_calls() -> None:
+    """Successful harvest with a warning increments both harvested and warned."""
+    report = HarvestReport(start_time=_START)
+    scope = report.open_repository("openagrar")
+    scope.record_harvested()
+    scope.record_warning("title from headline")
+    snap = scope.snapshot()
+    assert snap.harvested_datasets == 1
+    assert snap.warned_datasets == 1
+    assert snap.failed_datasets == 0
+    assert snap.skipped_datasets == 0
 
 
 def test_repository_issue_does_not_increment_failed_datasets() -> None:
@@ -315,6 +352,8 @@ def test_jsonld_metrics_and_failures() -> None:
     assert entry["fairagro:harvestedDatasets"] == _SAMPLE_HARVESTED
     assert entry["fairagro:failedDatasets"] == _SAMPLE_FAILED
     assert entry["fairagro:skippedDatasets"] == _SAMPLE_SKIPPED
+    assert entry["fairagro:warnedDatasets"] == 0
+    assert "fairagro:warnings" not in entry
     assert entry["fairagro:failures"][0] == {
         "fairagro:message": "map failed",
         "fairagro:kind": "dataset",
@@ -378,6 +417,7 @@ def test_jsonld_omits_unset_expected_and_study_assay() -> None:
     assert entry["fairagro:harvestedDatasets"] == 1
     assert entry["fairagro:failedDatasets"] == 0
     assert entry["fairagro:skippedDatasets"] == 0
+    assert entry["fairagro:warnedDatasets"] == 0
     assert entry["fairagro:harvestId"] == "harvest-1"
 
 
@@ -403,6 +443,37 @@ def test_jsonld_omits_empty_failures() -> None:
     report = _finished_report(populate=populate)
     entry = json.loads(JsonLdReportSerializer().render(report))["schema:result"][0]
     assert "fairagro:failures" not in entry
+    assert entry["fairagro:warnedDatasets"] == 0
+    assert "fairagro:warnings" not in entry
+
+
+def test_jsonld_warnings_list_and_count() -> None:
+    """Warnings emit warnedDatasets and an issue array; failures stay independent."""
+
+    def populate(report: HarvestReport) -> None:
+        scope = report.open_repository("openagrar")
+        scope.record_harvested()
+        scope.record_warning(
+            "title from html",
+            record_id="mods:110150",
+            url="https://www.openagrar.de/receive/openagrar_mods_00110150",
+        )
+        scope.close(closed_at=_SCOPE_CLOSE)
+
+    report = _finished_report(populate=populate)
+    entry = json.loads(JsonLdReportSerializer().render(report))["schema:result"][0]
+    assert entry["fairagro:harvestedDatasets"] == 1
+    assert entry["fairagro:failedDatasets"] == 0
+    assert entry["fairagro:warnedDatasets"] == 1
+    assert "fairagro:failures" not in entry
+    assert entry["fairagro:warnings"] == [
+        {
+            "fairagro:message": "title from html",
+            "fairagro:kind": "dataset",
+            "fairagro:recordId": "mods:110150",
+            "fairagro:url": "https://www.openagrar.de/receive/openagrar_mods_00110150",
+        }
+    ]
 
 
 def test_jsonld_empty_result_array() -> None:

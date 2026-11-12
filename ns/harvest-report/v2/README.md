@@ -15,21 +15,23 @@ not redefined here. Tool/image version on the run uses schema.org `instrument`, 
 
 ## Terms
 
-| Term                     | Meaning                                                            |
-| ------------------------ | ------------------------------------------------------------------ |
-| `harvestDurationSeconds` | Wall-clock duration of the entire harvest run, in seconds          |
-| `harvestId`              | Harvest id returned by the Middleware harvest API (`null` if none) |
-| `expectedDatasets`       | Expected dataset count for a repository, when known                |
-| `harvestedDatasets`      | Datasets successfully harvested and forwarded to the API           |
-| `failedDatasets`         | Datasets that failed during harvest or upload                      |
-| `skippedDatasets`        | Datasets intentionally skipped                                     |
-| `failures`               | Ordered list of harvest issues (dataset or repository)             |
-| `kind`                   | Issue kind: `dataset` or `repository`                              |
-| `message`                | Human-readable failure message on an issue                         |
-| `recordId`               | Optional source record identifier (dataset issues)                 |
-| `url`                    | Optional URL related to the issue                                  |
-| `totalStudies`           | Optional count of studies produced for a repository                |
-| `totalAssays`            | Optional count of assays produced for a repository                 |
+| Term                     | Meaning                                                              |
+| ------------------------ | -------------------------------------------------------------------- |
+| `harvestDurationSeconds` | Wall-clock duration of the entire harvest run, in seconds            |
+| `harvestId`              | Harvest id returned by the Middleware harvest API (`null` if none)   |
+| `expectedDatasets`       | Expected dataset count for a repository, when known                  |
+| `harvestedDatasets`      | Datasets successfully harvested and forwarded to the API             |
+| `failedDatasets`         | Datasets that failed during harvest or upload                        |
+| `skippedDatasets`        | Datasets intentionally skipped                                       |
+| `warnedDatasets`         | Datasets harvested (or otherwise continued) with a non-fatal warning |
+| `failures`               | Ordered list of harvest issues (dataset or repository)               |
+| `warnings`               | Ordered list of dataset-scoped warning issues                        |
+| `kind`                   | Issue kind: `dataset` or `repository`                                |
+| `message`                | Human-readable message on an issue                                   |
+| `recordId`               | Optional source record identifier (dataset issues)                   |
+| `url`                    | Optional URL related to the issue                                    |
+| `totalStudies`           | Optional count of studies produced for a repository                  |
+| `totalAssays`            | Optional count of assays produced for a repository                   |
 
 ## Versioning
 

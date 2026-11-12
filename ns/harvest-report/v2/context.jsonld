@@ -28,8 +28,16 @@
       "@id": "fairagro:skippedDatasets",
       "@type": "xsd:integer"
     },
+    "warnedDatasets": {
+      "@id": "fairagro:warnedDatasets",
+      "@type": "xsd:integer"
+    },
     "failures": {
       "@id": "fairagro:failures",
+      "@container": "@list"
+    },
+    "warnings": {
+      "@id": "fairagro:warnings",
       "@container": "@list"
     },
     "kind": {

@@ -1,4 +1,8 @@
-"""Mutable harvest-run report with counting methods and format-neutral snapshots."""
+"""Mutable harvest-run report with counting methods and format-neutral snapshots.
+
+Callers treat the report (via repository scope handles) as the sole owner of harvested,
+failed, skipped, warned, expected (when set), study, and assay counts for a run.
+"""
 
 from __future__ import annotations
 
@@ -24,7 +28,7 @@ class IssueKind(StrEnum):
 
 @dataclass(frozen=True)
 class HarvestIssue:
-    """One harvest issue (dataset failure or repository-level problem)."""
+    """One harvest issue (dataset failure/warning or repository-level problem)."""
 
     message: str
     kind: IssueKind = IssueKind.DATASET
@@ -53,7 +57,9 @@ class RepositoryReport:  # pylint: disable=too-many-instance-attributes
     harvested_datasets: int = 0
     failed_datasets: int = 0
     skipped_datasets: int = 0
+    warned_datasets: int = 0
     failures: tuple[HarvestIssue, ...] = ()
+    warnings: tuple[HarvestIssue, ...] = ()
     total_studies: int | None = None
     total_assays: int | None = None
 
@@ -67,7 +73,9 @@ class _DatasetCounts:
     harvested_datasets: int = 0
     failed_datasets: int = 0
     skipped_datasets: int = 0
+    warned_datasets: int = 0
     failures: list[HarvestIssue] = field(default_factory=list)
+    warnings: list[HarvestIssue] = field(default_factory=list)
 
 
 @dataclass
@@ -158,6 +166,25 @@ class RepositoryScope:
         with self._lock:
             self._datasets.skipped_datasets += 1
 
+    def record_warning(
+        self,
+        message: str,
+        *,
+        record_id: str | None = None,
+        url: str | None = None,
+    ) -> None:
+        """Record one dataset-scoped warning without changing harvest/fail/skip counts."""
+        with self._lock:
+            self._datasets.warned_datasets += 1
+            self._datasets.warnings.append(
+                HarvestIssue(
+                    message=message,
+                    kind=IssueKind.DATASET,
+                    record_id=record_id,
+                    url=url,
+                )
+            )
+
     def add_studies(self, count: int = 1) -> None:
         """Add ``count`` studies to this repository's totals."""
         if count < 0:
@@ -193,7 +220,9 @@ class RepositoryScope:
                 harvested_datasets=datasets.harvested_datasets,
                 failed_datasets=datasets.failed_datasets,
                 skipped_datasets=datasets.skipped_datasets,
+                warned_datasets=datasets.warned_datasets,
                 failures=tuple(datasets.failures),
+                warnings=tuple(datasets.warnings),
                 total_studies=total_studies,
                 total_assays=total_assays,
             )

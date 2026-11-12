@@ -32,7 +32,7 @@ def _format_iso_timestamp(value: datetime) -> str:
     return value.astimezone(UTC).isoformat().replace("+00:00", "Z")
 
 
-def _failure_node(issue: HarvestIssue) -> dict[str, Any]:
+def _issue_node(issue: HarvestIssue) -> dict[str, Any]:
     node: dict[str, Any] = {
         "fairagro:message": issue.message,
         "fairagro:kind": issue.kind.value,
@@ -55,6 +55,7 @@ def _entry_point(repo: RepositoryReport) -> dict[str, Any]:
         "fairagro:harvestedDatasets": repo.harvested_datasets,
         "fairagro:failedDatasets": repo.failed_datasets,
         "fairagro:skippedDatasets": repo.skipped_datasets,
+        "fairagro:warnedDatasets": repo.warned_datasets,
     }
     if repo.expected_datasets is not None:
         entry["fairagro:expectedDatasets"] = repo.expected_datasets
@@ -63,7 +64,9 @@ def _entry_point(repo: RepositoryReport) -> dict[str, Any]:
     if repo.total_assays is not None:
         entry["fairagro:totalAssays"] = repo.total_assays
     if repo.failures:
-        entry["fairagro:failures"] = [_failure_node(issue) for issue in repo.failures]
+        entry["fairagro:failures"] = [_issue_node(issue) for issue in repo.failures]
+    if repo.warnings:
+        entry["fairagro:warnings"] = [_issue_node(issue) for issue in repo.warnings]
     return entry
 
 
