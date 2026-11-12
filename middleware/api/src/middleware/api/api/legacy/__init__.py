@@ -1,1 +1,1 @@
-"""Legacy API helpers (v1/v2 compatibility)."""
+"""Legacy API helpers (v2 task-polling compatibility)."""

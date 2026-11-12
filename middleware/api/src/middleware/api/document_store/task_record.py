@@ -1,4 +1,4 @@
-"""Task status record model for legacy v1/v2 task endpoints."""
+"""Task status record model for legacy v2 task-polling endpoints."""
 
 from datetime import UTC, datetime
 from enum import StrEnum

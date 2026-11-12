@@ -73,7 +73,7 @@ def _app_with_admission(*, max_concurrent: int, retry_after: int = 7) -> FastAPI
         ("/v3/readiness", True),
         ("/v3/health", True),
         ("/v3/version", True),
-        ("/v1/health", True),
+        ("/v1/health", False),
         ("/v2/health", True),
         ("/v3/arcs", False),
         ("/v3/harvests/h1/arcs", False),

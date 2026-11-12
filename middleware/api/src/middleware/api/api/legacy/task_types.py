@@ -1,4 +1,4 @@
-"""Legacy task status types used by v1/v2 task polling endpoints."""
+"""Legacy task status types used by v2 task polling endpoints."""
 
 from dataclasses import dataclass, field
 from enum import StrEnum
@@ -6,7 +6,7 @@ from typing import Any
 
 
 class SyncTaskStatus(StrEnum):
-    """Status of a legacy async task exposed by v1/v2 endpoints."""
+    """Status of a legacy async task exposed by v2 endpoints."""
 
     PENDING = "PENDING"
     RUNNING = "RUNNING"
@@ -16,7 +16,7 @@ class SyncTaskStatus(StrEnum):
 
 @dataclass
 class SyncTaskResult:
-    """Legacy task status query result used by v1/v2 endpoints."""
+    """Legacy task status query result used by v2 endpoints."""
 
     status: SyncTaskStatus
     result: dict[str, Any] | None = field(default=None)

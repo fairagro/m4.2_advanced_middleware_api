@@ -26,7 +26,7 @@ the configuration fields.
 3. **Jitter `Retry-After`** — Every rejected request uniformly selects an integer in `1..retry_after_seconds`,
    preventing synchronized retry herds.
 4. **Probe paths do not take slots** — `/v3/liveness`, `/v3/readiness`, `/v3/health`, `/v3/version`, and legacy
-   `/v1/health` / `/v2/health` remain reachable under load.
+   `/v2/health` (while still registered) remain reachable under load. `/v1` system routes are gone and are not exempt.
 5. **Scale through replicas** — The per-process design matches the one-worker-per-container model; a shared counter
    would add infrastructure without improving this failure mode.
 6. **Opt in through configuration** — `max_concurrent_requests` unset or non-positive disables admission control;

@@ -29,15 +29,13 @@ workspace "FAIRagro Advanced Middleware API" "Architecture of the FAIRagro Advan
 
         # ─── The System ───────────────────────────────────────────────────────
 
-        middlewareApi = softwareSystem "FAIRagro Advanced Middleware API" "Receives ARC (Annotated Research Context) documents via REST, persists them in CouchDB for fast access, and asynchronously synchronises them to DataHUB/GitLab repositories. Exposes a versioned REST API (v1/v2/v3) and a harvest lifecycle management API (v3/harvests)." {
+        middlewareApi = softwareSystem "FAIRagro Advanced Middleware API" "Receives ARC (Annotated Research Context) documents via REST, persists them in CouchDB for fast access, and asynchronously synchronises them to DataHUB/GitLab repositories. Exposes a versioned REST API (v2/v3) and a harvest lifecycle management API (v3/harvests)." {
 
             # ── Containers ────────────────────────────────────────────────────
 
             apiServer = container "Middleware API Server" "Exposes the REST API, performs fast synchronous CouchDB writes, enqueues asynchronous GitLab-sync tasks, and serves health/readiness endpoints." "Python 3.12 · FastAPI · Uvicorn" "Api" {
 
                 # ── API Layer ─────────────────────────────────────────────────
-
-                v1Router = component "API v1 Router" "Deprecated compatibility system endpoints only: GET /v1/whoami, GET /v1/liveness, and GET /v1/health. Prefer /v3 equivalents. POST /v1/arcs and GET /v1/tasks have been removed." "FastAPI APIRouter"
 
                 v2Router = component "API v2 Router" "Task-based async ARC submission. POST /v2/arcs returns task_id immediately; clients poll GET /v2/tasks/{id} for the SUCCESS/FAILURE status." "FastAPI APIRouter"
 

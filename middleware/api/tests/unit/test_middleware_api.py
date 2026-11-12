@@ -28,11 +28,17 @@ def test_uvicorn_access_logger_uses_api_format() -> None:
     assert formatter._fmt == effective._fmt  # noqa: SLF001
 
 
-@pytest.mark.parametrize("path", ["/v1/whoami", "/v3/whoami"])
-def test_whoami_success(client: TestClient, middleware_api: Api, cert: str, path: str) -> None:
-    """Test whoami with a valid certificate and accept header on v1 and v3."""
+@pytest.mark.parametrize("path", ["/v1/whoami", "/v1/liveness", "/v1/health"])
+def test_removed_v1_system_routes_return_404(client: TestClient, path: str) -> None:
+    """Removed system_v1 routes must not remain registered."""
+    r = client.get(path, headers={"accept": "application/json"})
+    assert r.status_code == http.HTTPStatus.NOT_FOUND
+
+
+def test_whoami_success(client: TestClient, middleware_api: Api, cert: str) -> None:
+    """Test whoami with a valid certificate and accept header on v3."""
     r = client.get(
-        path,
+        "/v3/whoami",
         headers={"ssl-client-cert": cert, "ssl-client-verify": "SUCCESS", "accept": "application/json"},
     )
     assert r.status_code == http.HTTPStatus.OK
@@ -42,31 +48,28 @@ def test_whoami_success(client: TestClient, middleware_api: Api, cert: str, path
     middleware_api.app.dependency_overrides.clear()
 
 
-@pytest.mark.parametrize("path", ["/v1/whoami", "/v3/whoami"])
-def test_whoami_invalid_accept(client: TestClient, cert: str, path: str) -> None:
-    """Test whoami with an invalid accept header on v1 and v3."""
+def test_whoami_invalid_accept(client: TestClient, cert: str) -> None:
+    """Test whoami with an invalid accept header on v3."""
     r = client.get(
-        path,
+        "/v3/whoami",
         headers={"ssl-client-cert": cert, "ssl-client-verify": "SUCCESS", "accept": "application/xml"},
     )
     assert r.status_code == http.HTTPStatus.NOT_ACCEPTABLE
 
 
-@pytest.mark.parametrize("path", ["/v1/whoami", "/v3/whoami"])
-def test_whoami_no_cert(client: TestClient, path: str) -> None:
-    """Test whoami without a client certificate on v1 and v3."""
+def test_whoami_no_cert(client: TestClient) -> None:
+    """Test whoami without a client certificate on v3."""
     r = client.get(
-        path,
+        "/v3/whoami",
         headers={"accept": "application/json"},
     )
     assert r.status_code == http.HTTPStatus.UNAUTHORIZED
 
 
-@pytest.mark.parametrize("path", ["/v1/whoami", "/v3/whoami"])
-def test_whoami_invalid_cert(client: TestClient, middleware_api: Api, path: str) -> None:
-    """Test whoami with an invalid client certificate on v1 and v3."""
+def test_whoami_invalid_cert(client: TestClient, middleware_api: Api) -> None:
+    """Test whoami with an invalid client certificate on v3."""
     r = client.get(
-        path,
+        "/v3/whoami",
         headers={"ssl-client-cert": "dummy cert", "ssl-client-verify": "SUCCESS", "accept": "application/json"},
     )
     assert r.status_code == http.HTTPStatus.BAD_REQUEST
@@ -74,59 +77,14 @@ def test_whoami_invalid_cert(client: TestClient, middleware_api: Api, path: str)
     middleware_api.app.dependency_overrides.clear()
 
 
-@pytest.mark.parametrize("path", ["/v1/whoami", "/v3/whoami"])
 @pytest.mark.parametrize("verify_status", ["FAILED", "NONE"])
-def test_whoami_cert_verify_not_success(client: TestClient, cert: str, path: str, verify_status: str) -> None:
-    """Test whoami with failed or no certificate verification on v1 and v3."""
+def test_whoami_cert_verify_not_success(client: TestClient, cert: str, verify_status: str) -> None:
+    """Test whoami with failed or no certificate verification on v3."""
     r = client.get(
-        path,
+        "/v3/whoami",
         headers={"ssl-client-cert": cert, "ssl-client-verify": verify_status, "accept": "application/json"},
     )
     assert r.status_code == http.HTTPStatus.UNAUTHORIZED
-
-
-def test_health_check_success(client: TestClient, middleware_api: Api, cert: str) -> None:
-    """Test /v1/health success."""
-    with unittest.mock.patch.object(
-        middleware_api.business_logic,
-        "health_check",
-        side_effect=AsyncMock(return_value={"couchdb_reachable": True, "rabbitmq": True}),
-    ):
-        r = client.get(
-            "/v1/health",
-            headers={
-                "ssl-client-cert": cert,
-                "ssl-client-verify": "SUCCESS",
-                "accept": "application/json",
-            },
-        )
-        assert r.status_code == http.HTTPStatus.OK
-        assert r.json() == {
-            "status": "ok",
-            "rabbitmq_reachable": True,
-        }
-
-
-def test_health_check_failure(client: TestClient, middleware_api: Api, cert: str) -> None:
-    """Test /v1/health failure."""
-    with unittest.mock.patch.object(
-        middleware_api.business_logic,
-        "health_check",
-        side_effect=AsyncMock(return_value={"couchdb_reachable": False, "rabbitmq": False}),
-    ):
-        r = client.get(
-            "/v1/health",
-            headers={
-                "ssl-client-cert": cert,
-                "ssl-client-verify": "SUCCESS",
-                "accept": "application/json",
-            },
-        )
-        assert r.status_code == http.HTTPStatus.SERVICE_UNAVAILABLE
-        assert r.json() == {
-            "status": "error",
-            "rabbitmq_reachable": False,
-        }
 
 
 def test_health_check_v2_success(client: TestClient, middleware_api: Api, cert: str) -> None:
@@ -179,8 +137,7 @@ def test_health_check_v2_couchdb_failure(client: TestClient, middleware_api: Api
 # -------------------------------------------------------------------
 
 
-@pytest.mark.parametrize("path", ["/v1/whoami", "/v3/whoami"])
-def test_whoami_accessible_rdis_intersection(client: TestClient, middleware_api: Api, path: str) -> None:
+def test_whoami_accessible_rdis_intersection(client: TestClient, middleware_api: Api) -> None:
     """Test that accessible_rdis is the intersection of allowed_rdis and known_rdis."""
     # Create certificate with RDIs that partially overlap with known_rdis
     # known_rdis fixture has ["rdi-1", "rdi-2"]
@@ -195,7 +152,7 @@ def test_whoami_accessible_rdis_intersection(client: TestClient, middleware_api:
         mock_auth.return_value = ["rdi-1", "rdi-3"]
 
         r = client.get(
-            path,
+            "/v3/whoami",
             headers={
                 "ssl-client-cert": "dummy-cert",
                 "ssl-client-verify": "SUCCESS",
@@ -210,8 +167,7 @@ def test_whoami_accessible_rdis_intersection(client: TestClient, middleware_api:
     middleware_api.app.dependency_overrides.clear()
 
 
-@pytest.mark.parametrize("path", ["/v1/whoami", "/v3/whoami"])
-def test_whoami_accessible_rdis_no_overlap(client: TestClient, middleware_api: Api, path: str) -> None:
+def test_whoami_accessible_rdis_no_overlap(client: TestClient, middleware_api: Api) -> None:
     """Test that accessible_rdis is empty when there's no overlap between allowed and known RDIs."""
     # Create certificate with RDIs that don't overlap with known_rdis
     # known_rdis has ["rdi-1", "rdi-2"], create cert with ["rdi-3", "rdi-4"]
@@ -225,7 +181,7 @@ def test_whoami_accessible_rdis_no_overlap(client: TestClient, middleware_api: A
         mock_auth.return_value = ["rdi-3", "rdi-4"]
 
         r = client.get(
-            path,
+            "/v3/whoami",
             headers={"ssl-client-cert": "dummy-cert", "ssl-client-verify": "SUCCESS", "accept": "application/json"},
         )
         assert r.status_code == http.HTTPStatus.OK
@@ -236,8 +192,7 @@ def test_whoami_accessible_rdis_no_overlap(client: TestClient, middleware_api: A
     middleware_api.app.dependency_overrides.clear()
 
 
-@pytest.mark.parametrize("path", ["/v1/whoami", "/v3/whoami"])
-def test_whoami_accessible_rdis_complete_overlap(client: TestClient, middleware_api: Api, path: str) -> None:
+def test_whoami_accessible_rdis_complete_overlap(client: TestClient, middleware_api: Api) -> None:
     """Test that accessible_rdis contains all RDIs when there's complete overlap."""
     # Create certificate with same RDIs as known_rdis
     # pylint: disable=protected-access
@@ -250,7 +205,7 @@ def test_whoami_accessible_rdis_complete_overlap(client: TestClient, middleware_
         mock_auth.return_value = ["rdi-1", "rdi-2"]
 
         r = client.get(
-            path,
+            "/v3/whoami",
             headers={"ssl-client-cert": "dummy-cert", "ssl-client-verify": "SUCCESS", "accept": "application/json"},
         )
         assert r.status_code == http.HTTPStatus.OK
@@ -261,8 +216,7 @@ def test_whoami_accessible_rdis_complete_overlap(client: TestClient, middleware_
     middleware_api.app.dependency_overrides.clear()
 
 
-@pytest.mark.parametrize("path", ["/v1/whoami", "/v3/whoami"])
-def test_whoami_accessible_rdis_superset_in_cert(client: TestClient, middleware_api: Api, path: str) -> None:
+def test_whoami_accessible_rdis_superset_in_cert(client: TestClient, middleware_api: Api) -> None:
     """Test accessible_rdis when certificate contains more RDIs than known_rdis."""
     # Certificate has ["rdi-1", "rdi-2", "rdi-3", "rdi-4"]
     # known_rdis has ["rdi-1", "rdi-2"]
@@ -277,7 +231,7 @@ def test_whoami_accessible_rdis_superset_in_cert(client: TestClient, middleware_
         mock_auth.return_value = ["rdi-1", "rdi-2", "rdi-3", "rdi-4"]
 
         r = client.get(
-            path,
+            "/v3/whoami",
             headers={"ssl-client-cert": "dummy-cert", "ssl-client-verify": "SUCCESS", "accept": "application/json"},
         )
         assert r.status_code == http.HTTPStatus.OK
