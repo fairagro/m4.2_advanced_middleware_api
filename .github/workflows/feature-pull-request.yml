@@ -37,7 +37,7 @@ jobs:
               - 'scripts/**'
               - '.github/workflows/**'
             helm:
-              - 'helmchart/**'
+              - 'charts/**'
 
   code-quality:
     name: Code Quality
@@ -97,6 +97,6 @@ jobs:
     needs: detect-changes
     uses: fairagro/m4.2_middleware_devinfra/.github/workflows/reusable-helm-lint.yml@main
     with:
-      chart_dir: helmchart/fairagro-advanced-middleware-api-chart
+      chart_dir: charts/fairagro-advanced-middleware-api-chart
       skip: ${{ needs.detect-changes.outputs.helm != 'true' }}
     secrets: inherit

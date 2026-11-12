@@ -2,8 +2,8 @@
 # default-values helm lint / template smoke). Keep for explicit CI overlays when
 # Devinfra reusable-helm-lint gains values_file (devinfra#294).
 #
-#   helm template ci-smoke ./helmchart/fairagro-advanced-middleware-api-chart \
-#     -f helmchart/test_deploy/values-ci-smoke.yaml
+#   helm template ci-smoke ./charts/fairagro-advanced-middleware-api-chart \
+#     -f charts/test_deploy/values-ci-smoke.yaml
 
 rabbitmq:
   auth:

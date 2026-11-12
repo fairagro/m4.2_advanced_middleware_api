@@ -21,11 +21,11 @@ clients need cert auth; HTTPRoute can run in parallel for Gateway TLS exposure.
 **Render check (no live Gateway):**
 
 ```bash
-helm template api-test ./helmchart/fairagro-advanced-middleware-api-chart \
-  -f helmchart/test_deploy/values-httproute.yaml
+helm template api-test ./charts/fairagro-advanced-middleware-api-chart \
+  -f charts/test_deploy/values-httproute.yaml
 ```
 
-Minikube installs continue to use `helmchart/test_deploy/values.yaml` (Ingress only).
+Minikube installs continue to use `charts/test_deploy/values.yaml` (Ingress only).
 
 ### IDE: Helm templates vs YAML
 
@@ -41,13 +41,13 @@ dev container.
 
 ### Preparations
 
-Some files need for the test installation can be found in the folder `helmchart/advanced-middleware-api`. First we will
+Some files need for the test installation can be found in the folder `charts/advanced-middleware-api`. First we will
 need to create a temporary self-signed server certificate in this folder:
 
 ```bash
 FQDN=chart-example.local
 
-cat > helmchart/fairagro-advanced-middleware-api-chart/server.conf <<EOF
+cat > charts/fairagro-advanced-middleware-api-chart/server.conf <<EOF
 [req]
 FQDN=chart-example.local
 distinguished_name = req_distinguished_name
@@ -67,16 +67,16 @@ DNS.1 = ${FQDN}
 EOF
 
 openssl req -x509 -nodes -days 365 -newkey rsa:2048 \
-    -keyout helmchart/fairagro-advanced-middleware-api-chart/server.key \
-    -out helmchart/fairagro-advanced-middleware-api-chart/server.crt \
-    -config helmchart/fairagro-advanced-middleware-api-chart/server.conf \
+    -keyout charts/fairagro-advanced-middleware-api-chart/server.key \
+    -out charts/fairagro-advanced-middleware-api-chart/server.crt \
+    -config charts/fairagro-advanced-middleware-api-chart/server.conf \
     -extensions v3_req
 ```
 
 We also need a CA certificate and a client key/certificate pair for mTLS:
 
 ```bash
-cat > helmchart/fairagro-advanced-middleware-api-chart/client_ext.conf <<EOF
+cat > charts/fairagro-advanced-middleware-api-chart/client_ext.conf <<EOF
 [ client_ext ]
 extendedKeyUsage = critical,clientAuth
 keyUsage = digitalSignature
@@ -91,25 +91,25 @@ s5 = UTF8:publisso
 s6 = UTF8:thunen_atlas
 EOF
 
-openssl genrsa -out helmchart/fairagro-advanced-middleware-api-chart/ca.key 2048
+openssl genrsa -out charts/fairagro-advanced-middleware-api-chart/ca.key 2048
 openssl req -x509 -new -nodes \
-    -key helmchart/fairagro-advanced-middleware-api-chart/ca.key \
+    -key charts/fairagro-advanced-middleware-api-chart/ca.key \
     -sha256 -days 365 \
-    -out helmchart/fairagro-advanced-middleware-api-chart/ca.crt \
+    -out charts/fairagro-advanced-middleware-api-chart/ca.crt \
     -subj "/CN=chart-example-ca"
-openssl genrsa -out helmchart/fairagro-advanced-middleware-api-chart/client.key 2048
+openssl genrsa -out charts/fairagro-advanced-middleware-api-chart/client.key 2048
 openssl req -new \
-    -key helmchart/fairagro-advanced-middleware-api-chart/client.key \
-    -out helmchart/fairagro-advanced-middleware-api-chart/client.csr \
+    -key charts/fairagro-advanced-middleware-api-chart/client.key \
+    -out charts/fairagro-advanced-middleware-api-chart/client.csr \
     -subj "/CN=chart-example-client"
 openssl x509 -req \
-    -in helmchart/fairagro-advanced-middleware-api-chart/client.csr \
-    -CA helmchart/fairagro-advanced-middleware-api-chart/ca.crt \
-    -CAkey helmchart/fairagro-advanced-middleware-api-chart/ca.key \
+    -in charts/fairagro-advanced-middleware-api-chart/client.csr \
+    -CA charts/fairagro-advanced-middleware-api-chart/ca.crt \
+    -CAkey charts/fairagro-advanced-middleware-api-chart/ca.key \
     -CAcreateserial \
-    -out helmchart/fairagro-advanced-middleware-api-chart/client.crt \
+    -out charts/fairagro-advanced-middleware-api-chart/client.crt \
     -days 365 -sha256 \
-    -extfile helmchart/fairagro-advanced-middleware-api-chart/client_ext.conf \
+    -extfile charts/fairagro-advanced-middleware-api-chart/client_ext.conf \
     -extensions client_ext
 ```
 
@@ -131,15 +131,15 @@ minikube start --driver=docker --cni=calico
 minikube addons enable ingress
 minikube image load fairagro-advanced-middleware-api:test
 sops exec-env dev_environment/secrets.enc.yaml \
-    "helm install api-test ./helmchart/fairagro-advanced-middleware-api-chart \
-    -f helmchart/test_deploy/values.yaml \
+    "helm install api-test ./charts/fairagro-advanced-middleware-api-chart \
+    -f charts/test_deploy/values.yaml \
     --set rabbitmq.auth.user=\"$\RABBITMQ_DEFAULT_USER\" \
     --set rabbitmq.auth.password=\"\$RABBITMQ_DEFAULT_PASS\" \
     --set couchdb.auth.username=\"\$COUCHDB_USER\" \
     --set couchdb.auth.password=\"\$COUCHDB_PASSWORD\""
 ```
 
-Note that the value file `helmchart/test_deploy/values.yaml` references the local docker image
+Note that the value file `charts/test_deploy/values.yaml` references the local docker image
 `fairagro-advanced-middleware-api:test`.
 
 ### Test the api service
@@ -159,8 +159,8 @@ For endpoints requiring client certificate authentication:
 ```bash
 curl -k \
     --resolve ${FQDN}:443:$(minikube ip) \
-    --cert helmchart/fairagro-advanced-middleware-api-chart/client.crt \
-    --key helmchart/fairagro-advanced-middleware-api-chart/client.key \
+    --cert charts/fairagro-advanced-middleware-api-chart/client.crt \
+    --key charts/fairagro-advanced-middleware-api-chart/client.key \
      https://${FQDN}/v3/whoami
 ```
 
@@ -171,8 +171,8 @@ curl -k \
 echo -e "GET /v3/whoami HTTP/1.1\r\nHost: ${FQDN}\r\nAccept: application/json\r\nConnection: close\r\n\r\n" | \
 openssl s_client \
     -connect $(minikube ip):443 \
-    -cert helmchart/fairagro-advanced-middleware-api-chart/client.crt \
-    -key helmchart/fairagro-advanced-middleware-api-chart/client.key \
+    -cert charts/fairagro-advanced-middleware-api-chart/client.crt \
+    -key charts/fairagro-advanced-middleware-api-chart/client.key \
     -servername ${FQDN} \
     -ign_eof \
     2>/dev/null | grep -A 20 "HTTP/1.1"
