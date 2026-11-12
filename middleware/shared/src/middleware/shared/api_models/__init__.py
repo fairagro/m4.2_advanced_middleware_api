@@ -10,7 +10,7 @@ from .v2 import models as v2
 ArcStatus = common.ArcStatus
 TaskStatus = common.TaskStatus
 ApiResponse = common.ApiResponse
-ArcResponse = common.ArcResponse  # V1/V2 common
+ArcResponse = common.ArcResponse  # shared by v2 BL / compatibility exports
 
 # V2 Models
 HealthResponseV2 = v2.HealthResponse

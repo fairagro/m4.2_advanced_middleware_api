@@ -1,4 +1,4 @@
-"""Legacy task status store for v1/v2 endpoints backed by DocumentStore."""
+"""Legacy task status store for v2 task-polling endpoints backed by DocumentStore."""
 
 import asyncio
 import logging
@@ -23,7 +23,7 @@ _TASK_STATUS_WRITE_TIMEOUT_SECONDS = 5.0
 
 
 class LegacyTaskStatusStore:
-    """Task status persistence adapter for v1/v2 endpoints."""
+    """Task status persistence adapter for v2 task-polling endpoints."""
 
     def __init__(self, doc_store: DocumentStore) -> None:
         """Initialize adapter with backend-agnostic DocumentStore."""
