@@ -71,7 +71,8 @@ rabbitmq:
 
 couchdb:
   enabled: true
-  image: couchdb:3.3
+  # Official image user is couchdb uid/gid 5984 (spike: infra#22 on 3.5.2.1; same on 3.3).
+  image: couchdb:3.5.2.1
   auth:
     # Same as rabbitmq.auth — placeholders for lint/template smoke; override or existingSecret in prod.
     username: changeme
@@ -85,6 +86,14 @@ couchdb:
     enabled: false
     # storageClass: "-"
     # size: 8Gi
+  # Pod-level context — fsGroup keeps PVC at /opt/couchdb/data writable when persistence is enabled.
+  podSecurityContext:
+    fsGroup: 5984
+  # Container identity: Kubernetes runAsUser (PID 1), not only the process drop inside the entrypoint.
+  securityContext:
+    runAsNonRoot: true
+    runAsUser: 5984
+    runAsGroup: 5984
 
 # API deployment settings
 api:

@@ -49,6 +49,17 @@ If you override `rabbitmq.image` to a **Debian**-style tag (e.g. `rabbitmq:*-man
 matching UIDs in `rabbitmq.securityContext` / `podSecurityContext` — Debian images commonly use a different uid (often
 999), and the alpine defaults will be wrong.
 
+## CouchDB non-root defaults
+
+The chart CouchDB Deployment defaults to `couchdb:3.5.2.1` and runs as the image user **uid/gid 5984**
+(`couchdb.podSecurityContext.fsGroup: 5984`, `couchdb.securityContext.runAsNonRoot/runAsUser/runAsGroup`). That is the
+official `couchdb` passwd entry (spike: [infra#22](https://github.com/fairagro/m4.2_infrastructure/issues/22)). Without
+Kubernetes `runAsUser`, PID 1 / `kubectl exec` stay root even though the DB process may drop privileges.
+
+**Image bump:** chart defaults previously used `couchdb:3.3`. Moving to `3.5.2.1` is a patch-line upgrade within 3.x —
+still verify before upgrading persisted environments. Residual base-image CVEs may remain; scanners will not go fully
+green from this change alone.
+
 ## Helm chart testing
 
 This section is about a local test installation of the middleware api using helm. The needed tools are included in the
