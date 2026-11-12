@@ -79,17 +79,19 @@ dry-run: **Actions → Sync products → Run workflow** (`dry_run=true` by defau
 
 ### Slice 2 checklist: Infra Renovate + sync (`m4.2_infrastructure`)
 
-Operator steps (not automated in CI). Order matters — do **not** unskip live Infra sync before PAT + secret exist.
+Operator steps (not automated in CI). Slice-2 prerequisites (PAT + Infra secret + first live sync / Renovate green /
+Dependabot version-update wind-down) are **done**; push and dispatch now **include** Infra by default (#388). Keep this
+checklist as the historical enable path and for new bot tokens.
 
 1. Extend the fine-grained PAT repository access to include `fairagro/m4.2_infrastructure` (same permission table as
    above).
 2. Set repository Actions secret **`DEVINFRA_BOT_TOKEN`** on Infra to that PAT.
-3. On Devinfra: **Actions → Sync products → Run workflow** with `dry_run=true` and `skip_infrastructure=false` to
-   confirm the resolved allow includes `renovate.json`, `.github/workflows/renovate.yml`, and `versions.env` (not
-   product `.devcontainer/**` / `.python-version`). Unused product pins in `versions.env` are harmless on Infra — they
-   do not install tools until a Dockerfile or hook reads them.
-4. When dry-run looks right: live sync with `dry_run=false` and `skip_infrastructure=false` (push runs still default
-   `skip_infrastructure=true` until operators choose to change that default later).
+3. On Devinfra: **Actions → Sync products → Run workflow** with `dry_run=true` (Infra included unless you set
+   `skip_infrastructure=true`) to confirm the resolved allow includes `renovate.json`, `.github/workflows/renovate.yml`,
+   and `versions.env` (not product `.devcontainer/**` / `.python-version`). Unused product pins in `versions.env` are
+   harmless on Infra — they do not install tools until a Dockerfile or hook reads them.
+4. When dry-run looks right: live sync with `dry_run=false` (still omit Infra only if `skip_infrastructure=true`). Push
+   to `main` also syncs Infra when the allowlist gate fires.
 5. On Infra: run **Renovate** once (`workflow_dispatch`), then note status on
    [infra#80](https://github.com/fairagro/m4.2_infrastructure/issues/80).
 6. **Dependabot wind-down (Infra, after Renovate is green):** remove Dependabot **version updates**
