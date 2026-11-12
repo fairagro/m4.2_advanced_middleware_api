@@ -58,7 +58,7 @@ def test_v3_liveness_head_success(client: TestClient, middleware_api: Api) -> No
         "liveness_checks",
         side_effect=AsyncMock(return_value={"api_process": True}),
     ):
-        response = client.head("/v3/liveness", headers={"accept": "application/json"})
+        response = client.head("/v3/liveness")
 
     assert response.status_code == http.HTTPStatus.OK
     assert response.content == b""
@@ -87,7 +87,7 @@ def test_v3_readiness_head_success(client: TestClient, middleware_api: Api) -> N
         "readiness_checks",
         side_effect=AsyncMock(return_value={"couchdb_reachable": True, "rabbitmq": True}),
     ):
-        response = client.head("/v3/readiness", headers={"accept": "application/json"})
+        response = client.head("/v3/readiness")
 
     assert response.status_code == http.HTTPStatus.OK
     assert response.content == b""
