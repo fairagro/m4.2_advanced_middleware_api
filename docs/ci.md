@@ -143,8 +143,8 @@ license scan) pass `version:` into `aquasecurity/trivy-action` from the **caller
 independent: bumping `TRIVY_VERSION` moves the scanned binary without waiting for a new Action release.
 
 **CST binary pin:** `reusable-check.yml` **Container Structure Tests** install the official `container-structure-test`
-release via `scripts/install-cst.sh` from the **caller** checkout’s `versions.env` (`CST_VERSION`), fail closed if
-missing — same SoT as the Dev Container / Renovate pin. This replaces the former
+release via `scripts/install-pinned-tool.sh cst` from the **caller** checkout’s `versions.env` (`CST_VERSION`), fail
+closed if missing — same SoT as the Dev Container / Renovate pin. This replaces the former
 `plexsystems/container-structure-test-action` (opaque bundled binary). Products that temporarily vendor
 `reusable-check-local.yml` should mirror both wirings when syncing.
 
@@ -162,6 +162,9 @@ a substitute for Trivy on images. See
 
 **Secret scan:** the same reusable installs `gitleaks` from caller `GITLEAKS_VERSION` and fails on findings (no
 GitGuardian API key). See [quality.md](quality.md) (gitleaks section).
+
+**Actionlint:** the same reusable installs `actionlint` from caller `ACTIONLINT_VERSION` and fails the job on workflow
+findings (blocking). Same pin as Dev Container / commit-stage — see [quality.md](quality.md) (actionlint section).
 
 Bump the product `uses:` ref after this policy lands so callers pick up report-only Licence Check.
 
@@ -465,10 +468,15 @@ invoke (**file wins** over a stale Compose `env_file` snapshot) unless `QUALITY_
 [quality.md](quality.md#lockfile-cves-vs-trivy-vs-malware-check).
 
 **gitleaks (secret scan):** when `skip` is false, the job installs the caller’s `GITLEAKS_VERSION` via
-`scripts/install-gitleaks.sh` and runs `gitleaks detect --source . --no-git --verbose --redact` (fail closed; honors
-synced `.gitleaksignore`). `--no-git` scans the PR tip tree (avoids empty scans on shallow merge checkouts); `--redact`
-keeps secret values out of Actions logs. No GitGuardian API key. Same tool as the commit-stage
+`scripts/install-pinned-tool.sh gitleaks` and runs `gitleaks detect --source . --no-git --verbose --redact` (fail
+closed; honors synced `.gitleaksignore`). `--no-git` scans the PR tip tree (avoids empty scans on shallow merge
+checkouts); `--redact` keeps secret values out of Actions logs. No GitGuardian API key. Same tool as the commit-stage
 `gitleaks protect --staged` hook — see [quality.md](quality.md).
+
+**actionlint:** when `skip` is false, the job installs the caller’s `ACTIONLINT_VERSION` via
+`scripts/install-pinned-tool.sh actionlint` and runs `actionlint` (fail closed / blocking). Same pin as the Dev
+Container image and commit-stage hook. Devinfra-only `.github/actionlint.yaml` ignores false positives on
+`$/.github/workflows/…` nested reusable `uses:` — see [quality.md](quality.md).
 
 **pytest vs pre-push:** this workflow runs `uv run pytest "${PKG}" …` **without** the synced pre-push marker filter
 (`-m "not system_external and not system_local"`). CI stays the broader gate; local push excludes `system_*` by default
