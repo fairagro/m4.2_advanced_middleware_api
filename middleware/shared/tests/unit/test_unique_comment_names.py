@@ -7,7 +7,7 @@ from pathlib import Path
 import pytest
 from arctrl import ARC, ArcAssay, ArcInvestigation, ArcStudy, Comment, Person, Publication
 
-from middleware.api.arc_store.unique_comment_names import ensure_unique_comment_names
+from middleware.shared.arc.unique_comment_names import ensure_unique_comment_names
 
 
 def test_collapse_duplicate_investigation_comment_last_wins(caplog: pytest.LogCaptureFixture) -> None:

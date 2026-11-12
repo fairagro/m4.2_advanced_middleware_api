@@ -10,6 +10,7 @@ from pathlib import Path
 from arctrl import ARC, start_as_task
 
 from middleware.api_local_offline.config import LocalOfflineConfig
+from middleware.shared.arc.unique_comment_names import ensure_unique_comment_names
 
 logger = logging.getLogger(__name__)
 
@@ -56,6 +57,8 @@ class FilesystemArcStore:
         target = self.resolve_arc_dir(arc_id)
         try:
             target.mkdir(parents=True, exist_ok=True)
+            # Unique Comment names required by ISA-XLSX / ARCtrl (same as Git ArcStore).
+            ensure_unique_comment_names(arc)
             await start_as_task(arc.WriteAsync(str(target)))
         except Exception as exc:
             raise FilesystemArcStoreError(f"Failed to write ARC {arc_id} under {self._output_root}: {exc}") from exc

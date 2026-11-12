@@ -6,7 +6,7 @@ import json
 from pathlib import Path
 
 import pytest
-from arctrl import ARC
+from arctrl import ARC, ArcInvestigation, Comment
 
 from middleware.api_local_offline.config import LocalOfflineConfig
 from middleware.api_local_offline.filesystem_store import FilesystemArcStore
@@ -37,6 +37,26 @@ async def test_create_or_update_writes_arc_tree(tmp_path: Path) -> None:
     target = tmp_path / "arcid123"
     assert target.is_dir()
     assert any(target.iterdir())
+
+
+@pytest.mark.asyncio
+async def test_create_or_update_collapses_duplicate_comment_names(
+    tmp_path: Path,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """Duplicate Comment names on one holder must not block offline WriteAsync."""
+    store = FilesystemArcStore(LocalOfflineConfig(output_root=tmp_path))
+    arc = ARC.from_arc_investigation(ArcInvestigation.create(identifier="dup-note", title="T"))
+    arc.Comments.append(Comment.create("note", "first"))
+    arc.Comments.append(Comment.create("note", "second"))
+    with caplog.at_level("WARNING"):
+        pushed = await store.create_or_update("arc_dup_comments", arc, rdi="publisso")
+    assert pushed is True
+    target = tmp_path / "arc_dup_comments"
+    assert target.is_dir()
+    assert any(target.iterdir())
+    assert {c.Name: c.Value for c in arc.Comments} == {"note": "second"}
+    assert any("note" in r.message and "Investigation" in r.message for r in caplog.records)
 
 
 @pytest.mark.asyncio

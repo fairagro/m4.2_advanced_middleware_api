@@ -860,14 +860,15 @@ be a successful no-op in this change.
 - **WHEN** health or create-or-update runs
 - **THEN** no Git remote or DataHUB connectivity is required
 
-### Requirement: Unique Comment names per holder before Git Write
+### Requirement: Unique Comment names per holder before ArcStore Write
 
-Immediately before materializing an ARC into a Git working tree via `ARC.Write`, the Git store SHALL ensure that each
-Comment holder — Investigation (ARC root comments), Study, Assay, Person, and Publication — has at most one Comment per
-Comment name. When multiple Comments share a name on the same holder, the store MUST keep the last Comment for that name
-(last-wins) and MUST emit a warning log that names the holder kind, holder identity when available, and the duplicated
-Comment name. Same Comment names on different holders MUST remain allowed. This normalisation MUST NOT run as part of
-HTTP ingest, document-store persist, or `content_hash` computation.
+Immediately before materializing an ARC via `ARC.Write` or `WriteAsync` (Git working tree or local-offline filesystem
+output root), the ArcStore implementation SHALL ensure that each Comment holder — Investigation (ARC root comments),
+Study, Assay, Person, and Publication — has at most one Comment per Comment name. When multiple Comments share a name on
+the same holder, the store MUST keep the last Comment for that name (last-wins) and MUST emit a warning log that names
+the holder kind, holder identity when available, and the duplicated Comment name. Same Comment names on different
+holders MUST remain allowed. This normalisation MUST NOT run as part of HTTP ingest, document-store persist, or
+`content_hash` computation.
 
 #### Scenario: Duplicate name on one holder is collapsed before Write
 
@@ -876,6 +877,14 @@ HTTP ingest, document-store persist, or `content_hash` computation.
 - **THEN** `ARC.Write` succeeds
 - **AND** only the last `note` value remains on the Investigation
 - **AND** a warning is logged for the duplicate Comment name
+
+#### Scenario: Duplicate name is collapsed before local-offline WriteAsync
+
+- **GIVEN** a parsed ARC whose Investigation has two Comments both named `note` with different values
+- **WHEN** the local-offline filesystem store create-or-update writes that ARC
+- **THEN** `WriteAsync` succeeds
+- **AND** an ARC tree exists under the output root
+- **AND** only the last `note` value remains on the Investigation
 
 #### Scenario: Same name on Investigation and Study remains allowed
 
