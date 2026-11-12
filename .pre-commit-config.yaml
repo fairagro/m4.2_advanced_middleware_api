@@ -18,8 +18,8 @@ repos:
       - id: end-of-file-fixer
         exclude: ^\.agents/skills/(gh|docker|hadolint|uv|scan-secrets)/
       - id: check-yaml
-        # Vendor skills + Go-templated Helm (canonical charts/*; deprecated helm|helmchart). Harmless if absent (#63/#349).
-        exclude: ^(\.agents/skills/(gh|docker|hadolint|uv|scan-secrets)/|(charts|helm|helmchart)(/[^/]+)*/templates/.*\.ya?ml$)
+        # Vendor skills + Go-templated Helm under charts/**/templates. Harmless if absent (#63/#349/#361).
+        exclude: ^(\.agents/skills/(gh|docker|hadolint|uv|scan-secrets)/|charts(/[^/]+)*/templates/.*\.ya?ml$)
       - id: check-added-large-files
         exclude: ^\.agents/skills/(gh|docker|hadolint|uv|scan-secrets)/
       - id: check-merge-conflict
@@ -150,10 +150,10 @@ repos:
 
       - id: helm-lint
         name: helm lint
-        # Discovers charts/<chart>/ (canonical) plus deprecated helmchart|helm; no-op without charts.
+        # Discovers charts/<chart>/ only; no-op without charts (#361).
         entry: bash scripts/run-helm-lint.sh
         language: system
-        files: ^(charts|helm|helmchart)/
+        files: ^charts/
         pass_filenames: false
 
       - id: pytest
