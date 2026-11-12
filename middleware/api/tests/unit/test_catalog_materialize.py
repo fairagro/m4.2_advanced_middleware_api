@@ -741,6 +741,81 @@ def test_materialize_author_and_contributor() -> None:
     assert contributor.get("givenName") == "Bob"
 
 
+def test_materialize_person_identifier_orcid_passthrough() -> None:
+    """Person identifier (ORCID IRI) is kept with @id shape for compact (#551)."""
+    orcid = "https://orcid.org/0000-0002-1825-0097"
+    arc = cast(
+        RoCrateContent,
+        {
+            "@context": "https://w3id.org/ro/crate/1.1/context",
+            "@graph": [
+                {
+                    "@id": "#Person_Orcid",
+                    "@type": "Person",
+                    "givenName": "Ada",
+                    "familyName": "Lovelace",
+                    "identifier": {"@id": orcid},
+                },
+                {
+                    "@id": "./",
+                    "@type": "Dataset",
+                    "identifier": "DS-PERSON-ID",
+                    "creator": {"@id": "#Person_Orcid"},
+                },
+            ],
+        },
+    )
+    record = materialize_catalog_dataset(extract_catalog_dataset(arc), arc)
+    creators = record.get("creator")
+    assert isinstance(creators, list) and len(creators) == 1
+    creator = creators[0]
+    assert isinstance(creator, dict)
+    assert creator.get("identifier") == orcid
+
+    compact_ctx = build_catalog_compact_context(load_schema_org_context())
+    compacted = compact_catalog_dataset(
+        record,
+        compact_ctx,
+        emitted_context=build_catalog_emitted_context(),
+    )
+    compacted_creators = compacted.get("creator")
+    assert isinstance(compacted_creators, list) and len(compacted_creators) == 1
+    compacted_creator = compacted_creators[0]
+    assert isinstance(compacted_creator, dict)
+    assert compacted_creator.get("identifier") == orcid
+
+
+def test_materialize_person_identifier_http_string() -> None:
+    """Bare HTTP identifier strings pass through unchanged."""
+    orcid = "https://orcid.org/0000-0001-5109-3700"
+    arc = cast(
+        RoCrateContent,
+        {
+            "@context": "https://w3id.org/ro/crate/1.1/context",
+            "@graph": [
+                {
+                    "@id": "#Person_StrId",
+                    "@type": "Person",
+                    "givenName": "Alan",
+                    "identifier": orcid,
+                },
+                {
+                    "@id": "./",
+                    "@type": "Dataset",
+                    "identifier": "DS-PERSON-ID-STR",
+                    "creator": {"@id": "#Person_StrId"},
+                },
+            ],
+        },
+    )
+    record = materialize_catalog_dataset(extract_catalog_dataset(arc), arc)
+    creators = record.get("creator")
+    assert isinstance(creators, list) and len(creators) == 1
+    creator = creators[0]
+    assert isinstance(creator, dict)
+    assert creator.get("identifier") == orcid
+
+
 def _materialized_arctrl_arc() -> RoCrateContent:
     return cast(
         RoCrateContent,

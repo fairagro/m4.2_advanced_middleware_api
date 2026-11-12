@@ -12,7 +12,7 @@ from middleware.shared.json_types import CatalogDatasetRecord, JsonObject, JsonV
 logger = logging.getLogger(__name__)
 
 _PERSON_PROPERTIES = ("creator", "author", "contributor")
-_PERSON_FIELDS = ("givenName", "familyName", "name", "email", "sameAs", "affiliation")
+_PERSON_FIELDS = ("givenName", "familyName", "name", "email", "sameAs", "identifier", "affiliation")
 # ARCtrl puts every Investigation contact under Dataset.creator and encodes the ARC role
 # as Person.jobTitle → DefinedTerm.name. Author-like roles stay on creator; any other
 # role (including contributor) goes to contributor. Dual roles → both lists (#594).
@@ -159,6 +159,18 @@ def _materialize_same_as(value: JsonValue, graph_index: dict[str, JsonObject]) -
         if isinstance(ref_id, str) and (ref_id.startswith("http://") or ref_id.startswith("https://")):
             return {"@id": ref_id}
     return _materialize_iri_value(value, graph_index)
+
+
+def _materialize_person_identifier(value: JsonValue) -> JsonValue:
+    """Pass through Person ``identifier``; flatten HTTP ``@id`` refs to plain URL strings."""
+    if isinstance(value, str):
+        return value
+    if isinstance(value, dict):
+        ref_id = _extract_ref_id(value)
+        if isinstance(ref_id, str) and (ref_id.startswith("http://") or ref_id.startswith("https://")):
+            return ref_id
+        return value
+    return value
 
 
 def _materialize_iri_value(value: JsonValue, graph_index: dict[str, JsonObject]) -> JsonValue:
@@ -335,6 +347,10 @@ def _materialize_single_person(
             person[field] = _materialize_iri_value(field_value, graph_index)
         elif field == "sameAs":
             person[field] = _materialize_same_as(field_value, graph_index)
+        elif field == "identifier":
+            # schema.org identifier is not @type:@id; emit plain HTTP strings so compact
+            # keeps a URL string (not {"id": …}). PropertyValue objects pass through (#551).
+            person[field] = _materialize_person_identifier(field_value)
         else:
             person[field] = field_value
     _strip_fragment_ids(person)
