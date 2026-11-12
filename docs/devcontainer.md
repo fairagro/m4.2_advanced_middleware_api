@@ -274,7 +274,11 @@ rebuilds.
 
 ## postCreateCommand
 
-Runs `scripts/devcontainer-post-create.sh` once per create:
+Runs `scripts/devcontainer-post-create.sh` once per create. It sets up the **workspace** (deps, hooks, tokens,
+extensions). **Pinned CLI binaries** used by commit-stage hooks (`actionlint`, `kubeconform`, `gitleaks`, …) are baked
+into the **image** via `.devcontainer/Dockerfile` + `versions.env`. After a sync that adds or bumps such a CLI hook/pin,
+**rebuild the Dev Container image** — restarting the container or re-running postCreate alone does **not** install those
+tools.
 
 - fix `/commandhistory` and `~/.config/gh` permissions
 - write `.python-version` from `versions.env` via `scripts/load-versions-env.sh`
