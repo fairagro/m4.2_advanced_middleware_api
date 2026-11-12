@@ -36,7 +36,8 @@
   "lockFileMaintenance": {
     "enabled": true,
     "schedule": ["before 3am on monday"],
-    "recreateWhen": "always"
+    "recreateWhen": "always",
+    "commitMessageAction": "lock file maintenance"
   },
 
   "osvVulnerabilityAlerts": true,
