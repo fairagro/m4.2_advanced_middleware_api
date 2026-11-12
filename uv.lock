@@ -1184,6 +1184,7 @@ requires-dist = [{ name = "arctrl", specifier = ">=3.2.2" }]
 name = "fairagro-middleware-shared"
 source = { editable = "middleware/shared" }
 dependencies = [
+    { name = "arctrl" },
     { name = "opentelemetry-api" },
     { name = "opentelemetry-exporter-otlp" },
     { name = "opentelemetry-instrumentation-logging" },
@@ -1199,6 +1200,7 @@ dev = [
 
 [package.metadata]
 requires-dist = [
+    { name = "arctrl", specifier = ">=3.2.2" },
     { name = "opentelemetry-api", specifier = ">=1.26.0" },
     { name = "opentelemetry-exporter-otlp", specifier = ">=1.26.0" },
     { name = "opentelemetry-instrumentation-logging", specifier = ">=0.47b0" },

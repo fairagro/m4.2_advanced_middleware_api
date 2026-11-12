@@ -34,7 +34,7 @@ from middleware.api.arc_store.git_repo.remote_git_provider import (
     RemoteGitProvider,
     git_project_metadata_from_arc,
 )
-from middleware.api.arc_store.unique_comment_names import ensure_unique_comment_names
+from middleware.shared.arc.unique_comment_names import ensure_unique_comment_names
 
 logger = logging.getLogger(__name__)
 

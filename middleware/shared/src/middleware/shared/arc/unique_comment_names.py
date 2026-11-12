@@ -1,8 +1,8 @@
-"""Collapse duplicate Comment names per ARC holder before ``ARC.Write``.
+"""Collapse duplicate Comment names per ARC holder before ``ARC.Write`` / ``WriteAsync``.
 
 ISA-XLSX keys Comments by name on a given holder. ARCtrl rejects duplicates on Write.
-Ingest / CouchDB / content_hash intentionally leave duplicates alone; Git sync applies
-last-wins here and logs a warning (#562).
+Ingest / CouchDB / content_hash intentionally leave duplicates alone; ArcStore materialization
+(Git sync and local-offline filesystem) applies last-wins here and logs a warning (#562 / #647).
 """
 
 from __future__ import annotations
