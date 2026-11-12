@@ -1082,6 +1082,7 @@ def _spatial_bbox_arc(
 
 def test_materialize_spatial_coverage_union_from_study_bounding_boxes() -> None:
     """Root spatialCoverage is the axis-aligned union of Study Bounding Box params."""
+    # ParameterValue text is schema.org box order (south west north east); source mapping is harvester-side.
     arc = _spatial_bbox_arc(study_boxes=[("a", "48 8 49 9"), ("b", "48.5 8.5 50 10")])
     record = materialize_catalog_dataset(extract_catalog_dataset(arc), arc)
     coverage = record.get("spatialCoverage")
@@ -1099,9 +1100,53 @@ def test_materialize_spatial_coverage_union_from_study_bounding_boxes() -> None:
         assert "about" not in part
 
 
-def test_materialize_spatial_coverage_inspire_order() -> None:
-    """INSPIRE west south east north strings are accepted when lat magnitude dominates."""
-    arc = _spatial_bbox_arc(study_boxes=[("a", "8 48 9 49")])
+def test_materialize_spatial_coverage_comma_separated_string() -> None:
+    """Comma-separated schema.org box strings are accepted."""
+    arc = _spatial_bbox_arc(study_boxes=[("a", "48,8,49,9")])
+    record = materialize_catalog_dataset(extract_catalog_dataset(arc), arc)
+    coverage = record.get("spatialCoverage")
+    assert isinstance(coverage, dict)
+    geo = coverage.get("geo")
+    assert isinstance(geo, dict)
+    assert geo.get("box") == "48 8 49 9"
+
+
+def test_materialize_spatial_coverage_numeric_list_value() -> None:
+    """Four-number list ParameterValue values are accepted (not only strings)."""
+    arc = cast(
+        RoCrateContent,
+        {
+            "@context": "https://w3id.org/ro/crate/1.1/context",
+            "@graph": [
+                {
+                    "@id": "#ParameterValue_Bounding_Box_list",
+                    "@type": "PropertyValue",
+                    "additionalType": "ParameterValue",
+                    "name": "Bounding Box",
+                    "value": [48, 8, 49, 9],
+                },
+                {
+                    "@id": "#Process_bbox_list",
+                    "@type": "LabProcess",
+                    "name": "bbox_list",
+                    "parameterValue": {"@id": "#ParameterValue_Bounding_Box_list"},
+                },
+                {
+                    "@id": "studies/study-list/",
+                    "@type": "Dataset",
+                    "additionalType": "Study",
+                    "identifier": "study-list",
+                    "about": {"@id": "#Process_bbox_list"},
+                },
+                {
+                    "@id": "./",
+                    "@type": "Dataset",
+                    "identifier": "DS-SPATIAL-LIST",
+                    "hasPart": {"@id": "studies/study-list/"},
+                },
+            ],
+        },
+    )
     record = materialize_catalog_dataset(extract_catalog_dataset(arc), arc)
     coverage = record.get("spatialCoverage")
     assert isinstance(coverage, dict)

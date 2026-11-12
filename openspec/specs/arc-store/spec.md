@@ -526,14 +526,15 @@ unchanged.
 
 When worker finalize materializes a catalog Dataset and root `spatialCoverage` is absent, it SHALL collect
 ParameterValues named `Bounding Box` (case-insensitive) reachable from root `hasPart` Studies via `about` → `LabProcess`
-→ `parameterValue`, parse usable `value`s, and set `spatialCoverage` to one `Place` → `GeoShape.box` for the
-axis-aligned union (schema.org: south west north east, space-separated). Skip invalid/empty values; do not invent
-coverage; do not mutate CouchDB ARC bodies.
+→ `parameterValue`, parse `value` as schema.org `GeoShape.box` order (south west north east; string or four-number
+list), and set `spatialCoverage` to one `Place` → `GeoShape.box` for the axis-aligned union in that same order. Skip
+invalid/empty values; do not invent coverage; do not mutate CouchDB ARC bodies. Source-specific encodings (for example
+INSPIRE west/south/east/north) are a harvester concern before the ARC is written.
 
 #### Scenario: Union of Study Bounding Box parameters becomes spatialCoverage
 
 - **GIVEN** a root Dataset without `spatialCoverage` whose `hasPart` Studies reach LabProcess ParameterValues named
-  `Bounding Box` with parseable values that cover `48 8 49 9` and `48.5 8.5 50 10`
+  `Bounding Box` with parseable schema.org values `48 8 49 9` and `48.5 8.5 50 10`
 - **WHEN** worker finalize materializes the catalog entry
 - **THEN** the published Dataset `spatialCoverage` is a `Place` with `geo` `GeoShape.box` equal to the union envelope
   `48 8 50 10`

@@ -697,41 +697,40 @@ def _is_valid_lon(value: float) -> bool:
 
 
 def _schema_org_box(south: float, west: float, north: float, east: float) -> _BoundingBox | None:
+    """Validate schema.org GeoShape.box order (south west north east)."""
     coords_ok = _is_valid_lat(south) and _is_valid_lon(west) and _is_valid_lat(north) and _is_valid_lon(east)
-    if coords_ok and south <= north:
-        return _BoundingBox(south=south, west=west, north=north, east=east)
-    return None
-
-
-def _inspire_box(west: float, south: float, east: float, north: float) -> _BoundingBox | None:
-    coords_ok = _is_valid_lon(west) and _is_valid_lat(south) and _is_valid_lon(east) and _is_valid_lat(north)
     if coords_ok and south <= north and west <= east:
         return _BoundingBox(south=south, west=west, north=north, east=east)
     return None
 
 
+def _bounding_box_coord_parts(raw: JsonValue) -> list[str] | None:
+    """Normalize ParameterValue ``value`` to four coordinate tokens (schema.org box order)."""
+    parts: list[str] | None = None
+    if isinstance(raw, list):
+        if len(raw) == _BOX_COORD_COUNT and all(
+            not isinstance(item, bool) and isinstance(item, int | float | str) for item in raw
+        ):
+            parts = [str(item).strip() for item in raw]
+    elif isinstance(raw, str):
+        text = raw.strip()
+        if text:
+            parts = [piece for piece in text.replace(",", " ").split() if piece]
+    if parts is None or len(parts) != _BOX_COORD_COUNT:
+        return None
+    return parts
+
+
 def _parse_bounding_box_value(raw: JsonValue) -> _BoundingBox | None:
-    """Parse ParameterValue ``value`` into schema.org south/west/north/east."""
-    if not isinstance(raw, str):
-        return None
-    text = raw.strip()
-    if not text:
-        return None
-    parts = [piece for piece in text.replace(",", " ").split() if piece]
-    if len(parts) != _BOX_COORD_COUNT:
+    """Parse ParameterValue ``value`` as schema.org box (south west north east)."""
+    parts = _bounding_box_coord_parts(raw)
+    if parts is None:
         return None
     try:
-        a, b, c, d = (float(part) for part in parts)
+        south, west, north, east = (float(part) for part in parts)
     except ValueError:
         return None
-
-    schema_org = _schema_org_box(a, b, c, d)
-    # INSPIRE EX_GeographicBoundingBox serialization: west south east north
-    inspire = _inspire_box(a, b, c, d)
-    if schema_org is not None and inspire is not None:
-        # Prefer schema.org unless the first pair looks like lon/lat (Europe-style INSPIRE).
-        return inspire if abs(b) > abs(a) else schema_org
-    return schema_org if schema_org is not None else inspire
+    return _schema_org_box(south, west, north, east)
 
 
 def _union_bounding_boxes(boxes: list[_BoundingBox]) -> _BoundingBox | None:
