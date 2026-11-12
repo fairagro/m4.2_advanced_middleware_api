@@ -41,8 +41,16 @@ spec:
         {{- include "fairagro-advanced-middleware-api-chart.labels" . | nindent 8 }}
         app.kubernetes.io/component: couchdb
     spec:
+      {{- with .Values.couchdb.podSecurityContext }}
+      securityContext:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
       containers:
         - name: couchdb
+          {{- with .Values.couchdb.securityContext }}
+          securityContext:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
           image: {{ .Values.couchdb.image | quote }}
           ports:
             - containerPort: {{ .Values.couchdb.service.port }}
