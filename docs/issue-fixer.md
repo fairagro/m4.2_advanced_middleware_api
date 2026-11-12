@@ -30,9 +30,10 @@ invoked explicitly.
    Conventional Commits subject (skill “Handoff commit message”). Never empty bootstrap commits. Same path if a skill
    file is in scope (even for Task) or the user said `use opsx`.
 5. **Task / Bug / cheap Security**, and **docs-only** Feature/Refactoring with no skill file: implement in the working
-   tree → **pause** (with Suggested commit message) → on continue: draft PR when ahead of `main`. Docs-only does **not**
-   include Markdown under `openspec/specs/` or `openspec/changes/`. If a Task clearly changes `openspec/specs/`, pause
-   once (retype Feature or `use opsx`) — do not silently invent a change folder.
+   tree → **pause** (Suggested commit message label outside the copyable fence; fence = subject only) → on continue:
+   draft PR when ahead of `main`. Docs-only does **not** include Markdown under `openspec/specs/` or
+   `openspec/changes/`. If a Task clearly changes `openspec/specs/`, pause once (retype Feature or `use opsx`) — do not
+   silently invent a change folder.
 6. **`skip_specs`:** when OpenSpec **is** used, real delta spec if a capability contract changes; `skip_specs: true`
    only for tooling with **no** spec-level behavior change (do not invent a requirement to pass validation). Docs-only
    Feature/Refactoring without a skill file (and outside `openspec/specs|changes`) skips OpenSpec entirely rather than

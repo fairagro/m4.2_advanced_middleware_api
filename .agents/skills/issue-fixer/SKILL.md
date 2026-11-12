@@ -310,10 +310,12 @@ Rules for that subject:
 - If the pause has **no** dirty tree (explore-only lock-in, Discussion decision, auth wait), omit the commit-message
   block.
 
-Format in the user-visible pause (example):
+Format in the user-visible pause: put any “Suggested commit message” **label outside** the fence; the copyable fence
+MUST contain **only** the Conventional Commits subject (and optional short body) so copy-to-clipboard is paste-ready.
+
+Suggested commit message:
 
 ```text
-Suggested commit message:
 fix(quality): soft-load MYPYPATH from product.env with file wins
 ```
 

@@ -73,12 +73,12 @@ both). Escape hatch: `git commit --no-verify` (not a control). Fixtures: `bash s
 
 **Editor / agent generation:**
 
-| Surface                                          | How Conventional Commits are steered                                                                                            |
-| ------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------- |
-| **`/issue-fixer` / `/review-fixer` handoff**     | Skills **must** print a Suggested commit message when they pause after leaving uncommitted changes (prefer this over sparkle)   |
-| **VS Code Copilot**                              | synced `.vscode/settings.json` → `github.copilot.chat.commitMessageGeneration.instructions`                                     |
-| **Cursor sparkle** (SCM generate commit message) | synced root **`.cursorrules`** only — **discourage** for release-bearing commits (`version_bump: auto`); no official prompt API |
-| **Agents (other)**                               | `.github/copilot-instructions.md` + commitlint                                                                                  |
+| Surface                                          | How Conventional Commits are steered                                                                                                                                                                     |
+| ------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **`/issue-fixer` / `/review-fixer` handoff**     | Skills **must** print a Suggested commit message when they pause after leaving uncommitted changes (prefer this over sparkle). Label outside the copyable fence; fence = subject (+ optional body) only. |
+| **VS Code Copilot**                              | synced `.vscode/settings.json` → `github.copilot.chat.commitMessageGeneration.instructions`                                                                                                              |
+| **Cursor sparkle** (SCM generate commit message) | synced root **`.cursorrules`** only — **discourage** for release-bearing commits (`version_bump: auto`); no official prompt API                                                                          |
+| **Agents (other)**                               | `.github/copilot-instructions.md` + commitlint                                                                                                                                                           |
 
 Sparkle often misses the staged diff (planning-only/`feat`, archive not `chore(openspec)`). Prefer the agent handoff
 subject (or a future `m42-ai suggest-commit`). commitlint rejects non-conventional messages; the commit path check
