@@ -27,7 +27,7 @@ def create_local_offline_app(config: LocalOfflineConfig) -> FastAPI:
     def live() -> dict[str, str]:
         return {"status": "ok"}
 
-    @app.get("/v3/readiness")
+    @app.api_route("/v3/readiness", methods=["GET", "HEAD"])
     def readiness() -> JSONResponse:
         if store.check_health():
             return JSONResponse({"status": "ready"})
