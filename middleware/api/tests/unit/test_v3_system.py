@@ -51,6 +51,19 @@ def test_v3_liveness_success(client: TestClient, middleware_api: Api) -> None:
     }
 
 
+def test_v3_liveness_head_success(client: TestClient, middleware_api: Api) -> None:
+    """HEAD /v3/liveness returns the same status as GET without a body."""
+    with unittest.mock.patch.object(
+        middleware_api.health_service,
+        "liveness_checks",
+        side_effect=AsyncMock(return_value={"api_process": True}),
+    ):
+        response = client.head("/v3/liveness", headers={"accept": "application/json"})
+
+    assert response.status_code == http.HTTPStatus.OK
+    assert response.content == b""
+
+
 def test_v3_readiness_success(client: TestClient, middleware_api: Api) -> None:
     """Test /v3/readiness returns 200 if all direct dependencies are ready."""
     with unittest.mock.patch.object(
@@ -65,6 +78,19 @@ def test_v3_readiness_success(client: TestClient, middleware_api: Api) -> None:
         "status": "ok",
         "services": {"couchdb_reachable": True, "rabbitmq": True},
     }
+
+
+def test_v3_readiness_head_success(client: TestClient, middleware_api: Api) -> None:
+    """HEAD /v3/readiness returns the same status as GET without a body."""
+    with unittest.mock.patch.object(
+        middleware_api.health_service,
+        "readiness_checks",
+        side_effect=AsyncMock(return_value={"couchdb_reachable": True, "rabbitmq": True}),
+    ):
+        response = client.head("/v3/readiness", headers={"accept": "application/json"})
+
+    assert response.status_code == http.HTTPStatus.OK
+    assert response.content == b""
 
 
 def test_v3_readiness_failure(client: TestClient, middleware_api: Api) -> None:
@@ -148,7 +174,8 @@ def test_v3_health_head_success(client: TestClient, middleware_api: Api) -> None
             return_value=_VERSION,
         ),
     ):
-        response = client.head("/v3/health", headers={"accept": "application/json"})
+        # No Accept header: free UptimeRobot monitors send HEAD without Accept.
+        response = client.head("/v3/health")
 
     assert response.status_code == http.HTTPStatus.OK
     assert response.content == b""

@@ -52,10 +52,10 @@ async def whoami(
     )
 
 
-# GET /v3/liveness is registered by middleware.api_v3 (shared lifecycle surface).
+# GET/HEAD /v3/liveness is registered by middleware.api_v3 (shared lifecycle surface).
 
 
-@router.get("/readiness", response_model=ReadinessResponse)
+@router.api_route("/readiness", methods=["GET", "HEAD"], response_model=ReadinessResponse)
 async def readiness(
     response: Response,
     health_service: Annotated[ApiHealthService, Depends(get_health_service)],

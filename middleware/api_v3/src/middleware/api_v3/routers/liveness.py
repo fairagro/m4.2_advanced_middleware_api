@@ -13,7 +13,7 @@ from middleware.shared.v3_lifecycle import HarvestArcLifecyclePort
 router = APIRouter(prefix="/v3", tags=["v3", "system"])
 
 
-@router.get("/liveness", response_model=LivenessResponse)
+@router.api_route("/liveness", methods=["GET", "HEAD"], response_model=LivenessResponse)
 async def liveness(
     port: Annotated[HarvestArcLifecyclePort, Depends(get_lifecycle_port)],
 ) -> LivenessResponse:
