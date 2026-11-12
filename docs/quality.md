@@ -134,9 +134,11 @@ product `pyproject.toml`. Gates must not fail with `Failed to spawn` when a prod
 product-owned (`uv run pytest`).
 
 **actionlint (GitHub Actions workflows):** commit-stage hook and reusable code-quality both run the binary pinned as
-`ACTIONLINT_VERSION` in `versions.env` (Dev Container image + `bash scripts/install-pinned-tool.sh actionlint` in CI).
-Same pin locally and in the pipeline — do **not** pin via a pre-commit `rev`. Hook files: `.github/workflows/`. Devinfra
-keeps [`.github/actionlint.yaml`](../.github/actionlint.yaml) (not synced) to ignore false positives on the intentional
+`ACTIONLINT_VERSION` in `versions.env` (Dev Container **image** + `bash scripts/install-pinned-tool.sh actionlint` in
+CI). Same pin locally and in the pipeline — do **not** pin via a pre-commit `rev`. After a sync that adds or bumps this
+hook/pin, **rebuild the Dev Container image**; postCreate alone does not install actionlint (see
+[`docs/devcontainer.md`](devcontainer.md#postcreatecommand)). Hook files: `.github/workflows/`. Devinfra keeps
+[`.github/actionlint.yaml`](../.github/actionlint.yaml) (not synced) to ignore false positives on the intentional
 `$/.github/workflows/…` self-repo reusable `uses:` form ([docs/ci.md](ci.md)). Escape hatch for local hooks only:
 `SKIP=actionlint`.
 
@@ -155,10 +157,11 @@ prove charts render. Consumers (e.g. Infra after a template matrix) own CRD sche
 
 **gitleaks (secret scan):** commit-stage hook (`gitleaks protect --staged`) and reusable code-quality
 (`gitleaks detect --source . --no-git --verbose --redact`) use the binary pinned as `GITLEAKS_VERSION` in `versions.env`
-(Dev Container image + `bash scripts/install-pinned-tool.sh gitleaks` in CI). CI uses `--no-git` so the PR tip tree is
-scanned even on shallow/merge checkouts, and `--redact` so findings do not print secret values into Actions logs. No
-GitGuardian / SaaS API key. False positives: add a documented entry to synced [`.gitleaksignore`](../.gitleaksignore)
-(prefer fixing real leaks). Escape hatch for local hooks only: `SKIP=gitleaks`.
+(Dev Container **image** + `bash scripts/install-pinned-tool.sh gitleaks` in CI). Same rebuild rule as actionlint —
+postCreate does **not** refresh gitleaks. CI uses `--no-git` so the PR tip tree is scanned even on shallow/merge
+checkouts, and `--redact` so findings do not print secret values into Actions logs. No GitGuardian / SaaS API key. False
+positives: add a documented entry to synced [`.gitleaksignore`](../.gitleaksignore) (prefer fixing real leaks). Escape
+hatch for local hooks only: `SKIP=gitleaks`.
 
 **Vulture (named IDE exception):** unused-definition gate for `middleware/` (or reusable `python_package_root`). Hooks
 and CI both run `bash scripts/run-quality-cli.sh vulture <root> --min-confidence 100` with **no** synced whitelist file.
@@ -511,7 +514,7 @@ After syncing this change from Devinfra (#13):
 1. Drop any product-local `ggshield` / GitGuardian pins from `pyproject.toml` / lockfiles (fleet pins no longer include
    it).
 2. Unset unused `GITGUARDIAN_API_KEY` secrets (Actions / local store) — the fleet secret-scan gate does not use them.
-3. Rebuild or refresh the Dev Container so `gitleaks` matches `GITLEAKS_VERSION`; CI installs via
+3. Rebuild the Dev Container **image** so `gitleaks` matches `GITLEAKS_VERSION`; CI installs via
    `scripts/install-pinned-tool.sh gitleaks` in reusable code-quality.
 4. Infra follow-up: [`m4.2_infrastructure#74`](https://github.com/fairagro/m4.2_infrastructure/issues/74).
 
