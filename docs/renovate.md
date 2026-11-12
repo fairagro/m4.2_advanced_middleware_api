@@ -98,6 +98,15 @@ checklist as the historical enable path and for new bot tokens.
    (`.github/dependabot.yml` ecosystems that duplicate Renovate); keep Dependabot **alerts**; prefer Renovate for
    security remediation PRs. That edit stays in the Infra repo — this Devinfra doc is the plan only.
 
+### Commit subjects (commitlint `subject-case`)
+
+Fleet commitlint rejects sentence-case subjects. Shared [`renovate.json`](../renovate.json) sets top-level
+`commitMessagePrefix` to `deps:` and `commitMessageAction` to lowercase `update` so dependency bumps look like
+`deps: update dependency …` (#386). **`lockFileMaintenance`** has its own message template — keep
+`commitMessageAction: "lock file maintenance"` there so subjects are `deps: lock file maintenance`, not
+`deps: Lock file maintenance` (#394). After changing either action, recreate or rebase open Renovate PRs so the commit
+subject is rewritten.
+
 ### `gitAuthor` (avoid Mend default)
 
 Self-hosted Renovate without `gitAuthor` falls back to Mend’s `renovate@whitesourcesoftware.com`, which logs a WARN and
