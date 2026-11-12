@@ -262,8 +262,9 @@ handles on the same run MUST remain isolated from each other.
 ### Requirement: Format-neutral readable statistics
 
 After or during a run, serializers SHALL be able to read repository statistics without depending on a particular wire
-format: RDI, harvest id (nullable), duration, expected (optional), harvested, failed, skipped, optional study/assay
-totals, and the list of harvest issues (kind; message; optional id and URL).
+format: RDI, harvest id (nullable), duration, expected (optional), harvested, failed, skipped, warned, optional
+study/assay totals, the failures list (kind; message; optional id and URL), and the warnings list (same issue shape,
+dataset-scoped in the MVP).
 
 #### Scenario: Serializer reads counted state
 
