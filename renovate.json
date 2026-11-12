@@ -302,6 +302,26 @@
       "depNameTemplate": "gitleaks/gitleaks",
       "extractVersionTemplate": "^v?(?<version>.*)$",
       "autoReplaceStringTemplate": "GITLEAKS_VERSION=v{{newValue}}"
+    },
+    {
+      "description": "actionlint pin in versions.env",
+      "customType": "regex",
+      "managerFilePatterns": ["/^versions\\.env$/"],
+      "matchStrings": ["ACTIONLINT_VERSION=v(?<currentValue>[^\\s#]+)"],
+      "datasourceTemplate": "github-releases",
+      "depNameTemplate": "rhysd/actionlint",
+      "extractVersionTemplate": "^v?(?<version>.*)$",
+      "autoReplaceStringTemplate": "ACTIONLINT_VERSION=v{{newValue}}"
+    },
+    {
+      "description": "kubeconform pin in versions.env",
+      "customType": "regex",
+      "managerFilePatterns": ["/^versions\\.env$/"],
+      "matchStrings": ["KUBECONFORM_VERSION=v(?<currentValue>[^\\s#]+)"],
+      "datasourceTemplate": "github-releases",
+      "depNameTemplate": "yannh/kubeconform",
+      "extractVersionTemplate": "^v?(?<version>.*)$",
+      "autoReplaceStringTemplate": "KUBECONFORM_VERSION=v{{newValue}}"
     }
   ],
 
@@ -338,6 +358,20 @@
         "fairagro/m4.2_middleware_harvester"
       ],
       "matchPackageNames": ["docker/dockerfile"],
+      "enabled": false
+    },
+    {
+      "description": "Infra: do not bump Devinfra-synced Renovate/pin SoT (land in Devinfra, then sync #13)",
+      "matchRepositories": [
+        "fairagro/m4.2_infrastructure"
+      ],
+      "matchFileNames": [
+        "versions.env",
+        "package.json",
+        "package-lock.json",
+        "renovate.json",
+        ".github/workflows/renovate.yml"
+      ],
       "enabled": false
     },
     {

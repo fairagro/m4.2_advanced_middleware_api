@@ -15,14 +15,7 @@
   // Workspace member `scripts/ai` is editable via uv; extraPaths keeps analysis working before/without
   // a selected interpreter that already sees the install.
   "python.analysis.extraPaths": ["${workspaceFolder}/scripts/ai/src"],
-  "python.analysis.exclude": [
-    "**/node_modules",
-    "**/__pycache__",
-    "**/.*",
-    "**/.venv",
-    "**/venv",
-    "**/dist"
-  ],
+  "python.analysis.exclude": ["**/node_modules", "**/__pycache__", "**/.*", "**/.venv", "**/venv", "**/dist"],
 
   "python.testing.pytestEnabled": true,
   "python.testing.unittestEnabled": false,
@@ -43,7 +36,6 @@
 
   // Same binary + root ruff.toml as `uv run ruff --config ruff.toml` / pre-commit.
   "ruff.enable": true,
-  "ruff.nativeServer": "on",
   "ruff.path": ["${workspaceFolder}/.venv/bin/ruff"],
   "ruff.interpreter": ["${workspaceFolder}/.venv/bin/python"],
   "ruff.configuration": "${workspaceFolder}/ruff.toml",
@@ -98,17 +90,8 @@
     "vs-kubernetes.suppress-kubeconfig-not-found-alerts": true
   },
 
-  "cursorpyright.analysis.exclude": [
-    "**/node_modules",
-    "**/__pycache__",
-    "**/.*",
-    "**/.venv",
-    "**/venv",
-    "**/dist"
-  ],
-  "cursorpyright.analysis.extraPaths": [
-    "${workspaceFolder}/scripts/ai/src"
-  ],
+  "cursorpyright.analysis.exclude": ["**/node_modules", "**/__pycache__", "**/.*", "**/.venv", "**/venv", "**/dist"],
+  "cursorpyright.analysis.extraPaths": ["${workspaceFolder}/scripts/ai/src"],
 
   // Conventional Commits for release version_bump=auto — VS Code Copilot only.
   // Cursor SCM sparkle uses repo-root `.cursorrules` (not this key). See docs/quality.md.

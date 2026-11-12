@@ -83,7 +83,7 @@ emit_placeholder() {
 }
 
 if ! command -v git-cliff >/dev/null 2>&1; then
-  echo "generate-release-changelog: git-cliff not on PATH (install via scripts/install-git-cliff.sh)" >&2
+  echo "generate-release-changelog: git-cliff not on PATH (install via scripts/install-pinned-tool.sh git-cliff)" >&2
   emit_placeholder "Changelog unavailable (git-cliff not installed)."
   exit 0
 fi
