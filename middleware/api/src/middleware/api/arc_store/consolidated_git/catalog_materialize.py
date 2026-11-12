@@ -44,6 +44,22 @@ _LDComment_NAME_MAP = {
 _CREATOR_ORGANIZATION_COMMENT = "creator organization"
 _CREATOR_ORGANIZATION_URL_COMMENT = "creator organization url"
 _LANDING_PAGE_COMMENT = "landing page"
+_BOUNDING_BOX_PARAM = "bounding box"
+_BOX_COORD_COUNT = 4
+_LAT_MIN = -90.0
+_LAT_MAX = 90.0
+_LON_MIN = -180.0
+_LON_MAX = 180.0
+
+
+@dataclass(frozen=True)
+class _BoundingBox:
+    """Axis-aligned box in schema.org order: south, west, north, east."""
+
+    south: float
+    west: float
+    north: float
+    east: float
 
 
 @dataclass
@@ -86,6 +102,8 @@ def materialize_catalog_dataset(
     if "comment" in result:
         _materialize_dataset_comments(result, graph_index, warn)
     _replace_or_delete(result, ("citation",), graph_index, warn, _materialize_citation)
+    # Derive root spatialCoverage from Study Bounding Box params before hasPart loses `about`.
+    _derive_spatial_coverage_from_bounding_boxes(result, graph_index, warn)
     _replace_or_delete(
         result,
         ("hasPart",),
@@ -650,3 +668,159 @@ def _materialize_has_part_item(
         if materialized_nested is not None:
             part["hasPart"] = materialized_nested
     return part
+
+
+def _iter_ref_values(value: JsonValue | None) -> list[JsonValue]:
+    if value is None:
+        return []
+    if isinstance(value, list):
+        return value
+    return [value]
+
+
+def _additional_type_is(node: JsonObject, type_name: str) -> bool:
+    target = type_name.casefold()
+    additional = node.get("additionalType")
+    if isinstance(additional, str):
+        return additional.casefold() == target
+    if isinstance(additional, list):
+        return any(isinstance(item, str) and item.casefold() == target for item in additional)
+    return False
+
+
+def _is_valid_lat(value: float) -> bool:
+    return _LAT_MIN <= value <= _LAT_MAX
+
+
+def _is_valid_lon(value: float) -> bool:
+    return _LON_MIN <= value <= _LON_MAX
+
+
+def _schema_org_box(south: float, west: float, north: float, east: float) -> _BoundingBox | None:
+    coords_ok = _is_valid_lat(south) and _is_valid_lon(west) and _is_valid_lat(north) and _is_valid_lon(east)
+    if coords_ok and south <= north:
+        return _BoundingBox(south=south, west=west, north=north, east=east)
+    return None
+
+
+def _inspire_box(west: float, south: float, east: float, north: float) -> _BoundingBox | None:
+    coords_ok = _is_valid_lon(west) and _is_valid_lat(south) and _is_valid_lon(east) and _is_valid_lat(north)
+    if coords_ok and south <= north and west <= east:
+        return _BoundingBox(south=south, west=west, north=north, east=east)
+    return None
+
+
+def _parse_bounding_box_value(raw: JsonValue) -> _BoundingBox | None:
+    """Parse ParameterValue ``value`` into schema.org south/west/north/east."""
+    if not isinstance(raw, str):
+        return None
+    text = raw.strip()
+    if not text:
+        return None
+    parts = [piece for piece in text.replace(",", " ").split() if piece]
+    if len(parts) != _BOX_COORD_COUNT:
+        return None
+    try:
+        a, b, c, d = (float(part) for part in parts)
+    except ValueError:
+        return None
+
+    schema_org = _schema_org_box(a, b, c, d)
+    # INSPIRE EX_GeographicBoundingBox serialization: west south east north
+    inspire = _inspire_box(a, b, c, d)
+    if schema_org is not None and inspire is not None:
+        # Prefer schema.org unless the first pair looks like lon/lat (Europe-style INSPIRE).
+        return inspire if abs(b) > abs(a) else schema_org
+    return schema_org if schema_org is not None else inspire
+
+
+def _union_bounding_boxes(boxes: list[_BoundingBox]) -> _BoundingBox | None:
+    if not boxes:
+        return None
+    return _BoundingBox(
+        south=min(box.south for box in boxes),
+        west=min(box.west for box in boxes),
+        north=max(box.north for box in boxes),
+        east=max(box.east for box in boxes),
+    )
+
+
+def _resolve_graph_node(
+    value: JsonValue,
+    graph_index: dict[str, JsonObject],
+) -> JsonObject | None:
+    if isinstance(value, dict) and any(key not in _ID_KEYS for key in value):
+        # Inline object (may still carry @id).
+        return value
+    ref_id = _extract_ref_id(value)
+    if ref_id is None:
+        return None
+    return graph_index.get(ref_id)
+
+
+def _collect_bounding_boxes_from_study(
+    study: JsonObject,
+    graph_index: dict[str, JsonObject],
+    warn: Callable[[str], None],
+) -> list[_BoundingBox]:
+    boxes: list[_BoundingBox] = []
+    for about_item in _iter_ref_values(study.get("about")):
+        process = _resolve_graph_node(about_item, graph_index)
+        if process is None or not _node_has_type(process, "LabProcess"):
+            continue
+        for param_item in _iter_ref_values(process.get("parameterValue")):
+            param = _resolve_graph_node(param_item, graph_index)
+            if param is None:
+                continue
+            name = param.get("name")
+            if not isinstance(name, str) or name.casefold() != _BOUNDING_BOX_PARAM:
+                continue
+            raw_value = param.get("value")
+            parsed = _parse_bounding_box_value(raw_value)
+            if parsed is None:
+                warn(f"unparseable Bounding Box ParameterValue {raw_value!r}")
+                continue
+            boxes.append(parsed)
+    return boxes
+
+
+def _collect_study_bounding_boxes(
+    has_part: JsonValue | None,
+    graph_index: dict[str, JsonObject],
+    warn: Callable[[str], None],
+) -> list[_BoundingBox]:
+    boxes: list[_BoundingBox] = []
+    for item in _iter_ref_values(has_part):
+        node = _resolve_graph_node(item, graph_index)
+        if node is None or not _node_has_type(node, "Dataset"):
+            continue
+        if not _additional_type_is(node, "Study"):
+            continue
+        boxes.extend(_collect_bounding_boxes_from_study(node, graph_index, warn))
+    return boxes
+
+
+def _format_box_coord(value: float) -> str:
+    return str(int(value)) if value.is_integer() else str(value)
+
+
+def _derive_spatial_coverage_from_bounding_boxes(
+    record: dict[str, JsonValue],
+    graph_index: dict[str, JsonObject],
+    warn: Callable[[str], None],
+) -> None:
+    """Set root ``spatialCoverage`` from Study Bounding Box ParameterValues (ARC unchanged)."""
+    if "spatialCoverage" in record:
+        return
+    boxes = _collect_study_bounding_boxes(record.get("hasPart"), graph_index, warn)
+    union = _union_bounding_boxes(boxes)
+    if union is None:
+        return
+    box_text = " ".join(_format_box_coord(coord) for coord in (union.south, union.west, union.north, union.east))
+    record["spatialCoverage"] = {
+        "@type": "Place",
+        "geo": {
+            "@type": "GeoShape",
+            "box": box_text,
+        },
+    }
