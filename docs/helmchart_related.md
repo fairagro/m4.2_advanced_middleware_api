@@ -41,6 +41,10 @@ as the image user **uid 100 / gid 101** (`rabbitmq.podSecurityContext.fsGroup: 1
 `rabbitmq.securityContext.runAsNonRoot/runAsUser/runAsGroup`). That matches the official alpine passwd entry (spike:
 [infra#21](https://github.com/fairagro/m4.2_infrastructure/issues/21)).
 
+**Broker major bump:** chart defaults previously used `rabbitmq:3.12-management`. Moving to `4.3.4-management-alpine` is
+a RabbitMQ **3 → 4** jump as well as an alpine/UID change — review broker compatibility before upgrading existing
+releases.
+
 If you override `rabbitmq.image` to a **Debian**-style tag (e.g. `rabbitmq:*-management` without `-alpine`), set
 matching UIDs in `rabbitmq.securityContext` / `podSecurityContext` — Debian images commonly use a different uid (often
 999), and the alpine defaults will be wrong.
