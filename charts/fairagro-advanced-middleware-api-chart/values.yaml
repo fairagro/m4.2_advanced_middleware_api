@@ -47,7 +47,9 @@ config:
 
 rabbitmq:
   enabled: true
-  image: rabbitmq:3.12-management
+  # Alpine management tag: image user is rabbitmq uid 100 / gid 101 (see infra#21 spike).
+  # Debian/non-alpine tags often use different UIDs — override securityContext if you change the image family.
+  image: rabbitmq:4.3.4-management-alpine
   auth:
     # Placeholders so `helm template` / commit-stage helm-lint smoke succeed with chart defaults.
     # Production: override or set existingSecret (must contain username, password, erlang_cookie).
@@ -58,6 +60,14 @@ rabbitmq:
   service:
     port: 5672
     managementPort: 15672
+  # Pod-level context (fsGroup is forward-looking; chart has no RabbitMQ PVC today).
+  podSecurityContext:
+    fsGroup: 101
+  # Container identity aligned to rabbitmq:*-alpine (not Debian 999).
+  securityContext:
+    runAsNonRoot: true
+    runAsUser: 100
+    runAsGroup: 101
 
 couchdb:
   enabled: true
