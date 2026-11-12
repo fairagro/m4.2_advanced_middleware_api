@@ -41,8 +41,8 @@ dev container.
 
 ### Preparations
 
-Some files need for the test installation can be found in the folder `charts/advanced-middleware-api`. First we will
-need to create a temporary self-signed server certificate in this folder:
+Some files needed for the test installation live in `charts/fairagro-advanced-middleware-api-chart`. First we will need
+to create a temporary self-signed server certificate in this folder:
 
 ```bash
 FQDN=chart-example.local
