@@ -24,9 +24,9 @@ Infra pre-commit root via **`infra-consumer`** (`.pre-commit-config.infrastructu
 copy product **`.devcontainer/*`**, `.python-version`, or the python-product `.pre-commit-config.yaml` to Infra. Unused
 pins in `versions.env` on Infra do not install tools. Infra **keeps** its fat GitOps Dev Container (argocd / kind /
 chart-testing / …) until a dedicated **adoption** issue; sync must never overwrite it with the verbatim product Dev
-Container blob ([#352](https://github.com/fairagro/m4.2_middleware_devinfra/issues/352)). Live Infra sync stays skipped
-by default until the bot checklist in
-[`renovate.md`](renovate.md#slice-2-checklist-infra-renovate--sync-m42_infrastructure).
+Container blob ([#352](https://github.com/fairagro/m4.2_middleware_devinfra/issues/352)). Live Infra sync is included by
+default after Slice-2 (#388); see [`renovate.md`](renovate.md#slice-2-checklist-infra-renovate--sync-m42_infrastructure)
+and skip via dispatch when needed.
 
 ## Dev Container overlay + pin ownership (#352 / #354)
 
@@ -115,7 +115,7 @@ workflows, `middleware/**`).
 | **`*.global` + product overlay** | Tool or docs support a synced SoT file plus a product-local file sync must not overwrite | `surface-quality-bar.global.md` + `surface-quality-bar.md`; `principles.global.md` + `principles.md` (import-linter is product-owned `.importlinter` only — not a `.global` pair; see `docs/quality.md`)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
 | **Env / CI inputs / wrappers**   | Config file has no merge/`extends` — keep the synced blob generic                        | `MYPYPATH`, reusable `pylint_source_roots`, CST bake env, optional `.devcontainer/product.env` (Compose `env_file`, not synced); synced `scripts/bin/{k,d}` instead of bash aliases — see [`devcontainer.md`](devcontainer.md#bashrc-free-shell-init-no-load-envsh); uv-audit accepted-risk IDs in product `.uv-audit-ignore` (read by synced `scripts/run-uv-audit.sh`)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
 | **Verbatim shared fragment**     | Fleet wants identical policy; product deltas are wrong or go upstream                    | `ruff.toml` ([#60](https://github.com/fairagro/m4.2_middleware_devinfra/issues/60)), `pyrightconfig.json` ([#64](https://github.com/fairagro/m4.2_middleware_devinfra/issues/64)), `.vscode/settings.json` + `.vscode/extensions.json` (recommendations match Dev Container extensions — [#118](https://github.com/fairagro/m4.2_middleware_devinfra/issues/118)), `.devcontainer/devcontainer.json` + `docker-compose.yml` (`/workspace`, basename `name`/volumes, `remoteEnv.PATH` for `.venv/bin`+`scripts/bin` — [#65](https://github.com/fairagro/m4.2_middleware_devinfra/issues/65)/[#58](https://github.com/fairagro/m4.2_middleware_devinfra/issues/58)), `.pre-commit-config.yaml` ([#63](https://github.com/fairagro/m4.2_middleware_devinfra/issues/63)), root `.gitignore` ([#62](https://github.com/fairagro/m4.2_middleware_devinfra/issues/62)) |
-| **Nested `.gitignore` overlays** | Git has no root-ignore merge; product-only paths must not live in the synced root file   | e.g. `charts/.gitignore` (TLS scratch; legacy `helmchart/` until rename), `dev_environment/.gitignore` (`demo_output`) — sync never overwrites nested ignore files; do **not** append product lines to root after sync. Fleet-wide Docker Buildx / token-seed under `.docker/` belongs in the synced root baseline ([#141](https://github.com/fairagro/m4.2_middleware_devinfra/issues/141)), not a nested overlay — tracked `.docker/config.json` stays commit-able.                                                                                                                                                                                                                                                                                                                                                                                           |
+| **Nested `.gitignore` overlays** | Git has no root-ignore merge; product-only paths must not live in the synced root file   | e.g. `charts/.gitignore` (TLS scratch), `dev_environment/.gitignore` (`demo_output`) — sync never overwrites nested ignore files; do **not** append product lines to root after sync. Fleet-wide Docker Buildx / token-seed under `.docker/` belongs in the synced root baseline ([#141](https://github.com/fairagro/m4.2_middleware_devinfra/issues/141)), not a nested overlay — tracked `.docker/config.json` stays commit-able.                                                                                                                                                                                                                                                                                                                                                                                                                             |
 
 Do **not** invent mypy config-merge here — third-party silence for fleet deps (`arctrl` / `fable_library`) lives in
 synced `mypy.ini` / `.pylintrc` (and Ruff isort classification); `MYPYPATH` remains the product path overlay for
@@ -130,17 +130,18 @@ first-party packages ([`docs/quality.md`](quality.md)).
 | `harvester`      | `fairagro/m4.2_middleware_harvester`    | `foundation` + `python-product` + `gitops` |
 | `infrastructure` | `fairagro/m4.2_infrastructure`          | `foundation` + `gitops` + `infra-consumer` |
 
-Push runs **skip** `infrastructure` by default until operators complete the Slice-2 bot checklist
-([`renovate.md`](renovate.md#slice-2-checklist-infra-renovate--sync-m42_infrastructure)). Dispatch can dry-run or unskip
-Infra once the PAT covers that repo and the Infra secret is set.
+Push and dispatch **include** `infrastructure` by default (Slice-2 checklist done — see
+[`renovate.md`](renovate.md#slice-2-checklist-infra-renovate--sync-m42_infrastructure)). Set `skip_infrastructure=true`
+on dispatch when you need to omit Infra (ops emergency / dry-run focus).
 
 ## Triggers
 
 - **Push to `main`**: live sync when the **product-union** allowlist **file set** or allowlisted **content** changed vs
   `before`. Passes `--orphan-base` so consumer PRs can delete delta orphans **per target**. Always collects
-  `SYNC-FOLLOWUP` from the merged PR (body + comments) when a PR exists for `HEAD` (python-product repos only).
+  `SYNC-FOLLOWUP` from the merged PR (body + comments) when a PR exists for `HEAD` (python-product repos only). Includes
+  `infrastructure` (no push hard-skip).
 - **`workflow_dispatch`**: inputs `dry_run` (default **true**), `skip_api`, `skip_sql_to_arc`, `skip_harvester`,
-  `skip_infrastructure` (default **true**), `followup_id` (optional stable id).
+  `skip_infrastructure` (default **false**), `followup_id` (optional stable id).
 
 Dry-run reports resolved files / would-delete orphans and targets without cloning or opening/closing PRs or creating
 issues. Skip flags omit a consumer. Actions dry-run (`workflow_dispatch` with `dry_run=true`) does **not** require

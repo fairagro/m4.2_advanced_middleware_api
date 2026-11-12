@@ -1,7 +1,6 @@
 #!/usr/bin/env bash
 # Commit-stage Helm lint + template smoke.
-# Canonical root: charts/<chart>/Chart.yaml (one segment).
-# Deprecated (migration): helmchart/<chart>/ and helm/<chart>/. Not supported: helmcharts/.
+# Fleet root: charts/<chart>/Chart.yaml (one segment). Not supported: helm/, helmchart/, helmcharts/.
 # No charts → success (Helm optional). Charts present → helm on PATH required.
 # Optional overlay: HELM_VALUES_FILE (path relative to repo root) — same -f semantics
 # as Feature-PR reusable input values_file (empty = bare chart).
@@ -16,13 +15,13 @@ cd "${REPO_ROOT}"
 shopt -s nullglob
 
 charts=()
-for yaml in charts/*/Chart.yaml helmchart/*/Chart.yaml helm/*/Chart.yaml; do
+for yaml in charts/*/Chart.yaml; do
   [[ -f "${yaml}" ]] || continue
   charts+=("$(dirname "${yaml}")")
 done
 
 if [[ "${#charts[@]}" -eq 0 ]]; then
-  echo "helm lint: no charts/*/Chart.yaml (or deprecated helmchart/*/ / helm/*/ ) — skipping." >&2
+  echo "helm lint: no charts/*/Chart.yaml — skipping." >&2
   exit 0
 fi
 

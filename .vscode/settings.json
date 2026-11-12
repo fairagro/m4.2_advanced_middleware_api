@@ -76,13 +76,7 @@
   "files.associations": {
     "**/charts/**/templates/**/*.yaml": "helm",
     "**/charts/**/templates/**/*.yml": "helm",
-    "**/charts/**/templates/**/*.tpl": "helm",
-    "**/helmchart/**/templates/**/*.yaml": "helm",
-    "**/helmchart/**/templates/**/*.yml": "helm",
-    "**/helmchart/**/templates/**/*.tpl": "helm",
-    "**/helm/**/templates/**/*.yaml": "helm",
-    "**/helm/**/templates/**/*.yml": "helm",
-    "**/helm/**/templates/**/*.tpl": "helm"
+    "**/charts/**/templates/**/*.tpl": "helm"
   },
   // Dev Containers often have no cluster kubeconfig; suppress toast noise only.
   // Do not suppress kubectl-not-found — kubectl/helm are on the shared image PATH.

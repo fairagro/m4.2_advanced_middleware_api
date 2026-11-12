@@ -13,8 +13,9 @@
 # infra-consumer = Infra-only paths (e.g. `.pre-commit-config.infrastructure.yaml`)
 # #352: Infra keeps fat GitOps Dev Container until adoption — do not add `.devcontainer/**`
 #   to foundation/gitops/infra-consumer. Pin ownership: docs/sync.md + docs/devcontainer.md.
-# #354: Infra gets Renovate + versions.env via foundation (unused pins are no-ops until a
-#   Dockerfile/hook reads them). Live sync still defaults skip_infrastructure until bot checklist.
+# #354 / #388: Infra gets Renovate + versions.env via foundation (unused pins are no-ops until a
+#   Dockerfile/hook reads them). Live sync includes infrastructure by default; dispatch can still
+#   set skip_infrastructure=true.
 
 profiles:
   foundation:
