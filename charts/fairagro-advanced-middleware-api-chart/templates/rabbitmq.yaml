@@ -35,8 +35,16 @@ spec:
         {{- include "fairagro-advanced-middleware-api-chart.labels" . | nindent 8 }}
         app.kubernetes.io/component: rabbitmq
     spec:
+      {{- with .Values.rabbitmq.podSecurityContext }}
+      securityContext:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
       containers:
         - name: rabbitmq
+          {{- with .Values.rabbitmq.securityContext }}
+          securityContext:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
           image: {{ .Values.rabbitmq.image | quote }}
           ports:
             - containerPort: {{ .Values.rabbitmq.service.port }}

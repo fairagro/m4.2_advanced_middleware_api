@@ -34,6 +34,17 @@ those paths as language `helm` (Kubernetes Tools) plus suppressing the extension
 cluster is configured. That belongs in **synced Devinfra** `.vscode` / Dev Container settings — not product-local forks
 of allowlisted paths.
 
+## RabbitMQ non-root defaults
+
+The chart RabbitMQ Deployment defaults to an **Alpine management** image (`rabbitmq:4.3.4-management-alpine`) and runs
+as the image user **uid 100 / gid 101** (`rabbitmq.podSecurityContext.fsGroup: 101`,
+`rabbitmq.securityContext.runAsNonRoot/runAsUser/runAsGroup`). That matches the official alpine passwd entry (spike:
+[infra#21](https://github.com/fairagro/m4.2_infrastructure/issues/21)).
+
+If you override `rabbitmq.image` to a **Debian**-style tag (e.g. `rabbitmq:*-management` without `-alpine`), set
+matching UIDs in `rabbitmq.securityContext` / `podSecurityContext` — Debian images commonly use a different uid (often
+999), and the alpine defaults will be wrong.
+
 ## Helm chart testing
 
 This section is about a local test installation of the middleware api using helm. The needed tools are included in the
