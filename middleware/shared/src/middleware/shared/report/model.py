@@ -57,11 +57,12 @@ class RepositoryReport:  # pylint: disable=too-many-instance-attributes
     harvested_datasets: int = 0
     failed_datasets: int = 0
     skipped_datasets: int = 0
-    warned_datasets: int = 0
     failures: tuple[HarvestIssue, ...] = ()
-    warnings: tuple[HarvestIssue, ...] = ()
     total_studies: int | None = None
     total_assays: int | None = None
+    # Append-only: new public fields go at the end (griffe positional surface vs main).
+    warned_datasets: int = 0
+    warnings: tuple[HarvestIssue, ...] = ()
 
 
 @dataclass
@@ -220,11 +221,11 @@ class RepositoryScope:
                 harvested_datasets=datasets.harvested_datasets,
                 failed_datasets=datasets.failed_datasets,
                 skipped_datasets=datasets.skipped_datasets,
-                warned_datasets=datasets.warned_datasets,
                 failures=tuple(datasets.failures),
-                warnings=tuple(datasets.warnings),
                 total_studies=total_studies,
                 total_assays=total_assays,
+                warned_datasets=datasets.warned_datasets,
+                warnings=tuple(datasets.warnings),
             )
 
 
