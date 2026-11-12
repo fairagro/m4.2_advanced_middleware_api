@@ -28,6 +28,13 @@ def test_uvicorn_access_logger_uses_api_format() -> None:
     assert formatter._fmt == effective._fmt  # noqa: SLF001
 
 
+@pytest.mark.parametrize("path", ["/v1/whoami", "/v1/liveness", "/v1/health"])
+def test_removed_v1_system_routes_return_404(client: TestClient, path: str) -> None:
+    """Removed system_v1 routes must not remain registered."""
+    r = client.get(path, headers={"accept": "application/json"})
+    assert r.status_code == http.HTTPStatus.NOT_FOUND
+
+
 def test_whoami_success(client: TestClient, middleware_api: Api, cert: str) -> None:
     """Test whoami with a valid certificate and accept header on v3."""
     r = client.get(
