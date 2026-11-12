@@ -1,23 +1,8 @@
 """Unit tests for shared API models."""
 
-from middleware.shared.api_models import (
-    ArcStatus,
-    LivenessResponse,
-)
+from middleware.shared.api_models import ArcStatus
 from middleware.shared.api_models.common.models import HarvestStatus
 from middleware.shared.api_models.v3.models import HarvestError, HarvestErrorType, HarvestResponse
-
-
-def test_liveness_response_default() -> None:
-    """Test creating a LivenessResponse with default message."""
-    response = LivenessResponse()
-    assert response.message == "ok"
-
-
-def test_liveness_response_custom_message() -> None:
-    """Test creating a LivenessResponse with custom message."""
-    response = LivenessResponse(message="service is running")
-    assert response.message == "service is running"
 
 
 def test_arc_status_enum() -> None:

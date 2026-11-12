@@ -46,7 +46,6 @@ from .common.dependencies import CommonApiDependencies
 from .legacy.task_status_store import LegacyTaskStatusStore
 from .rate_limiting import RateLimitingMiddleware
 from .tracing import setup_api_tracing
-from .v1 import system as system_v1
 from .v2 import arcs as arcs_v2, system as system_v2, tasks as tasks_v2
 from .v3 import harvests as harvests_v3, system as system_v3
 from .v3.lifecycle_port import production_port_factory
@@ -318,9 +317,6 @@ class Api:
 
     def _setup_routes(self) -> None:
         """Register all API routes via versioned routers."""
-        # Register V1 (system endpoints only; arcs/tasks removed)
-        self._app.include_router(system_v1.router)
-
         # Register V2
         self._app.include_router(system_v2.router)
         self._app.include_router(arcs_v2.router)
