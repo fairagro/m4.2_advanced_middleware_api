@@ -76,7 +76,7 @@ platform-owned.
 
 ### Requirement: Document dual-path and deploy constraints
 
-Operator-facing documentation (Helm chart NOTES and helmchart docs) SHALL describe:
+Operator-facing documentation (Helm chart NOTES and charts operator docs (`docs/helmchart_related.md`)) SHALL describe:
 
 1. Dual-path exposure: Ingress may provide client mTLS today; HTTPRoute attaches to platform Gateway TLS.
 2. That client mTLS cutover to Gateway Fabric is a platform follow-up, not chart-local.

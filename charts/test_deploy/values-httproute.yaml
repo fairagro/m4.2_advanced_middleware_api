@@ -1,11 +1,11 @@
 # Render-only overlay for Gateway API HTTPRoute (no live Gateway required).
 # Dummy rabbitmq/couchdb auth satisfies chart required() for full `helm template`.
 # Usage:
-#   helm template api-test ./helmchart/fairagro-advanced-middleware-api-chart \
-#     -f helmchart/test_deploy/values-httproute.yaml
+#   helm template api-test ./charts/fairagro-advanced-middleware-api-chart \
+#     -f charts/test_deploy/values-httproute.yaml
 # Or HTTPRoute only:
-#   helm template api-test ./helmchart/fairagro-advanced-middleware-api-chart \
-#     -f helmchart/test_deploy/values-httproute.yaml \
+#   helm template api-test ./charts/fairagro-advanced-middleware-api-chart \
+#     -f charts/test_deploy/values-httproute.yaml \
 #     --show-only templates/httproute.yaml
 #
 # Minikube smoke installs keep using values.yaml (Ingress). Do not use this file

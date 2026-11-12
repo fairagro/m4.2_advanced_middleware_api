@@ -72,9 +72,9 @@ post-processing identifies medium or high severity. CodeQL path exclusions are k
 ### Pull-request change detection
 
 `dorny/paths-filter` classifies **code** (`middleware/**`, `pyproject.toml`, `docker/**`, `scripts/**`,
-`.github/workflows/**`) separately from **Helm** (`helmchart/**`). Documentation and specification-only changes skip
-Docker build/scan and Helm lint. Helm-only changes skip Docker build/scan and run `reusable-helm-lint.yml`. Chart paths
-MUST NOT live only in the Docker `code` filter.
+`.github/workflows/**`) separately from **Helm** (`charts/**`). Documentation and specification-only changes skip Docker
+build/scan and Helm lint. Helm-only changes skip Docker build/scan and run `reusable-helm-lint.yml`. Chart paths MUST
+NOT live only in the Docker `code` filter.
 
 Required checks cannot be job-skipped because that leaves branch protection without a status.
 `reusable-code-quality.yml`, `reusable-check-local.yml` (Feature PR; same `skip` contract as Devinfra

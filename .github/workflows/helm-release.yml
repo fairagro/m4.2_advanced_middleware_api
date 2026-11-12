@@ -32,7 +32,7 @@ jobs:
     uses: fairagro/m4.2_middleware_devinfra/.github/workflows/reusable-helm-release.yml@main
     with:
       version_bump: ${{ inputs.version_bump }}
-      chart_dir: helmchart/fairagro-advanced-middleware-api-chart
+      chart_dir: charts/fairagro-advanced-middleware-api-chart
       chart_name: fairagro-advanced-middleware-api-chart
       dockerhub_namespace: zalf
       require_main: true
