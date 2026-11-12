@@ -337,10 +337,12 @@ Rules:
 - Do **not** auto-commit. Do **not** steer the user to Cursor Source Control sparkle for this handoff.
 - Dismiss/follow-up-only runs with **no** local edits omit the commit-message block.
 
-Format:
+Format: put any “Suggested commit message” **label outside** the fence; the copyable fence MUST contain **only** the
+Conventional Commits subject (and optional short body) so copy-to-clipboard is paste-ready.
+
+Suggested commit message:
 
 ```text
-Suggested commit message:
 fix(docs): mention QUALITY_PATH_LOADED in ci and devcontainer prose
 ```
 
