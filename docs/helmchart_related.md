@@ -60,6 +60,10 @@ Kubernetes `runAsUser`, PID 1 / `kubectl exec` stay root even though the DB proc
 still verify before upgrading persisted environments. Residual base-image CVEs may remain; scanners will not go fully
 green from this change alone.
 
+If you override `couchdb.image` to a non-official family (e.g. Bitnami or another layout), set matching UIDs in
+`couchdb.securityContext` / `podSecurityContext` — those images commonly use a different uid, and the 5984 defaults will
+be wrong.
+
 ## Helm chart testing
 
 This section is about a local test installation of the middleware api using helm. The needed tools are included in the

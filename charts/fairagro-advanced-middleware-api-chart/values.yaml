@@ -72,6 +72,7 @@ rabbitmq:
 couchdb:
   enabled: true
   # Official image user is couchdb uid/gid 5984 (spike: infra#22 on 3.5.2.1; same on 3.3).
+  # Non-official image families (Bitnami, etc.) often use different UIDs — override securityContext if you change the image.
   image: couchdb:3.5.2.1
   auth:
     # Same as rabbitmq.auth — placeholders for lint/template smoke; override or existingSecret in prod.
