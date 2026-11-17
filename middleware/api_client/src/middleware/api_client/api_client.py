@@ -374,8 +374,8 @@ class ApiClient:
     ) -> list[HarvestError]:
         """Submit all ARCs in bounded parallelism and return per-item errors.
 
-        Compatibility shim (issue #240): duplicate detection and submission
-        failures are recorded client-side until the server persists them natively.
+        Intra-batch duplicate-identifier skip and item-level submission failures are
+        recorded client-side (durable policy); skipped duplicates never reach the server.
         """
         pending_tasks: set[asyncio.Task[None]] = set()
         task_identifiers: dict[asyncio.Task[None], str | None] = {}
@@ -913,7 +913,7 @@ class ApiClient:
             )
 
         result = await self.complete_harvest(harvest_id)
-        # Compatibility shim (#566): merge client-collected errors with any
+        # Merge client-collected errors (e.g. intra-batch duplicate skips) with any
         # server-persisted errors already on the completed harvest response.
         if client_errors:
             result = result.model_copy(update={"errors": [*result.errors, *client_errors]})

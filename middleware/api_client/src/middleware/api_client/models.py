@@ -52,8 +52,8 @@ class HarvestError(BaseModel):
 
     Harvest query/complete responses may include server-persisted errors
     (issue #240). :meth:`~middleware.api_client.ApiClient.harvest_arcs` also
-    merges client-collected errors as a compatibility shim until follow-up
-    #566 removes client-side duplicate skip.
+    merges client-collected errors (durable policy), including intra-batch
+    duplicate-identifier skips that never reach the server.
     """
 
     arc_id: Annotated[
@@ -140,7 +140,7 @@ class HarvestResult(BaseModel):
         list[HarvestError],
         Field(
             description="Per-item errors for the harvest run (server-persisted and/or "
-            "client-collected by harvest_arcs() until shim removal in #566)."
+            "client-collected by harvest_arcs(), including intra-batch duplicate skips)."
         ),
     ] = Field(default_factory=list)
     message: Annotated[str, Field(description="Human-readable result message")] = ""
