@@ -30,7 +30,8 @@ target "api-wheels" {
     ALPINE_MINOR      = ALPINE_MINOR
     PIP_VERSION       = PIP_VERSION
     UV_VERSION        = UV_VERSION
-    UV_BUILD_PACKAGES = "fairagro-middleware-shared api"
+    # api depends on fairagro-middleware-api-v3 (#613); --no-deps wheel install needs it listed (#718).
+    UV_BUILD_PACKAGES = "fairagro-middleware-shared fairagro-middleware-api-v3 api"
   }
 }
 
@@ -45,10 +46,10 @@ target "api-base" {
     PIP_VERSION            = PIP_VERSION
     UV_VERSION             = UV_VERSION
     PYINSTALLER_VERSION    = PYINSTALLER_VERSION
-    UV_BUILD_PACKAGES      = "fairagro-middleware-shared api"
+    UV_BUILD_PACKAGES      = "fairagro-middleware-shared fairagro-middleware-api-v3 api"
     BINARY_NAME            = "middleware-api"
     PYINSTALLER_IMPORT     = "middleware.api"
-    EXTRA_PYINSTALLER_ARGS = "--hidden-import middleware.api.worker --hidden-import middleware.api.worker.celery_app --hidden-import middleware.api.worker.worker --hidden-import celery.app.amqp --hidden-import celery.app.control --hidden-import celery.app.events --hidden-import celery.app.log --hidden-import celery.apps.worker --hidden-import celery.concurrency.prefork --hidden-import celery.events.state --hidden-import celery.fixups --hidden-import celery.fixups.django --hidden-import celery.loaders.app --hidden-import celery.worker.autoscale --hidden-import celery.worker.components --hidden-import celery.worker.consumer --hidden-import celery.worker.consumer.delayed_delivery --hidden-import celery.worker.strategy --hidden-import kombu.transport.pyamqp --copy-metadata celery --copy-metadata opentelemetry-api --copy-metadata opentelemetry-instrumentation --copy-metadata opentelemetry-instrumentation-fastapi --copy-metadata opentelemetry-instrumentation-celery --copy-metadata opentelemetry-instrumentation-requests --copy-metadata opentelemetry-sdk --copy-metadata requests --copy-metadata pydantic --copy-metadata pydantic-core --copy-metadata fastapi --copy-metadata uvicorn --copy-metadata prompt-toolkit --copy-metadata click --copy-metadata api --collect-data middleware.api.arc_store.consolidated_git"
+    EXTRA_PYINSTALLER_ARGS = "--hidden-import middleware.api.worker --hidden-import middleware.api.worker.celery_app --hidden-import middleware.api.worker.worker --hidden-import middleware.api_v3 --hidden-import celery.app.amqp --hidden-import celery.app.control --hidden-import celery.app.events --hidden-import celery.app.log --hidden-import celery.apps.worker --hidden-import celery.concurrency.prefork --hidden-import celery.events.state --hidden-import celery.fixups --hidden-import celery.fixups.django --hidden-import celery.loaders.app --hidden-import celery.worker.autoscale --hidden-import celery.worker.components --hidden-import celery.worker.consumer --hidden-import celery.worker.consumer.delayed_delivery --hidden-import celery.worker.strategy --hidden-import kombu.transport.pyamqp --copy-metadata celery --copy-metadata opentelemetry-api --copy-metadata opentelemetry-instrumentation --copy-metadata opentelemetry-instrumentation-fastapi --copy-metadata opentelemetry-instrumentation-celery --copy-metadata opentelemetry-instrumentation-requests --copy-metadata opentelemetry-sdk --copy-metadata requests --copy-metadata pydantic --copy-metadata pydantic-core --copy-metadata fastapi --copy-metadata uvicorn --copy-metadata prompt-toolkit --copy-metadata click --copy-metadata api --copy-metadata fairagro-middleware-api-v3 --collect-data middleware.api.arc_store.consolidated_git"
   }
 }
 

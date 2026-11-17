@@ -27,6 +27,10 @@ fileExistenceTests:
     path: '/api/middleware-api/_internal/middleware/api/arc_store/consolidated_git/jsonld_contexts/schemaorg-30.0-context.jsonld'
     shouldExist: true
 
+  - name: 'Shared api_v3 package bundled by PyInstaller (#718)'
+    path: '/api/middleware-api/_internal/middleware/api_v3/__init__.py'
+    shouldExist: true
+
 # File content tests
 fileContentTests:
   - name: 'Non-root user created'
