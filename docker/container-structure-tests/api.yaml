@@ -69,6 +69,18 @@ commandTests:
     args: ['-x', '/api/middleware-api']
     exitCode: 0
 
+  # Pure-Python packages land in the PYZ archive, not as loose __init__.py files.
+  # Missing api_v3 used to raise ModuleNotFoundError before config load (#718 / #613).
+  - name: 'Frozen binary loads past middleware.api_v3 import (#718)'
+    command: 'sh'
+    args:
+      - '-lc'
+      - >-
+        out="$(/api/middleware-api/middleware-api 2>&1 || true)";
+        printf '%s\n' "$out" | grep -q 'configuration file not found';
+        ! printf '%s\n' "$out" | grep -q 'ModuleNotFoundError'
+    exitCode: 0
+
   - name: 'Minimal package count (Alpine security)'
     command: 'sh'
     args: ['-lc', 'apk info | wc -l']
