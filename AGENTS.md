@@ -349,7 +349,7 @@ Before generating or modifying code, read the relevant specs:
 
 - **[`openspec/specs/harvest-client/`](openspec/specs/harvest-client/)** — Harvest lifecycle: parallel ARC submission,
   per-item error collection (`HarvestError`, `HarvestErrorType`), merge with server-persisted errors, typed statistics
-  (`HarvestStatistics`), and temporary client shim until #566.
+  (`HarvestStatistics`), and durable intra-batch duplicate-identifier skip.
 
 **Shared capabilities:**
 

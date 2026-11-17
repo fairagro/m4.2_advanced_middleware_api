@@ -51,9 +51,9 @@ structured typed fields, not an opaque mapping.
 
 The result MUST include an errors list containing every item-level submission error observed by the client **and** every
 per-item error returned by the server for that harvest. Each error MUST provide a category, a human-readable message, an
-ISO 8601 occurrence timestamp, and an optional ARC identifier. Until the server records every client-observed failure
-mode, the client MUST continue to collect errors during parallel submission and MUST merge them with server-provided
-errors so callers still see a complete list.
+ISO 8601 occurrence timestamp, and an optional ARC identifier. The client MUST collect errors during parallel submission
+(including durable client-only modes such as intra-batch duplicate skips that never reach the server) and MUST merge
+them with server-provided errors so callers see a complete list.
 
 #### Scenario: Return a successful harvest with no item errors
 
@@ -86,8 +86,10 @@ on `HarvestResult.errors` using the existing typed error model.
 
 ### Requirement: Detect duplicate identifiers before submission
 
-The client MUST detect duplicate ARC identifiers within one batch before making the duplicate request, skip the later
-ARC, and record a `duplicate` error. The first ARC with that identifier MUST continue through normal submission.
+The client MUST detect duplicate ARC identifiers within one `harvest_arcs` batch before making the duplicate request,
+skip the later ARC, and record a `duplicate` error. The first ARC with that identifier MUST continue through normal
+submission. This intra-batch skip and client-side `duplicate` reporting is durable client policy for producer-side
+duplicate identifiers in one batch (not deferred pending further server coverage).
 
 #### Scenario: Skip the second ARC with a duplicate identifier
 

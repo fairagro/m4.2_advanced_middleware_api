@@ -32,8 +32,8 @@ them with server-provided errors so callers see a complete list.
 
 The client MUST detect duplicate ARC identifiers within one `harvest_arcs` batch before making the duplicate request,
 skip the later ARC, and record a `duplicate` error. The first ARC with that identifier MUST continue through normal
-submission. This intra-batch skip and client-side `duplicate` reporting is durable client policy (producer-side
-duplicate identifiers in one batch), not a temporary shim pending server changes.
+submission. This intra-batch skip and client-side `duplicate` reporting is durable client policy for producer-side
+duplicate identifiers in one batch (not deferred pending further server coverage).
 
 #### Scenario: Skip the second ARC with a duplicate identifier
 
