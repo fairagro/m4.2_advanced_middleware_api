@@ -1,0 +1,23 @@
+{
+  "_id": "arc_0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+  "_rev": "1-xyz",
+  "doc_type": "arc",
+  "schema_version": 1,
+  "rdi": "test-rdi",
+  "arc_content": {
+    "@context": "https://w3id.org/ro/crate/1.1/context",
+    "@graph": []
+  },
+  "metadata": {
+    "arc_hash": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+    "status": "ACTIVE",
+    "first_seen": "2024-05-01T10:00:00",
+    "last_seen": "2024-05-02T10:00:00",
+    "first_harvest_id": "harvest-old-001",
+    "last_harvest_id": "harvest-old-001",
+    "events": [],
+    "git": {
+      "status": "PENDING"
+    }
+  }
+}
