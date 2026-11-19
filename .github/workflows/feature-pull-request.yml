@@ -92,6 +92,27 @@ jobs:
       - name: Check public Python API surface vs main
         run: ./scripts/check-api-surface.sh --base origin/main
 
+  openapi-v3:
+    name: OpenAPI /v3
+    needs: detect-changes
+    if: needs.detect-changes.outputs.code == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - name: Install uv
+        uses: astral-sh/setup-uv@v10.3.3
+      - name: Sync workspace
+        run: uv sync --dev --all-packages
+      - name: Install oasdiff
+        run: |
+          ./scripts/install-oasdiff.sh
+          echo "${HOME}/.local/bin" >> "${GITHUB_PATH}"
+      - name: Check HTTP /v3 OpenAPI vs main
+        run: ./scripts/check-openapi-v3.sh --base origin/main
+
   helm-lint:
     name: Helm Lint
     needs: detect-changes

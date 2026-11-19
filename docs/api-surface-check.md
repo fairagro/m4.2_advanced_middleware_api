@@ -16,9 +16,9 @@ Allowlist: [`api-surface-allowlist.yaml`](../api-surface-allowlist.yaml) (`api_c
 | Breaking          | at least one commit declares breaking                        | **pass** |
 | Non-breaking only | (any)                                                        | **pass** |
 
-HTTP OpenAPI and CouchDB document shapes are out of scope
-([#651](https://github.com/fairagro/m4.2_advanced_middleware_api/issues/651),
-[#652](https://github.com/fairagro/m4.2_advanced_middleware_api/issues/652)).
+HTTP `/v3` OpenAPI is gated separately ([#651](https://github.com/fairagro/m4.2_advanced_middleware_api/issues/651),
+[`openapi-v3-check.md`](openapi-v3-check.md)). CouchDB document shapes remain
+[#652](https://github.com/fairagro/m4.2_advanced_middleware_api/issues/652).
 
 ## How to run
 

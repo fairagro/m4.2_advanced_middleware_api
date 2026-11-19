@@ -9,52 +9,38 @@ breaking changes are declared on main..HEAD via Conventional Commits
 from __future__ import annotations
 
 import argparse
-import re
-import subprocess
+import importlib.util
 import sys
 from collections.abc import Iterable, Sequence
 from pathlib import Path
+from types import ModuleType
 from typing import Any
 
 import yaml
 from griffe import find_breaking_changes, load, load_git
 
-_BREAKING_SUBJECT = re.compile(r"^[a-z]+(?:\([^)]*\))?!:", re.MULTILINE)
-_BREAKING_FOOTER = re.compile(r"^BREAKING CHANGE:", re.MULTILINE)
+
+def _load_conventional_breaking() -> ModuleType:
+    """Load sibling ``conventional_breaking.py`` (scripts/ is not a package)."""
+    path = Path(__file__).resolve().parent / "conventional_breaking.py"
+    spec = importlib.util.spec_from_file_location("conventional_breaking", path)
+    if spec is None or spec.loader is None:
+        msg = f"cannot load {path}"
+        raise ImportError(msg)
+    module = importlib.util.module_from_spec(spec)
+    sys.modules["conventional_breaking"] = module
+    spec.loader.exec_module(module)
+    return module
+
+
+_conventional_breaking = _load_conventional_breaking()
+# Re-export for scripts/tests/test_check_api_surface.sh
+_BREAKING_SUBJECT = _conventional_breaking.BREAKING_SUBJECT
+_BREAKING_FOOTER = _conventional_breaking.BREAKING_FOOTER
+branch_declares_breaking = _conventional_breaking.branch_declares_breaking
+resolve_base_ref = _conventional_breaking.resolve_base_ref
+
 _DEFAULT_ALLOWLIST = Path("api-surface-allowlist.yaml")
-
-
-def _git_output(args: Sequence[str], *, cwd: Path) -> str:
-    return subprocess.check_output(["git", *args], cwd=cwd, text=True)
-
-
-def resolve_base_ref(explicit: str | None, *, cwd: Path) -> str:
-    """Return an explicit base ref or the first available of origin/main, main."""
-    if explicit:
-        return explicit
-    for candidate in ("origin/main", "main"):
-        try:
-            _git_output(["rev-parse", "--verify", candidate], cwd=cwd)
-        except subprocess.CalledProcessError:
-            continue
-        return candidate
-    msg = "Could not resolve base ref (tried origin/main, main); pass --base"
-    raise SystemExit(msg)
-
-
-def branch_declares_breaking(*, base: str, cwd: Path) -> bool:
-    """Return whether any commit on base..HEAD declares a Conventional Commits break."""
-    try:
-        log = _git_output(["log", f"{base}..HEAD", "--format=%B%x00"], cwd=cwd)
-    except subprocess.CalledProcessError as exc:
-        raise SystemExit(f"git log {base}..HEAD failed: {exc}") from exc
-    for message in log.split("\0"):
-        text = message.strip()
-        if not text:
-            continue
-        if _BREAKING_SUBJECT.search(text) or _BREAKING_FOOTER.search(text):
-            return True
-    return False
 
 
 def _load_allowlist(path: Path) -> list[dict[str, Any]]:
