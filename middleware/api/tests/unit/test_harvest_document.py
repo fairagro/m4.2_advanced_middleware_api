@@ -6,7 +6,6 @@ aliasing behavior of the HarvestDocument schema.
 """
 
 from datetime import datetime
-from typing import Any
 
 import pytest
 from pydantic import ValidationError
@@ -21,7 +20,6 @@ from middleware.shared.api_models.common.models import HarvestStatus
 from middleware.shared.api_models.v3.models import HarvestError, HarvestErrorType
 
 ARCS_SUBMITTED = 10
-GRACE_PERIOD_DAYS = 7
 
 
 def test_harvest_document_instantiation() -> None:
@@ -70,77 +68,7 @@ def test_harvest_document_alias() -> None:
     assert dump["_rev"] == "1-abc"
 
 
-def test_harvest_document_backward_compat_no_client_id() -> None:
-    """Old CouchDB documents pre-date the 'client_id' field entirely.
-
-    Such documents must be parsed without error; client_id falls back
-    to None because we have no way to recover the original client identity.
-    The unrelated old 'source' field (data-source system name, not client
-    identity) must be silently ignored via extra='ignore'.
-    """
-    now = datetime.now()
-    old_doc: dict[str, Any] = {
-        "_id": "harvest-old-001",
-        "_rev": "1-abc",
-        "type": "harvest",
-        "rdi": "test-rdi",
-        "source": "edaphobase",  # old field — different semantics, must be dropped
-        "started_at": now.isoformat(),
-        "status": HarvestStatus.COMPLETED,
-        "statistics": {"arcs_submitted": 3},
-    }
-
-    doc = HarvestDocument.model_validate(old_doc)
-
-    assert doc.client_id is None
-    assert doc.doc_id == "harvest-old-001"
-    assert doc.statistics.arcs_submitted == 3  # noqa: PLR2004
-
-
-def test_harvest_document_backward_compat_config_field_ignored() -> None:
-    """Old CouchDB documents contain a 'config' sub-document.
-
-    The new schema does not have this field; it must be silently ignored
-    rather than raising a validation error.
-    """
-    now = datetime.now()
-    old_doc: dict[str, Any] = {
-        "_id": "harvest-old-002",
-        "type": "harvest",
-        "rdi": "test-rdi",
-        "source": "edaphobase",
-        "started_at": now.isoformat(),
-        "status": HarvestStatus.RUNNING,
-        "statistics": {},
-        "config": {  # old nested object not present in new schema
-            "grace_period_days": 3,
-            "auto_mark_deleted": True,
-        },
-    }
-
-    doc = HarvestDocument.model_validate(old_doc)
-
-    assert doc.client_id is None
-    # Neither 'config' nor 'source' must appear on the new model
-    assert not hasattr(doc, "config")
-    assert not hasattr(doc, "source")
-
-
-def test_harvest_document_backward_compat_no_errors() -> None:
-    """Legacy harvest documents without an errors field default to an empty list."""
-    now = datetime.now()
-    old_doc: dict[str, Any] = {
-        "_id": "harvest-old-003",
-        "type": "harvest",
-        "rdi": "test-rdi",
-        "started_at": now.isoformat(),
-        "status": HarvestStatus.RUNNING,
-        "statistics": {},
-    }
-
-    doc = HarvestDocument.model_validate(old_doc)
-
-    assert doc.errors == []
+# Older on-disk harvest shapes: see middleware/api/tests/fixtures/store_docs/ (#652).
 
 
 def test_harvest_document_stores_errors() -> None:
