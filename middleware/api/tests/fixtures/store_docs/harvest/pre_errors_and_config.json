@@ -1,0 +1,13 @@
+{
+  "_id": "harvest-old-002",
+  "type": "harvest",
+  "rdi": "test-rdi",
+  "source": "edaphobase",
+  "started_at": "2024-06-02T08:00:00",
+  "status": "RUNNING",
+  "statistics": {},
+  "config": {
+    "grace_period_days": 3,
+    "auto_mark_deleted": true
+  }
+}

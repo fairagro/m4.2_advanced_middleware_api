@@ -40,3 +40,8 @@ Public **Python** library surface (`api_client` + selected `shared`) is gated by
 [`docs/api-surface-check.md`](api-surface-check.md) (griffe vs `main`, synced to Conventional Commit breaking markers).
 HTTP **`/v3` OpenAPI** is gated by [`docs/openapi-v3-check.md`](openapi-v3-check.md) (oasdiff vs `main`, same commit
 escape). Both checks are CI/toolchain-owned — not a Finder/Fixer nit surface.
+
+**Persisted store document shapes** (internal) use golden fixtures + tip `model_validate` under
+`middleware/api/tests/fixtures/store_docs/`
+([#652](https://github.com/fairagro/m4.2_advanced_middleware_api/issues/652)) — pytest/toolchain-owned, not a public
+SemVer / Finder nit surface. See that directory’s `README.md`.

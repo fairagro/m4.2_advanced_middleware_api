@@ -1,0 +1,12 @@
+{
+  "_id": "harvest-old-001",
+  "_rev": "1-abc",
+  "type": "harvest",
+  "rdi": "test-rdi",
+  "source": "edaphobase",
+  "started_at": "2024-06-01T12:00:00",
+  "status": "COMPLETED",
+  "statistics": {
+    "arcs_submitted": 3
+  }
+}
