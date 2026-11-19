@@ -190,6 +190,8 @@ still matches (no unique commits vs) a **CLOSED** PR head commit that reaches a 
 `Superseded by #<n>` chain. Reusing a closed/superseded head **name** for new work is not enough to delete — the current
 tip SHA must still be that closed PR’s head (or an ancestor of it). It never deletes `main`, the current branch, or
 heads of **OPEN** PRs. Requires `gh` on `PATH` (Dev Container wrappers). Dry-run is the default (`--apply` deletes).
+Each run starts with a full `git fetch --prune` for the remote (not base-only) so already-deleted GitHub heads are not
+listed as candidates; a delete that finds no remote ref counts as success.
 
 ## Bot token (shared with Renovate)
 

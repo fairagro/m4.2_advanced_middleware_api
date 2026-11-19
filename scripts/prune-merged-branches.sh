@@ -12,6 +12,11 @@
 #
 # Never deletes: <base>, current checkout, heads of OPEN PRs.
 #
+# Always starts with a full `git fetch --prune <remote>` (all heads under that remote),
+# not a base-only fetch — otherwise stale origin/<feature> ghosts remain after GitHub
+# already deleted them, dry-run lists them, and --apply gets "remote ref does not exist".
+# A missing remote head on delete is treated as success (already gone).
+#
 # Usage:
 #   ./scripts/prune-merged-branches.sh
 #   ./scripts/prune-merged-branches.sh --apply
@@ -62,8 +67,10 @@ fi
 REPO_ROOT="$(git rev-parse --show-toplevel)"
 cd "$REPO_ROOT"
 
-echo "Fetching ${REMOTE}/${BASE}..."
-git fetch "$REMOTE" "$BASE" --prune
+echo "Fetching ${REMOTE} (prune all remote-tracking refs)..."
+# Explicit refspec + --prune only drops stale refs that match that refspec (e.g. main).
+# Full fetch --prune clears origin/<branch> ghosts after GitHub "Delete branch" on merge.
+git fetch --prune "$REMOTE"
 
 BASE_REF="${REMOTE}/${BASE}"
 if ! git rev-parse --verify "$BASE_REF" >/dev/null 2>&1; then
@@ -308,9 +315,15 @@ consider() {
       KEPT+=("local $name (delete-failed)")
     fi
   else
-    if git push "$REMOTE" --delete "$name"; then
+    push_err="$TMP/push-delete-${name//\//_}.err"
+    if git push "$REMOTE" --delete "$name" 2>"$push_err"; then
       DELETED+=("remote $name ($reason)")
+    elif grep -qiF 'remote ref does not exist' "$push_err"; then
+      # Already gone on the remote (stale tracking or race); not a failure.
+      DELETED+=("remote $name ($reason; already-absent)")
+      git branch -r -d "${REMOTE}/${name}" 2>/dev/null || true
     else
+      cat "$push_err" >&2
       KEPT+=("remote $name (delete-failed)")
     fi
   fi
