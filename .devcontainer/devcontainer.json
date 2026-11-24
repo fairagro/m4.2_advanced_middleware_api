@@ -77,7 +77,7 @@
       }
     }
   },
-  "initializeCommand": ["bash", "scripts/devcontainer-prepare-env.sh"],
+  "initializeCommand": ["scripts/devcontainer-prepare-env"],
   "postCreateCommand": ["bash", "scripts/devcontainer-post-create.sh"],
   "remoteUser": "vscode"
 }
