@@ -55,7 +55,10 @@ if [[ "${count}" =~ ^[0-9]+$ ]] && ((count > 0)); then
   done
 fi
 
-# Load store/host tokens for hooks (e.g. GitGuardian). Never prompt — Cursor SCM polls share /dev/tty.
+# Load store/host tokens for hooks (e.g. GitGuardian). Never prompt — Cursor SCM polls
+# share /dev/tty. Drop inherited FORCE/PROMPT so a cancelled set-dev-tokens cannot turn
+# every Starship/`git` prompt redraw into another `read -s` (#411).
+unset DEV_TOKENS_FORCE DEV_TOKENS_PROMPT || true
 # shellcheck source=scripts/dev-tokens.sh
 source "${_git_dir}/../dev-tokens.sh"
 unset _git_dir _git_self

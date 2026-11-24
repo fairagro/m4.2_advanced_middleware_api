@@ -1,0 +1,5 @@
+#!/usr/bin/env bash
+# Linux/macOS host prepare entry for initializeCommand (#415).
+# Windows resolves scripts/devcontainer-prepare-env.cmd instead (no bash).
+set -euo pipefail
+exec "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/devcontainer-prepare-env.sh"

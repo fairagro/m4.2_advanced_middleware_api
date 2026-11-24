@@ -151,8 +151,8 @@ group so Prettier / markdownlint SoT cannot diverge from the lockfile. `NPM_VERS
 `RENOVATE_VERSION` / `OPENSPEC_VERSION` stay in the CLI-pins group (not in `package.json`).
 
 **Generated Compose `.env`:** `.devcontainer/.env` is a host-generated copy of `versions.env` (not a tracked symlink;
-see `scripts/devcontainer-prepare-env.sh` / #410). It is listed in Renovate `ignorePaths` so regex managers do not scan
-the same pins twice via that copy (duplicate Detection / double apply).
+see `scripts/devcontainer-prepare-env` / #410 / #415). It is listed in Renovate `ignorePaths` so regex managers do not
+scan the same pins twice via that copy (duplicate Detection / double apply).
 
 **`v`-prefixed pins:** For `NODE_VERSION` / GitHub-release CLIs, capture the version **without** the leading `v`
 (`NODE_VERSION=v(?<currentValue>…)` + `autoReplaceStringTemplate` `…=v{{newValue}}`). Capturing `v1.2.3` while

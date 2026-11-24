@@ -25,13 +25,13 @@ OpenSpec **specs/changes** for product work stay in the product repos
 
 | Path                                                | Purpose                                                                                                                                                                                                       |
 | --------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `.devcontainer/devcontainer.json`                   | **Verbatim** sync: Compose service, DinD, mounts, extensions, `initializeCommand` (prepare `.env`), postCreate                                                                                                |
+| `.devcontainer/devcontainer.json`                   | **Verbatim** sync: Compose service, DinD, mounts, extensions, OS-specific `initializeCommand` (prepare `.env`), postCreate                                                                                    |
 | `.devcontainer/docker-compose.yml`                  | **Verbatim** sync: build args from `versions.env`, bind `..:/workspace`                                                                                                                                       |
 | `.devcontainer/product.env`                         | **Product-owned** (optional, not synced): `MYPYPATH`, `PYLINT_SOURCE_ROOTS`, `CST_*`, … — quality CLI re-applies path keys each invoke unless `QUALITY_PATH_LOADED`; Compose still injects the file at create |
 | `.devcontainer/Dockerfile`                          | Pinned shared tooling image                                                                                                                                                                                   |
 | [`.vscode/settings.json`](../.vscode/settings.json) | Shared workspace IDE settings (also apply on host clones)                                                                                                                                                     |
 | `versions.env`                                      | Single source of truth for tool versions                                                                                                                                                                      |
-| `.devcontainer/.env`                                | **Generated** copy of `versions.env` (host `initializeCommand` → `scripts/devcontainer-prepare-env.sh`; gitignored)                                                                                           |
+| `.devcontainer/.env`                                | **Generated** copy of `versions.env` (host `initializeCommand` → `scripts/devcontainer-prepare-env`; Linux/macOS `.sh`, Windows `.cmd`/PowerShell; gitignored)                                                |
 
 ## Shared JSON + Compose contract (`/workspace`)
 
