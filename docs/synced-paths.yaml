@@ -94,7 +94,10 @@ profiles:
       - scripts/git-hooks/**
       - scripts/load-versions-env.sh
       - scripts/devcontainer-post-create.sh
+      - scripts/devcontainer-prepare-env
       - scripts/devcontainer-prepare-env.sh
+      - scripts/devcontainer-prepare-env.cmd
+      - scripts/devcontainer-prepare-env.ps1
       - scripts/import-public-gpg-keys.sh
       - openspec/principles.global.md
       - .github/workflows/codeql.yml

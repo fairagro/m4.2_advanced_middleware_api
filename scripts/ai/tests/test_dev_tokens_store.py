@@ -3,15 +3,20 @@
 from __future__ import annotations
 
 import base64
+import fcntl
 import os
 import pty
 import select
+import signal
 import subprocess
+import termios
 import time
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 DEV_TOKENS = REPO_ROOT / "scripts" / "dev-tokens.sh"
+SET_DEV_TOKENS = REPO_ROOT / "scripts" / "set-dev-tokens.sh"
+GIT_WRAPPER = REPO_ROOT / "scripts" / "bin" / "git"
 
 
 def _b64_line(var: str, value: str) -> str:
@@ -187,6 +192,202 @@ test -z "${{GITGUARDIAN_API_KEY-}}"
         status = proc.wait(timeout=5)
         err = proc.stderr.read() if proc.stderr else ""
         assert status == 0, f"script failed ({status}): {err}"
+    finally:
+        if slave >= 0:
+            os.close(slave)
+        os.close(master)
+
+
+def test_git_wrapper_ignores_dev_tokens_force_on_tty(tmp_path: Path) -> None:
+    """scripts/bin/git must not prompt even when DEV_TOKENS_FORCE is inherited (#411)."""
+    store = tmp_path / "tokens.env"
+    store.write_text("", encoding="utf-8")
+    script = f"""
+set -euo pipefail
+export DEV_TOKENS_FILE={store!s}
+export DEV_TOKENS_FORCE=1
+unset DEV_TOKENS_PROMPT GH_TOKEN GITGUARDIAN_API_KEY || true
+"{GIT_WRAPPER!s}" --version
+"""
+    master, slave = pty.openpty()
+    chunks: list[bytes] = []
+
+    def _claim_tty() -> None:
+        os.setsid()
+        fcntl.ioctl(slave, termios.TIOCSCTTY, 0)
+
+    try:
+        proc = subprocess.Popen(
+            ["bash", "-c", script],
+            stdin=slave,
+            stdout=slave,
+            stderr=slave,
+            cwd=REPO_ROOT,
+            preexec_fn=_claim_tty,
+        )
+        os.close(slave)
+        slave = -1
+        deadline = time.monotonic() + 5.0
+        while proc.poll() is None and time.monotonic() < deadline:
+            ready, _, _ = select.select([master], [], [], 0.1)
+            if ready:
+                try:
+                    chunks.append(os.read(master, 4096))
+                except OSError:
+                    break
+        status = proc.wait(timeout=5)
+        while True:
+            ready, _, _ = select.select([master], [], [], 0.05)
+            if not ready:
+                break
+            try:
+                chunks.append(os.read(master, 4096))
+            except OSError:
+                break
+        pty_text = b"".join(chunks).decode(errors="replace")
+        assert status == 0, f"script failed ({status}): pty={pty_text!r}"
+        # Prompt goes to /dev/tty (pty master once it is the controlling tty).
+        assert "GH_TOKEN" not in pty_text, f"unexpected token prompt on tty: {pty_text!r}"
+    finally:
+        if slave >= 0:
+            os.close(slave)
+        os.close(master)
+
+
+def test_set_dev_tokens_empty_answer_clears_force(tmp_path: Path) -> None:
+    """Empty set-dev-tokens answer must leave DEV_TOKENS_FORCE unset in that shell (#411)."""
+    store = tmp_path / "tokens.env"
+    store.write_text("", encoding="utf-8")
+    script = f"""
+set -euo pipefail
+export DEV_TOKENS_FILE={store!s}
+unset DEV_TOKENS_FORCE DEV_TOKENS_PROMPT GH_TOKEN GITGUARDIAN_API_KEY || true
+# shellcheck disable=SC1091
+source {SET_DEV_TOKENS!s}
+# FORCE must not linger after a normal (empty) prompt completion.
+if [ "${{DEV_TOKENS_FORCE+x}}" = x ]; then
+  echo "DEV_TOKENS_FORCE still set after set-dev-tokens" >&2
+  exit 1
+fi
+test -z "${{GH_TOKEN-}}"
+"""
+    master, slave = pty.openpty()
+    try:
+        proc = subprocess.Popen(
+            ["bash", "-c", script],
+            stdin=slave,
+            stdout=slave,
+            stderr=subprocess.PIPE,
+            cwd=REPO_ROOT,
+            text=True,
+        )
+        os.close(slave)
+        slave = -1
+        deadline = time.monotonic() + 5.0
+        answers_left = 1
+        while proc.poll() is None and time.monotonic() < deadline:
+            ready, _, _ = select.select([master], [], [], 0.1)
+            if ready:
+                try:
+                    _ = os.read(master, 4096)
+                except OSError:
+                    break
+                if answers_left > 0:
+                    os.write(master, b"\n")
+                    answers_left -= 1
+            time.sleep(0.05)
+        while answers_left > 0 and time.monotonic() < deadline:
+            ready, _, _ = select.select([master], [], [], 0.2)
+            if ready:
+                try:
+                    _ = os.read(master, 4096)
+                except OSError:
+                    break
+            os.write(master, b"\n")
+            answers_left -= 1
+        status = proc.wait(timeout=5)
+        err = proc.stderr.read() if proc.stderr else ""
+        assert status == 0, f"script failed ({status}): {err}"
+    finally:
+        if slave >= 0:
+            os.close(slave)
+        os.close(master)
+
+
+def test_set_dev_tokens_int_clears_force(tmp_path: Path) -> None:
+    """SIGINT during set-dev-tokens prompt must leave DEV_TOKENS_FORCE unset (#411)."""
+    store = tmp_path / "tokens.env"
+    store.write_text("", encoding="utf-8")
+    script = f"""
+set -euo pipefail
+export DEV_TOKENS_FILE={store!s}
+unset DEV_TOKENS_FORCE DEV_TOKENS_PROMPT GH_TOKEN GITGUARDIAN_API_KEY || true
+set +e
+# shellcheck disable=SC1091
+source {SET_DEV_TOKENS!s}
+src_st=$?
+set -e
+if [ "${{DEV_TOKENS_FORCE+x}}" = x ]; then
+  echo "DEV_TOKENS_FORCE still set after INT (source status=${{src_st}})" >&2
+  exit 1
+fi
+exit 0
+"""
+    master, slave = pty.openpty()
+
+    def _claim_tty() -> None:
+        os.setsid()
+        fcntl.ioctl(slave, termios.TIOCSCTTY, 0)
+
+    try:
+        proc = subprocess.Popen(
+            ["bash", "-c", script],
+            stdin=slave,
+            stdout=slave,
+            stderr=slave,
+            cwd=REPO_ROOT,
+            preexec_fn=_claim_tty,
+        )
+        os.close(slave)
+        slave = -1
+        deadline = time.monotonic() + 5.0
+        saw_prompt = False
+        chunks: list[bytes] = []
+        while proc.poll() is None and time.monotonic() < deadline:
+            ready, _, _ = select.select([master], [], [], 0.1)
+            if ready:
+                try:
+                    chunk = os.read(master, 4096)
+                except OSError:
+                    break
+                chunks.append(chunk)
+                if b"GH_TOKEN" in chunk:
+                    saw_prompt = True
+                    # Foreground Ctrl+C hits the process group (setsid); signal only
+                    # the parent would leave the read -s subshell running.
+                    os.killpg(proc.pid, signal.SIGINT)
+                    break
+            time.sleep(0.05)
+        assert saw_prompt, (
+            "timed out waiting for GH_TOKEN prompt before SIGINT; "
+            f"pty={b''.join(chunks)!r}"
+        )
+        try:
+            status = proc.wait(timeout=5)
+        except subprocess.TimeoutExpired:
+            os.killpg(proc.pid, signal.SIGKILL)
+            proc.wait(timeout=2)
+            raise
+        # Drain leftover pty output for diagnostics on failure.
+        while True:
+            ready, _, _ = select.select([master], [], [], 0.05)
+            if not ready:
+                break
+            try:
+                chunks.append(os.read(master, 4096))
+            except OSError:
+                break
+        assert status == 0, f"script failed ({status}): pty={b''.join(chunks)!r}"
     finally:
         if slave >= 0:
             os.close(slave)

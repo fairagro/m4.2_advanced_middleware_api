@@ -125,7 +125,13 @@ _dev_tokens_ask() {
   fi
   { printf '' >/dev/tty; } 2>/dev/null || return 0
   printf '%s — %s (empty leaves unset; override later: set-dev-tokens.sh)\n> ' "${var}" "${hint}" >/dev/tty
-  IFS= read -r -s val </dev/tty || true
+  # read -s in a subshell so EXIT/INT/TERM can restore echo even if the read is
+  # cancelled (shared tty; otherwise the parent shell stays blind) (#411).
+  val="$(
+    trap 'stty echo </dev/tty 2>/dev/null || stty echo 2>/dev/null || true' EXIT INT TERM
+    IFS= read -r -s line </dev/tty || true
+    printf '%s' "${line}"
+  )"
   printf '\n' >/dev/tty
   if [ -z "${val}" ]; then
     # Do not persist empty skip markers.

@@ -10,14 +10,25 @@
 _set_dev_tokens_main() {
   local prev="${DEV_TOKENS_FORCE-}" had=0 status=0
   [ "${DEV_TOKENS_FORCE+x}" = x ] && had=1
+
+  _set_dev_tokens_cleanup() {
+    if [ "${had}" -eq 1 ]; then
+      export DEV_TOKENS_FORCE="${prev}"
+    else
+      unset DEV_TOKENS_FORCE
+    fi
+    # Shared tty: cancelled read -s can leave echo off (#411).
+    stty echo </dev/tty 2>/dev/null || stty echo 2>/dev/null || true
+  }
+
   export DEV_TOKENS_FORCE=1
+  # INT during nested source/read must still clear FORCE and restore echo (#411).
+  trap '_set_dev_tokens_cleanup; return 130' INT
   # shellcheck source=scripts/dev-tokens.sh
   source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/dev-tokens.sh" || status=$?
-  if [ "${had}" -eq 1 ]; then
-    export DEV_TOKENS_FORCE="${prev}"
-  else
-    unset DEV_TOKENS_FORCE
-  fi
+  trap - INT
+  _set_dev_tokens_cleanup
+  unset -f _set_dev_tokens_cleanup
   return "${status}"
 }
 _set_dev_tokens_main
