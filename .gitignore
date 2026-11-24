@@ -51,14 +51,12 @@ venv.bak/
 # --- Node ---
 node_modules/
 
-# --- Env secrets (Compose symlink + ciphertext stay tracked) ---
+# --- Env secrets (ciphertext exceptions; generated Compose .env is ignored) ---
 .env
 .env.*
 .envrc
 !.env.integration.enc
 !.env*.example
-# Dev Container Compose: .devcontainer/.env → ../versions.env
-!.devcontainer/.env
 
 # --- Docker CLI config dir (repo-local DOCKER_CONFIG=.docker) ---
 # Keep tracked config.json; ignore Buildx / token-seed runtime only.
