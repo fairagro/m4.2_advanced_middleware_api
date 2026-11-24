@@ -150,8 +150,9 @@ runtime + tool bumps and failed when a mid-group replace missed an already-updat
 group so Prettier / markdownlint SoT cannot diverge from the lockfile. `NPM_VERSION` lives in the **runtime** group;
 `RENOVATE_VERSION` / `OPENSPEC_VERSION` stay in the CLI-pins group (not in `package.json`).
 
-**Symlink:** `.devcontainer/.env` → `versions.env` is Compose SoT only. It is listed in Renovate `ignorePaths` so the
-regex managers do not scan the same pin file twice via the symlink (duplicate Detection / double apply).
+**Generated Compose `.env`:** `.devcontainer/.env` is a host-generated copy of `versions.env` (not a tracked symlink;
+see `scripts/devcontainer-prepare-env.sh` / #410). It is listed in Renovate `ignorePaths` so regex managers do not scan
+the same pins twice via that copy (duplicate Detection / double apply).
 
 **`v`-prefixed pins:** For `NODE_VERSION` / GitHub-release CLIs, capture the version **without** the leading `v`
 (`NODE_VERSION=v(?<currentValue>…)` + `autoReplaceStringTemplate` `…=v{{newValue}}`). Capturing `v1.2.3` while

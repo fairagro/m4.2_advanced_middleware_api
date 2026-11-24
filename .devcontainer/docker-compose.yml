@@ -1,5 +1,6 @@
 # Build-arg substitution (${UV_VERSION}, etc.) reads .env in this directory —
-# a symlink to ../versions.env (single source of truth).
+# a generated copy of ../versions.env (scripts/devcontainer-prepare-env.sh via
+# initializeCommand; not a tracked symlink — see #410).
 # Optional product-owned `.devcontainer/product.env` (not synced) for MYPYPATH / CST_* / similar.
 services:
   devcontainer:
