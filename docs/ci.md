@@ -616,7 +616,10 @@ uses `GITHUB_TOKEN` (`packages: write` on push jobs; `contents: write` to edit t
 Bake and registry pushes are **nested reusables** (`reusable-docker-bake.yml`, `reusable-docker-registry-push.yml`,
 `reusable-helm-oci-push.yml`). Outer Devinfra workflows call them with `$/.github/workflows/<file>` so the nested file
 comes from the **same Devinfra commit** as the outer reusable (product callers do not need those files locally).
-Requires Actions runner ≥ 2.336 for `$/` (GitHub-hosted is fine).
+Requires Actions runner ≥ 2.336 for `$/` (GitHub-hosted is fine). Nested Helm OCI push exposes `dh_status` / `dh_reason`
+/ `ghcr_status` / `ghcr_reason` / `ghcr_ns`: secret-using login/push steps write those values under `$RUNNER_TEMP`, and
+a follow-up normalize step (no secret context) sets `$GITHUB_OUTPUT` / job outputs so Actions does not skip them as “may
+contain secret” (#421).
 
 **Docker path:** nested Bake at `git_tag` → nested registry push → replace `## Registry status` on the Release. **Helm
 path:** download `{chart_name}-{version}.tgz` from the Release → nested Helm OCI push → same body replace. Other Release
