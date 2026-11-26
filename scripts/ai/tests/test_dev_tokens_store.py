@@ -372,23 +372,46 @@ exit 0
             "timed out waiting for GH_TOKEN prompt before SIGINT; "
             f"pty={b''.join(chunks)!r}"
         )
+        # INT can race with `val="$(read …)"`; closing the master unblocks a stuck
+        # silent read so the set-dev-tokens INT cleanup can finish (flake on push).
+        for _ in range(30):
+            if proc.poll() is not None:
+                break
+            time.sleep(0.05)
+        else:
+            try:
+                os.killpg(proc.pid, signal.SIGINT)
+            except ProcessLookupError:
+                pass
+            time.sleep(0.1)
+            if proc.poll() is None and master >= 0:
+                try:
+                    os.close(master)
+                except OSError:
+                    pass
+                master = -1
         try:
-            status = proc.wait(timeout=5)
+            status = proc.wait(timeout=3)
         except subprocess.TimeoutExpired:
-            os.killpg(proc.pid, signal.SIGKILL)
+            try:
+                os.killpg(proc.pid, signal.SIGKILL)
+            except ProcessLookupError:
+                pass
             proc.wait(timeout=2)
             raise
         # Drain leftover pty output for diagnostics on failure.
-        while True:
-            ready, _, _ = select.select([master], [], [], 0.05)
-            if not ready:
-                break
-            try:
-                chunks.append(os.read(master, 4096))
-            except OSError:
-                break
+        if master >= 0:
+            while True:
+                ready, _, _ = select.select([master], [], [], 0.05)
+                if not ready:
+                    break
+                try:
+                    chunks.append(os.read(master, 4096))
+                except OSError:
+                    break
         assert status == 0, f"script failed ({status}): pty={b''.join(chunks)!r}"
     finally:
         if slave >= 0:
             os.close(slave)
-        os.close(master)
+        if master >= 0:
+            os.close(master)
