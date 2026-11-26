@@ -1,0 +1,21 @@
+{{- $clientTls := .Values.api.httpRoute.clientTls | default dict -}}
+{{- if and .Values.api.httpRoute.enabled $clientTls.enabled -}}
+{{- $verifyDepth := $clientTls.verifyDepth | default 1 -}}
+apiVersion: gateway.nginx.org/v1alpha1
+kind: SnippetsFilter
+metadata:
+  name: {{ include "fairagro-advanced-middleware-api-chart.clientTlsSnippetsFilterName" . }}
+  labels:
+    {{- include "fairagro-advanced-middleware-api-chart.labels" . | nindent 4 }}
+spec:
+  snippets:
+    - context: http.server
+      value: |
+        ssl_client_certificate {{ include "fairagro-advanced-middleware-api-chart.clientTlsCaPath" . }};
+        ssl_verify_client optional;
+        ssl_verify_depth {{ $verifyDepth }};
+    - context: http.server.location
+      value: |
+        proxy_set_header ssl-client-cert $ssl_client_escaped_cert;
+        proxy_set_header ssl-client-verify $ssl_client_verify;
+{{- end }}

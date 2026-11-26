@@ -4,19 +4,24 @@
 
 The chart can expose the API in two independently flagged ways:
 
-| Path                    | Values                  | Role today                                                                                                                                                                                                                                              |
-| ----------------------- | ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Classic Ingress         | `api.ingress.enabled`   | Local minikube smoke; optional nginx client mTLS (`api.ingress.mtlsEnabled`) and Ingress TLS Secrets from `api.tls.*`                                                                                                                                   |
-| Gateway API `HTTPRoute` | `api.httpRoute.enabled` | Attach to a platform-owned parent (typically `ListenerSet` `fairagro-https` in `kube-gateway-api`). Server TLS for `*.fairagro.net` stays on the platform ListenerSet / wildcard cert — the chart does **not** create a `Certificate` for that hostname |
+| Path                    | Values                            | Role today                                                                                                                                                                                                                                              |
+| ----------------------- | --------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Classic Ingress         | `api.ingress.enabled`             | Local minikube smoke; optional nginx client mTLS (`api.ingress.mtlsEnabled`) and Ingress TLS Secrets from `api.tls.*`                                                                                                                                   |
+| Gateway API `HTTPRoute` | `api.httpRoute.enabled`           | Attach to a platform-owned parent (typically `ListenerSet` `fairagro-https` in `kube-gateway-api`). Server TLS for `*.fairagro.net` stays on the platform ListenerSet / wildcard cert — the chart does **not** create a `Certificate` for that hostname |
+| Gateway optional mTLS   | `api.httpRoute.clientTls.enabled` | Chart `SnippetsFilter` + HTTPRoute `ExtensionRef`: optional client cert verify against the platform-mounted project CA; upstream headers `ssl-client-cert` / `ssl-client-verify` for the API. Requires NGF `snippets.enable` and CA mount (misc#562)    |
 
-Defaults leave both off (`enabled: false`). Deploy overlays supply cluster-specific `parentRefs` and `hostnames`; chart
-defaults stay cluster-agnostic (no elise/fizz/draven/gangplank hardcoding).
+Defaults leave HTTPRoute and Gateway client TLS off (`enabled: false`). Deploy overlays supply `hostnames` (and may
+override `parentRefs` / `clientTls`); chart defaults stay cluster-agnostic (no elise/fizz/draven/gangplank hardcoding).
 
 **ListenerSet allowlist:** the Helm release namespace must be allowed by the target ListenerSet (current platform
 inventories use `fairagro-advanced-middleware`). Routes from other namespaces are not accepted.
 
-**Client mTLS cutover** to NGINX Gateway Fabric is a **platform** follow-up. Until then, keep Ingress (with mTLS) if
-clients need cert auth; HTTPRoute can run in parallel for Gateway TLS exposure.
+**Client CA path:** default `/etc/nginx/client-cas/<api.httpRoute.clientTls.project>/ca.crt` (project default
+`fairagro-m42`). Override with `api.httpRoute.clientTls.caPath` when needed.
+
+**Ingress vs Gateway mTLS:** Ingress nginx annotations remain available for local smoke / transition. Fairagro
+Ingress-off cutover (Gateway-only) is tracked in
+[#741](https://github.com/fairagro/m4.2_advanced_middleware_api/issues/741).
 
 **Render check (no live Gateway):**
 
@@ -25,7 +30,8 @@ helm template api-test ./charts/fairagro-advanced-middleware-api-chart \
   -f charts/test_deploy/values-httproute.yaml
 ```
 
-Minikube installs continue to use `charts/test_deploy/values.yaml` (Ingress only).
+That overlay enables HTTPRoute and Gateway client TLS for template smoke. Minikube installs continue to use
+`charts/test_deploy/values.yaml` (Ingress only).
 
 ### IDE: Helm templates vs YAML
 
