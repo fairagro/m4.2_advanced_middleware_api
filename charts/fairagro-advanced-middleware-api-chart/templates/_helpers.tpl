@@ -93,6 +93,27 @@ Create the name of the CA TLS secret
 {{- end }}
 
 {{/*
+Name of the Gateway client-TLS SnippetsFilter (same namespace as HTTPRoute).
+*/}}
+{{- define "fairagro-advanced-middleware-api-chart.clientTlsSnippetsFilterName" -}}
+{{- printf "%s-client-tls" (include "fairagro-advanced-middleware-api-chart.fullname" .) | trunc 63 | trimSuffix "-" }}
+{{- end }}
+
+{{/*
+Platform-mounted client CA path for SnippetsFilter ssl_client_certificate.
+*/}}
+{{- define "fairagro-advanced-middleware-api-chart.clientTlsCaPath" -}}
+{{- $clientTls := .Values.api.httpRoute.clientTls | default dict -}}
+{{- $override := $clientTls.caPath | default "" -}}
+{{- if $override -}}
+{{- $override -}}
+{{- else -}}
+{{- $project := $clientTls.project | default "fairagro-m42" -}}
+{{- printf "/etc/nginx/client-cas/%s/ca.crt" $project -}}
+{{- end -}}
+{{- end }}
+
+{{/*
 Compute Celery broker URL based on enabled RabbitMQ or provided override.
 */}}
 {{- define "fairagro-advanced-middleware-api-chart.celeryBrokerUrl" -}}

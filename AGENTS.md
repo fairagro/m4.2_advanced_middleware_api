@@ -343,7 +343,8 @@ Before generating or modifying code, read the relevant specs:
 - **[`openspec/specs/rate-limiting/`](openspec/specs/rate-limiting/)** — Process-local per-client rate limits on
   harvest/ARC write POSTs → `429` + `Retry-After`.
 - **[`openspec/specs/helm-httproute/`](openspec/specs/helm-httproute/)** — Optional Gateway API `HTTPRoute` in the
-  product Helm chart (dual-path with Ingress; cluster-agnostic `parentRefs`; no chart-owned public hostname cert).
+  product Helm chart (dual-path with Ingress; optional NGF `SnippetsFilter` client TLS; cluster-agnostic `parentRefs`;
+  no chart-owned public hostname cert).
 
 **API Client capabilities:**
 
@@ -390,7 +391,7 @@ mode) use it to locate affected code.
 | `openspec/specs/harvest-report/`        | `middleware/shared/src/middleware/shared/report/`, `ns/harvest-report/`                                                                                                                                                                                                                                                                         |
 | `openspec/specs/arc-export-validation/` | `middleware/arc_validation/src/middleware/arc_validation/`                                                                                                                                                                                                                                                                                      |
 | `openspec/specs/ci-cd/`                 | `.github/workflows/` (see domain design for workflow files); PyPI via `.github/workflows/publish-pypi.yml`                                                                                                                                                                                                                                      |
-| `openspec/specs/helm-httproute/`        | `charts/fairagro-advanced-middleware-api-chart/templates/httproute.yaml`, `values.yaml` (`api.httpRoute`), `templates/NOTES.txt`; template overlay `charts/test_deploy/values-httproute.yaml`                                                                                                                                                   |
+| `openspec/specs/helm-httproute/`        | `charts/fairagro-advanced-middleware-api-chart/templates/httproute.yaml`, `templates/snippetsfilter-client-tls.yaml`, `values.yaml` (`api.httpRoute` / `clientTls`), `templates/NOTES.txt`; template overlay `charts/test_deploy/values-httproute.yaml`                                                                                         |
 
 ---
 

@@ -19,6 +19,14 @@ spec:
         - path:
             type: PathPrefix
             value: /
+      {{- if .Values.api.httpRoute.clientTls.enabled }}
+      filters:
+        - type: ExtensionRef
+          extensionRef:
+            group: gateway.nginx.org
+            kind: SnippetsFilter
+            name: {{ include "fairagro-advanced-middleware-api-chart.clientTlsSnippetsFilterName" . }}
+      {{- end }}
       backendRefs:
         - name: {{ include "fairagro-advanced-middleware-api-chart.fullname" . }}
           port: {{ .Values.api.service.port }}

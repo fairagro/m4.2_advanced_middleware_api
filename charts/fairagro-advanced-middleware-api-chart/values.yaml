@@ -129,6 +129,16 @@ api:
         name: fairagro-https
         namespace: kube-gateway-api
     hostnames: []
+    # Optional client TLS via NGINX Gateway Fabric SnippetsFilter (misc#562).
+    # Requires platform CA mount + snippets.enable on the Gateway dataplane.
+    # Fairagro Ingress-off cutover: issue #741.
+    clientTls:
+      enabled: false
+      # Argo CD / zalf-argocd-projects clientCAs key → dataplane path
+      # /etc/nginx/client-cas/<project>/ca.crt unless caPath is set.
+      project: fairagro-m42
+      caPath: ""
+      verifyDepth: 1
   tls:
     # Direct certificate values (preferred for secrets management)
     serverCrt: ""  # Base64-encoded or PEM server certificate
