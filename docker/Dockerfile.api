@@ -27,9 +27,9 @@ ARG GIT_VERSION=2.54.1-r0
 ARG ZLIB_VERSION=1.4-r0
 ARG TZDATA_VERSION=2026f-r0
 ARG MUSL_UTILS_VERSION=1.2.6-r3
-ARG LIBSSL3_VERSION=3.5.9-r0
+ARG LIBSSL3_VERSION=3.5.9-r1
 # Transitive (git/curl); pin explicitly so Trivy HIGH CVEs get --upgrade'd.
-ARG LIBEXPAT_VERSION=2.10.0-r0
+ARG LIBEXPAT_VERSION=2.11.0-r0
 RUN apk add --no-cache --upgrade \
         "ca-certificates=${CA_CERTIFICATES_VERSION}" \
         "curl=${CURL_VERSION}" \
