@@ -21,6 +21,7 @@
   kubectl --namespace {{ .Release.Namespace }} port-forward $POD_NAME 8080:$CONTAINER_PORT
 {{- end }}
 {{- if .Values.api.httpRoute.enabled }}
+{{- $clientTls := .Values.api.httpRoute.clientTls | default dict }}
 
 2. Gateway API HTTPRoute is enabled for this release.
    - Server TLS for platform hostnames (e.g. *.fairagro.net) is owned by the parent
@@ -28,7 +29,7 @@
    - The Helm release namespace ({{ .Release.Namespace }}) MUST be allowed by the
      target ListenerSet allowlist (currently fairagro-advanced-middleware on platform
      inventories).
-{{- if .Values.api.httpRoute.clientTls.enabled }}
+{{- if $clientTls.enabled }}
    - Optional client TLS is provided by a chart SnippetsFilter on this HTTPRoute
      (CA path {{ include "fairagro-advanced-middleware-api-chart.clientTlsCaPath" . }}).
      Platform must mount that CA on the Gateway dataplane and enable NGF snippets.

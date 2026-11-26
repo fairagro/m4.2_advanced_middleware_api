@@ -1,5 +1,6 @@
-{{- if and .Values.api.httpRoute.enabled .Values.api.httpRoute.clientTls.enabled -}}
-{{- $verifyDepth := .Values.api.httpRoute.clientTls.verifyDepth | default 1 -}}
+{{- $clientTls := .Values.api.httpRoute.clientTls | default dict -}}
+{{- if and .Values.api.httpRoute.enabled $clientTls.enabled -}}
+{{- $verifyDepth := $clientTls.verifyDepth | default 1 -}}
 apiVersion: gateway.nginx.org/v1alpha1
 kind: SnippetsFilter
 metadata:

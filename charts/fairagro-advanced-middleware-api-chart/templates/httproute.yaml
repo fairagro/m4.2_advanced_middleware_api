@@ -1,4 +1,5 @@
 {{- if .Values.api.httpRoute.enabled -}}
+{{- $clientTls := .Values.api.httpRoute.clientTls | default dict -}}
 apiVersion: gateway.networking.k8s.io/v1
 kind: HTTPRoute
 metadata:
@@ -19,7 +20,7 @@ spec:
         - path:
             type: PathPrefix
             value: /
-      {{- if .Values.api.httpRoute.clientTls.enabled }}
+      {{- if $clientTls.enabled }}
       filters:
         - type: ExtensionRef
           extensionRef:
