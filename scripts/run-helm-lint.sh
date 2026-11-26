@@ -3,7 +3,8 @@
 # Fleet root: charts/<chart>/Chart.yaml (one segment). Not supported: helm/, helmchart/, helmcharts/.
 # No charts → success (Helm optional). Charts present → helm on PATH required.
 # Optional overlay: HELM_VALUES_FILE (path relative to repo root) — same -f semantics
-# as Feature-PR reusable input values_file (empty = bare chart).
+# as Feature-PR reusable input values_file. When unset, auto-uses ci/helm-ci-overrides.yaml
+# if that file exists (Infra CI-safe defaults); absent file → bare chart (#419).
 # Environment: host or Dev Container. Supported pin: versions.env HELM_VERSION (Dev Container image).
 
 set -euo pipefail
@@ -36,6 +37,11 @@ if ! command -v helm >/dev/null 2>&1; then
   exit 1
 fi
 
+# Explicit HELM_VALUES_FILE wins; otherwise prefer Infra CI overlay when present (#419).
+if [[ -z "${HELM_VALUES_FILE+x}" ]] && [[ -f ci/helm-ci-overrides.yaml ]]; then
+  HELM_VALUES_FILE=ci/helm-ci-overrides.yaml
+fi
+
 values_args=()
 if [[ -n "${HELM_VALUES_FILE:-}" ]]; then
   if [[ ! -f "${HELM_VALUES_FILE}" ]]; then
@@ -43,6 +49,7 @@ if [[ -n "${HELM_VALUES_FILE:-}" ]]; then
     exit 1
   fi
   values_args=(-f "${HELM_VALUES_FILE}")
+  echo "helm lint: values overlay ${HELM_VALUES_FILE}" >&2
 fi
 
 echo "helm lint: using $(command -v helm) ($(helm version --short 2>/dev/null || echo unknown)) pin=${helm_pin:-unset}" >&2

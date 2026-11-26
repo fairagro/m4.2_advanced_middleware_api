@@ -16,7 +16,7 @@ Not every file under `scripts/` is Dev Container-only. Personal-token helpers ar
 | `run-quality-cli.sh`                  | Host or Dev Container  | `uv run --with-requirements scripts/quality-tools-pins.txt` for fleet quality CLIs                                                                                                       |
 | `run-import-linter.sh`                | Host or Dev Container  | Product `.importlinter`; soft-skips without `middleware/`; uses `run-quality-cli.sh`                                                                                                     |
 | `run-uv-audit.sh`                     | Host or Dev Container  | Needs `uv` + network to OSV; optional `.uv-audit-ignore`                                                                                                                                 |
-| `run-helm-lint.sh`                    | Host or Dev Container  | Needs `helm` on `PATH` when `charts/<chart>/` exists; pin is Dev Container `HELM_VERSION`; optional `HELM_VALUES_FILE` overlay                                                           |
+| `run-helm-lint.sh`                    | Host or Dev Container  | Needs `helm` on `PATH` when `charts/<chart>/` exists; pin is Dev Container `HELM_VERSION`; optional `HELM_VALUES_FILE` (else auto `ci/helm-ci-overrides.yaml` if present)                |
 | `detect-version-bump.sh`              | Host or Dev Container  | Release `version_bump=auto`; needs `git-cliff` + `jq` (pin `GIT_CLIFF_VERSION`)                                                                                                          |
 | `generate-release-changelog.sh`       | Host or CI             | Final Release `## Changelog` via git-cliff (R1 ranges); soft-fail placeholder                                                                                                            |
 | `setup-git-hooks.sh` / `git-hooks/`   | Host or Dev Container  | Dispatcher + `pre-push.d/50-quality`; no `git-lfs` required                                                                                                                              |
@@ -307,9 +307,12 @@ Examples already in the product skeleton:
   and `helmcharts/` are **not** discovered. No such chart → no-op (Helm not required). Charts without `helm` on `PATH`
   fail closed (use the Dev Container pin from `versions.env` `HELM_VERSION`). Optional overlay: export
   `HELM_VALUES_FILE` to a repo-relative values file (same `-f` semantics as Feature-PR
-  [`reusable-helm-lint.yml`](ci.md#reusable-helm-lintyml) input `values_file`; empty/unset = bare chart; missing path
-  fails closed). Feature-PR CI still uses that reusable with a **separate** chart detect-changes filter — do not put
-  chart paths only in the Docker `code` bag. IDE Helm extensions are optional and are **not** the gate.
+  [`reusable-helm-lint.yml`](ci.md#reusable-helm-lintyml) input `values_file`; missing path fails closed). When
+  `HELM_VALUES_FILE` is **unset**, the runner auto-applies `ci/helm-ci-overrides.yaml` if that file exists (Infra
+  CI-safe defaults, e.g. TLS off — #419); if the file is absent (typical product repos), bare chart defaults remain.
+  Explicit `HELM_VALUES_FILE=…` always wins. Feature-PR CI still uses that reusable with a **separate** chart
+  detect-changes filter — do not put chart paths only in the Docker `code` bag. IDE Helm extensions are optional and are
+  **not** the gate.
 - Commit-stage `prettier-md` (`npm run format:md` write) and `markdownlint` (`npm run lint:md`) share the same `files` /
   `exclude` class for `*.md` / `*.mdc`. Escape hatch only: `SKIP=prettier-md` or `SKIP=markdownlint` (same class as
   other Node markdown hooks — not the normal workflow). Like `ruff-format`, Prettier rewrites on commit; re-stage
